@@ -110,6 +110,12 @@
 }
 </script>
 
+<!-- Font preloads — tell browser to start fetching woff2s in parallel with HTML/CSS parse -->
+<link rel="preload" href="/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-500.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-700.woff2" as="font" type="font/woff2" crossorigin>
+
 <style>
   /* Self-hosted JetBrains Mono — weights actually used: 400, 500, 600, 700 */
   @font-face {
