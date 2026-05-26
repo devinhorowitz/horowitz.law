@@ -789,46 +789,6 @@
       git clone <a href="https://github.com/devinhorowitz/horowitz.law" target="_blank" rel="noopener noreferrer">github.com/devinhorowitz/horowitz.law</a>
     </div>
   </div>
-
-  <script>
-    const toggle = document.getElementById('themeToggle');
-    const root = document.documentElement;
-
-    function getSaved() {
-      try { return localStorage.getItem('theme'); } catch (e) { return null; }
-    }
-    function setSaved(v) {
-      try { localStorage.setItem('theme', v); } catch (e) { /* noop */ }
-    }
-
-    if (getSaved() === 'light') {
-      root.setAttribute('data-theme', 'light');
-      toggle.textContent = '[ dark ]';
-      toggle.setAttribute('aria-pressed', 'true');
-    }
-
-    toggle.addEventListener('click', () => {
-      const isLight = root.getAttribute('data-theme') === 'light';
-      if (isLight) {
-        root.removeAttribute('data-theme');
-        toggle.textContent = '[ light ]';
-        toggle.setAttribute('aria-pressed', 'false');
-        setSaved('dark');
-      } else {
-        root.setAttribute('data-theme', 'light');
-        toggle.textContent = '[ dark ]';
-        toggle.setAttribute('aria-pressed', 'true');
-        setSaved('light');
-      }
-    });
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) entry.target.classList.add('visible');
-      });
-    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-
-    document.querySelectorAll('section').forEach(s => observer.observe(s));
-  </script>
+  <script src="/app.js" defer></script>
 </body>
 </html>

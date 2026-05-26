@@ -516,7 +516,7 @@
     <div class="topbar">
       <span class="path"><span class="prompt-char" aria-hidden="true">$</span><a href="/">cd ~</a> · ~/resume.html</span>
       <div class="topbar-actions">
-        <button onclick="window.print()" class="download-btn" aria-label="Print or save resume as PDF">[ print / pdf ]</button>
+        <button id="printButton" class="download-btn" aria-label="Print or save resume as PDF">[ print / pdf ]</button>
         <button class="theme-toggle" id="themeToggle" aria-label="Toggle light or dark theme" aria-pressed="false">[ light ]</button>
       </div>
     </div>
@@ -762,38 +762,6 @@
     </footer>
 
   </div>
-
-  <script>
-    const toggle = document.getElementById('themeToggle');
-    const root = document.documentElement;
-
-    function getSaved() {
-      try { return localStorage.getItem('theme'); } catch (e) { return null; }
-    }
-    function setSaved(v) {
-      try { localStorage.setItem('theme', v); } catch (e) { /* noop */ }
-    }
-
-    if (getSaved() === 'light') {
-      root.setAttribute('data-theme', 'light');
-      toggle.textContent = '[ dark ]';
-      toggle.setAttribute('aria-pressed', 'true');
-    }
-
-    toggle.addEventListener('click', () => {
-      const isLight = root.getAttribute('data-theme') === 'light';
-      if (isLight) {
-        root.removeAttribute('data-theme');
-        toggle.textContent = '[ light ]';
-        toggle.setAttribute('aria-pressed', 'false');
-        setSaved('dark');
-      } else {
-        root.setAttribute('data-theme', 'light');
-        toggle.textContent = '[ dark ]';
-        toggle.setAttribute('aria-pressed', 'true');
-        setSaved('light');
-      }
-    });
-  </script>
+  <script src="/app.js" defer></script>
 </body>
 </html>
