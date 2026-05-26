@@ -416,6 +416,20 @@
     transform: translateX(3px);
   }
 
+  /* inline authority links in credentials/honors/admissions */
+  .cred-value a, .honor-source a, .admissions-col li a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--fg-muted);
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  .cred-value a:hover, .honor-source a:hover, .admissions-col li a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    border-bottom-style: solid;
+  }
+
   /* footer */
   footer {
     margin-top: 96px;
@@ -509,25 +523,25 @@
         <ul class="cred-list">
           <li>
             <span class="cred-label">Bar</span>
-            <span class="cred-value">State Bar of Georgia
+            <span class="cred-value"><a href="https://www.gabar.org/" target="_blank" rel="noopener noreferrer">State Bar of Georgia</a>
               <span class="cred-sub">Member No. 551617 · Active since 2017</span>
             </span>
           </li>
           <li>
             <span class="cred-label">J.D.</span>
-            <span class="cred-value">Atlanta's John Marshall Law School · 2017
+            <span class="cred-value"><a href="https://www.johnmarshall.edu/" target="_blank" rel="noopener noreferrer">Atlanta's John Marshall Law School</a> · 2017
               <span class="cred-sub"><em>Cum Laude</em> · Top 10% · Law Journal Staff Editor</span>
             </span>
           </li>
           <li>
             <span class="cred-label">M.S.</span>
-            <span class="cred-value">Southern Polytechnic State University · 2012
+            <span class="cred-value"><a href="https://www.kennesaw.edu/" target="_blank" rel="noopener noreferrer">Southern Polytechnic State University</a> · 2012
               <span class="cred-sub">Information Technology · Grad. Certificates in Information Security &amp; Assurance and Healthcare IT</span>
             </span>
           </li>
           <li>
             <span class="cred-label">B.S.</span>
-            <span class="cred-value">Southern Polytechnic State University · 2010
+            <span class="cred-value"><a href="https://www.kennesaw.edu/" target="_blank" rel="noopener noreferrer">Southern Polytechnic State University</a> · 2010
               <span class="cred-sub">Information Technology · Minor in Business Administration</span>
             </span>
           </li>
@@ -541,11 +555,11 @@
         <ul class="honors-list">
           <li>
             <span class="honor-name">Distinguished Pro Bono Award</span>
-            <span class="honor-source">Atlanta's John Marshall Law School · May 2017</span>
+            <span class="honor-source"><a href="https://www.johnmarshall.edu/" target="_blank" rel="noopener noreferrer">Atlanta's John Marshall Law School</a> · May 2017</span>
           </li>
           <li>
             <span class="honor-name">John E. Ryan Merit Scholar</span>
-            <span class="honor-source">Atlanta's John Marshall Law School · 2014</span>
+            <span class="honor-source"><a href="https://www.johnmarshall.edu/" target="_blank" rel="noopener noreferrer">Atlanta's John Marshall Law School</a> · 2014</span>
           </li>
         </ul>
       </div>
@@ -559,16 +573,16 @@
             <div class="admissions-col-label">Georgia</div>
             <ul>
               <li>All Georgia Trial Courts</li>
-              <li>Court of Appeals of Georgia</li>
-              <li>Supreme Court of Georgia</li>
+              <li><a href="https://www.gaappeals.gov/" target="_blank" rel="noopener noreferrer">Court of Appeals of Georgia</a></li>
+              <li><a href="https://www.gasupreme.us/" target="_blank" rel="noopener noreferrer">Supreme Court of Georgia</a></li>
             </ul>
           </div>
           <div class="admissions-col">
             <div class="admissions-col-label">Federal</div>
             <ul>
-              <li>U.S. District Court &mdash; N.D. Georgia</li>
-              <li>U.S. District Court &mdash; M.D. Georgia</li>
-              <li>U.S. District Court &mdash; S.D. Georgia</li>
+              <li><a href="https://www.gand.uscourts.gov/" target="_blank" rel="noopener noreferrer">U.S. District Court &mdash; N.D. Georgia</a></li>
+              <li><a href="https://www.gamd.uscourts.gov/" target="_blank" rel="noopener noreferrer">U.S. District Court &mdash; M.D. Georgia</a></li>
+              <li><a href="https://www.gasd.uscourts.gov/" target="_blank" rel="noopener noreferrer">U.S. District Court &mdash; S.D. Georgia</a></li>
             </ul>
           </div>
         </div>
