@@ -31,6 +31,7 @@
 <meta name="twitter:title" content="Curriculum Vitae · Devin R. Horowitz">
 <meta name="twitter:description" content="Civil litigation attorney with a decade of Georgia trial experience.">
 <meta name="twitter:image" content="https://horowitz.law/og-card.png">
+<meta name="twitter:image" content="https://horowitz.law/og-card.png">
 
 <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
 <link href="https://fonts.bunny.net/css?family=jetbrains-mono:300,400,500,600,700&display=swap" rel="stylesheet">
@@ -331,6 +332,25 @@
     .entry-head, .entry-subhead { flex-direction: column; align-items: flex-start; gap: 2px; }
   }
 
+
+  .entry-link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--fg-muted);
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .entry-link:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    border-bottom-style: solid;
+  }
+
+  .entry-practice {
+    color: var(--fg-muted);
+    font-weight: 400;
+    font-size: 13px;
+  }
+
   /* h2 reset for section headers (only neutralize browser top margin) */
   .section-header {
     margin-top: 0;
@@ -516,8 +536,8 @@
     <div class="topbar">
       <span class="path"><span class="prompt-char" aria-hidden="true">$</span><a href="/">cd ~</a> · ~/resume.html</span>
       <div class="topbar-actions">
-        <button id="printButton" class="download-btn" aria-label="Print or save resume as PDF">[ print / pdf ]</button>
-        <button class="theme-toggle" id="themeToggle" aria-label="Toggle light or dark theme" aria-pressed="false">[ light ]</button>
+        <button type="button" id="printButton" class="download-btn" aria-label="Print or save resume as PDF">[ print / pdf ]</button>
+        <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light or dark theme" aria-pressed="false">[ light ]</button>
       </div>
     </div>
 
@@ -542,7 +562,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title"><a href="https://www.johnmarshall.edu/" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted);">Atlanta's John Marshall Law School</a></span>
+          <span class="entry-title"><a href="https://www.johnmarshall.edu/" target="_blank" rel="noopener noreferrer" class="entry-link">Atlanta's John Marshall Law School</a></span>
           <span class="entry-location">Atlanta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -553,7 +573,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title"><a href="https://www.kennesaw.edu/" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted);">Southern Polytechnic State University</a></span>
+          <span class="entry-title"><a href="https://www.kennesaw.edu/" target="_blank" rel="noopener noreferrer" class="entry-link">Southern Polytechnic State University</a></span>
           <span class="entry-location">Marietta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -575,7 +595,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title"><a href="https://qpwblaw.com/" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted);">Quintairos, Prieto, Wood &amp; Boyer, P.A.</a> <span style="color:var(--fg-muted);font-weight:400;font-size:13px;">(Insurance Defense)</span></span>
+          <span class="entry-title"><a href="https://qpwblaw.com/" target="_blank" rel="noopener noreferrer" class="entry-link">Quintairos, Prieto, Wood &amp; Boyer, P.A.</a> <span class="entry-practice">(Insurance Defense)</span></span>
           <span class="entry-location">Atlanta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -591,7 +611,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title">Hall and Lampros LLP <span style="color:var(--fg-muted);font-weight:400;font-size:13px;">(Civil Rights &amp; Personal Injury)</span></span>
+          <span class="entry-title">Hall and Lampros LLP <span class="entry-practice">(Civil Rights &amp; Personal Injury)</span></span>
           <span class="entry-location">Atlanta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -606,7 +626,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title">Greene Legal Group, LLC <span style="color:var(--fg-muted);font-weight:400;font-size:13px;">(Personal Injury &amp; General Practice)</span></span>
+          <span class="entry-title">Greene Legal Group, LLC <span class="entry-practice">(Personal Injury &amp; General Practice)</span></span>
           <span class="entry-location">Atlanta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -625,7 +645,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title">Ashenden &amp; Associates, PC <span style="color:var(--fg-muted);font-weight:400;font-size:13px;">(Personal Injury)</span></span>
+          <span class="entry-title">Ashenden &amp; Associates, PC <span class="entry-practice">(Personal Injury)</span></span>
           <span class="entry-location">Atlanta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -641,7 +661,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title">Equal Employment Opportunity Commission <span style="color:var(--fg-muted);font-weight:400;font-size:13px;">(Civil Rights)</span></span>
+          <span class="entry-title">Equal Employment Opportunity Commission <span class="entry-practice">(Civil Rights)</span></span>
           <span class="entry-location">Atlanta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -656,7 +676,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title">ATL Family Lawyers <span style="color:var(--fg-muted);font-weight:400;font-size:13px;">(Family Law)</span></span>
+          <span class="entry-title">ATL Family Lawyers <span class="entry-practice">(Family Law)</span></span>
           <span class="entry-location">Atlanta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -670,7 +690,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title">Greene Legal Group, LLC <span style="color:var(--fg-muted);font-weight:400;font-size:13px;">(Personal Injury)</span></span>
+          <span class="entry-title">Greene Legal Group, LLC <span class="entry-practice">(Personal Injury)</span></span>
           <span class="entry-location">Atlanta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -684,7 +704,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title">Cherokee Judicial Circuit, DA's Office <span style="color:var(--fg-muted);font-weight:400;font-size:13px;">(Criminal Law)</span></span>
+          <span class="entry-title">Cherokee Judicial Circuit, DA's Office <span class="entry-practice">(Criminal Law)</span></span>
           <span class="entry-location">Cartersville, GA</span>
         </div>
         <div class="entry-subhead">
@@ -698,7 +718,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title">Alexander Shunnarah, LLP <span style="color:var(--fg-muted);font-weight:400;font-size:13px;">(Personal Injury)</span></span>
+          <span class="entry-title">Alexander Shunnarah, LLP <span class="entry-practice">(Personal Injury)</span></span>
           <span class="entry-location">Atlanta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -712,7 +732,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title">Justin J. Wyatt &amp; Associates, PC <span style="color:var(--fg-muted);font-weight:400;font-size:13px;">(General Practice)</span></span>
+          <span class="entry-title">Justin J. Wyatt &amp; Associates, PC <span class="entry-practice">(General Practice)</span></span>
           <span class="entry-location">Marietta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -726,7 +746,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title">Tucker &amp; Associates Law Firm, LLC <span style="color:var(--fg-muted);font-weight:400;font-size:13px;">(Criminal Law)</span></span>
+          <span class="entry-title">Tucker &amp; Associates Law Firm, LLC <span class="entry-practice">(Criminal Law)</span></span>
           <span class="entry-location">Jonesboro, GA</span>
         </div>
         <div class="entry-subhead">
@@ -740,7 +760,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title"><a href="https://www.kennesaw.edu/" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted);">Southern Polytechnic State University</a></span>
+          <span class="entry-title"><a href="https://www.kennesaw.edu/" target="_blank" rel="noopener noreferrer" class="entry-link">Southern Polytechnic State University</a></span>
           <span class="entry-location">Marietta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -758,7 +778,7 @@
 
     <footer>
       <span>© 2026 Devin R. Horowitz</span>
-      <span><a href="/" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted);">← back to horowitz.law</a></span>
+      <span><a href="/" class="entry-link">← back to horowitz.law</a></span>
     </footer>
 
   </div>
