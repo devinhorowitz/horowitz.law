@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Devin R. Horowitz — Attorney at Law</title>
 <meta name="description" content="Devin R. Horowitz — Civil litigation attorney with a decade of Georgia trial experience. Personal injury and complex liability matters. Based in metro Atlanta.">
+<meta name="robots" content="index, follow">
 
 <!-- favicon -->
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -557,18 +558,66 @@
     background: var(--accent);
     color: var(--bg);
   }
+
+  /* h2 reset for section headers (only neutralize browser top margin) */
+  .section-header {
+    margin-top: 0;
+    font-weight: 600;
+  }
+
+  /* skip-to-content link (keyboard accessibility) */
+  .skip-link {
+    position: absolute;
+    top: -100px;
+    left: 0;
+    background: var(--accent);
+    color: var(--bg);
+    padding: 12px 16px;
+    z-index: 1000;
+    text-decoration: none;
+    font-weight: 600;
+    border-radius: 0 0 6px 0;
+  }
+  .skip-link:focus {
+    top: 0;
+  }
+
+  /* focus indicators for keyboard navigation */
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  /* respect user preference for reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+    .cursor { animation: none !important; opacity: 1; }
+    body::after { display: none !important; }
+    section { opacity: 1 !important; transform: none !important; }
+  }
+
 </style>
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   <div class="container">
     <div class="topbar">
-      <span class="path"><span class="prompt-char">~</span>horowitz.law</span>
-      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">[ light ]</button>
+      <span class="path"><span class="prompt-char" aria-hidden="true">~</span>horowitz.law</span>
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle light or dark theme" aria-pressed="false">[ light ]</button>
     </div>
 
     <header class="hero">
       <div class="hero-portrait">
-        <img src="devin.jpg" alt="Devin R. Horowitz" />
+        <img src="devin.jpg" alt="Headshot of Devin R. Horowitz" width="170" height="170" loading="eager" />
         <span class="portrait-corner tl"></span>
         <span class="portrait-corner tr"></span>
         <span class="portrait-corner bl"></span>
@@ -576,7 +625,7 @@
       </div>
       <div class="hero-content">
         <div class="hero-prompt">$ whoami</div>
-        <h1>Devin R. Horowitz<span class="cursor"></span></h1>
+        <h1>Devin R. Horowitz<span class="cursor" aria-hidden="true"></span></h1>
         <div class="hero-meta">
           <span>Attorney at Law</span>
           <span>Georgia Bar No. 551617</span>
@@ -585,8 +634,9 @@
       </div>
     </header>
 
+    <main id="main-content">
     <section id="about">
-      <div class="section-header">about</div>
+      <h2 class="section-header">about</h2>
       <div class="section-body">
         <p>Civil litigation attorney with a decade of Georgia trial experience, focused on personal injury and complex liability matters. I handle cases from pre-suit investigation through trial — catastrophic commercial-vehicle and wrongful-death claims, negligent entrustment, motor-vehicle liability, premises, and coverage disputes.</p>
         <p>My career has run through both sides of the docket. I spent most of the past decade on the plaintiff side — first at Ashenden &amp; Associates, then six years at Greene Legal Group, and most recently as a partner at Hall &amp; Lampros — before moving to insurance defense at Quintairos, Prieto, Wood &amp; Boyer, P.A. The through-line across hundreds of depositions, mediations, and trials has been the same: build the file as if you're trying it.</p>
@@ -595,7 +645,7 @@
     </section>
 
     <section id="areas">
-      <div class="section-header">areas</div>
+      <h2 class="section-header">areas</h2>
       <div class="section-body">
         <ul class="areas-grid">
           <li>Motor Vehicle &amp; Auto Liability<span class="area-sub">Collision reconstruction; negligent entrustment; UM/UIM</span></li>
@@ -612,7 +662,7 @@
     </section>
 
     <section id="credentials">
-      <div class="section-header">credentials</div>
+      <h2 class="section-header">credentials</h2>
       <div class="section-body">
         <ul class="cred-list">
           <li>
@@ -644,7 +694,7 @@
     </section>
 
     <section id="honors">
-      <div class="section-header">honors</div>
+      <h2 class="section-header">honors</h2>
       <div class="section-body">
         <ul class="honors-list">
           <li>
@@ -660,7 +710,7 @@
     </section>
 
     <section id="admissions">
-      <div class="section-header">admissions</div>
+      <h2 class="section-header">admissions</h2>
       <div class="section-body">
         <div class="admissions-grid">
           <div class="admissions-col">
@@ -684,7 +734,7 @@
     </section>
 
     <section id="contact">
-      <div class="section-header">contact</div>
+      <h2 class="section-header">contact</h2>
       <div class="section-body">
         <div class="contact-grid">
           <a href="mailto:devin@horowitz.law">devin@horowitz.law</a>
@@ -696,6 +746,8 @@
         </div>
       </div>
     </section>
+
+    </main>
 
     <footer>
       <span>© 2026 Devin R. Horowitz</span>
@@ -717,6 +769,7 @@
     if (getSaved() === 'light') {
       root.setAttribute('data-theme', 'light');
       toggle.textContent = '[ dark ]';
+      toggle.setAttribute('aria-pressed', 'true');
     }
 
     toggle.addEventListener('click', () => {
@@ -724,10 +777,12 @@
       if (isLight) {
         root.removeAttribute('data-theme');
         toggle.textContent = '[ light ]';
+        toggle.setAttribute('aria-pressed', 'false');
         setSaved('dark');
       } else {
         root.setAttribute('data-theme', 'light');
         toggle.textContent = '[ dark ]';
+        toggle.setAttribute('aria-pressed', 'true');
         setSaved('light');
       }
     });

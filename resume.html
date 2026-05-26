@@ -331,24 +331,193 @@
     .entry-head, .entry-subhead { flex-direction: column; align-items: flex-start; gap: 2px; }
   }
 
-  /* print styles */
-  @media print {
-    body::before, body::after { display: none; }
-    body { background: #fff; color: #000; font-size: 10pt; }
-    .topbar { display: none; }
-    a { color: inherit; text-decoration: none; }
-    section { page-break-inside: avoid; }
+  /* h2 reset for section headers (only neutralize browser top margin) */
+  .section-header {
+    margin-top: 0;
+    font-weight: 600;
   }
+
+  /* skip-to-content link */
+  .skip-link {
+    position: absolute;
+    top: -100px;
+    left: 0;
+    background: var(--accent);
+    color: var(--bg);
+    padding: 12px 16px;
+    z-index: 1000;
+    text-decoration: none;
+    font-weight: 600;
+    border-radius: 0 0 6px 0;
+  }
+  .skip-link:focus { top: 0; }
+
+  /* focus indicators */
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  /* respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+    .cursor { animation: none !important; opacity: 1; }
+    body::after { display: none !important; }
+    section { opacity: 1 !important; transform: none !important; }
+  }
+
+  /* =================================================
+     PRINT STYLES — what gets generated when the user
+     prints the page (browser handles "Save as PDF").
+     The HTML resume IS the resume PDF; no separate file.
+     ================================================= */
+  @media print {
+    /* page setup: US Letter, tight margins */
+    @page {
+      size: letter;
+      margin: 0.55in 0.7in;
+    }
+
+    /* force light theme regardless of user toggle state */
+    :root,
+    :root[data-theme="light"] {
+      --bg: #ffffff !important;
+      --bg-elev: #ffffff !important;
+      --fg: #000000 !important;
+      --fg-muted: #444444 !important;
+      --accent: #8a4014 !important;
+      --accent-soft: rgba(138, 64, 20, 0.06) !important;
+      --border: #999999 !important;
+      --scanline-opacity: 0 !important;
+    }
+    html, body {
+      background: #ffffff !important;
+      color: #000000 !important;
+    }
+
+    /* remove decorative background effects */
+    body::before, body::after { display: none !important; }
+
+    /* hide screen-only controls and navigation */
+    .topbar,
+    .theme-toggle,
+    .download-btn,
+    .skip-link,
+    footer {
+      display: none !important;
+    }
+
+    /* tighten the header for print */
+    .cv-header {
+      text-align: left;
+      margin-top: 0;
+      padding-top: 0;
+      margin-bottom: 8pt;
+    }
+    .cv-header h1 {
+      font-size: 20pt;
+      margin: 0 0 2pt 0;
+      line-height: 1.05;
+    }
+    .cv-tagline {
+      font-size: 10pt;
+      margin: 0 0 4pt 0;
+    }
+    .cv-meta {
+      font-size: 9.5pt;
+      margin: 0;
+    }
+
+    /* main container: remove screen-specific padding */
+    .container {
+      padding: 0 !important;
+      max-width: 100% !important;
+    }
+    main {
+      padding: 0;
+    }
+
+    /* section headers — compact, but allow breaks after if needed */
+    .section-header {
+      font-size: 10pt !important;
+      margin-top: 8pt !important;
+      margin-bottom: 4pt !important;
+      padding-bottom: 3pt !important;
+    }
+
+    /* body content: serif font, tight line spacing */
+    body {
+      font-family: "Times New Roman", Times, Georgia, serif !important;
+      font-size: 10pt !important;
+      line-height: 1.25 !important;
+    }
+    /* keep monospace where the terminal feel matters */
+    .section-header,
+    .prompt-char,
+    .cv-tagline,
+    .cv-meta,
+    code, pre {
+      font-family: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace !important;
+    }
+
+    /* paragraphs and lists */
+    p, li {
+      orphans: 2;
+      widows: 2;
+      margin-top: 0;
+      margin-bottom: 2pt;
+    }
+
+    /* prevent splitting individual entries across pages */
+    .entry {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    /* keep section header glued to its first entry */
+    .section-header + .entry {
+      page-break-before: avoid;
+      break-before: avoid;
+    }
+
+    /* tight section spacing */
+    section {
+      margin-bottom: 4pt !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+
+    /* remove the blinking cursor from print */
+    .cursor { display: none !important; }
+
+    /* links: readable but quiet */
+    a {
+      color: #000000 !important;
+      text-decoration: underline;
+    }
+    a[href^="mailto:"], a[href^="tel:"], a[href^="#"], a[href="/"] {
+      text-decoration: none;
+      color: #000000 !important;
+    }
+  }
+
 </style>
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   <div class="container">
 
     <div class="topbar">
-      <span class="path"><span class="prompt-char">$</span><a href="/">cd ~</a> · ~/resume.html</span>
+      <span class="path"><span class="prompt-char" aria-hidden="true">$</span><a href="/">cd ~</a> · ~/resume.html</span>
       <div class="topbar-actions">
-        <a href="/resume.pdf" class="download-btn" download>[ download pdf ]</a>
-        <button class="theme-toggle" id="themeToggle">[ light ]</button>
+        <button onclick="window.print()" class="download-btn" aria-label="Print or save resume as PDF">[ print / pdf ]</button>
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle light or dark theme" aria-pressed="false">[ light ]</button>
       </div>
     </div>
 
@@ -356,19 +525,20 @@
       <h1>Devin R. Horowitz</h1>
       <div class="cv-tagline">// curriculum vitae</div>
       <div class="cv-contact">
-        Marietta, GA · <a href="mailto:devin@horowitz.law">devin@horowitz.law</a> · <a href="tel:+14042138076">(404) 213-8076</a> · <a href="/">horowitz.law</a>
+        Marietta, GA · <a href="mailto:devin@horowitz.law">devin@horowitz.law</a> · <a href="/">horowitz.law</a>
       </div>
     </header>
 
+    <main id="main-content">
     <section>
-      <div class="section-header">summary</div>
+      <h2 class="section-header">summary</h2>
       <div class="admissions-body">
         Georgia civil litigator with a decade of experience on both sides of the docket. Current insurance defense practice in personal injury, premises liability, and trucking matters draws on six prior years of plaintiff-side personal injury work — drafting demands, reviewing medical records, and negotiating liens. The cross-side exposure informs how cases are built, valued, and resolved.
       </div>
     </section>
 
     <section>
-      <div class="section-header">education</div>
+      <h2 class="section-header">education</h2>
 
       <div class="entry">
         <div class="entry-head">
@@ -394,14 +564,14 @@
     </section>
 
     <section>
-      <div class="section-header">bar &amp; court admissions</div>
+      <h2 class="section-header">bar &amp; court admissions</h2>
       <div class="admissions-body">
         <a href="https://www.gabar.org/member-directory/?id=FC428AB535A766354BD28D799AF095EF" target="_blank" rel="noopener noreferrer">State Bar of Georgia</a>, No. 551617 (active since 2017) · All Georgia State and Superior Courts · <a href="https://www.gaappeals.gov/" target="_blank" rel="noopener noreferrer">Court of Appeals of Georgia</a> · <a href="https://www.gasupreme.us/" target="_blank" rel="noopener noreferrer">Supreme Court of Georgia</a> · U.S. District Court for the <a href="https://www.gand.uscourts.gov/" target="_blank" rel="noopener noreferrer">Northern</a>, <a href="https://www.gamd.uscourts.gov/" target="_blank" rel="noopener noreferrer">Middle</a>, and <a href="https://www.gasd.uscourts.gov/" target="_blank" rel="noopener noreferrer">Southern</a> Districts of Georgia
       </div>
     </section>
 
     <section>
-      <div class="section-header">work experience</div>
+      <h2 class="section-header">work experience</h2>
 
       <div class="entry">
         <div class="entry-head">
@@ -584,6 +754,8 @@
       </div>
     </section>
 
+    </main>
+
     <footer>
       <span>© 2026 Devin R. Horowitz</span>
       <span><a href="/" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted);">← back to horowitz.law</a></span>
@@ -605,6 +777,7 @@
     if (getSaved() === 'light') {
       root.setAttribute('data-theme', 'light');
       toggle.textContent = '[ dark ]';
+      toggle.setAttribute('aria-pressed', 'true');
     }
 
     toggle.addEventListener('click', () => {
@@ -612,10 +785,12 @@
       if (isLight) {
         root.removeAttribute('data-theme');
         toggle.textContent = '[ light ]';
+        toggle.setAttribute('aria-pressed', 'false');
         setSaved('dark');
       } else {
         root.setAttribute('data-theme', 'light');
         toggle.textContent = '[ dark ]';
+        toggle.setAttribute('aria-pressed', 'true');
         setSaved('light');
       }
     });
