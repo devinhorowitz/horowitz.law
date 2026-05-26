@@ -538,6 +538,31 @@
     letter-spacing: 0.02em;
   }
 
+  .repo-link {
+    margin-top: 18px;
+    font-size: 11px;
+    color: var(--fg-muted);
+    opacity: 0.55;
+    letter-spacing: 0;
+    transition: opacity 0.2s ease;
+  }
+  .repo-link:hover {
+    opacity: 1;
+  }
+  .repo-link::before {
+    content: '$ ';
+    color: var(--accent);
+  }
+  .repo-link a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--fg-muted);
+  }
+  .repo-link a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
   @media (max-width: 600px) {
     .container { padding: 36px 22px 80px; }
     .topbar { margin-bottom: 50px; }
@@ -753,6 +778,10 @@
       <span>© 2026 Devin R. Horowitz</span>
       <span>Informational only. No attorney-client relationship.</span>
     </footer>
+
+    <div class="repo-link" aria-label="View site source code on GitHub">
+      git clone <a href="https://github.com/devinhorowitz/horowitz.law" target="_blank" rel="noopener noreferrer">github.com/devinhorowitz/horowitz.law</a>
+    </div>
   </div>
 
   <script>
