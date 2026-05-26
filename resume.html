@@ -31,18 +31,35 @@
 <meta name="twitter:title" content="Curriculum Vitae · Devin R. Horowitz">
 <meta name="twitter:description" content="Civil litigation attorney with a decade of Georgia trial experience.">
 <meta name="twitter:image" content="https://horowitz.law/og-card.png">
-<meta name="twitter:image" content="https://horowitz.law/og-card.png">
+
+<!-- JSON-LD structured data: ProfilePage referencing the Person defined on horowitz.law/ -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ProfilePage",
+  "url": "https://horowitz.law/resume.html",
+  "name": "Curriculum Vitae · Devin R. Horowitz",
+  "about": {
+    "@type": "Person",
+    "name": "Devin R. Horowitz",
+    "url": "https://horowitz.law/",
+    "sameAs": [
+      "https://www.linkedin.com/in/devinhorowitz/",
+      "https://qpwblaw.com/attorney/devin-r-horowitz/",
+      "https://www.gabar.org/member-directory/?id=FC428AB535A766354BD28D799AF095EF"
+    ]
+  }
+}
+</script>
 
 <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
 <link href="https://fonts.bunny.net/css?family=jetbrains-mono:300,400,500,600,700&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #0d0e10;
-    --bg-elev: #161719;
     --fg: #e8e3d8;
     --fg-muted: #807a72;
     --accent: #ff9e5e;
-    --accent-soft: rgba(255, 158, 94, 0.12);
     --border: #25262a;
     --grain-opacity: 0.04;
     --scanline-opacity: 0.018;
@@ -50,11 +67,9 @@
 
   [data-theme="light"] {
     --bg: #f5ede0;
-    --bg-elev: #ebe2d2;
     --fg: #1a1a1a;
     --fg-muted: #6a6560;
     --accent: #b8531a;
-    --accent-soft: rgba(184, 83, 26, 0.08);
     --border: #d4cab8;
     --grain-opacity: 0.025;
     --scanline-opacity: 0;
@@ -333,13 +348,13 @@
   }
 
 
-  .entry-link {
+  .text-link {
     color: inherit;
     text-decoration: none;
     border-bottom: 1px dotted var(--fg-muted);
     transition: color 0.2s, border-color 0.2s;
   }
-  .entry-link:hover {
+  .text-link:hover {
     color: var(--accent);
     border-bottom-color: var(--accent);
     border-bottom-style: solid;
@@ -409,11 +424,9 @@
     :root,
     :root[data-theme="light"] {
       --bg: #ffffff !important;
-      --bg-elev: #ffffff !important;
       --fg: #000000 !important;
       --fg-muted: #444444 !important;
       --accent: #8a4014 !important;
-      --accent-soft: rgba(138, 64, 20, 0.06) !important;
       --border: #999999 !important;
       --scanline-opacity: 0 !important;
     }
@@ -562,7 +575,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title"><a href="https://www.johnmarshall.edu/" target="_blank" rel="noopener noreferrer" class="entry-link">Atlanta's John Marshall Law School</a></span>
+          <span class="entry-title"><a href="https://www.johnmarshall.edu/" target="_blank" rel="noopener noreferrer" class="text-link">Atlanta's John Marshall Law School</a></span>
           <span class="entry-location">Atlanta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -573,7 +586,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title"><a href="https://www.kennesaw.edu/" target="_blank" rel="noopener noreferrer" class="entry-link">Southern Polytechnic State University</a></span>
+          <span class="entry-title"><a href="https://www.kennesaw.edu/" target="_blank" rel="noopener noreferrer" class="text-link">Southern Polytechnic State University</a></span>
           <span class="entry-location">Marietta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -595,7 +608,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title"><a href="https://qpwblaw.com/" target="_blank" rel="noopener noreferrer" class="entry-link">Quintairos, Prieto, Wood &amp; Boyer, P.A.</a> <span class="entry-practice">(Insurance Defense)</span></span>
+          <span class="entry-title"><a href="https://qpwblaw.com/" target="_blank" rel="noopener noreferrer" class="text-link">Quintairos, Prieto, Wood &amp; Boyer, P.A.</a> <span class="entry-practice">(Insurance Defense)</span></span>
           <span class="entry-location">Atlanta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -760,7 +773,7 @@
 
       <div class="entry">
         <div class="entry-head">
-          <span class="entry-title"><a href="https://www.kennesaw.edu/" target="_blank" rel="noopener noreferrer" class="entry-link">Southern Polytechnic State University</a></span>
+          <span class="entry-title"><a href="https://www.kennesaw.edu/" target="_blank" rel="noopener noreferrer" class="text-link">Southern Polytechnic State University</a></span>
           <span class="entry-location">Marietta, GA</span>
         </div>
         <div class="entry-subhead">
@@ -778,7 +791,7 @@
 
     <footer>
       <span>© 2026 Devin R. Horowitz</span>
-      <span><a href="/" class="entry-link">← back to horowitz.law</a></span>
+      <span><a href="/" class="text-link">← back to horowitz.law</a></span>
     </footer>
 
   </div>

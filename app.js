@@ -21,7 +21,14 @@
   }
 
   if (toggle) {
-    if (getSaved() === 'light') {
+    // First-visit precedence: explicit user choice > OS preference > dark default
+    const saved = getSaved();
+    const prefersLight =
+      saved === null &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-color-scheme: light)').matches;
+
+    if (saved === 'light' || prefersLight) {
       root.setAttribute('data-theme', 'light');
       toggle.textContent = '[ dark ]';
       toggle.setAttribute('aria-pressed', 'true');
