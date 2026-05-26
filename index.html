@@ -6,6 +6,8 @@
 <title>Devin R. Horowitz — Attorney at Law</title>
 <meta name="description" content="Devin R. Horowitz — Civil litigation attorney with a decade of Georgia trial experience. Personal injury and complex liability matters. Based in metro Atlanta.">
 <meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0d0e10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5ede0" media="(prefers-color-scheme: light)">
 
 <!-- favicon -->
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -117,7 +119,7 @@
     --bg: #f5ede0;
     --fg: #1a1a1a;
     --fg-muted: #6a6560;
-    --accent: #b8531a;
+    --accent: #a4471a;
     --border: #d4cab8;
     --grain-opacity: 0.025;
     --scanline-opacity: 0;
@@ -481,6 +483,12 @@
     opacity: 0.95;
   }
 
+
+  /* contact section: address element default italic override */
+  address.contact-grid {
+    font-style: normal;
+  }
+
   /* contact */
   .contact-grid {
     display: flex;
@@ -762,7 +770,7 @@
     <section id="contact">
       <h2 class="section-header">contact</h2>
       <div class="section-body">
-        <div class="contact-grid">
+        <address class="contact-grid">
           <a href="mailto:devin@horowitz.law">devin@horowitz.law</a>
           <a href="mailto:devin.horowitz@qpwblaw.com">devin.horowitz@qpwblaw.com</a>
           <a href="tel:+17706508737,1983">(770) 650-8737 ext. 1983</a>
@@ -770,7 +778,7 @@
           <a href="https://qpwblaw.com/attorney/devin-r-horowitz/" target="_blank" rel="noopener noreferrer">QPWB firm profile</a>
           <a href="https://www.linkedin.com/in/devinhorowitz/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
           <a href="/resume.html">Curriculum vitae</a>
-        </div>
+        </address>
       </div>
     </section>
 

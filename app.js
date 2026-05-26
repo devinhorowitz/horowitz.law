@@ -14,11 +14,21 @@
   const root = document.documentElement;
 
   function getSaved() {
-    try { return localStorage.getItem('theme'); } catch (e) { return null; }
+    try { return localStorage.getItem('horowitz-theme'); } catch (e) { return null; }
   }
   function setSaved(v) {
-    try { localStorage.setItem('theme', v); } catch (e) { /* noop */ }
+    try { localStorage.setItem('horowitz-theme', v); } catch (e) { /* noop */ }
   }
+
+  // One-time migration: copy legacy 'theme' key to namespaced 'horowitz-theme'.
+  // Can be removed after a reasonable transition window (3-6 months).
+  try {
+    const legacy = localStorage.getItem('theme');
+    if (legacy && !localStorage.getItem('horowitz-theme')) {
+      localStorage.setItem('horowitz-theme', legacy);
+      localStorage.removeItem('theme');
+    }
+  } catch (e) { /* noop */ }
 
   if (toggle) {
     // First-visit precedence: explicit user choice > OS preference > dark default
