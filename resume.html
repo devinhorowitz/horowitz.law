@@ -245,6 +245,21 @@
     border-bottom-style: solid;
   }
 
+  .cursor {
+    display: inline-block;
+    width: 0.55em;
+    height: 0.75em;
+    background: var(--accent);
+    margin-left: 6px;
+    vertical-align: baseline;
+    animation: blink 1.05s steps(2) infinite;
+  }
+
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    50.01%, 100% { opacity: 0; }
+  }
+
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
@@ -591,7 +606,7 @@
     </div>
 
     <header class="cv-header">
-      <h1>Devin R. Horowitz</h1>
+      <h1>Devin R. Horowitz<span class="cursor" aria-hidden="true"></span></h1>
       <div class="cv-tagline">// curriculum vitae</div>
       <div class="cv-contact">
         Marietta, GA · <a href="mailto:devin@horowitz.law">devin@horowitz.law</a> · <a href="/">horowitz.law</a>
