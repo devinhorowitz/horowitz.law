@@ -8,6 +8,22 @@
   'use strict';
 
   // -----------------------------------------------------------
+  // Console greeting — for the curious who open DevTools.
+  // Hidden from regular visitors. Logs once per page load.
+  // -----------------------------------------------------------
+  try {
+    console.log(
+      '%c~ horowitz.law',
+      'color: #ff9e5e; font-family: ui-monospace, monospace; font-size: 14px; font-weight: 600; padding: 4px 0;'
+    );
+    console.log(
+      '%chand-coded · vanilla everything · no tracking\nsource: https://github.com/devinhorowitz/horowitz.law\n\nif you\'re reading this, hi.',
+      'color: #807a72; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.6;'
+    );
+  } catch (e) { /* noop */ }
+
+
+  // -----------------------------------------------------------
   // Hero name typing animation — types out the h1 name
   // character-by-character like a human at a console.
   // Falls back gracefully:
@@ -129,6 +145,21 @@
       }, duration + 30);
     }
 
+    // Brief haptic pulse on supported devices (Android browsers). The
+    // double-pulse pattern mimics the bistable click of a real toggle switch.
+    // Silently no-ops on iOS (Apple doesn't implement Web Vibration) and on
+    // desktop (no vibration hardware). Respects prefers-reduced-motion.
+    function triggerHaptic() {
+      if (reduceMotion) return;
+      try {
+        if ('vibrate' in navigator) {
+          navigator.vibrate([8, 12, 8]);
+        }
+      } catch (e) {
+        // silently fail if blocked or unsupported
+      }
+    }
+
     // Synthesized "tactile click" via Web Audio API. No asset file needed.
     // Slight per-click randomization in frequency and volume matches the
     // analog feel of the typing and flicker animations. Skipped under
@@ -188,6 +219,7 @@
     // Manual toggle: user explicitly chooses — flicker + click sound + persist
     toggle.addEventListener('click', function () {
       const isLight = root.getAttribute('data-theme') === 'light';
+      triggerHaptic();
       playClickSound();
       flickerTransition();
       applyTheme(!isLight);

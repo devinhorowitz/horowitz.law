@@ -1,0 +1,30 @@
+/* TEAM */
+    Builder:  Devin R. Horowitz
+    Site:     horowitz.law
+    Source:   github.com/devinhorowitz/horowitz.law
+    Location: Marietta, Georgia, USA
+
+/* SITE */
+    Standards:    HTML5, CSS3, ECMAScript 2020+
+    Stack:        vanilla everything — no framework, no build step
+    Typography:   JetBrains Mono (self-hosted, 4 weights)
+    Graphics:     SVG (QR, ornament, favicon)
+    Hosting:      Cloudflare Pages
+    Analytics:    intentionally none
+    Cookies:      none
+    Last update:  2026
+    Language:     English
+
+/* THANKS */
+    JetBrains Mono — JetBrains s.r.o.
+    Cloudflare Pages — Cloudflare, Inc.
+    The unnamed authors of every public spec
+    that makes the open web actually work.
+
+/* SIGNATURE */
+                                                  
+                                                  
+        ~ horowitz.law                            
+        a small artifact, hand-built              
+                                                  
+                                                  
