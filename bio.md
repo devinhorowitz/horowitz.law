@@ -1,5 +1,21 @@
 # bio.md
 
+A longer-form personal history that lives in the repo rather than on the
+rendered site. Not linked from horowitz.law; visible only to anyone who
+navigates the GitHub source.
+
+Preserved here because once it's gone from LinkedIn it's gone everywhere
+else. Some of this is color rather than credential — the kind of detail
+that ages well rather than decays, but doesn't belong on a civil litigation
+attorney's professional landing page.
+
+---
+
+## The career arc, written out
+
+Continuous trajectory from age 16 to bar admission. Each role built on
+the previous in a way that's only legible in retrospect.
+
 **2005-2007 · ForTech, Forsyth County Schools.** Two-year internship at
 South Forsyth High School during the senior years. General classroom, lab,
 and faculty technology support. Installing and troubleshooting projectors,
@@ -89,5 +105,21 @@ Spring 2017 alone.
 
 ---
 
+## What stayed in this file rather than the resume
+
+The resume captures the credentials someone hiring an attorney needs to
+see. This file captures the continuous trajectory underneath them — that
+the technical instincts started in high school, that the pyrotechnician
+work was real and concurrent with undergraduate IT studies, that the JD
+was built on top of a decade of practical IT experience rather than
+replacing it.
+
+The hand-coded website itself is downstream of all this.
+
+---
+
 *This file is intentionally not linked from horowitz.law. If you found it,
 that's because you went looking through the source. Hi.*
+
+*Companion file: `courses.md` preserves the formal coursework inventory
+from high school through law school.*
