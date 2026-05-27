@@ -328,6 +328,33 @@
     50.01%, 100% { opacity: 0; }
   }
 
+
+  /* Brief analog-feel flicker on theme transitions. JS adds .theme-flickering
+     to <html> for ~280-480ms; this drives the animation on content containers
+     (leaving topbar/toggle stable as the anchor point during the change). */
+  @keyframes themeFlicker {
+    0%   { opacity: 1; }
+    10%  { opacity: 0.55; }
+    18%  { opacity: 0.95; }
+    28%  { opacity: 0.7; }
+    38%  { opacity: 1; }
+    52%  { opacity: 0.4; }
+    62%  { opacity: 0.85; }
+    76%  { opacity: 1; }
+    88%  { opacity: 0.95; }
+    100% { opacity: 1; }
+  }
+
+  html.theme-flickering .container > *:not(.topbar) {
+    animation: themeFlicker var(--flicker-duration, 400ms) steps(14) forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html.theme-flickering .container > *:not(.topbar) {
+      animation: none !important;
+    }
+  }
+
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }

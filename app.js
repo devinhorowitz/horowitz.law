@@ -8,6 +8,75 @@
   'use strict';
 
   // -----------------------------------------------------------
+  // Hero name typing animation — types out the h1 name
+  // character-by-character like a human at a console.
+  // Falls back gracefully:
+  //   - No JS / script fails: full name shown in HTML markup
+  //   - prefers-reduced-motion: skip animation, show full name
+  //   - Screen readers: get the full name via aria-label
+  //   - User prints mid-animation: finalize text immediately
+  // -----------------------------------------------------------
+  (function typeHeroName() {
+    const cursor = document.querySelector('h1 .cursor');
+    if (!cursor) return;
+    const h1 = cursor.parentElement;
+    const textNode = h1.firstChild;
+    if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return;
+
+    if (window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+
+    const fullText = textNode.textContent;
+    h1.setAttribute('aria-label', fullText);
+    textNode.textContent = '';
+
+    let i = 0;
+    let finished = false;
+    function typeNext() {
+      if (finished || i >= fullText.length) {
+        finished = true;
+        return;
+      }
+      const ch = fullText[i++];
+      textNode.textContent += ch;
+
+      // Base timing: 55-145ms — humans don't hit keys at perfect intervals
+      let delay = 55 + Math.random() * 90;
+
+      // Micro-pause (~12% chance): brief hesitation, "what's the next letter"
+      if (Math.random() < 0.12) {
+        delay += 50 + Math.random() * 100;
+      }
+
+      // Thinking beat (~3% chance): longer pause, like brain caught on something
+      if (Math.random() < 0.03) {
+        delay += 180 + Math.random() * 220;
+      }
+
+      // Word boundary: spaces get a natural inter-word pause
+      if (ch === ' ') delay += 90 + Math.random() * 90;
+
+      // Period: longest natural pause, like brain registers punctuation
+      if (ch === '.') delay += 140 + Math.random() * 160;
+
+      setTimeout(typeNext, delay);
+    }
+
+    // Snap to full text if the user invokes print mid-animation
+    window.addEventListener('beforeprint', function () {
+      if (!finished) {
+        textNode.textContent = fullText;
+        finished = true;
+      }
+    });
+
+    // Initial pause is also randomized — each load starts a beat differently
+    setTimeout(typeNext, 300 + Math.random() * 300);
+  })();
+
+  // -----------------------------------------------------------
   // Theme toggle (both pages)
   // -----------------------------------------------------------
   const toggle = document.getElementById('themeToggle');
@@ -31,33 +100,115 @@
   } catch (e) { /* noop */ }
 
   if (toggle) {
-    // First-visit precedence: explicit user choice > OS preference > dark default
-    const saved = getSaved();
-    const prefersLight =
-      saved === null &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-color-scheme: light)').matches;
+    const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+    const reduceMotion = window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    if (saved === 'light' || prefersLight) {
-      root.setAttribute('data-theme', 'light');
-      toggle.textContent = '[ dark ]';
-      toggle.setAttribute('aria-pressed', 'true');
-    }
-
-    toggle.addEventListener('click', function () {
-      const isLight = root.getAttribute('data-theme') === 'light';
+    function applyTheme(isLight) {
       if (isLight) {
-        root.removeAttribute('data-theme');
-        toggle.textContent = '[ light ]';
-        toggle.setAttribute('aria-pressed', 'false');
-        setSaved('dark');
-      } else {
         root.setAttribute('data-theme', 'light');
         toggle.textContent = '[ dark ]';
         toggle.setAttribute('aria-pressed', 'true');
-        setSaved('light');
+      } else {
+        root.removeAttribute('data-theme');
+        toggle.textContent = '[ light ]';
+        toggle.setAttribute('aria-pressed', 'false');
       }
+    }
+
+    // Brief analog-feel flicker on theme transitions. Duration is randomized
+    // (280-480ms) so each transition has its own slight cadence — same spirit
+    // as the typing animation. Skipped under prefers-reduced-motion.
+    function flickerTransition() {
+      if (reduceMotion) return;
+      const duration = 280 + Math.random() * 200;
+      root.style.setProperty('--flicker-duration', duration + 'ms');
+      root.classList.add('theme-flickering');
+      setTimeout(function () {
+        root.classList.remove('theme-flickering');
+      }, duration + 30);
+    }
+
+    // Synthesized "tactile click" via Web Audio API. No asset file needed.
+    // Slight per-click randomization in frequency and volume matches the
+    // analog feel of the typing and flicker animations. Skipped under
+    // prefers-reduced-motion. AudioContext is created lazily on first use
+    // because browser autoplay policies require user gesture initialization.
+    let audioCtx = null;
+    function playClickSound() {
+      if (reduceMotion) return;
+      try {
+        if (!audioCtx) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return;
+          audioCtx = new Ctx();
+        }
+        const now = audioCtx.currentTime;
+        const duration = 0.035 + Math.random() * 0.025; // 35-60ms
+
+        // Brief noise burst, naturally decaying inside the buffer
+        const buf = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * duration), audioCtx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+          data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+        }
+        const source = audioCtx.createBufferSource();
+        source.buffer = buf;
+
+        // Bandpass filter centers the noise into "click" frequency band
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 1200 + Math.random() * 600; // 1200-1800 Hz, slight variance
+        filter.Q.value = 1.4;
+
+        // Gain envelope: instant attack, fast exponential decay
+        const gain = audioCtx.createGain();
+        const vol = 0.08 + Math.random() * 0.04; // 0.08-0.12
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        source.start(now);
+        source.stop(now + duration);
+      } catch (e) {
+        // Silently fail if Web Audio is blocked or unavailable
+      }
+    }
+
+    // First-visit precedence: explicit user choice > OS preference > dark default
+    const saved = getSaved();
+    const prefersLight = saved === null && mq && mq.matches;
+    if (saved === 'light' || prefersLight) {
+      applyTheme(true);
+    }
+
+    // Manual toggle: user explicitly chooses — flicker + click sound + persist
+    toggle.addEventListener('click', function () {
+      const isLight = root.getAttribute('data-theme') === 'light';
+      playClickSound();
+      flickerTransition();
+      applyTheme(!isLight);
+      setSaved(isLight ? 'dark' : 'light');
     });
+
+    // System theme change: follow OS only if user hasn't manually chosen.
+    // Silent (no click sound) — automatic change, not user-initiated.
+    if (mq) {
+      const handler = function (e) {
+        if (getSaved() === null) {
+          flickerTransition();
+          applyTheme(e.matches);
+        }
+      };
+      if (mq.addEventListener) {
+        mq.addEventListener('change', handler);
+      } else if (mq.addListener) {
+        mq.addListener(handler); // Safari < 14 fallback
+      }
+    }
   }
 
   // -----------------------------------------------------------
