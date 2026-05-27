@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>404 · Page Not Found · horowitz.law</title>
+<meta name="description" content="The page you requested does not exist on horowitz.law.">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0d0e10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5ede0" media="(prefers-color-scheme: light)">
+
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+
+<link rel="preload" href="/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-700.woff2" as="font" type="font/woff2" crossorigin>
+
+<style>
+  @font-face {
+    font-family: 'JetBrains Mono';
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+    src: url('/fonts/jetbrains-mono-400.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'JetBrains Mono';
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+    src: url('/fonts/jetbrains-mono-600.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'JetBrains Mono';
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+    src: url('/fonts/jetbrains-mono-700.woff2') format('woff2');
+  }
+
+  :root {
+    --bg: #0d0e10;
+    --fg: #ddd5c8;
+    --fg-muted: #807a72;
+    --accent: #ff9e5e;
+    --border: #25262a;
+    --grain-opacity: 0.04;
+    --scanline-opacity: 0.018;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f5ede0;
+      --fg: #1a1a1a;
+      --fg-muted: #6a6560;
+      --accent: #a4471a;
+      --border: #d4cab8;
+      --grain-opacity: 0.025;
+      --scanline-opacity: 0;
+    }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--fg);
+    background: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 48px 32px;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* Grain texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: var(--grain-opacity);
+    pointer-events: none;
+    z-index: 1;
+    mix-blend-mode: overlay;
+  }
+
+  /* CRT scanlines */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(255, 158, 94, var(--scanline-opacity)) 0px,
+      rgba(255, 158, 94, var(--scanline-opacity)) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .container {
+    max-width: 760px;
+    width: 100%;
+    margin: 0 auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    z-index: 3;
+  }
+
+  .topbar {
+    margin-bottom: 80px;
+    font-size: 13px;
+    color: var(--fg-muted);
+    letter-spacing: 0.05em;
+  }
+
+  .topbar a {
+    color: var(--fg-muted);
+    text-decoration: none;
+    border-bottom: 1px dotted transparent;
+    transition: border-color 0.2s, color 0.2s;
+  }
+
+  .topbar a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-bottom: 80px;
+  }
+
+  .terminal {
+    font-size: 15px;
+    line-height: 1.85;
+    margin-bottom: 32px;
+  }
+
+  .line {
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .prompt::before {
+    content: '$ ';
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .err {
+    color: var(--fg-muted);
+  }
+
+  .err-prefix {
+    color: #d97757;
+  }
+
+  .path {
+    color: var(--fg);
+    font-weight: 500;
+  }
+
+  .ls-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    column-gap: 24px;
+    row-gap: 4px;
+    margin: 12px 0 12px 16px;
+    font-size: 14px;
+  }
+
+  .ls-grid a {
+    color: var(--fg);
+    text-decoration: none;
+    border-bottom: 1px dotted transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  .ls-grid a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .ls-grid a::before {
+    content: '→ ';
+    color: var(--fg-muted);
+  }
+
+  .blink {
+    display: inline-block;
+    width: 0.55em;
+    height: 0.75em;
+    background: var(--accent);
+    margin-left: 4px;
+    vertical-align: baseline;
+    animation: blink 1.05s steps(2) infinite;
+  }
+
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    50.01%, 100% { opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .blink { animation: none !important; opacity: 1; }
+    body::after { display: none !important; }
+  }
+
+  footer {
+    margin-top: auto;
+    padding-top: 32px;
+    font-size: 11px;
+    color: var(--fg-muted);
+    border-top: 1px solid var(--border);
+  }
+
+  footer a {
+    color: var(--fg-muted);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--fg-muted);
+  }
+
+  footer a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  @media (max-width: 600px) {
+    body { padding: 36px 22px; }
+    .topbar { margin-bottom: 50px; }
+    .terminal { font-size: 13px; }
+    .ls-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="topbar">
+    <a href="/">~ horowitz.law</a>
+  </div>
+
+  <main>
+    <div class="terminal">
+      <div class="line prompt">cat <span class="path" id="requestedPath">/</span></div>
+      <div class="line err"><span class="err-prefix">cat:</span> <span class="path" id="requestedPath2">/</span>: No such file or directory</div>
+      <div class="line">&nbsp;</div>
+      <div class="line prompt">ls /</div>
+      <div class="ls-grid">
+        <a href="/#about">about/</a>
+        <a href="/#areas">areas/</a>
+        <a href="/#credentials">credentials/</a>
+        <a href="/#honors">honors/</a>
+        <a href="/#admissions">admissions/</a>
+        <a href="/#contact">contact/</a>
+        <a href="/resume.html">resume.html</a>
+      </div>
+      <div class="line prompt">cd /<span class="blink" aria-hidden="true"></span></div>
+    </div>
+  </main>
+
+  <footer>
+    <span>404 · Page not found · <a href="/">return home</a></span>
+  </footer>
+
+</div>
+
+<script>
+  // Populate the requested path so the 404 honestly reflects what the user typed
+  (function () {
+    var path = window.location.pathname;
+    if (path === '/' || path === '/404.html' || path === '/404') {
+      path = '/unknown-resource';
+    }
+    var els = document.querySelectorAll('#requestedPath, #requestedPath2');
+    for (var i = 0; i < els.length; i++) {
+      els[i].textContent = path;
+    }
+  })();
+</script>
+
+</body>
+</html>

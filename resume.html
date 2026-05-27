@@ -444,6 +444,16 @@
     flex-wrap: wrap;
     gap: 12px;
   }
+  footer a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  footer a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
 
   /* responsive */
   @media (max-width: 600px) {
@@ -898,7 +908,7 @@
     </main>
 
     <footer>
-      <span>© 2026 · Hand-coded by Devin R. Horowitz</span>
+      <span>© 2026 · <a href="/colophon">Hand-coded by Devin R. Horowitz</a></span>
       <span><a href="/" class="text-link">← back to horowitz.law</a></span>
     </footer>
 
