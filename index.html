@@ -265,8 +265,8 @@
 
   .hero-portrait {
     position: relative;
-    opacity: 0;
-    animation: fadeIn 0.9s ease 0.1s forwards;
+    animation: fadeIn 0.9s ease 0.1s both;
+    width: fit-content;
   }
 
   .hero-portrait img {
@@ -298,8 +298,7 @@
     color: var(--accent);
     font-size: 13.5px;
     margin-bottom: 16px;
-    opacity: 0;
-    animation: fadeIn 0.6s ease 0.25s forwards;
+    animation: fadeIn 0.6s ease 0.25s both;
     letter-spacing: 0.03em;
   }
 
@@ -309,8 +308,7 @@
     letter-spacing: -0.025em;
     line-height: 1.12;
     margin-bottom: 20px;
-    opacity: 0;
-    animation: fadeIn 0.8s ease 0.45s forwards;
+    animation: fadeIn 0.8s ease 0.45s both;
   }
 
   .cursor {
@@ -361,8 +359,7 @@
   .hero-meta {
     font-size: 13px;
     color: var(--fg-muted);
-    opacity: 0;
-    animation: fadeIn 0.8s ease 0.65s forwards;
+    animation: fadeIn 0.8s ease 0.65s both;
     line-height: 1.8;
   }
 
@@ -606,8 +603,8 @@
   }
   .qr-code {
     display: block;
-    width: 90px;
-    height: 90px;
+    width: 135px;
+    height: 135px;
     padding: 4px;
     background: #fff;
     border-radius: 2px;
@@ -731,7 +728,12 @@
       flex-direction: column;
     }
     .qr-block {
-      align-self: flex-end;
+      align-self: center;
+      margin-top: 14px;
+    }
+    .qr-code {
+      width: 165px;
+      height: 165px;
     }
         .contact-grid {
       display: flex;
