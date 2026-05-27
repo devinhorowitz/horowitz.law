@@ -1,21 +1,5 @@
 # bio.md
 
-A longer-form personal history that lives in the repo rather than on the
-rendered site. Not linked from horowitz.law; visible only to anyone who
-navigates the GitHub source.
-
-Preserved here because once it's gone from LinkedIn it's gone everywhere
-else. Some of this is color rather than credential — the kind of detail
-that ages well rather than decays, but doesn't belong on a civil litigation
-attorney's professional landing page.
-
----
-
-## The career arc, written out
-
-Continuous trajectory from age 16 to bar admission. Each role built on
-the previous in a way that's only legible in retrospect.
-
 **2005-2007 · ForTech, Forsyth County Schools.** Two-year internship at
 South Forsyth High School during the senior years. General classroom, lab,
 and faculty technology support. Installing and troubleshooting projectors,
@@ -48,6 +32,15 @@ compliance. Genuinely unusual for an attorney. Stays interesting.
 **2011-2012 · M.S., Information Technology, Southern Polytechnic State
 University.** Concentrations in Information Security & Assurance and
 Healthcare IT. GPA 3.58.
+
+**Mar 2012 · First peer-reviewed publication.** Co-authored with faculty
+advisor Chi Zhang: "Streamlining Electronic Health Records and Health Care
+Information System Implementation for General Practices: One Clinic's
+Experience," in the Proceedings of the Southern Association for Information
+Systems Conference (SAIS 2012), Paper 18. First author. The paper
+documented pre-implementation procedures and recommended workflow for
+small medical practices adopting EHR systems — the same Healthcare IT
+domain as the M.S. concentration, translated into actual research output.
 
 **Mar 2012 - Jul 2014 · Educational Technology Support Specialist, SPSU.**
 Promotion from student assistant to professional staff. Two years of
@@ -93,19 +86,6 @@ Electronic Discovery, Healthcare Law, Internet Law, Pre-Trial Practice
 Spring 2017 alone.
 
 **Nov 2017 · Admitted to the State Bar of Georgia (No. 551617).**
-
----
-
-## What stayed in this file rather than the resume
-
-The resume captures the credentials someone hiring an attorney needs to
-see. This file captures the continuous trajectory underneath them — that
-the technical instincts started in high school, that the pyrotechnician
-work was real and concurrent with undergraduate IT studies, that the JD
-was built on top of a decade of practical IT experience rather than
-replacing it.
-
-The hand-coded website itself is downstream of all this.
 
 ---
 
