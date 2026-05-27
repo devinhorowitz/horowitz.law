@@ -262,29 +262,56 @@
 
 
   /* Brief analog-feel flicker on theme transitions. JS adds .theme-flickering
-     to <html> for ~280-480ms; this drives the animation on content containers
-     (leaving topbar/toggle stable as the anchor point during the change). */
+     to <html> for ~450-700ms; smooth interpolation (no steps) and gentler
+     opacity dips give the effect an analog/phosphor feel rather than a
+     digital glitch. Topbar/toggle stay stable as the anchor of the change. */
   @keyframes themeFlicker {
     0%   { opacity: 1; }
-    10%  { opacity: 0.55; }
-    18%  { opacity: 0.95; }
-    28%  { opacity: 0.7; }
-    38%  { opacity: 1; }
-    52%  { opacity: 0.4; }
-    62%  { opacity: 0.85; }
-    76%  { opacity: 1; }
-    88%  { opacity: 0.95; }
+    18%  { opacity: 0.78; }
+    34%  { opacity: 0.95; }
+    50%  { opacity: 0.68; }
+    68%  { opacity: 0.92; }
+    85%  { opacity: 0.96; }
     100% { opacity: 1; }
   }
 
   html.theme-flickering .container > *:not(.topbar) {
-    animation: themeFlicker var(--flicker-duration, 400ms) steps(14) forwards;
+    animation: themeFlicker var(--flicker-duration, 550ms) ease-out forwards;
   }
 
   @media (prefers-reduced-motion: reduce) {
     html.theme-flickering .container > *:not(.topbar) {
       animation: none !important;
     }
+  }
+
+
+  /* terminal-style credits block (matches landing page) */
+  .repo-link {
+    margin-top: 18px;
+    font-size: 11px;
+    color: var(--fg-muted);
+    letter-spacing: 0;
+  }
+  .repo-link > div {
+    line-height: 1.75;
+  }
+  .repo-cmd::before {
+    content: '$ ';
+    color: var(--accent);
+  }
+  .repo-note::before {
+    content: '# ';
+    color: var(--accent);
+  }
+  .repo-link a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--fg-muted);
+  }
+  .repo-link a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
   }
 
   @keyframes fadeIn {
@@ -522,6 +549,9 @@
     .download-btn,
     .skip-link,
     footer {
+      display: none !important;
+    }
+    .repo-link {
       display: none !important;
     }
 
@@ -871,6 +901,11 @@
       <span>© 2026 Devin R. Horowitz</span>
       <span><a href="/" class="text-link">← back to horowitz.law</a></span>
     </footer>
+
+    <div class="repo-link">
+      <div class="repo-cmd">git clone <a href="https://github.com/devinhorowitz/horowitz.law" target="_blank" rel="noopener noreferrer">github.com/devinhorowitz/horowitz.law</a></div>
+      <div class="repo-note">hand-coded · hosted on cloudflare</div>
+    </div>
 
   </div>
   <script src="/app.js" defer></script>

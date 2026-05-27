@@ -117,11 +117,11 @@
     }
 
     // Brief analog-feel flicker on theme transitions. Duration is randomized
-    // (280-480ms) so each transition has its own slight cadence — same spirit
+    // (450-700ms) so each transition has its own slight cadence — same spirit
     // as the typing animation. Skipped under prefers-reduced-motion.
     function flickerTransition() {
       if (reduceMotion) return;
-      const duration = 280 + Math.random() * 200;
+      const duration = 450 + Math.random() * 250;
       root.style.setProperty('--flicker-duration', duration + 'ms');
       root.classList.add('theme-flickering');
       setTimeout(function () {
