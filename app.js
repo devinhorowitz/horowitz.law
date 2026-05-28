@@ -126,7 +126,10 @@
         toggle.textContent = '[ dark ]';
         toggle.setAttribute('aria-pressed', 'true');
       } else {
-        root.removeAttribute('data-theme');
+        // Set 'dark' explicitly rather than removing the attribute: the
+        // first-visit media query keys off :not([data-theme="dark"]), so an
+        // explicit dark choice must mark itself to override a light-mode OS.
+        root.setAttribute('data-theme', 'dark');
         toggle.textContent = '[ light ]';
         toggle.setAttribute('aria-pressed', 'false');
       }
@@ -209,12 +212,20 @@
       }
     }
 
-    // First-visit precedence: explicit user choice > OS preference > dark default
+    // First-visit precedence: explicit user choice > OS preference > dark
+    // default. For unsaved visitors the CSS media query has already painted
+    // the OS-preferred theme (flash-free); JS only needs to set the button
+    // label and, for OS-light, mark data-theme so the toggle reads correctly.
+    // A saved 'dark' must be applied explicitly to override a light-mode OS.
     const saved = getSaved();
-    const prefersLight = saved === null && mq && mq.matches;
-    if (saved === 'light' || prefersLight) {
+    if (saved === 'light') {
+      applyTheme(true);
+    } else if (saved === 'dark') {
+      applyTheme(false);
+    } else if (mq && mq.matches) {
       applyTheme(true);
     }
+    // else: unsaved + OS dark — leave the base default; button stays "[ light ]".
 
     // Manual toggle: user explicitly chooses — flicker + click sound + persist
     toggle.addEventListener('click', function () {
@@ -265,5 +276,18 @@
     printBtn.addEventListener('click', function () {
       window.print();
     });
+  }
+
+  // -----------------------------------------------------------
+  // 404 path populator (404.html) — fills in the path the
+  // visitor tried to load. No-ops on pages without the markers.
+  // -----------------------------------------------------------
+  const pathTargets = document.querySelectorAll('#requestedPath, #requestedPath2');
+  if (pathTargets.length) {
+    let path = window.location.pathname;
+    if (path === '/' || path === '/404.html' || path === '/404') {
+      path = '/unknown-resource';
+    }
+    pathTargets.forEach(function (el) { el.textContent = path; });
   }
 })();
