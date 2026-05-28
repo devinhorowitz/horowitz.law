@@ -60,16 +60,14 @@
     --scanline-opacity: 0.018;
   }
 
-  @media (prefers-color-scheme: light) {
-    :root {
-      --bg: #f5ede0;
-      --fg: #1a1a1a;
-      --fg-muted: #6a6560;
-      --accent: #a4471a;
-      --border: #d4cab8;
-      --grain-opacity: 0.025;
-      --scanline-opacity: 0;
-    }
+  :root[data-theme="light"] {
+    --bg: #f5ede0;
+    --fg: #1a1a1a;
+    --fg-muted: #6a6560;
+    --accent: #a4471a;
+    --border: #d4cab8;
+    --grain-opacity: 0.025;
+    --scanline-opacity: 0;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -128,10 +126,14 @@
   }
 
   .topbar {
-    margin-bottom: 80px;
+    margin-bottom: 60px;
     font-size: 13px;
     color: var(--fg-muted);
     letter-spacing: 0.05em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
   }
 
   .topbar a {
@@ -144,6 +146,26 @@
   .topbar a:hover {
     color: var(--accent);
     border-bottom-color: var(--accent);
+  }
+
+  .theme-toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--fg-muted);
+    font-family: inherit;
+    font-size: 11.5px;
+    padding: 5px 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+    text-decoration: none;
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .theme-toggle:hover {
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   main {
@@ -262,6 +284,7 @@
 
   <div class="topbar">
     <a href="/">~ horowitz.law</a>
+    <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light or dark theme" aria-pressed="false">[ light ]</button>
   </div>
 
   <main>
@@ -289,19 +312,7 @@
 
 </div>
 
-<script>
-  // Populate the requested path so the 404 honestly reflects what the user typed
-  (function () {
-    var path = window.location.pathname;
-    if (path === '/' || path === '/404.html' || path === '/404') {
-      path = '/unknown-resource';
-    }
-    var els = document.querySelectorAll('#requestedPath, #requestedPath2');
-    for (var i = 0; i < els.length; i++) {
-      els[i].textContent = path;
-    }
-  })();
-</script>
+<script src="/app.js" defer></script>
 
 </body>
 </html>
