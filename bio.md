@@ -101,7 +101,7 @@ Electronic Discovery, Healthcare Law, Internet Law, Pre-Trial Practice
 **May 2017 · Distinguished Pro Bono Award.** 365 pro bono hours in
 Spring 2017 alone.
 
-**Nov 2017 · Admitted to the State Bar of Georgia (No. 551617).**
+**Nov 2017 · Admitted to the State Bar of Georgia.**
 
 ---
 

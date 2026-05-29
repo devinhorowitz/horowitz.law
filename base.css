@@ -1,0 +1,116 @@
+/* =============================================================
+   horowitz.law — base.css
+   Shared foundation linked by every page: the @font-face
+   declarations (identical everywhere, previously duplicated in
+   four inline <style> blocks), the color-scheme signal so native
+   UI matches the theme, and modern text-wrapping defaults.
+
+   Page-specific :root color tokens stay inline per page, because
+   they intentionally differ (e.g. --fg is slightly dimmer on the
+   colophon and 404 than on the landing and resume).
+   ============================================================= */
+
+/* ---- Self-hosted JetBrains Mono (weights used: 400/500/600/700) ---- */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-700.woff2') format('woff2');
+}
+
+/* ---- color-scheme: make native UI (scrollbars, controls, the
+   find-in-page bar) render in the active theme rather than default
+   light. Keyed to the same selectors the theme system uses. ---- */
+:root {
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+  }
+}
+
+/* ---- Modern text wrapping. Progressive enhancement: ignored by
+   browsers that don't support it, better typography where they do.
+   balance evens out short multi-line headings; pretty prevents
+   single-word orphans in body copy. ---- */
+h1, h2, h3 {
+  text-wrap: balance;
+}
+p {
+  text-wrap: pretty;
+}
+
+/* ---- Toggle / button interaction states.
+   Covers the theme toggle and the resume's print button, which share a
+   visual vocabulary. Hover is scoped to devices that actually hover, so
+   the accent state doesn't "stick" on a touchscreen after a tap. The
+   :active state gives an immediate, visible press indication: iOS Safari
+   shows no feedback on a <button> without one, so a tap previously felt
+   inert even though the page reacted. The press inverts the button and
+   nudges its scale. ---- */
+.theme-toggle,
+.download-btn {
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  .theme-toggle:hover,
+  .download-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+}
+.theme-toggle:active,
+.download-btn:active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+  transform: scale(0.96);
+}
+
+/* ---- Touch tap-target sizing. On coarse pointers the buttons render
+   ~26px tall — fine for a mouse, but under the 44px Apple HIG / WCAG 2.5.5
+   target for fingers. An invisible pseudo-element widens the *hit area* to
+   44px without enlarging the visible button, so the desktop look is
+   untouched while taps land reliably on mobile. ---- */
+@media (pointer: coarse) {
+  .theme-toggle,
+  .download-btn {
+    position: relative;
+  }
+  .theme-toggle::after,
+  .download-btn::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: 50%;
+    transform: translateY(-50%);
+    height: 44px;
+    min-height: 100%;
+  }
+}

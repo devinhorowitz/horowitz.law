@@ -30,9 +30,11 @@
 <!-- Open Graph -->
 <meta property="og:type" content="profile">
 <meta property="og:url" content="https://horowitz.law/resume.html">
+<meta property="og:locale" content="en_US">
 <meta property="og:title" content="Curriculum Vitae · Devin R. Horowitz">
 <meta property="og:description" content="Civil litigation attorney with a decade of Georgia trial experience.">
-<meta property="og:image" content="https://horowitz.law/og-card.png">
+<meta property="og:image" content="https://horowitz.law/og-card.jpg">
+<meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Devin R. Horowitz — Civil Litigation Attorney, Georgia state and federal courts.">
@@ -42,7 +44,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Curriculum Vitae · Devin R. Horowitz">
 <meta name="twitter:description" content="Civil litigation attorney with a decade of Georgia trial experience.">
-<meta name="twitter:image" content="https://horowitz.law/og-card.png">
+<meta name="twitter:image" content="https://horowitz.law/og-card.jpg">
 
 <!-- JSON-LD structured data: ProfilePage referencing the Person defined on horowitz.law/ -->
 <script type="application/ld+json">
@@ -64,43 +66,15 @@
 }
 </script>
 
-<!-- Font preloads — tell browser to start fetching woff2s in parallel with HTML/CSS parse -->
+<!-- Shared foundation: @font-face, color-scheme, text-wrap -->
+<link rel="stylesheet" href="/base.css">
+
+<!-- Font preloads — above-the-fold weights only (400 body, 500 name).
+     600/700 load on demand via font-display: swap. -->
 <link rel="preload" href="/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/jetbrains-mono-500.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/jetbrains-mono-600.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/jetbrains-mono-700.woff2" as="font" type="font/woff2" crossorigin>
 
 <style>
-  /* Self-hosted JetBrains Mono — weights actually used: 400, 500, 600, 700 */
-  @font-face {
-    font-family: 'JetBrains Mono';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: url('/fonts/jetbrains-mono-400.woff2') format('woff2');
-  }
-  @font-face {
-    font-family: 'JetBrains Mono';
-    font-style: normal;
-    font-weight: 500;
-    font-display: swap;
-    src: url('/fonts/jetbrains-mono-500.woff2') format('woff2');
-  }
-  @font-face {
-    font-family: 'JetBrains Mono';
-    font-style: normal;
-    font-weight: 600;
-    font-display: swap;
-    src: url('/fonts/jetbrains-mono-600.woff2') format('woff2');
-  }
-  @font-face {
-    font-family: 'JetBrains Mono';
-    font-style: normal;
-    font-weight: 700;
-    font-display: swap;
-    src: url('/fonts/jetbrains-mono-700.woff2') format('woff2');
-  }
-
   :root {
     --bg: #0d0e10;
     --fg: #e8e3d8;
@@ -119,6 +93,22 @@
     --border: #d4cab8;
     --grain-opacity: 0.025;
     --scanline-opacity: 0;
+  }
+
+  /* First-visit: honor an OS light preference on initial paint, before any
+     explicit choice exists. The :not([data-theme="dark"]) guard ensures an
+     explicit dark toggle still wins on a light-mode OS. Keep vars in sync
+     with the [data-theme="light"] block above. */
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f5ede0;
+      --fg: #1a1a1a;
+      --fg-muted: #6a6560;
+      --accent: #a4471a;
+      --border: #d4cab8;
+      --grain-opacity: 0.025;
+      --scanline-opacity: 0;
+    }
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -185,7 +175,7 @@
   }
 
   .path { letter-spacing: 0.02em; }
-  .path .prompt-char { color: var(--accent); margin-right: 6px; }
+  .path .prompt-char { color: var(--accent); margin-inline-end: 6px; }
   .path a {
     color: var(--fg-muted);
     text-decoration: none;
@@ -207,15 +197,10 @@
     font-size: 11.5px;
     padding: 5px 11px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.2s;
     letter-spacing: 0.05em;
     text-decoration: none;
     display: inline-block;
-  }
-
-  .theme-toggle:hover, .download-btn:hover {
-    border-color: var(--accent);
-    color: var(--accent);
   }
 
   /* header */
@@ -261,7 +246,7 @@
     width: 0.55em;
     height: 0.75em;
     background: var(--accent);
-    margin-left: 6px;
+    margin-inline-start: 6px;
     vertical-align: baseline;
     animation: blink 1.05s steps(2) infinite;
   }
@@ -399,12 +384,12 @@
 
   .entry-bullets {
     list-style: none;
-    padding-left: 0;
+    padding-inline-start: 0;
   }
 
   .entry-bullets li {
     position: relative;
-    padding-left: 18px;
+    padding-inline-start: 18px;
     font-size: 13.5px;
     line-height: 1.65;
     color: var(--fg);
@@ -414,7 +399,7 @@
   .entry-bullets li::before {
     content: '·';
     position: absolute;
-    left: 4px;
+    inset-inline-start: 4px;
     color: var(--accent);
     font-weight: 700;
   }
@@ -502,7 +487,7 @@
   .skip-link {
     position: absolute;
     top: -100px;
-    left: 0;
+    inset-inline-start: 0;
     background: var(--accent);
     color: var(--bg);
     padding: 12px 16px;
@@ -578,7 +563,7 @@
 
     /* tighten the header for print */
     .cv-header {
-      text-align: left;
+      text-align: start;
       margin-top: 0;
       padding-top: 0;
       margin-bottom: 6pt;

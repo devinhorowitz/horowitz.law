@@ -23,44 +23,17 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 
+<!-- Shared foundation: @font-face, color-scheme, text-wrap -->
+<link rel="stylesheet" href="/base.css">
+
+<!-- Font preloads — above-the-fold weights only. -->
 <link rel="preload" href="/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/jetbrains-mono-500.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/jetbrains-mono-600.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/jetbrains-mono-700.woff2" as="font" type="font/woff2" crossorigin>
 
 <style>
-  @font-face {
-    font-family: 'JetBrains Mono';
-    font-weight: 400;
-    font-style: normal;
-    font-display: swap;
-    src: url('/fonts/jetbrains-mono-400.woff2') format('woff2');
-  }
-  @font-face {
-    font-family: 'JetBrains Mono';
-    font-weight: 500;
-    font-style: normal;
-    font-display: swap;
-    src: url('/fonts/jetbrains-mono-500.woff2') format('woff2');
-  }
-  @font-face {
-    font-family: 'JetBrains Mono';
-    font-weight: 600;
-    font-style: normal;
-    font-display: swap;
-    src: url('/fonts/jetbrains-mono-600.woff2') format('woff2');
-  }
-  @font-face {
-    font-family: 'JetBrains Mono';
-    font-weight: 700;
-    font-style: normal;
-    font-display: swap;
-    src: url('/fonts/jetbrains-mono-700.woff2') format('woff2');
-  }
-
   :root {
     --bg: #0d0e10;
-    --fg: #ddd5c8;
+    --fg: #e8e3d8;
     --fg-muted: #807a72;
     --accent: #ff9e5e;
     --border: #25262a;
@@ -76,6 +49,22 @@
     --border: #d4cab8;
     --grain-opacity: 0.025;
     --scanline-opacity: 0;
+  }
+
+  /* First-visit: honor an OS light preference on initial paint, before any
+     explicit choice exists. The :not([data-theme="dark"]) guard ensures an
+     explicit dark toggle still wins on a light-mode OS. Keep vars in sync
+     with the [data-theme="light"] block above. */
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f5ede0;
+      --fg: #1a1a1a;
+      --fg-muted: #6a6560;
+      --accent: #a4471a;
+      --border: #d4cab8;
+      --grain-opacity: 0.025;
+      --scanline-opacity: 0;
+    }
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -163,11 +152,7 @@
     letter-spacing: 0.05em;
     padding: 5px 11px;
     cursor: pointer;
-    transition: all 0.2s;
-  }
-  .theme-toggle:hover {
-    border-color: var(--accent);
-    color: var(--accent);
+    transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.2s;
   }
 
   /* page title */
@@ -294,7 +279,7 @@
   /* skip-to-content link (keyboard accessibility) */
   .skip-link {
     position: absolute;
-    left: -9999px;
+    inset-inline-start: -9999px;
     top: 0;
     background: var(--accent);
     color: var(--bg);
@@ -304,7 +289,7 @@
     z-index: 100;
   }
   .skip-link:focus {
-    left: 16px;
+    inset-inline-start: 16px;
     top: 16px;
   }
 

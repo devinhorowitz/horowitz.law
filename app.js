@@ -115,10 +115,71 @@
     }
   } catch (e) { /* noop */ }
 
+  // -----------------------------------------------------------
+  // Shared interaction feedback. The synthesized "tactile click"
+  // is a deliberate device-control gesture, used by the theme
+  // toggle and the print button. Hoisted to the top level so any
+  // handler can trigger it. Navigation links intentionally stay
+  // silent — the click maps to "pressing a control," not "going
+  // somewhere," which keeps the analog conceit coherent (and a
+  // link's sound would get cut off by same-tab page unload anyway).
+  // Respects prefers-reduced-motion.
+  // -----------------------------------------------------------
+  const reduceMotion = window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let audioCtx = null;
+  function playClickSound() {
+    if (reduceMotion) return;
+    try {
+      if (!audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        audioCtx = new Ctx();
+      }
+      // iOS Safari can leave the context suspended (tab backgrounding,
+      // audio-session interruptions); resume it within this user gesture
+      // so the click actually plays instead of failing silently.
+      if (audioCtx.state === 'suspended' && audioCtx.resume) {
+        audioCtx.resume();
+      }
+      const now = audioCtx.currentTime;
+      const duration = 0.035 + Math.random() * 0.025; // 35-60ms
+
+      // Brief noise burst, naturally decaying inside the buffer
+      const buf = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * duration), audioCtx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+      }
+      const source = audioCtx.createBufferSource();
+      source.buffer = buf;
+
+      // Bandpass filter centers the noise into "click" frequency band
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 1200 + Math.random() * 600; // 1200-1800 Hz, slight variance
+      filter.Q.value = 1.4;
+
+      // Gain envelope: instant attack, fast exponential decay
+      const gain = audioCtx.createGain();
+      const vol = 0.08 + Math.random() * 0.04; // 0.08-0.12
+      gain.gain.setValueAtTime(vol, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      source.connect(filter);
+      filter.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      source.start(now);
+      source.stop(now + duration);
+    } catch (e) {
+      // Silently fail if Web Audio is blocked or unavailable
+    }
+  }
+
   if (toggle) {
     const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
-    const reduceMotion = window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     function applyTheme(isLight) {
       if (isLight) {
@@ -160,55 +221,6 @@
         }
       } catch (e) {
         // silently fail if blocked or unsupported
-      }
-    }
-
-    // Synthesized "tactile click" via Web Audio API. No asset file needed.
-    // Slight per-click randomization in frequency and volume matches the
-    // analog feel of the typing and flicker animations. Skipped under
-    // prefers-reduced-motion. AudioContext is created lazily on first use
-    // because browser autoplay policies require user gesture initialization.
-    let audioCtx = null;
-    function playClickSound() {
-      if (reduceMotion) return;
-      try {
-        if (!audioCtx) {
-          const Ctx = window.AudioContext || window.webkitAudioContext;
-          if (!Ctx) return;
-          audioCtx = new Ctx();
-        }
-        const now = audioCtx.currentTime;
-        const duration = 0.035 + Math.random() * 0.025; // 35-60ms
-
-        // Brief noise burst, naturally decaying inside the buffer
-        const buf = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * duration), audioCtx.sampleRate);
-        const data = buf.getChannelData(0);
-        for (let i = 0; i < data.length; i++) {
-          data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
-        }
-        const source = audioCtx.createBufferSource();
-        source.buffer = buf;
-
-        // Bandpass filter centers the noise into "click" frequency band
-        const filter = audioCtx.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.frequency.value = 1200 + Math.random() * 600; // 1200-1800 Hz, slight variance
-        filter.Q.value = 1.4;
-
-        // Gain envelope: instant attack, fast exponential decay
-        const gain = audioCtx.createGain();
-        const vol = 0.08 + Math.random() * 0.04; // 0.08-0.12
-        gain.gain.setValueAtTime(vol, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
-        source.connect(filter);
-        filter.connect(gain);
-        gain.connect(audioCtx.destination);
-
-        source.start(now);
-        source.stop(now + duration);
-      } catch (e) {
-        // Silently fail if Web Audio is blocked or unavailable
       }
     }
 
@@ -274,6 +286,7 @@
   const printBtn = document.getElementById('printButton');
   if (printBtn) {
     printBtn.addEventListener('click', function () {
+      playClickSound();
       window.print();
     });
   }

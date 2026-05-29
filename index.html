@@ -30,9 +30,11 @@
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://horowitz.law/">
+<meta property="og:locale" content="en_US">
 <meta property="og:title" content="Devin R. Horowitz — Civil Litigation Attorney">
 <meta property="og:description" content="Civil litigation attorney with a decade of Georgia trial experience. Personal injury and complex liability matters.">
-<meta property="og:image" content="https://horowitz.law/og-card.png">
+<meta property="og:image" content="https://horowitz.law/og-card.jpg">
+<meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Devin R. Horowitz — Civil Litigation Attorney, Georgia state and federal courts.">
@@ -42,7 +44,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Devin R. Horowitz — Civil Litigation Attorney">
 <meta name="twitter:description" content="Civil litigation attorney with a decade of Georgia trial experience. Personal injury and complex liability matters.">
-<meta name="twitter:image" content="https://horowitz.law/og-card.png">
+<meta name="twitter:image" content="https://horowitz.law/og-card.jpg">
 
 <!-- JSON-LD structured data -->
 <script type="application/ld+json">
@@ -91,8 +93,7 @@
   "memberOf": {
     "@type": "Organization",
     "name": "State Bar of Georgia",
-    "url": "https://www.gabar.org/",
-    "identifier": "551617"
+    "url": "https://www.gabar.org/"
   },
   "hasOccupation": {
     "@type": "Occupation",
@@ -120,43 +121,15 @@
 }
 </script>
 
-<!-- Font preloads — tell browser to start fetching woff2s in parallel with HTML/CSS parse -->
+<!-- Shared foundation: @font-face, color-scheme, text-wrap -->
+<link rel="stylesheet" href="/base.css">
+
+<!-- Font preloads — only the above-the-fold weights (400 body, 500 name).
+     600/700 load on demand via font-display: swap. -->
 <link rel="preload" href="/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/jetbrains-mono-500.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/jetbrains-mono-600.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/jetbrains-mono-700.woff2" as="font" type="font/woff2" crossorigin>
 
 <style>
-  /* Self-hosted JetBrains Mono — weights actually used: 400, 500, 600, 700 */
-  @font-face {
-    font-family: 'JetBrains Mono';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: url('/fonts/jetbrains-mono-400.woff2') format('woff2');
-  }
-  @font-face {
-    font-family: 'JetBrains Mono';
-    font-style: normal;
-    font-weight: 500;
-    font-display: swap;
-    src: url('/fonts/jetbrains-mono-500.woff2') format('woff2');
-  }
-  @font-face {
-    font-family: 'JetBrains Mono';
-    font-style: normal;
-    font-weight: 600;
-    font-display: swap;
-    src: url('/fonts/jetbrains-mono-600.woff2') format('woff2');
-  }
-  @font-face {
-    font-family: 'JetBrains Mono';
-    font-style: normal;
-    font-weight: 700;
-    font-display: swap;
-    src: url('/fonts/jetbrains-mono-700.woff2') format('woff2');
-  }
-
   :root {
     --bg: #0d0e10;
     --fg: #e8e3d8;
@@ -261,7 +234,7 @@
 
   .path .prompt-char {
     color: var(--accent);
-    margin-right: 6px;
+    margin-inline-end: 6px;
   }
 
   .theme-toggle {
@@ -272,13 +245,8 @@
     font-size: 11.5px;
     padding: 5px 11px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.2s;
     letter-spacing: 0.05em;
-  }
-
-  .theme-toggle:hover {
-    border-color: var(--accent);
-    color: var(--accent);
   }
 
   /* hero */
@@ -312,10 +280,10 @@
     border: 1px solid var(--accent);
     opacity: 0.7;
   }
-  .portrait-corner.tl { top: -4px; left: -4px; border-right: none; border-bottom: none; }
-  .portrait-corner.tr { top: -4px; right: -4px; border-left: none; border-bottom: none; }
-  .portrait-corner.bl { bottom: -4px; left: -4px; border-right: none; border-top: none; }
-  .portrait-corner.br { bottom: -4px; right: -4px; border-left: none; border-top: none; }
+  .portrait-corner.tl { top: -4px; inset-inline-start: -4px; border-inline-end: none; border-bottom: none; }
+  .portrait-corner.tr { top: -4px; inset-inline-end: -4px; border-inline-start: none; border-bottom: none; }
+  .portrait-corner.bl { bottom: -4px; inset-inline-start: -4px; border-inline-end: none; border-top: none; }
+  .portrait-corner.br { bottom: -4px; inset-inline-end: -4px; border-inline-start: none; border-top: none; }
 
   .hero-content {
     padding-top: 4px;
@@ -343,7 +311,7 @@
     width: 0.55em;
     height: 0.75em;
     background: var(--accent);
-    margin-left: 6px;
+    margin-inline-start: 6px;
     vertical-align: baseline;
     animation: blink 1.05s steps(2) infinite;
   }
@@ -454,7 +422,7 @@
     letter-spacing: 0.05em;
     padding: 5px 11px;
     text-decoration: none;
-    transition: all 0.2s;
+    transition: border-color 0.2s, color 0.2s;
     white-space: nowrap;
   }
   .section-cta:hover {
@@ -478,7 +446,7 @@
 
   .areas-grid li {
     position: relative;
-    padding-left: 18px;
+    padding-inline-start: 18px;
     font-size: 13.5px;
     color: var(--fg);
     line-height: 1.5;
@@ -487,7 +455,7 @@
   .areas-grid li::before {
     content: '→';
     position: absolute;
-    left: 0;
+    inset-inline-start: 0;
     color: var(--accent);
     opacity: 0.75;
   }
@@ -511,7 +479,7 @@
     flex-direction: column;
     gap: 4px;
     position: relative;
-    padding-left: 22px;
+    padding-inline-start: 22px;
   }
 
   .honors-list li:last-child { border-bottom: none; }
@@ -519,7 +487,7 @@
   .honors-list li::before {
     content: '◆';
     position: absolute;
-    left: 0;
+    inset-inline-start: 0;
     top: 16px;
     color: var(--accent);
     font-size: 9px;
@@ -558,7 +526,7 @@
 
   .admissions-col li {
     position: relative;
-    padding-left: 18px;
+    padding-inline-start: 18px;
     font-size: 13.5px;
     line-height: 1.95;
     color: var(--fg);
@@ -567,7 +535,7 @@
   .admissions-col li::before {
     content: '→';
     position: absolute;
-    left: 0;
+    inset-inline-start: 0;
     color: var(--accent);
     opacity: 0.75;
   }
@@ -664,7 +632,7 @@
     color: var(--fg);
     text-decoration: none;
     padding: 6px 0;
-    transition: all 0.2s;
+    transition: color 0.2s;
     display: inline-block;
     width: fit-content;
   }
@@ -672,7 +640,7 @@
   .contact-grid a::before, .contact-grid .static::before {
     content: '→';
     color: var(--fg-muted);
-    margin-right: 10px;
+    margin-inline-end: 10px;
     transition: color 0.2s, transform 0.2s;
     display: inline-block;
   }
@@ -800,7 +768,7 @@
   .skip-link {
     position: absolute;
     top: -100px;
-    left: 0;
+    inset-inline-start: 0;
     background: var(--accent);
     color: var(--bg);
     padding: 12px 16px;
@@ -848,7 +816,7 @@
 
     <header class="hero">
       <div class="hero-portrait">
-        <img src="devin.jpg" alt="" width="170" height="170" loading="eager">
+        <img src="devin.jpg" alt="Devin R. Horowitz" width="170" height="170" loading="eager" fetchpriority="high" decoding="async">
         <span class="portrait-corner tl"></span>
         <span class="portrait-corner tr"></span>
         <span class="portrait-corner bl"></span>
@@ -898,7 +866,7 @@
           <li>
             <span class="cred-label">Bar</span>
             <span class="cred-value"><a href="https://www.gabar.org/" target="_blank" rel="noopener noreferrer">State Bar of Georgia</a>
-              <span class="cred-sub">Member No. 551617 · Active since 2017</span>
+              <span class="cred-sub">Active since 2017</span>
               <span class="cred-sub">Sections: <a href="https://www.gabar.org/bar-communities/sections/view/E-Discovery-the-Use-of-Technology" target="_blank" rel="noopener noreferrer">E-Discovery &amp; the Use of Technology</a> · <a href="https://www.gabar.org/bar-communities/sections/General-Practice-Trial-Law" target="_blank" rel="noopener noreferrer">General Practice &amp; Trial Law</a> · <a href="https://www.gabar.org/bar-communities/sections/Insurance-Law" target="_blank" rel="noopener noreferrer">Insurance Law</a></span>
             </span>
           </li>
@@ -976,8 +944,8 @@
           <a href="mailto:devin.horowitz@qpwblaw.com">devin.horowitz@qpwblaw.com</a>
           <a href="tel:+17706508737,1983">(770) 650-8737 ext. 1983</a>
           <span class="static">Marietta, GA</span>
-          <a href="https://qpwblaw.com/attorney/devin-r-horowitz/" target="_blank" rel="noopener noreferrer">QPWB firm profile</a>
-          <a href="https://www.linkedin.com/in/devinhorowitz/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+          <a href="https://qpwblaw.com/attorney/devin-r-horowitz/" target="_blank" rel="me noopener noreferrer">QPWB firm profile</a>
+          <a href="https://www.linkedin.com/in/devinhorowitz/" target="_blank" rel="me noopener noreferrer">LinkedIn</a>
           <a href="/resume.html">Curriculum vitae</a>
         </address>
         <div class="qr-block">
@@ -1000,5 +968,19 @@
     </div>
   </div>
   <script src="/app.js" defer></script>
+
+  <!-- Speculation Rules: prerender the resume on hover intent so the
+       landing→resume navigation is instant. Progressive enhancement;
+       ignored by browsers without support (Safari/Firefox today). -->
+  <script type="speculationrules">
+  {
+    "prerender": [
+      {
+        "where": { "href_matches": "/resume.html" },
+        "eagerness": "moderate"
+      }
+    ]
+  }
+  </script>
 </body>
 </html>
