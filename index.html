@@ -121,13 +121,18 @@
 }
 </script>
 
-<!-- Shared foundation: @font-face, color-scheme, text-wrap -->
-<link rel="stylesheet" href="/base.css?v=2026-05-28">
-
-<!-- Font preloads — only the above-the-fold weights (400 body, 500 name).
-     600/700 load on demand via font-display: swap. -->
+<!-- Font preloads. All four weights render in the initial viewport (400 body,
+     500 name, 600/700 section headers), and their only other discovery path is
+     @font-face inside base.css, so preload them here to fetch in parallel
+     instead of chaining behind the stylesheet. crossorigin is required for
+     fonts even when same-origin (they are CORS-fetched). -->
 <link rel="preload" href="/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/jetbrains-mono-500.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-700.woff2" as="font" type="font/woff2" crossorigin>
+
+<!-- Shared foundation: @font-face, color-scheme, text-wrap -->
+<link rel="stylesheet" href="/base.css?v=2026-05-28">
 
 <style>
   :root {

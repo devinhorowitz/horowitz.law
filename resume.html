@@ -67,12 +67,17 @@
 </script>
 
 <!-- Shared foundation: @font-face, color-scheme, text-wrap -->
-<link rel="stylesheet" href="/base.css?v=2026-05-28">
-
-<!-- Font preloads — above-the-fold weights only (400 body, 500 name).
-     600/700 load on demand via font-display: swap. -->
+<!-- Font preloads. resume.html renders all four weights (400 body, 500 name,
+     600/700 section headers), so each is preloaded to fetch in parallel rather
+     than chaining behind base.css, whose @font-face is their only other
+     discovery path. crossorigin is required for fonts even when same-origin. -->
 <link rel="preload" href="/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/jetbrains-mono-500.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-700.woff2" as="font" type="font/woff2" crossorigin>
+
+<!-- Shared foundation: @font-face, color-scheme, text-wrap -->
+<link rel="stylesheet" href="/base.css?v=2026-05-28">
 
 <style>
   :root {

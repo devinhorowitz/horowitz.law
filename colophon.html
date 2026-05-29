@@ -24,11 +24,17 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 
 <!-- Shared foundation: @font-face, color-scheme, text-wrap -->
-<link rel="stylesheet" href="/base.css?v=2026-05-28">
-
-<!-- Font preloads — above-the-fold weights only. -->
+<!-- Font preloads. colophon.html renders weight 400 (body, the default since
+     body sets no font-weight), 500 (page title), and 600/700 (section headers),
+     so each is preloaded to fetch in parallel rather than chaining behind
+     base.css. crossorigin is required for fonts even when same-origin. -->
 <link rel="preload" href="/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/jetbrains-mono-500.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-700.woff2" as="font" type="font/woff2" crossorigin>
+
+<!-- Shared foundation: @font-face, color-scheme, text-wrap -->
+<link rel="stylesheet" href="/base.css?v=2026-05-28">
 
 <style>
   :root {
