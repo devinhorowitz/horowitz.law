@@ -132,6 +132,8 @@
 <link rel="preload" href="/fonts/jetbrains-mono-700.woff2" as="font" type="font/woff2" crossorigin>
 
 <!-- Shared foundation: @font-face, color-scheme, text-wrap -->
+<!-- pre-paint theme: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js; CSP hash-pinned) -->
+<script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <link rel="stylesheet" href="/base.css?v=2026-05-28">
 
 <style>
@@ -144,6 +146,7 @@
     --grain-opacity: 0.04;
     --scanline-opacity: 0.018;
     --portrait-filter: contrast(1.02) saturate(0.96);
+    --toggle-border: #66625b;
   }
 
   [data-theme="light"] {
@@ -155,6 +158,7 @@
     --grain-opacity: 0.025;
     --scanline-opacity: 0;
     --portrait-filter: contrast(1.0) saturate(0.94);
+    --toggle-border: var(--border);
   }
 
   /* First-visit: honor an OS light preference on initial paint, before any
@@ -171,6 +175,7 @@
       --grain-opacity: 0.025;
       --scanline-opacity: 0;
       --portrait-filter: contrast(1.0) saturate(0.94);
+      --toggle-border: var(--border);
     }
   }
 
@@ -244,7 +249,7 @@
 
   .theme-toggle {
     background: transparent;
-    border: 1px solid var(--border);
+    border: 1px solid var(--toggle-border);
     color: var(--fg-muted);
     font-family: inherit;
     font-size: 11.5px;
@@ -403,6 +408,14 @@
   section.visible {
     opacity: 1;
     transform: translateY(0);
+  }
+
+  /* No-JS fallback: the fade-in above is applied by app.js (IntersectionObserver
+     adds .visible), so without scripting the sections would never be revealed.
+     Show them outright when scripting is unavailable, so content is never gated
+     on JavaScript. */
+  @media (scripting: none) {
+    section { opacity: 1; transform: none; }
   }
 
   .section-header {
@@ -996,7 +1009,7 @@
       <div class="repo-note">served over a CDN</div>
     </div>
   </div>
-  <script src="/app.js?v=2026-05-28" defer></script>
+  <script src="/app.js?v=2026-05-30" defer></script>
 
   <!-- Speculation Rules: prerender the resume on hover intent so the
        landing→resume navigation is instant. Progressive enhancement;
