@@ -22,6 +22,7 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
 
 <!-- Shared foundation: @font-face, color-scheme, text-wrap -->
 <!-- Font preloads. colophon.html renders weight 400 (body, the default since
@@ -36,7 +37,7 @@
 <!-- Shared foundation: @font-face, color-scheme, text-wrap -->
 <!-- pre-paint theme: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js; CSP hash-pinned) -->
 <script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
-<link rel="stylesheet" href="/base.css?v=2026-05-28">
+<link rel="stylesheet" href="/base.css?v=2026-05-30">
 
 <style>
   :root {
@@ -75,8 +76,6 @@
     }
   }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
   html { scroll-behavior: smooth; }
 
   body {
@@ -89,32 +88,6 @@
     position: relative;
     overflow-x: hidden;
     overflow-wrap: break-word;
-  }
-
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    opacity: var(--grain-opacity);
-    pointer-events: none;
-    z-index: 1;
-    mix-blend-mode: overlay;
-  }
-
-  body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      rgba(255, 158, 94, var(--scanline-opacity)) 0px,
-      rgba(255, 158, 94, var(--scanline-opacity)) 1px,
-      transparent 1px,
-      transparent 3px
-    );
-    pointer-events: none;
-    z-index: 2;
   }
 
   .container {
@@ -255,11 +228,6 @@
     text-decoration: none;
     border-bottom: 1px dotted var(--fg-muted);
     transition: color 0.2s, border-color 0.2s;
-  }
-
-  footer a:hover {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
   }
 
   /* theme transition flicker — matches main site */
