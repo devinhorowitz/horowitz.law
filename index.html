@@ -116,7 +116,7 @@
   "sameAs": [
     "https://www.linkedin.com/in/devinhorowitz/",
     "https://qpwblaw.com/attorney/devin-r-horowitz/",
-    "https://www.gabar.org/member-directory/?id=FC428AB535A766354BD28D799AF095EF"
+    "https://www.gabar.org/member-directory/?id=66828"
   ]
 }
 </script>
@@ -276,6 +276,18 @@
     display: block;
     filter: var(--portrait-filter);
     border: 1px solid var(--border);
+  }
+
+  /* Theme-aware portrait: dark-background photo on the dark theme, the
+     light-background version on the light theme. Mirrors the three
+     --portrait-filter theme selectors above so the swap follows the manual
+     toggle, not just the OS setting. Keep in sync with those selectors. */
+  .hero-portrait .portrait-light { display: none; }
+  [data-theme="light"] .hero-portrait .portrait-dark { display: none; }
+  [data-theme="light"] .hero-portrait .portrait-light { display: block; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) .hero-portrait .portrait-dark { display: none; }
+    :root:not([data-theme="dark"]) .hero-portrait .portrait-light { display: block; }
   }
 
   .portrait-corner {
@@ -821,7 +833,8 @@
 
     <header class="hero">
       <div class="hero-portrait">
-        <img src="devin.jpg" alt="Devin R. Horowitz" width="170" height="170" loading="eager" fetchpriority="high" decoding="async">
+        <img class="portrait-dark" src="devin.jpg" alt="Devin R. Horowitz" width="170" height="170" loading="eager" fetchpriority="high" decoding="async">
+        <img class="portrait-light" src="devin-light.webp" alt="Devin R. Horowitz" width="170" height="170" loading="eager" decoding="async">
         <span class="portrait-corner tl"></span>
         <span class="portrait-corner tr"></span>
         <span class="portrait-corner bl"></span>
@@ -969,7 +982,7 @@
 
     <div class="repo-link">
       <div class="repo-cmd">git clone <a href="https://github.com/devinhorowitz/horowitz.law" target="_blank" rel="noopener noreferrer">github.com/devinhorowitz/horowitz.law</a></div>
-      <div class="repo-note">hosted on <a href="https://www.cloudflare.com" target="_blank" rel="noopener noreferrer">cloudflare</a></div>
+      <div class="repo-note">served over a CDN</div>
     </div>
   </div>
   <script src="/app.js?v=2026-05-28" defer></script>

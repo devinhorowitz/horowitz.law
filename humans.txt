@@ -9,7 +9,7 @@
     Stack:        vanilla everything — no framework, no build step
     Typography:   JetBrains Mono (self-hosted, 4 weights)
     Graphics:     SVG (QR, ornament, favicon)
-    Hosting:      Cloudflare Pages
+    Hosting:      static files on a global CDN
     Analytics:    intentionally none
     Cookies:      none
     Last update:  2026
@@ -17,7 +17,7 @@
 
 /* THANKS */
     JetBrains Mono — JetBrains s.r.o.
-    Cloudflare Pages — Cloudflare, Inc.
+    Static hosting — served over a global CDN
     The unnamed authors of every public spec
     that makes the open web actually work.
 
