@@ -265,29 +265,35 @@
 
   .hero-portrait {
     position: relative;
+    display: grid;
     animation: fadeIn 0.9s ease 0.1s both;
     width: fit-content;
   }
 
   .hero-portrait img {
+    grid-area: 1 / 1;
     width: 170px;
     height: 170px;
     object-fit: cover;
     display: block;
     filter: var(--portrait-filter);
     border: 1px solid var(--border);
+    transition: opacity 0.4s ease;
   }
 
   /* Theme-aware portrait: dark-background photo on the dark theme, the
-     light-background version on the light theme. Mirrors the three
-     --portrait-filter theme selectors above so the swap follows the manual
-     toggle, not just the OS setting. Keep in sync with those selectors. */
-  .hero-portrait .portrait-light { display: none; }
-  [data-theme="light"] .hero-portrait .portrait-dark { display: none; }
-  [data-theme="light"] .hero-portrait .portrait-light { display: block; }
+     light-background version on the light theme. The two are stacked in one
+     grid cell and cross-faded by toggling opacity, so a theme switch is a
+     gentle dissolve rather than a hard cut. Mirrors the three --portrait-filter
+     theme selectors above so the swap follows the manual toggle, not just the
+     OS setting. (Reduced-motion users get an instant swap via the global
+     transition-duration override below.) Keep in sync with those selectors. */
+  .hero-portrait .portrait-light { opacity: 0; }
+  [data-theme="light"] .hero-portrait .portrait-dark { opacity: 0; }
+  [data-theme="light"] .hero-portrait .portrait-light { opacity: 1; }
   @media (prefers-color-scheme: light) {
-    :root:not([data-theme="dark"]) .hero-portrait .portrait-dark { display: none; }
-    :root:not([data-theme="dark"]) .hero-portrait .portrait-light { display: block; }
+    :root:not([data-theme="dark"]) .hero-portrait .portrait-dark { opacity: 0; }
+    :root:not([data-theme="dark"]) .hero-portrait .portrait-light { opacity: 1; }
   }
 
   .portrait-corner {
@@ -834,7 +840,7 @@
     <header class="hero">
       <div class="hero-portrait">
         <img class="portrait-dark" src="/devin-dark.webp" alt="Devin R. Horowitz" width="170" height="170" loading="eager" fetchpriority="high" decoding="async">
-        <img class="portrait-light" src="/devin-light.webp" alt="Devin R. Horowitz" width="170" height="170" loading="eager" decoding="async">
+        <img class="portrait-light" src="/devin-light.webp" alt="" aria-hidden="true" width="170" height="170" loading="eager" decoding="async">
         <span class="portrait-corner tl"></span>
         <span class="portrait-corner tr"></span>
         <span class="portrait-corner bl"></span>
