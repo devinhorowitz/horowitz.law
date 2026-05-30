@@ -278,7 +278,7 @@
     display: block;
     filter: var(--portrait-filter);
     border: 1px solid var(--border);
-    transition: opacity 0.4s ease;
+    transition: opacity 0.6s ease;
   }
 
   /* Theme-aware portrait: dark-background photo on the dark theme, the
@@ -359,12 +359,17 @@
     100% { opacity: 1; }
   }
 
-  html.theme-flickering .container > *:not(.topbar) {
+  /* The portrait is exempt so it cross-fades cleanly instead of flickering:
+     flicker its text sibling (.hero-content) and the rest of the page, but not
+     the .hero block that wraps the image. */
+  html.theme-flickering .container > *:not(.topbar):not(.hero),
+  html.theme-flickering .hero-content {
     animation: themeFlicker var(--flicker-duration, 550ms) ease-out forwards;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    html.theme-flickering .container > *:not(.topbar) {
+    html.theme-flickering .container > *:not(.topbar):not(.hero),
+    html.theme-flickering .hero-content {
       animation: none !important;
     }
   }
