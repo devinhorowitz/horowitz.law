@@ -1,4 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="4" fill="#0d0e10"/>
+  <style>
+    /* Dark UA chrome (dark URL bar): drop the near-black plate. On a dark bar
+       it nearly vanishes and its anti-aliased rounded edge reads as a faint
+       gray ring. The orange monogram stands on its own there. Light chrome
+       keeps the plate so the orange stays legible on a pale bar. */
+    @media (prefers-color-scheme: dark) { .plate { fill: none; } }
+  </style>
+  <rect class="plate" width="32" height="32" rx="4" fill="#0d0e10"/>
   <text x="16" y="22" font-family="ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace" font-size="17" font-weight="700" fill="#ff9e5e" text-anchor="middle" letter-spacing="-0.5">DH</text>
 </svg>

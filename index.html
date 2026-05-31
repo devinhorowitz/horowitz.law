@@ -20,7 +20,7 @@
 <meta name="theme-color" content="#f5ede0" media="(prefers-color-scheme: light)">
 
 <!-- favicon -->
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2026-05-30">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
@@ -143,6 +143,7 @@
     --fg: #e8e3d8;
     --fg-muted: #807a72;
     --accent: #ff9e5e;
+    --qr-fg: var(--accent);
     --border: #25262a;
     --grain-opacity: 0.04;
     --scanline-opacity: 0.018;
@@ -155,6 +156,7 @@
     --fg: #1a1a1a;
     --fg-muted: #6a6560;
     --accent: #a4471a;
+    --qr-fg: var(--fg);
     --border: #d4cab8;
     --grain-opacity: 0.025;
     --scanline-opacity: 0;
@@ -172,6 +174,7 @@
       --fg: #1a1a1a;
       --fg-muted: #6a6560;
       --accent: #a4471a;
+      --qr-fg: var(--fg);
       --border: #d4cab8;
       --grain-opacity: 0.025;
       --scanline-opacity: 0;
@@ -619,8 +622,8 @@
     border-radius: 4px;
   }
   .qr-code rect { fill: var(--bg); }
-  .qr-code path { fill: var(--accent); }
-  .qr-code .qr-logo-dh { fill: var(--accent); }
+  .qr-code path { fill: var(--qr-fg); }
+  .qr-code .qr-logo-dh { fill: var(--qr-fg); }
   .qr-caption {
     display: block;
     margin-top: 6px;
