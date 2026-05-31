@@ -599,7 +599,7 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 32px;
+    gap: 20px;
   }
   .contact-body .contact-grid {
     flex: 1;
@@ -620,7 +620,6 @@
   }
   .qr-code rect { fill: var(--bg); }
   .qr-code path { fill: var(--accent); }
-  .qr-code .qr-logo-bg { stroke: var(--border); stroke-width: 0.3; }
   .qr-code .qr-logo-dh { fill: var(--accent); }
   .qr-caption {
     display: block;
@@ -642,7 +641,7 @@
     grid-template-columns: 1fr 1fr;
     grid-template-rows: repeat(4, auto);
     grid-auto-flow: column;
-    column-gap: 32px;
+    column-gap: 20px;
     row-gap: 2px;
   }
 
@@ -745,6 +744,7 @@
     .cred-list li { grid-template-columns: 1fr; gap: 4px; padding: 14px 0; }
     .contact-body {
       flex-direction: column;
+      gap: 32px;
     }
     .qr-block {
       align-self: center;
