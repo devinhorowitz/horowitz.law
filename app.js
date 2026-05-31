@@ -305,4 +305,49 @@
     }
     pathTargets.forEach(function (el) { el.textContent = path; });
   }
+
+  // -----------------------------------------------------------
+  // Keyboard shortcuts — invisible by design, for the keyboard and
+  // the curious. 't' toggles the theme (reusing the toggle's own
+  // flicker + click + persistence); 'g' then h/r/c navigates to
+  // home / resume / colophon, vim/gmail style; '?' prints the list
+  // to the console, matching the greeting above. Ignored while a
+  // field is focused or a browser modifier is held, so native
+  // shortcuts (Cmd-T and friends) are never hijacked.
+  // -----------------------------------------------------------
+  (function keyboardShortcuts() {
+    let goArmed = false, goTimer = null;
+    function disarm() { goArmed = false; if (goTimer) { clearTimeout(goTimer); goTimer = null; } }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      var el = e.target;
+      if (el && (el.isContentEditable || /^(input|textarea|select)$/i.test(el.tagName))) return;
+
+      var k = e.key;
+
+      if (goArmed) {
+        var dest = { h: '/', r: '/resume', c: '/colophon' }[String(k).toLowerCase()];
+        disarm();
+        if (dest) { e.preventDefault(); window.location.href = dest; }
+        return;
+      }
+
+      if (k === 't' || k === 'T') {
+        var tg = document.getElementById('themeToggle');
+        if (tg) { e.preventDefault(); tg.click(); }
+      } else if (k === 'g' || k === 'G') {
+        goArmed = true;
+        goTimer = setTimeout(disarm, 1200);
+      } else if (k === '?') {
+        try {
+          console.log('%ckeyboard', 'color:#ff9e5e;font-family:ui-monospace,monospace;font-weight:600;');
+          console.log(
+            '%ct        toggle theme\ng h      home\ng r      resume\ng c      colophon\n?        this list',
+            'color:#807a72;font-family:ui-monospace,monospace;line-height:1.6;'
+          );
+        } catch (e2) { /* noop */ }
+      }
+    });
+  })();
 })();

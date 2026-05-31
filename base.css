@@ -149,3 +149,17 @@ footer a:hover {
     color: var(--accent);
     border-bottom-color: var(--accent);
   }
+
+/* ---- Honor system signals beyond motion. Reduced data and reduced
+   transparency both mean "send/show me less," and a request for more contrast
+   means the low-contrast decorative layers should step aside: in all three
+   cases, drop the film-grain and scanline overlays for a flatter, cleaner,
+   higher-contrast surface. Everyone else keeps the full treatment. ---- */
+@media (prefers-reduced-data: reduce),
+       (prefers-reduced-transparency: reduce),
+       (prefers-contrast: more) {
+  body::before,
+  body::after {
+    display: none !important;
+  }
+}

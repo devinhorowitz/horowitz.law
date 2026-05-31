@@ -135,7 +135,7 @@
 <!-- Shared foundation: @font-face, color-scheme, text-wrap -->
 <!-- pre-paint theme: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js; CSP hash-pinned) -->
 <script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
-<link rel="stylesheet" href="/base.css?v=2026-05-30b">
+<link rel="stylesheet" href="/base.css?v=2026-05-31">
 
 <style>
   :root {
@@ -410,6 +410,20 @@
     content: '>';
     color: var(--accent);
     font-weight: 700;
+  }
+
+  /* Arrival cue: reaching a section via an anchor (the 404's ls / links, or any
+     deep link) gives its panel a brief accent wash, so you can see where you
+     landed. Quiet, and it self-cancels under reduced-motion. */
+  @keyframes sectionArrive {
+    from { background-color: rgba(255, 158, 94, 0.10); }
+    to   { background-color: transparent; }
+  }
+  section:target {
+    animation: sectionArrive 2.2s ease-out;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    section:target { animation: none !important; }
   }
 
   /* A header row pairs the section title with a section-level action.
@@ -985,7 +999,7 @@
       <div class="repo-note">served over a CDN</div>
     </div>
   </div>
-  <script src="/app.js?v=2026-05-30b" defer></script>
+  <script src="/app.js?v=2026-05-31" defer></script>
 
   <!-- Speculation Rules: prerender the resume on hover intent so the
        landing→resume navigation is instant. Progressive enhancement;
