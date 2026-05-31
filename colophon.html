@@ -269,6 +269,14 @@
     top: 16px;
   }
 
+  /* focus indicators for keyboard navigation */
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
   ::selection {
     background: var(--accent);
     color: var(--bg);
@@ -327,7 +335,7 @@
 
 </div>
 
-<script src="/app.js?v=2026-05-30" defer></script>
+<script src="/app.js?v=2026-05-30b" defer></script>
 
 </body>
 </html>
