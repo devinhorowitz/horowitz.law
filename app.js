@@ -105,16 +105,6 @@
     try { localStorage.setItem('horowitz-theme', v); } catch (e) { /* noop */ }
   }
 
-  // One-time migration: copy legacy 'theme' key to namespaced 'horowitz-theme'.
-  // Can be removed after a reasonable transition window (3-6 months).
-  try {
-    const legacy = localStorage.getItem('theme');
-    if (legacy && !localStorage.getItem('horowitz-theme')) {
-      localStorage.setItem('horowitz-theme', legacy);
-      localStorage.removeItem('theme');
-    }
-  } catch (e) { /* noop */ }
-
   // -----------------------------------------------------------
   // Shared interaction feedback. The synthesized "tactile click"
   // is a deliberate device-control gesture, used by the theme
@@ -178,6 +168,22 @@
     }
   }
 
+  // Brief haptic pulse on supported devices (Android browsers). Double-pulse
+  // pattern mimics the click of a physical control. No-ops on iOS (Apple
+  // doesn't implement Web Vibration) and on desktop (no vibration hardware).
+  // Hoisted to top level so the toggle and save button share it. Respects
+  // prefers-reduced-motion.
+  function triggerHaptic() {
+    if (reduceMotion) return;
+    try {
+      if ('vibrate' in navigator) {
+        navigator.vibrate([8, 12, 8]);
+      }
+    } catch (e) {
+      // silently fail if blocked or unsupported
+    }
+  }
+
   if (toggle) {
     const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
 
@@ -207,21 +213,6 @@
       setTimeout(function () {
         root.classList.remove('theme-flickering');
       }, duration + 30);
-    }
-
-    // Brief haptic pulse on supported devices (Android browsers). The
-    // double-pulse pattern mimics the bistable click of a real toggle switch.
-    // Silently no-ops on iOS (Apple doesn't implement Web Vibration) and on
-    // desktop (no vibration hardware). Respects prefers-reduced-motion.
-    function triggerHaptic() {
-      if (reduceMotion) return;
-      try {
-        if ('vibrate' in navigator) {
-          navigator.vibrate([8, 12, 8]);
-        }
-      } catch (e) {
-        // silently fail if blocked or unsupported
-      }
     }
 
     // First-visit precedence: explicit user choice > OS preference > dark
@@ -260,8 +251,6 @@
       };
       if (mq.addEventListener) {
         mq.addEventListener('change', handler);
-      } else if (mq.addListener) {
-        mq.addListener(handler); // Safari < 14 fallback
       }
     }
   }
@@ -288,6 +277,19 @@
     printBtn.addEventListener('click', function () {
       playClickSound();
       window.print();
+    });
+  }
+
+  // -----------------------------------------------------------
+  // Save-to-contacts cue (index.html). A vCard download is a control
+  // action, not navigation, so it carries the same click + haptic as the
+  // toggle. The download doesn't unload the page, so the sound isn't cut off.
+  // -----------------------------------------------------------
+  const saveContactsBtn = document.getElementById('saveContactsBtn');
+  if (saveContactsBtn) {
+    saveContactsBtn.addEventListener('click', function () {
+      playClickSound();
+      triggerHaptic();
     });
   }
 
