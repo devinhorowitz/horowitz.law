@@ -1,6 +1,13 @@
 /* Sidebar — QPWB drafting workspace (prototype). CSP-clean: no inline handlers, external script. */
 "use strict";
 
+/* Trusted Types default policy. The site CSP enforces require-trusted-types-for 'script';
+   without a registered policy, the innerHTML assignments below throw in Chromium and no
+   view renders. createHTML is pass-through because all HTML here is app-authored. */
+if (window.trustedTypes && trustedTypes.createPolicy) {
+  trustedTypes.createPolicy('default', { createHTML: (s) => s });
+}
+
 const check='<svg viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const JL={generic:'Generic','ga-state':'GA State','ga-fed':'N.D. Ga. (Fed)','fl-state':'FL State','fl-fed':'S.D. Fla. (Fed)','tn-state':'TN State'};
 function jclass(j){return j==='generic'?'generic':(j.endsWith('-fed')||j==='fed')?'fed':'state';}
