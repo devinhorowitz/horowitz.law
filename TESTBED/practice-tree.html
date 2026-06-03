@@ -168,7 +168,28 @@
     .layer{box-shadow:none}
     header,.hero,.intro,section.block{opacity:1; animation:none}
     .canopy,.tree .label-g{opacity:1}
+    .skillcard{box-shadow:none}
   }
+
+  /* ---- complete catalog ---- */
+  .catalog{max-width:1000px; margin:0 auto}
+  .soil-note{max-width:720px; margin:0 auto 38px; text-align:center; font-style:italic; color:var(--muted); font-size:17px; line-height:1.6}
+  .soil-note b{font-style:normal; font-weight:600; color:var(--soil)}
+  .stratum{margin:0 auto 42px}
+  .st-head{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; border-bottom:1px solid var(--c); padding-bottom:9px; margin-bottom:20px}
+  .st-head .nm{font-family:"Fraunces",serif; font-weight:600; font-size:25px; color:var(--c); letter-spacing:-.01em}
+  .st-head .ds{font-family:"Spectral",serif; font-style:italic; color:var(--muted); font-size:16px}
+  .st-head .ct{margin-left:auto; align-self:center; font-family:"Spectral",serif; font-size:13px; letter-spacing:.13em; text-transform:uppercase; color:var(--muted)}
+  .skillgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(284px,1fr)); gap:14px}
+  .skillcard{background:var(--panel); border:1px solid var(--faint); border-left:4px solid var(--c); border-radius:3px; padding:15px 18px 16px; transition:transform .2s ease, box-shadow .2s ease}
+  .skillcard:hover{transform:translateY(-2px); box-shadow:0 12px 28px -20px rgba(60,40,24,.55)}
+  .skillcard h4{font-family:"Fraunces",serif; font-weight:600; font-size:18px; margin:0 0 1px; color:var(--ink); letter-spacing:-.005em; line-height:1.2}
+  .skillcard .sid{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:11.5px; color:var(--c); display:block; margin:0 0 9px; letter-spacing:.01em; opacity:.92}
+  .skillcard p{margin:0; font-size:14.5px; line-height:1.5; color:var(--ink)}
+  .skillcard .draws{margin-top:9px; font-size:13px; font-style:italic; color:var(--muted); line-height:1.42}
+  .skillcard .draws b{font-style:normal; font-weight:600; color:var(--c)}
+  .strata-roots{--c:var(--roots)} .strata-trunk{--c:var(--trunk)} .strata-branches{--c:var(--branches)} .strata-leaves{--c:var(--leaves)}
+  @media (max-width:560px){ .skillgrid{grid-template-columns:1fr} .st-head .ct{display:none} }
 </style>
 </head>
 <body>
@@ -1145,6 +1166,8 @@
           <span class="chip">Procedural offense</span>
           <span class="chip">Current tort reform</span>
           <span class="chip">Bankruptcy &amp; the debtor-plaintiff</span>
+          <span class="chip">Spoliation</span>
+          <span class="chip">Arbitration awards</span>
         </div>
       </article>
 
@@ -1167,7 +1190,7 @@
           <span class="chip">Pretrial order</span>
           <span class="chip">Vehicle inspection</span>
           <span class="chip">Pre-suit outreach</span>
-          <span class="chip more">and more, as needed</span>
+          <span class="chip more">nineteen in all, listed below</span>
         </div>
       </article>
 
@@ -1220,6 +1243,89 @@
 
     <div class="closing">
       <p>The documents are the leaves. What makes them good is everything underneath, ending in the soil, which is yours.</p>
+    </div>
+  </section>
+
+  <!-- ===================== COMPLETE CATALOG ===================== -->
+  <section class="block">
+    <p class="eyebrow">The whole canopy, named</p>
+    <h2>The complete tree</h2>
+    <p class="sub">Every framework in the practice, forty-two in all, placed in the layer it belongs to. The deeper layers feed upward; each leaf is a finished filing that draws its law from a branch, its craft from the trunk, and its disciplines from the roots.</p>
+
+    <div class="catalog">
+
+      <p class="soil-note"><b>Soil</b> is not catalogued here. It is the attorney&rsquo;s own voice and habits, the layer that belongs to the person rather than the practice, and everything below draws from it.</p>
+
+      <!-- ROOTS -->
+      <div class="stratum strata-roots">
+        <div class="st-head"><span class="nm">Roots</span><span class="ds">the disciplines, and the filter</span><span class="ct">4 skills</span></div>
+        <div class="skillgrid">
+          <article class="skillcard"><h4>Foundation</h4><span class="sid">qpwb-core</span><p>The universal document mechanics and the verify-before-stating citation guardrail every other skill assumes is in force.</p></article>
+          <article class="skillcard"><h4>Writing foundations</h4><span class="sid">qpwb-writing</span><p>The six principles of clear legal prose and the editorial-alteration discipline, beneath every drafting task.</p></article>
+          <article class="skillcard"><h4>Billing discipline</h4><span class="sid">qpwb-billing</span><p>How every task is recorded, classified, and routed: the entry format, the three-part carrier test, classify-down, and the research cap.</p></article>
+          <article class="skillcard"><h4>The intake filter</h4><span class="sid">qpwb-screen</span><p>Four gates on every input before it becomes work product: truth, propriety, necessity, and integrity.</p></article>
+        </div>
+      </div>
+
+      <!-- TRUNK -->
+      <div class="stratum strata-trunk">
+        <div class="st-head"><span class="nm">Trunk</span><span class="ds">the craft of practicing</span><span class="ct">8 skills</span></div>
+        <div class="skillgrid">
+          <article class="skillcard"><h4>Filing form &amp; routing</h4><span class="sid">qpwb-filings</span><p>The shared filing conventions (caption, signature block, certificate of service) and the index that routes any filing to its skill.</p></article>
+          <article class="skillcard"><h4>Advocacy craft</h4><span class="sid">qpwb-briefs</span><p>How a persuasive brief is built whatever motion it supports: controlling theory, the single-punch opening, and record-cite hygiene.</p></article>
+          <article class="skillcard"><h4>Discovery</h4><span class="sid">qpwb-discovery</span><p>Drafting and serving interrogatories, requests for production, and admissions; responding and objecting; privilege logs; the move to compel.</p></article>
+          <article class="skillcard"><h4>External writing</h4><span class="sid">qpwb-correspondence</span><p>The durable letter form, the communication-method discipline, and the partner-copy and trial-notice protocols.</p></article>
+          <article class="skillcard"><h4>Coverage posture</h4><span class="sid">qpwb-coverage</span><p>The tripartite-relationship and reservation-of-rights ethics, and coverage-architecture mapping at intake on every matter.</p></article>
+          <article class="skillcard"><h4>Case evaluation</h4><span class="sid">qpwb-evaluation</span><p>File review and the holistic damages picture: medical-records methodology, credibility analysis, and treatment-shopping detection.</p></article>
+          <article class="skillcard"><h4>Deposition craft</h4><span class="sid">qpwb-depositions</span><p>Preparing, taking, defending, and writing up depositions: the tiered outline, the cut list, and the adjuster summary.</p></article>
+          <article class="skillcard"><h4>Docket analytics</h4><span class="sid">qpwb-litigation-intelligence</span><p>Judge, opposing-counsel, party, expert, and comparable-verdict data to orient strategy. Intelligence, not authority.</p></article>
+        </div>
+      </div>
+
+      <!-- BRANCHES -->
+      <div class="stratum strata-branches">
+        <div class="st-head"><span class="nm">Branches</span><span class="ds">the substantive law</span><span class="ct">11 skills</span></div>
+        <div class="skillgrid">
+          <article class="skillcard"><h4>Affirmative defenses</h4><span class="sid">qpwb-affirmative-defenses</span><p>The trigger-organized checklist of defenses to plead, and the plead-develop-cull discipline that keeps the list defensible.</p></article>
+          <article class="skillcard"><h4>Apportionment of fault</h4><span class="sid">qpwb-apportionment</span><p>The § 51-12-33 framework, the non-party-fault notice and its 120-day deadline, the 50% bar, and the single-defendant-trial limitation.</p></article>
+          <article class="skillcard"><h4>Uninsured-motorist defense</h4><span class="sid">qpwb-um</span><p>The Maxwell/Bonds framework and the answer architecture that keeps a UM carrier on the John Doe side of § 33-7-11.</p></article>
+          <article class="skillcard"><h4>Premises liability</h4><span class="sid">qpwb-premises</span><p>The Robinson v. Kroger two-prong invitee analysis, the static-condition defense, and negligent-security variations.</p></article>
+          <article class="skillcard"><h4>Procedural levers</h4><span class="sid">qpwb-procedural-offense</span><p>The Civil Practice Act rules to weaponize when an opponent misfires: the § 9-11-4(h) toll, default mechanics, the five-year dismissal, the discovery stay.</p></article>
+          <article class="skillcard"><h4>The debtor-plaintiff</h4><span class="sid">qpwb-bankruptcy</span><p>The automatic stay, the estate-property standing problem, judicial estoppel, and trustee-and-court settlement approval.</p></article>
+          <article class="skillcard"><h4>Lost evidence</h4><span class="sid">qpwb-spoliation</span><p>The duty-to-preserve trigger, the AMLI five-factor sanctions test, the adverse-inference standard, and O.C.G.A. § 24-14-22.</p></article>
+          <article class="skillcard"><h4>Arbitration awards</h4><span class="sid">qpwb-arbitration</span><p>Confirming under § 9-9-12, vacating on the exclusive § 9-9-13(b) grounds, the manifest-disregard ground, and modification under § 9-9-14.</p></article>
+          <article class="skillcard"><h4>Settlement doctrine</h4><span class="sid">qpwb-settlement</span><p>The five demand types, the offer-evaluation letter, the Holt audit and safe harbor, and the post-acceptance deadline calendar.</p></article>
+          <article class="skillcard"><h4>Daubert practice</h4><span class="sid">qpwb-expert-challenge</span><p>The § 24-7-702 qualification threshold and four elements, worked both attacking and defending an expert.</p></article>
+          <article class="skillcard"><h4>Current tort reform</h4><span class="sid">qpwb-tort-reform</span><p>SB 426 and SB 68/69 provision by provision, with effective dates, triggers, and the mixed-retroactivity method.</p></article>
+        </div>
+      </div>
+
+      <!-- LEAVES -->
+      <div class="stratum strata-leaves">
+        <div class="st-head"><span class="nm">Leaves</span><span class="ds">the documents you produce</span><span class="ct">19 skills</span></div>
+        <div class="skillgrid">
+          <article class="skillcard"><h4>Answer</h4><span class="sid">qpwb-answer</span><p>Admit, deny, or neither-admit-nor-deny discipline; the affirmative-defenses section; special-appearance preservation; verification; the prayer.</p><p class="draws"><b>Draws on</b> affirmative-defenses · filings · procedural-offense</p></article>
+          <article class="skillcard"><h4>Complaint</h4><span class="sid">qpwb-complaint</span><p>The affirmative filing the firm brings as plaintiff: subrogation, a collection on a lien or bond, a third-party complaint, or a declaratory judgment.</p><p class="draws"><b>Draws on</b> filings · coverage · procedural-offense · apportionment</p></article>
+          <article class="skillcard"><h4>Motion to dismiss</h4><span class="sid">qpwb-motion-to-dismiss</span><p>The § 9-11-12(b) vehicle for ending or narrowing a case at the pleadings, and the strategic choice between moving and answering.</p><p class="draws"><b>Draws on</b> briefs · procedural-offense · affirmative-defenses · answer</p></article>
+          <article class="skillcard"><h4>Summary judgment</h4><span class="sid">qpwb-motion-summary-judgment</span><p>The § 9-11-56 vehicle for ending a case or claim before trial where no material fact is in dispute, including on deemed admissions.</p><p class="draws"><b>Draws on</b> briefs · discovery · expert-challenge</p></article>
+          <article class="skillcard"><h4>Motion in limine</h4><span class="sid">qpwb-motion-in-limine</span><p>Excluding anticipated prejudicial evidence, with the catalog of common defense targets from collateral-source write-downs to golden-rule argument.</p><p class="draws"><b>Draws on</b> briefs · tort-reform · expert-challenge · settlement</p></article>
+          <article class="skillcard"><h4>Daubert motion</h4><span class="sid">qpwb-motion-to-exclude-expert</span><p>Asking the court as gatekeeper under § 24-7-702 to exclude a plaintiff&rsquo;s expert before trial, strongest when paired with summary judgment.</p><p class="draws"><b>Draws on</b> expert-challenge · motion-summary-judgment · motion-in-limine</p></article>
+          <article class="skillcard"><h4>Motion to compel</h4><span class="sid">qpwb-motion-to-compel</span><p>The § 9-11-37 deliverable that forces a full response to ignored or evasive discovery, with the good-faith conferral certificate.</p><p class="draws"><b>Draws on</b> discovery · filings · briefs · procedural-offense</p></article>
+          <article class="skillcard"><h4>Litigation sanctions</h4><span class="sid">qpwb-motion-sanctions</span><p>The § 9-15-14 motion for fees against a frivolous claim or defense, a fabricated citation, or a position held after the record defeats it.</p><p class="draws"><b>Draws on</b> briefs · filings</p></article>
+          <article class="skillcard"><h4>Spoliation sanctions</h4><span class="sid">qpwb-motion-for-spoliation-sanctions</span><p>The motion to sanction a party who destroyed evidence, with relief scaling from default through exclusion to an adverse-inference charge.</p><p class="draws"><b>Draws on</b> spoliation · briefs · vehicle-inspection · depositions</p></article>
+          <article class="skillcard"><h4>Enforce a settlement</h4><span class="sid">qpwb-motion-to-enforce-settlement</span><p>The motion that holds a party to a settlement they agreed to and now resist, decided under the summary-judgment standard.</p><p class="draws"><b>Draws on</b> settlement · correspondence · briefs · filings</p></article>
+          <article class="skillcard"><h4>Offer of settlement</h4><span class="sid">qpwb-offer-of-settlement</span><p>The § 9-11-68 statutory fee-shifting offer, its strict form and good-faith record, and the post-judgment fee motion when a rejected offer beats the threshold.</p><p class="draws"><b>Draws on</b> settlement · filings · briefs</p></article>
+          <article class="skillcard"><h4>Confirm or vacate an award</h4><span class="sid">qpwb-motion-to-confirm-or-vacate-arbitration-award</span><p>Enforcing an arbitration award under § 9-9-12 or attacking it on the exclusive § 9-9-13(b) grounds, decided on the documentary record.</p><p class="draws"><b>Draws on</b> arbitration · filings · briefs</p></article>
+          <article class="skillcard"><h4>Recurring notices</h4><span class="sid">qpwb-notices</span><p>The short, form-driven notices: non-party fault, removal, voluntary dismissal, jury demand, leave of absence, substitution, and deposition.</p><p class="draws"><b>Draws on</b> filings · apportionment · depositions</p></article>
+          <article class="skillcard"><h4>Less-frequent motions</h4><span class="sid">qpwb-specialized-motions</span><p>Protective order, amend, extension, reconsideration, bifurcate, continuance, and the application for interlocutory review.</p><p class="draws"><b>Draws on</b> filings · briefs · discovery</p></article>
+          <article class="skillcard"><h4>Pre-trial order</h4><span class="sid">qpwb-pretrial-order</span><p>The milestone that supersedes the pleadings and controls the trial, where a defense, witness, or exhibit omitted from it is waived.</p><p class="draws"><b>Draws on</b> affirmative-defenses · motion-in-limine · discovery · apportionment</p></article>
+          <article class="skillcard"><h4>Vehicle inspection</h4><span class="sid">qpwb-vehicle-inspection</span><p>The attorney-run sequence for inspecting, preserving, and releasing a vehicle, and the five template letters it runs on.</p><p class="draws"><b>Draws on</b> correspondence · discovery · evaluation</p></article>
+          <article class="skillcard"><h4>Carrier reports</h4><span class="sid">qpwb-carrier-report</span><p>The recurring written deliverables to a carrier: file-opening, the litigation report and plan, impact, hearing after-action, post-trial, and interview.</p><p class="draws"><b>Draws on</b> evaluation · correspondence · settlement · coverage</p></article>
+          <article class="skillcard"><h4>Pre-suit outreach</h4><span class="sid">qpwb-pre-suit-outreach</span><p>The carrier-directed, attorney-to-attorney call made before suit to obtain voluntary evidence on a fraud, coverage, or damages issue.</p><p class="draws"><b>Draws on</b> correspondence · coverage · screen</p></article>
+          <article class="skillcard"><h4>Federal practice &amp; case management</h4><span class="sid">qpwb-federal-practice</span><p>The federal-state forum divide and the case schedule: diversity removal and remand, the Rule 16 scheduling order, and co-counsel coordination.</p><p class="draws"><b>Draws on</b> motion-to-dismiss · notices · discovery · coverage</p></article>
+        </div>
+      </div>
+
     </div>
   </section>
 
