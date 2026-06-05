@@ -1,11 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <style>
-    /* Dark UA chrome (dark URL bar): drop the near-black plate. On a dark bar
-       it nearly vanishes and its anti-aliased rounded edge reads as a faint
-       gray ring. The orange monogram stands on its own there. Light chrome
-       keeps the plate so the orange stays legible on a pale bar. */
-    @media (prefers-color-scheme: dark) { .plate { fill: none; } }
+    /* Default to NO plate. On a dark tab bar — and in any browser that does
+       not honor prefers-color-scheme inside a favicon (much of Chromium) —
+       there is then no near-black plate whose anti-aliased edge reads as a
+       light ring. The plate is re-added only for light chrome, where it helps
+       the orange monogram stand out on a pale bar. */
+    .plate { fill: none; }
+    @media (prefers-color-scheme: light) { .plate { fill: #0d0e10; } }
   </style>
-  <rect class="plate" width="32" height="32" rx="4" fill="#0d0e10"/>
+  <rect class="plate" width="32" height="32" rx="4"/>
   <text x="16" y="22" font-family="ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace" font-size="17" font-weight="700" fill="#ff9e5e" text-anchor="middle" letter-spacing="-0.5">DH</text>
 </svg>
