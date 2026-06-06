@@ -209,6 +209,12 @@ def run():
     if not update.CL_TOKEN:
         print("  ! warning: COURTLISTENER_TOKEN not set; metadata lookups may be rate-limited or denied.")
 
+    # Guarantee the PR-body file exists on every exit path (dry run, 429 abort,
+    # no cards), so the workflow's PR step never fails on a missing file. The
+    # daily pipeline does the same. It is overwritten with the real report below.
+    os.makedirs(os.path.dirname(PR_PATH), exist_ok=True)
+    open(PR_PATH, "w", encoding="utf-8").write("No backfill this run.\n")
+
     seed = seed_list()
     entries = json.load(open(update.JSON_PATH, encoding="utf-8")) if os.path.exists(update.JSON_PATH) else []
     have = {int(e["cluster_id"]) for e in entries if e.get("cluster_id")}
