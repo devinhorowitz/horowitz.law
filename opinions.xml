@@ -6,8 +6,46 @@
     <atom:link href="https://horowitz.law/opinions.xml" rel="self" type="application/rss+xml" />
     <description>AI-assisted synopses of new Supreme Court of Georgia and Court of Appeals of Georgia opinions, filtered for civil litigation and insurance-defense practice. Each synopsis is AI-drafted; the linked opinion is the authority. A curated core, not a complete docket.</description>
     <language>en-us</language>
-    <lastBuildDate>Thu, 04 Jun 2026 12:00:00 -0400</lastBuildDate>
+    <lastBuildDate>Fri, 05 Jun 2026 12:00:00 -0400</lastBuildDate>
     <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>
+    <item>
+      <title>Gamma Homes, LLC v. Atlanta Real Estate Specialty Group, LLC (Ga. Ct. App.)</title>
+      <link>https://www.courtlistener.com/opinion/10870596/gamma-homes-llc-v-atlanta-real-estate-specialty-group-llc/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10870596/gamma-homes-llc-v-atlanta-real-estate-specialty-group-llc/</guid>
+      <pubDate>Fri, 05 Jun 2026 12:00:00 -0400</pubDate>
+      <category>Court of Appeals of Georgia</category>
+      <category>procedure</category>
+      <category>damages</category>
+      <description><![CDATA[Plaintiffs, a group of real estate LLCs, sued their former property manager for breach of property management agreements after the manager failed to provide a final accounting or remit funds estimated at about $58,000. The trial court granted an involuntary dismissal under O.C.G.A. section 9-11-41(b) at the close of plaintiffs' case, ruling that excluded software-generated reports left insufficient evidence of damages. The Court of Appeals reversed, holding that the owner's uncontroverted testimony about consistent monthly disbursements and his itemized calculation of amounts owed was sufficient to support a damages award, and that the disputed reports were independently admissible both as business records under O.C.G.A. section 24-8-803(6) and as party admissions under O.C.G.A. section 24-8-801(d)(2). Why it matters: The decision clarifies that a property owner who accessed records through a vendor's software portal may lay a sufficient business-records foundation without being the records' creator, and that uncontroverted lay testimony about historical payments and a reasoned damages calculation can survive an O.C.G.A. section 9-11-41(b) motion, both points of practical interest to defense litigators evaluating damages and evidentiary sufficiency at bench trials. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10870596/gamma-homes-llc-v-atlanta-real-estate-specialty-group-llc/]]></description>
+    </item>
+    <item>
+      <title>McCammon v. Bankers Healthcare Group, LLC (Ga. Ct. App.)</title>
+      <link>https://www.courtlistener.com/opinion/10870242/dawne-g-mccammon-v-bankers-healthcare-group-llc/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10870242/dawne-g-mccammon-v-bankers-healthcare-group-llc/</guid>
+      <pubDate>Thu, 04 Jun 2026 12:00:00 -0400</pubDate>
+      <category>Court of Appeals of Georgia</category>
+      <category>procedure</category>
+      <description><![CDATA[A trial court entered default judgment against a defendant who failed to answer a complaint and did not respond to a motion for default judgment. The defendant later moved to declare the judgment void and to quash service of process, but the trial court denied that motion. The Court of Appeals dismissed the ensuing direct appeal, holding that a motion to declare a default judgment void is treated as a motion to vacate or set aside under O.C.G.A. section 9-11-60(d), and that denial of such a motion may be appealed only through a discretionary application under O.C.G.A. section 5-6-35(a)(8). Why it matters: Defense litigators should note that any challenge to a default judgment framed as a motion to void the judgment will be classified as a section 9-11-60(d) motion, requiring a discretionary application rather than a direct appeal, regardless of how the motion is labeled. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10870242/dawne-g-mccammon-v-bankers-healthcare-group-llc/]]></description>
+    </item>
+    <item>
+      <title>Sherwood v. Cain (Ga. Ct. App.)</title>
+      <link>https://www.courtlistener.com/opinion/10870236/nia-simon-sherwood-v-robert-cain/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10870236/nia-simon-sherwood-v-robert-cain/</guid>
+      <pubDate>Thu, 04 Jun 2026 12:00:00 -0400</pubDate>
+      <category>Court of Appeals of Georgia</category>
+      <category>procedure</category>
+      <category>auto</category>
+      <description><![CDATA[Plaintiff filed a notice of appeal 35 days after the trial court entered an order dismissing with prejudice her automobile-accident case, exceeding the 30-day deadline under O.C.G.A. section 5-6-38(a). The Court of Appeals dismissed the appeal for lack of jurisdiction, reiterating that a timely notice of appeal is an absolute jurisdictional requirement. The court also clarified that the 30-day clock runs from entry of the order, not from the date the party was served with it. Why it matters: Reminds defense litigators that in Georgia cases, including auto-tort matters, the 30-day notice-of-appeal deadline is measured from order entry, not service, and that missing the deadline forfeits appellate review entirely. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10870236/nia-simon-sherwood-v-robert-cain/]]></description>
+    </item>
+    <item>
+      <title>Reid v. Winchester (Ga. Ct. App.)</title>
+      <link>https://www.courtlistener.com/opinion/10870234/travion-reid-v-matthew-k-winchester/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10870234/travion-reid-v-matthew-k-winchester/</guid>
+      <pubDate>Thu, 04 Jun 2026 12:00:00 -0400</pubDate>
+      <category>Court of Appeals of Georgia</category>
+      <category>procedure</category>
+      <description><![CDATA[Plaintiff filed a direct appeal after the trial court dismissed his breach of fiduciary duty complaint against his former attorney, but the defendant's counterclaims for bad faith and frivolous litigation remained pending below. The Court of Appeals held that, because the order did not dispose of all claims, the judgment was not final under O.C.G.A. section 5-6-34(a)(1). Plaintiff was required to follow the interlocutory appeal procedures of O.C.G.A. section 5-6-34(b) or obtain a certification under O.C.G.A. section 9-11-54(b), and his failure to do so deprived the court of jurisdiction. Why it matters: This ruling is a practical reminder for defense litigators that a partial dismissal in a multi-claim case does not support a direct appeal absent an express O.C.G.A. section 9-11-54(b) determination or compliance with interlocutory procedures, a procedural trap relevant whenever counterclaims remain pending. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10870234/travion-reid-v-matthew-k-winchester/]]></description>
+    </item>
     <item>
       <title>Warrington Enterprises, LLC v. Lopez (Ga. Ct. App.)</title>
       <link>https://www.courtlistener.com/opinion/10870108/warrington-enterprises-llc-v-marvin-lopez/</link>
