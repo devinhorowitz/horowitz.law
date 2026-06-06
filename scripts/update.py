@@ -577,7 +577,8 @@ def main():
 
         entry = {"cluster_id": cid, "name": (v.get("name") or name).strip(), "court": court,
                  "division": (v.get("division") or None), "date": date_filed, "dockets": dockets,
-                 "disposition": disp, "areas": areas, "url": url, "synopsis": synopsis, "why": why}
+                 "disposition": disp, "areas": areas, "url": url, "synopsis": synopsis, "why": why,
+                 "first_seen": datetime.date.today().isoformat()}
 
         reasons = []
         if (v.get("confidence") or "").lower() == "low":
