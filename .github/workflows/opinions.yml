@@ -1,0 +1,48 @@
+name: Georgia Appellate Watch update
+
+on:
+  schedule:
+    - cron: '17 11 * * *'   # daily at 11:17 UTC (about 6-7am Eastern). Adjust freely.
+  workflow_dispatch: {}      # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: opinions-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Fetch, classify, summarize, render
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+          OPINIONS_MODEL: claude-sonnet-4-6
+        run: python scripts/update.py
+
+      # Opens or updates a pull request only when the run changed tracked files.
+      # Confirm the latest tag at github.com/peter-evans/create-pull-request before pinning.
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: bot/opinions-update
+          title: 'Georgia Appellate Watch: new opinions'
+          commit-message: 'opinions: add new Georgia appellate decisions'
+          body-path: scripts/pr_body.md
+          labels: opinions, automated
+          delete-branch: true
+          add-paths: |
+            opinions.json
+            opinions.xml
+            opinions_state.json
+            opinions.html
