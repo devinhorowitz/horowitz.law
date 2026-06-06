@@ -42,6 +42,7 @@ Environment:
 """
 import os, re, sys, json, time, html, datetime
 import urllib.request, urllib.parse, urllib.error
+import xml.etree.ElementTree as ET
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
@@ -165,8 +166,11 @@ SYSTEM = (
 )
 
 
+UA = "horowitz.law Georgia Appellate Watch (contact: via horowitz.law)"
+
+
 def cl_headers():
-    h = {"User-Agent": "horowitz.law Georgia Appellate Watch"}
+    h = {"User-Agent": UA}
     if CL_TOKEN:
         h["Authorization"] = "Token " + CL_TOKEN
     return h
@@ -229,11 +233,73 @@ def cluster_id_of(r):
     return int(m.group(1)) if m else None
 
 
+ATOM = "{http://www.w3.org/2005/Atom}"
+DOCKET_RE = re.compile(r"\bA\d{2}[A-Z]\d{4}\b")
+
+
+def feed_get(url, deadline=None):
+    """Fetch a public CourtListener court feed. This is the /feed/ path, not /api/rest/,
+    so it does not draw on the REST API daily rate limit. No token needed."""
+    last = None
+    for attempt in range(3):
+        if deadline and time.time() > deadline:
+            raise TimeoutError("feed deadline exceeded")
+        try:
+            with urllib.request.urlopen(
+                    urllib.request.Request(url, headers={"User-Agent": UA}), timeout=20) as r:
+                return r.read()
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
+            last = e
+            if attempt < 2:
+                wait = 4 * (attempt + 1)
+                if deadline and time.time() + wait > deadline:
+                    raise
+                _dbg("feed error (%s), retrying in %ss" % (getattr(e, "reason", e), wait))
+                time.sleep(wait); continue
+            raise
+    if last:
+        raise last
+
+
+def feed_court(court, deadline=None):
+    """Discover recent opinions from the court's Atom feed. Returns candidate dicts with the
+    same keys the pipeline expects (cluster_id, caseName, court_id, absolute_url, dateFiled,
+    docketNumber, snippet), plus pdf_url. The feed snippet is the opinion's opening text,
+    which is enough for the screen tier; full text is fetched later only for survivors."""
+    raw = feed_get("https://www.courtlistener.com/feed/court/%s/" % court, deadline)
+    root = ET.fromstring(raw)
+    out = []
+    for e in root.findall(ATOM + "entry"):
+        t = e.find(ATOM + "title")
+        name = (t.text or "").strip() if t is not None else ""
+        href, pdf = "", ""
+        for ln in e.findall(ATOM + "link"):
+            rel, h = ln.get("rel"), (ln.get("href") or "")
+            if rel == "alternate" and "/opinion/" in h:
+                href = h
+            elif rel == "enclosure" and (ln.get("type") == "application/pdf" or h.endswith(".pdf")):
+                pdf = h
+        m = re.search(r"/opinion/(\d+)/", href)
+        if not m:
+            continue
+        pub = e.find(ATOM + "published")
+        if pub is None:
+            pub = e.find(ATOM + "updated")
+        date_filed = ((pub.text or "")[:10]) if pub is not None else ""
+        sm = e.find(ATOM + "summary")
+        snippet = re.sub(r"<[^>]+>", " ", html.unescape(sm.text or "")) if sm is not None else ""
+        snippet = re.sub(r"\s+", " ", snippet).strip()
+        dm = DOCKET_RE.search(snippet)
+        path = href.split("courtlistener.com", 1)[-1] if "courtlistener.com" in href else href
+        out.append({"cluster_id": int(m.group(1)), "caseName": name, "court_id": court,
+                    "absolute_url": path, "dateFiled": date_filed,
+                    "docketNumber": dm.group(0) if dm else "", "snippet": snippet[:1500],
+                    "pdf_url": pdf})
+    return out
+
+
 def snippet_of(r):
-    ops = r.get("opinions") or []
-    if ops and isinstance(ops[0], dict):
-        return ops[0].get("snippet") or ""
-    return ""
+    return r.get("snippet") or ""
 
 
 def opinion_id_of(r):
@@ -394,20 +460,22 @@ def main():
     results = []
     for court in COURTS:
         if time.time() > search_deadline:
-            print("  ! search budget reached (%ds); skipping remaining courts" % SEARCH_BUDGET)
+            print("  ! feed budget reached (%ds); skipping remaining courts" % SEARCH_BUDGET)
             break
         try:
-            results += search_court(court, since, search_deadline)
+            results += feed_court(court, search_deadline)
         except Exception as e:
-            print("  ! courtlistener search failed for %s: %s" % (court, e))
+            print("  ! courtlistener feed failed for %s: %s" % (court, e))
     if not results:
-        print("no candidates returned from courtlistener "
-              "(search timed out or rate-limited); nothing written this run.")
+        print("no candidates returned from the courtlistener feeds "
+              "(feed unreachable or empty); nothing written this run.")
         return
     cand, ids = [], set()
     for r in results:
         cid = cluster_id_of(r)
         if not cid or cid in have or cid in seen or cid in ids:
+            continue
+        if (r.get("dateFiled") or "") and r["dateFiled"] < since:
             continue
         ids.add(cid)
         cand.append(r)
