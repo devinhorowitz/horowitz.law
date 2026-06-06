@@ -38,7 +38,7 @@ UNSUB      = os.environ.get("DIGEST_UNSUB") or ""             # https one-click 
 UNSUB_EMAIL= os.environ.get("DIGEST_UNSUB_EMAIL") or "unsubscribe@horowitz.law"  # mailto fallback, always compliant
 POSTAL     = os.environ.get("DIGEST_POSTAL") or ""            # CAN-SPAM: a real physical mailing address
 DISCLAIMER = os.environ.get("DIGEST_DISCLAIMER") or ""        # e.g. not-legal-advice / attorney-advertising line
-PREHEADER  = os.environ.get("DIGEST_PREHEADER") or "New Georgia appellate decisions for civil litigation and insurance-defense practice."
+PREHEADER  = os.environ.get("DIGEST_PREHEADER") or "New Georgia appellate decisions in civil litigation and insurance practice."
 PREVIEW    = os.environ.get("DIGEST_PREVIEW") or os.path.join(REPO, "digest_preview.html")
 
 # Anyone who unsubscribes is dropped from every future send. Sources: the DIGEST_SUPPRESS
