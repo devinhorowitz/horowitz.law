@@ -1,0 +1,73 @@
+name: Georgia Appellate Watch backfill
+
+# Manual only. Run from the Actions tab. Leave dry_run checked the first time to
+# preview the recall report and the drafted cards in the run log without writing
+# anything or opening a PR; uncheck it to write the cards and open the PR.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (preview recall report + cards in the log; write nothing, open no PR)'
+        type: boolean
+        default: true
+      seed:
+        description: 'Seed override: comma-separated cluster:court_id pairs (court_id in ga, gactapp, ca11, scotus). Blank = built-in skill seed.'
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  PYTHONUNBUFFERED: '1'
+
+# Separate group from the daily update so a manual backfill neither blocks nor is
+# blocked by the cron. Both open their own PR branch off main, so their diffs stay
+# independent.
+concurrency:
+  group: opinions-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install --upgrade pypdf
+
+      - name: Seed the archive (screen as recall test, triage, summarize, render)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          OPINIONS_SEED: ${{ inputs.seed }}
+          # Same three-tier funnel as the daily pipeline.
+          OPINIONS_SCREEN_MODEL: claude-haiku-4-5-20251001
+          OPINIONS_TRIAGE_MODEL: claude-sonnet-4-6
+          OPINIONS_MODEL: claude-opus-4-8
+        run: python scripts/backfill.py
+
+      # In a dry run the script writes nothing, so this finds no changes and opens
+      # no PR. In a real run it opens or updates one PR with the recall report as
+      # the body and the grown opinions.json plus re-rendered html/xml.
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: bot/opinions-backfill
+          title: 'Georgia Appellate Watch: backfill (skill seed)'
+          commit-message: 'opinions: backfill seed of known skill-cases'
+          body-path: scripts/backfill_pr_body.md
+          labels: opinions, automated, backfill
+          delete-branch: true
+          add-paths: |
+            opinions.json
+            opinions.xml
+            opinions.html
