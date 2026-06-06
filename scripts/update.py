@@ -1,27 +1,39 @@
 #!/usr/bin/env python3
-"""Georgia Appellate Watch updater.
+"""Georgia Appellate Watch updater (three-tier funnel).
 
-Daily pipeline, standard library only:
-  1. Ask CourtListener for new published Georgia appellate opinions since the last run.
-  2. For each one not seen before, fetch its text and ask Claude whether it is
-     relevant to a Georgia insurance-defense / civil-litigation audience and, if so,
-     to write a short synopsis in the house style.
-  3. Append the keepers to opinions.json, update opinions_state.json, and re-render
-     opinions.html and opinions.xml via scripts/render.py.
-  4. Write scripts/pr_body.md summarizing the run for the pull request.
+Daily pipeline, standard library only. Three model tiers, cheapest first, so the
+expensive model only ever touches confirmed keepers:
 
-Run from the repo root: `python scripts/update.py`.
-No third-party packages. Network: CourtListener REST v4 + Anthropic Messages API.
+  Tier 1  SCREEN   (Haiku)  reads the case name and opening excerpt only and drops
+                            the categorically unrelated (criminal, family, juvenile,
+                            probate, tax, bar, election, dispossessory) and one-line
+                            application or clerk orders. Permissive: anything civil or
+                            ambiguous passes, so nothing relevant is dropped on a glance.
+  Tier 2  TRIAGE   (Sonnet) reads the FULL opinion and decides, against a narrow bar,
+                            whether it genuinely decides or clarifies something relevant,
+                            catching holdings that are not visible from the opening.
+  Tier 3  SUMMARIZE(Opus)   reads the FULL opinion plus the triage note and writes the
+                            public-facing card in the house style. Final backstop: it can
+                            still decline. Runs at effort=high by default (its accuracy
+                            lever); Opus 4.8 does not take an extended-thinking budget.
+
+Keepers are appended to opinions.json, opinions_state.json is updated, opinions.html
+and opinions.xml are re-rendered, and scripts/pr_body.md is written for the pull request.
+
+Run from the repo root: `python scripts/update.py`. No third-party packages.
 
 Environment:
-  ANTHROPIC_API_KEY     required
-  COURTLISTENER_TOKEN   optional (raises CourtListener rate limits)
-  OPINIONS_MODEL        Claude model id (default below; confirm current id in API docs)
-  OPINIONS_COURTS       CourtListener court ids (default "ga,gactapp")
-  OPINIONS_LOOKBACK     fallback look-back window in days when state is empty (default 21)
-  OPINIONS_MAX          max opinions evaluated per run (default 25)
-  OPINIONS_MAXCHARS     opinion text characters sent to the model (default 14000)
-  DRY_RUN               if set to 1, evaluate and print but write nothing
+  ANTHROPIC_API_KEY        required
+  COURTLISTENER_TOKEN      optional (raises CourtListener rate limits)
+  OPINIONS_MODEL           Tier 3 summarizer (default claude-opus-4-8)
+  OPINIONS_TRIAGE_MODEL    Tier 2 full-read gate (default claude-sonnet-4-6). "" disables it.
+  OPINIONS_SCREEN_MODEL    Tier 1 excerpt screen (default claude-haiku-4-5-20251001). "" disables it.
+  OPINIONS_COURTS          CourtListener court ids (default "ga,gactapp")
+  OPINIONS_LOOKBACK        fallback look-back window in days when state is empty (default 21)
+  OPINIONS_MAX             max opinions evaluated per run (default 25)
+  OPINIONS_MAXCHARS        opinion characters sent to triage and summarizer (default 60000)
+  OPINIONS_MAX_TOKENS      summarizer output token cap (default 4096)
+  DRY_RUN                  if set to 1, evaluate and print but write nothing
 """
 import os, re, sys, json, time, html, datetime
 import urllib.request, urllib.parse, urllib.error
@@ -34,57 +46,112 @@ JSON_PATH  = os.path.join(REPO, "opinions.json")
 STATE_PATH = os.path.join(REPO, "opinions_state.json")
 PR_PATH    = os.path.join(REPO, "scripts", "pr_body.md")
 
-KEY      = os.environ.get("ANTHROPIC_API_KEY", "")
-CL_TOKEN = os.environ.get("COURTLISTENER_TOKEN", "")
-MODEL    = os.environ.get("OPINIONS_MODEL", "claude-sonnet-4-6")
-VERSION  = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
-COURTS   = [c.strip() for c in os.environ.get("OPINIONS_COURTS", "ga,gactapp").split(",") if c.strip()]
-LOOKBACK = int(os.environ.get("OPINIONS_LOOKBACK", "21"))
-MAX_RUN  = int(os.environ.get("OPINIONS_MAX", "25"))
-MAXCHARS = int(os.environ.get("OPINIONS_MAXCHARS", "14000"))
-DRY_RUN  = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
+KEY          = os.environ.get("ANTHROPIC_API_KEY", "")
+CL_TOKEN     = os.environ.get("COURTLISTENER_TOKEN", "")
+MODEL        = os.environ.get("OPINIONS_MODEL", "claude-opus-4-8")
+TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-4-6")
+SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5-20251001")
+VERSION      = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
+COURTS       = [c.strip() for c in os.environ.get("OPINIONS_COURTS", "ga,gactapp").split(",") if c.strip()]
+LOOKBACK     = int(os.environ.get("OPINIONS_LOOKBACK", "21"))
+MAX_RUN      = int(os.environ.get("OPINIONS_MAX", "25"))
+MAXCHARS     = int(os.environ.get("OPINIONS_MAXCHARS", "60000"))
+OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
+DRY_RUN      = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 
 COURT_MAP   = {"ga": "scotga", "gactapp": "ctapp"}
 VALID_AREAS = set(render.AREA_LABELS)
 CITE_RE = re.compile(r"\b\d+\s+(?:Ga\.?\s*App\.?|Ga\.?|S\.?\s*E\.?\s*2d|S\.?\s*E\.?|U\.?\s*S\.?|S\.?\s*Ct\.?|F\.?(?:2d|3d|4th)?|F\.?\s*Supp\.?)\s+\d+", re.I)
 
+SCREEN_SYSTEM = (
+    "You are a fast first-pass screener for a curated feed of Georgia appellate decisions "
+    "for an insurance-defense and civil-litigation audience. You see only a case name and a "
+    "short opening excerpt. Be permissive: your only job is to discard cases that cannot "
+    "possibly belong, not to judge relevance.\n\n"
+    "FAIL only if the case is clearly one of these: criminal (often captioned 'v. The State'), "
+    "habeas, family or domestic, juvenile or dependency ('In the Interest of'), probate or "
+    "wills, tax, workers' compensation, attorney discipline or bar admission, election, or "
+    "landlord-tenant or dispossessory; or it is a one-line order that merely grants or denies "
+    "an application or dismisses for failure to file, with no merits.\n\n"
+    "PASS everything else, including any general civil case and anything you are not sure "
+    "about. A later step reads the full opinion, so when in doubt, PASS. "
+    "Output ONLY a JSON object: {\"pass\": true or false, \"reason\": \"a few words\"}."
+)
+
+TRIAGE_SYSTEM = (
+    "You are the second-stage reviewer for a CURATED, NARROW feed of Georgia appellate "
+    "decisions for an insurance-defense and civil-litigation audience. A cheap first pass has "
+    "already removed the obviously unrelated cases. You are given the FULL text of one "
+    "opinion. Catch genuine relevance that a glance at the opening would miss, while keeping "
+    "the feed narrow.\n\n"
+    "Mark relevant=true only if the opinion DECIDES or CLARIFIES a point in one of these "
+    "areas, even if that point is not apparent from the caption or opening and even if it is a "
+    "secondary holding: auto or UM/UIM, premises liability, negligent security, insurance "
+    "coverage or insurer bad faith, trucking or commercial motor carriers, apportionment of "
+    "fault, tort damages or medical causation, wrongful death, products liability, dram shop, "
+    "spoliation, Georgia tort reform (SB 68), expert or Daubert issues, or a civil procedure "
+    "or evidence rule of broad practical importance to civil defense litigators.\n\n"
+    "Mark relevant=false if the opinion only MENTIONS such a topic in passing without "
+    "deciding anything about it, if it is a routine and fact-bound application of a settled "
+    "rule, or if it is otherwise out of scope (ordinary commercial or contract disputes, "
+    "landlord-tenant, family, criminal, and the like). Default to false on a close call.\n\n"
+    "Output ONLY a JSON object with keys: relevant (true or false), significance ('high', "
+    "'medium', or 'low'), areas (a list of codes from: coverage, badfaith, auto, premises, "
+    "negsec, expert, procedure, damages), note (one or two sentences telling the next reviewer "
+    "exactly what in the opinion is relevant and worth summarizing, especially if it is "
+    "buried), reason (a few words). If relevant is false, areas and note may be empty."
+)
+
 SYSTEM = (
-    "You are a legal editor maintaining a curated feed of new Georgia appellate opinions "
-    "for an insurance-defense audience. Given one opinion, decide whether it is relevant, "
+    "You are the editor of a CURATED, NARROW feed of new Georgia appellate decisions for an "
+    "insurance-defense and civil-litigation audience. Relevance and significance matter far "
+    "more than coverage. You are given the full text of one opinion, and a triage note from a "
+    "prior reviewer pointing to what is relevant. Decide whether it earns a place in the feed, "
     "and if so write a short neutral digest.\n\n"
-    "RELEVANT means a Georgia civil case touching any of: auto and UM or UIM, premises "
-    "liability, negligent security, insurance coverage, insurer bad faith, apportionment of "
-    "fault, tort reform (SB 68), expert or Daubert issues, or civil damages. Also relevant: a "
-    "civil procedure ruling likely to matter to defense litigators (service, dismissal, "
-    "default, summary judgment, discovery sanctions).\n"
-    "NOT RELEVANT (set relevant=false): criminal, habeas, family or domestic, juvenile, "
-    "probate or wills, tax, workers' compensation administrative appeals, attorney discipline "
-    "or bar admission, election, and zoning or governmental matters with no tort or insurance "
-    "angle.\n\n"
-    "If relevant, write the digest in this house style:\n"
-    "- A 2 to 4 sentence synopsis, then a separate one-sentence reason it matters.\n"
-    "- Neutral reporter voice. Lowercase party roles (plaintiff, defendant, insurer).\n"
-    "- State the disposition (affirmed; reversed; vacated and remanded; affirmed in part, "
+    "INCLUDE (relevant=true) only if BOTH are true:\n"
+    "  (1) Nexus. It involves one or more of: auto or UM/UIM, premises liability, negligent "
+    "security, insurance coverage or insurer bad faith, trucking or commercial motor carriers, "
+    "apportionment of fault, tort damages or medical causation, wrongful death, products "
+    "liability, dram shop, spoliation, Georgia tort reform (SB 68), or expert or Daubert "
+    "issues; OR it is a civil procedure or evidence decision that announces or clarifies a "
+    "rule of broad, practical importance to civil defense litigators.\n"
+    "  (2) Significance. It actually decides or clarifies something a practitioner would want "
+    "to know. A routine, fact-bound application of a settled rule does not qualify.\n\n"
+    "EXCLUDE (relevant=false): criminal, habeas, family or domestic, juvenile or dependency, "
+    "probate or wills, tax, workers' compensation, attorney discipline or bar admission, "
+    "election, zoning, and governmental matters with no tort or insurance angle; landlord-"
+    "tenant and dispossessory cases; ordinary commercial, contract, business-tort, or debt-"
+    "collection disputes with no insurance or personal-injury nexus, unless the holding "
+    "establishes an evidentiary or procedural rule of broad importance to civil defense "
+    "practice; routine jurisdictional dispositions that merely apply a settled appellate rule "
+    "to the facts (late notice of appeal, non-final order without a Rule 54(b) certificate, "
+    "wrong appeal route, failure to file a brief, dismissal for want of prosecution), unless "
+    "the opinion announces or clarifies a rule of broader significance; and one-line orders "
+    "that merely grant or deny an application. Default to EXCLUSION on close calls.\n\n"
+    "If you INCLUDE it, write the digest in this house style:\n"
+    "  - A 2 to 4 sentence synopsis, then a separate one-sentence reason it matters.\n"
+    "  - Neutral reporter voice. Lowercase party roles (plaintiff, defendant, insurer).\n"
+    "  - State the disposition (affirmed; reversed; vacated and remanded; affirmed in part, "
     "reversed in part; appeal dismissed; and so on).\n"
-    "- Be conservative. Describe only what the opinion holds. Do not overstate.\n"
-    "- Do NOT invent or include any case citations or reporter cites. Refer to the case by "
+    "  - Be conservative. Describe only what the opinion holds. Do not overstate.\n"
+    "  - Do NOT invent or include any case citations or reporter cites. Refer to the case by "
     "party name only. A statutory cite in the form O.C.G.A. section X is fine only if the "
     "opinion itself uses it.\n"
-    "- No em dashes. Use commas and periods. Use the Oxford comma. Write 'about' not "
+    "  - No em dashes. Use commas and periods. Use the Oxford comma. Write 'about' not "
     "'approximately'.\n\n"
     "Field rules:\n"
-    "- court: 'scotga' for the Supreme Court of Georgia, 'ctapp' for the Court of Appeals of Georgia.\n"
-    "- division: the Court of Appeals division if the opinion states one (for example "
+    "  - court: 'scotga' for the Supreme Court of Georgia, 'ctapp' for the Court of Appeals of Georgia.\n"
+    "  - division: the Court of Appeals division if the opinion states one (for example "
     "'First Division'), otherwise null.\n"
-    "- dockets: a list of docket numbers as strings.\n"
-    "- disposition: a short lowercase phrase.\n"
-    "- areas: one or more codes from EXACTLY this set, using only codes that genuinely fit: "
+    "  - dockets: a list of docket numbers as strings.\n"
+    "  - disposition: a short lowercase phrase.\n"
+    "  - areas: one or more codes from EXACTLY this set, using only codes that genuinely fit: "
     "coverage, badfaith, auto, premises, negsec, expert, procedure, damages.\n"
-    "- name: the case name in the form 'Party v. Party'.\n"
-    "- confidence: 'high', 'medium', or 'low'.\n\n"
+    "  - significance: 'high', 'medium', or 'low'. If you would rate it 'low', set relevant=false instead.\n"
+    "  - confidence: 'high', 'medium', or 'low'.\n\n"
     "Output ONLY a JSON object, no markdown and no commentary, with these keys: relevant, "
-    "court, division, dockets, disposition, areas, name, synopsis, why, confidence. "
-    "If relevant is false, the remaining fields may be empty."
+    "court, division, dockets, disposition, areas, name, synopsis, why, significance, "
+    "confidence. If relevant is false, the remaining fields may be empty."
 )
 
 
@@ -126,6 +193,13 @@ def cluster_id_of(r):
         return int(r["cluster_id"])
     m = re.search(r"/opinion/(\d+)/", r.get("absolute_url", "") or "")
     return int(m.group(1)) if m else None
+
+
+def snippet_of(r):
+    ops = r.get("opinions") or []
+    if ops and isinstance(ops[0], dict):
+        return ops[0].get("snippet") or ""
+    return ""
 
 
 def opinion_id_of(r):
@@ -171,20 +245,39 @@ def parse_json(s):
         return json.loads(m.group(0))
 
 
-def summarize(court_id, case_name, docket, date_filed, text):
-    user = ("Court (CourtListener id): %s\nCase name: %s\nDocket: %s\nDate filed: %s\n\n"
-            "OPINION TEXT (may be truncated):\n%s" % (court_id, case_name, docket, date_filed, text[:MAXCHARS]))
-    body = {"model": MODEL, "max_tokens": 1024, "system": SYSTEM,
-            "messages": [{"role": "user", "content": user}]}
+def anthropic_json(body):
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
         data=json.dumps(body).encode("utf-8"),
         headers={"content-type": "application/json", "x-api-key": KEY, "anthropic-version": VERSION},
         method="POST")
-    with urllib.request.urlopen(req, timeout=120) as r:
+    with urllib.request.urlopen(req, timeout=240) as r:
         data = json.loads(r.read().decode("utf-8"))
     txt = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
     return parse_json(txt)
+
+
+def screen(name, docket, snippet):
+    user = "Case name: %s\nDocket: %s\nOpening excerpt:\n%s" % (name, docket, (snippet or "")[:1500])
+    return anthropic_json({"model": SCREEN_MODEL, "max_tokens": 256, "system": SCREEN_SYSTEM,
+                           "messages": [{"role": "user", "content": user}]})
+
+
+def triage(name, docket, text):
+    user = "Case name: %s\nDocket: %s\n\nFULL OPINION:\n%s" % (name, docket, text[:MAXCHARS])
+    return anthropic_json({"model": TRIAGE_MODEL, "max_tokens": 1024, "system": TRIAGE_SYSTEM,
+                           "messages": [{"role": "user", "content": user}]})
+
+
+def summarize(court_id, name, docket, date_filed, text, note):
+    user = ("Court (CourtListener id): %s\nCase name: %s\nDocket: %s\nDate filed: %s\n\n"
+            "Triage note (what a prior reviewer flagged as relevant): %s\n\n"
+            "OPINION TEXT (may be truncated):\n%s"
+            % (court_id, name, docket, date_filed, note or "(none)", text[:MAXCHARS]))
+    # Opus 4.8 runs at effort=high by default (its accuracy lever) and does not take an
+    # extended-thinking budget, so neither is set here.
+    return anthropic_json({"model": MODEL, "max_tokens": OUT_TOKENS, "system": SYSTEM,
+                           "messages": [{"role": "user", "content": user}]})
 
 
 def main():
@@ -204,7 +297,6 @@ def main():
     else:
         since = (datetime.date.today() - datetime.timedelta(days=LOOKBACK)).isoformat()
 
-    # gather candidates across courts, newest first, de-duplicated
     results = []
     for court in COURTS:
         results += search_court(court, since)
@@ -217,9 +309,11 @@ def main():
         cand.append(r)
     cand.sort(key=lambda r: (r.get("dateFiled") or "", cluster_id_of(r)), reverse=True)
     cand = cand[:MAX_RUN]
-    print("since %s | candidates: %d" % (since, len(cand)))
+    print("since %s | candidates: %d | tiers: screen=%s triage=%s summarize=%s"
+          % (since, len(cand), SCREEN_MODEL or "off", TRIAGE_MODEL or "off", MODEL))
 
-    added, flagged, skipped, evaluated = [], [], [], set()
+    added, flagged, skipped = [], [], []
+    evaluated, n_screen, n_triage, n_opus = set(), 0, 0, 0
     for r in cand:
         cid = cluster_id_of(r)
         name = r.get("caseName") or r.get("caseNameFull") or ""
@@ -228,19 +322,42 @@ def main():
         date_filed = (r.get("dateFiled") or "")[:10]
         url = "https://www.courtlistener.com" + (r.get("absolute_url") or "")
         try:
+            # Tier 1: cheap excerpt screen
+            if SCREEN_MODEL:
+                n_screen += 1
+                s = screen(name, docket, snippet_of(r))
+                if not s.get("pass"):
+                    skipped.append((name, "screen: %s" % (s.get("reason") or "not a fit")))
+                    evaluated.add(cid); continue
+                time.sleep(0.4)
+            # full text, fetched once and reused by tiers 2 and 3
             oid = opinion_id_of(r)
             text = opinion_text(oid) if oid else ""
             if not text:
                 skipped.append((name, "no opinion text available")); continue
-            time.sleep(1)
-            v = summarize(court_id, name, docket, date_filed, text)
+            time.sleep(0.4)
+            # Tier 2: full-read relevance gate
+            note = ""
+            if TRIAGE_MODEL:
+                n_triage += 1
+                t = triage(name, docket, text)
+                if not t.get("relevant") or (t.get("significance") or "").lower() == "low":
+                    skipped.append((name, "triage: %s" % (t.get("reason") or "not relevant")))
+                    evaluated.add(cid); continue
+                note = t.get("note") or ""
+                time.sleep(0.4)
+            # Tier 3: high-effort public summary
+            n_opus += 1
+            v = summarize(court_id, name, docket, date_filed, text, note)
             evaluated.add(cid)
         except Exception as e:
             print("  ! error on cluster %s (%s): %s" % (cid, name, e))
             continue  # leave unseen so it is retried next run
 
         if not v.get("relevant"):
-            skipped.append((name, "model marked not relevant")); continue
+            skipped.append((name, "summarizer: not relevant")); continue
+        if (v.get("significance") or "").lower() == "low":
+            skipped.append((name, "summarizer: low significance")); continue
 
         areas = [a for a in (v.get("areas") or []) if a in VALID_AREAS]
         if not areas:
@@ -270,9 +387,8 @@ def main():
             flagged.append((entry["name"], reasons))
 
         added.append(entry)
-        print("  + %s [%s] %s" % (entry["name"], ",".join(areas), disp))
+        print("  + %s [%s] %s (sig=%s)" % (entry["name"], ",".join(areas), disp, v.get("significance")))
 
-    # PR body summary
     lines = ["## Georgia Appellate Watch: %d new opinion(s)" % len(added), ""]
     for e in added:
         cl = render.COURT_LABELS[e["court"]]
@@ -282,20 +398,21 @@ def main():
         if fr:
             lines.append("  - review: %s" % "; ".join(fr))
     if skipped:
-        lines += ["", "Skipped (logged, not added):"]
+        lines += ["", "Screened or dropped this run (not added):"]
         lines += ["- %s: %s" % (n, why) for n, why in skipped]
     if not added:
         lines += ["", "No new relevant opinions this run."]
     pr_body = "\n".join(lines) + "\n"
+    funnel = "screened %d, triaged %d, summarized %d" % (n_screen, n_triage, n_opus)
 
     if DRY_RUN:
-        print("\n--- DRY RUN, nothing written ---\n" + pr_body); return
+        print("\n--- DRY RUN, nothing written (%s) ---\n%s" % (funnel, pr_body)); return
 
     os.makedirs(os.path.dirname(PR_PATH), exist_ok=True)
     open(PR_PATH, "w", encoding="utf-8").write(pr_body)
 
     if not added:
-        print("no new opinions; leaving files unchanged"); return
+        print("no new opinions; files unchanged (%s, dropped %d)" % (funnel, len(skipped))); return
 
     entries += added
     json.dump(entries, open(JSON_PATH, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
@@ -304,7 +421,8 @@ def main():
     state["updated"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     json.dump(state, open(STATE_PATH, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     n = render.render(entries)
-    print("rendered %d entries; added %d, flagged %d, skipped %d" % (n, len(added), len(flagged), len(skipped)))
+    print("rendered %d entries; added %d, flagged %d (%s, dropped %d)"
+          % (n, len(added), len(flagged), funnel, len(skipped)))
 
 
 if __name__ == "__main__":
