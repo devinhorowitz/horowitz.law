@@ -9,6 +9,10 @@ permissions:
   contents: write
   pull-requests: write
 
+# Workflow-wide environment.
+#  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 silences the Node 20 deprecation warning by
+#  running the prebuilt actions on Node 24 now (the default after June 16, 2026).
+#  PYTHONUNBUFFERED makes the script stream its log live instead of in one burst.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   PYTHONUNBUFFERED: '1'
@@ -27,11 +31,14 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Fetch, classify, summarize, render
+      - name: Fetch, screen, triage, summarize, render
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
-          OPINIONS_MODEL: claude-sonnet-4-6
+          # Three-tier funnel, cheapest first. Model ids per the Anthropic models docs.
+          OPINIONS_SCREEN_MODEL: claude-haiku-4-5-20251001   # tier 1: excerpt screen ($1/$5 per MTok)
+          OPINIONS_TRIAGE_MODEL: claude-sonnet-4-6           # tier 2: full-read gate ($3/$15 per MTok)
+          OPINIONS_MODEL: claude-opus-4-8                    # tier 3: public summary ($5/$25, effort=high by default)
         run: python scripts/update.py
 
       # Opens or updates a pull request only when the run changed tracked files.
