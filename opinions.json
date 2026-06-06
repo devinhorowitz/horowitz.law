@@ -1,23 +1,5 @@
 [
   {
-    "cluster_id": 10870108,
-    "name": "Warrington Enterprises, LLC v. Lopez",
-    "court": "ctapp",
-    "division": null,
-    "date": "2026-06-04",
-    "dockets": [
-      "A26A2069"
-    ],
-    "disposition": "appeal dismissed",
-    "areas": [
-      "procedure"
-    ],
-    "url": "https://www.courtlistener.com/opinion/10870108/warrington-enterprises-llc-v-marvin-lopez/",
-    "synopsis": "The Court of Appeals dismissed a defendant's appeal from the denial of its motion to open a default, holding the appeal untimely. A notice of appeal must be filed within thirty days of the order appealed under O.C.G.A. § 5-6-38(a), and a motion for reconsideration neither extends that deadline nor is itself appealable.",
-    "why": "a clean reminder of an easily fatal appellate trap: a motion for reconsideration does not stop the thirty-day clock to appeal the underlying order.",
-    "first_seen": "2026-06-04"
-  },
-  {
     "cluster_id": 10862301,
     "name": "State Farm Mut. Auto. Ins. Co. & GEICO Indemnity Co. v. Barnor-Cooper",
     "court": "ctapp",
