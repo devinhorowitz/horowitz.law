@@ -38,6 +38,7 @@ Environment:
   OPINIONS_EFFORT          Opus reasoning effort high|medium|low (default medium); "" uses the API default
   OPINIONS_BUDGET_SEC      wall-clock cap on the candidate loop in seconds (default 480)
   OPINIONS_BREAKER         stop after this many consecutive API failures (default 4)
+  OPINIONS_SEARCH_BUDGET_SEC  wall-clock cap on the CourtListener search phase (default 120)
 """
 import os, re, sys, json, time, html, datetime
 import urllib.request, urllib.parse, urllib.error
@@ -66,6 +67,7 @@ DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "ye
 EFFORT       = os.environ.get("OPINIONS_EFFORT", "medium").strip()
 BUDGET_SEC   = int(os.environ.get("OPINIONS_BUDGET_SEC", "480"))
 BREAKER      = int(os.environ.get("OPINIONS_BREAKER", "4"))
+SEARCH_BUDGET= int(os.environ.get("OPINIONS_SEARCH_BUDGET_SEC", "120"))
 
 COURT_MAP   = {"ga": "scotga", "gactapp": "ctapp"}
 VALID_AREAS = set(render.AREA_LABELS)
@@ -173,24 +175,30 @@ def cl_headers():
 CL_RETRY_STATUS = {429, 500, 502, 503, 504, 520, 522, 524}
 
 
-def cl_get(path):
+def cl_get(path, deadline=None):
     url = path if path.startswith("http") else "https://www.courtlistener.com" + path
     last = None
-    for attempt in range(6):
+    for attempt in range(4):
+        if deadline and time.time() > deadline:
+            raise TimeoutError("courtlistener deadline exceeded")
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers=cl_headers()), timeout=60) as r:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=cl_headers()), timeout=20) as r:
                 return json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             last = e
-            if e.code in CL_RETRY_STATUS and attempt < 5:
-                wait = _retry_after(e) or min(5 * (attempt + 1), 60)
+            if e.code in CL_RETRY_STATUS and attempt < 3:
+                wait = _retry_after(e) or min(4 * (attempt + 1), 20)
+                if deadline and time.time() + wait > deadline:
+                    raise
                 _dbg("courtlistener HTTP %s, retrying in %ss" % (e.code, wait))
                 time.sleep(wait); continue
             raise
         except (urllib.error.URLError, TimeoutError) as e:
             last = e
-            if attempt < 5:
-                wait = min(5 * (attempt + 1), 60)
+            if attempt < 3:
+                wait = min(4 * (attempt + 1), 20)
+                if deadline and time.time() + wait > deadline:
+                    raise
                 _dbg("courtlistener network error (%s), retrying in %ss" % (getattr(e, "reason", e), wait))
                 time.sleep(wait); continue
             raise
@@ -198,13 +206,15 @@ def cl_get(path):
         raise last
 
 
-def search_court(court, since):
+def search_court(court, since, deadline=None):
     params = {"type": "o", "court": court, "filed_after": since,
               "stat_Published": "on", "order_by": "dateFiled desc", "page_size": "50"}
     url = "https://www.courtlistener.com/api/rest/v4/search/?" + urllib.parse.urlencode(params)
     out, pages = [], 0
     while url and pages < 6:
-        data = cl_get(url)
+        if deadline and time.time() > deadline:
+            break
+        data = cl_get(url, deadline)
         out += data.get("results", [])
         url = data.get("next")
         pages += 1
@@ -373,15 +383,20 @@ def main():
     else:
         since = (datetime.date.today() - datetime.timedelta(days=LOOKBACK)).isoformat()
 
+    run_start = time.time()
+    search_deadline = run_start + SEARCH_BUDGET
     results = []
     for court in COURTS:
+        if time.time() > search_deadline:
+            print("  ! search budget reached (%ds); skipping remaining courts" % SEARCH_BUDGET)
+            break
         try:
-            results += search_court(court, since)
+            results += search_court(court, since, search_deadline)
         except Exception as e:
             print("  ! courtlistener search failed for %s: %s" % (court, e))
     if not results:
         print("no candidates returned from courtlistener "
-              "(search likely rate-limited); nothing written this run.")
+              "(search timed out or rate-limited); nothing written this run.")
         return
     cand, ids = [], set()
     for r in results:
@@ -397,7 +412,7 @@ def main():
 
     added, flagged, skipped = [], [], []
     evaluated, n_screen, n_triage, n_opus = set(), 0, 0, 0
-    run_start, consec = time.time(), 0
+    consec = 0
     for r in cand:
         if time.time() - run_start > BUDGET_SEC:
             print("  ! time budget reached (%ds) after %d evaluated; finalizing with what is collected"
