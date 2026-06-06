@@ -40,7 +40,7 @@ Environment:
   OPINIONS_BREAKER         stop after this many consecutive API failures (default 4)
   OPINIONS_SEARCH_BUDGET_SEC  wall-clock cap on the CourtListener search phase (default 120)
 """
-import os, re, sys, json, time, html, datetime
+import os, re, sys, json, time, html, datetime, io
 import urllib.request, urllib.parse, urllib.error
 import xml.etree.ElementTree as ET
 
@@ -62,6 +62,7 @@ COURTS       = [c.strip() for c in os.environ.get("OPINIONS_COURTS", "ga,gactapp
 LOOKBACK     = int(os.environ.get("OPINIONS_LOOKBACK", "21"))
 MAX_RUN      = int(os.environ.get("OPINIONS_MAX", "25"))
 MAXCHARS     = int(os.environ.get("OPINIONS_MAXCHARS", "60000"))
+PDF_MIN_CHARS= int(os.environ.get("OPINIONS_PDF_MIN_CHARS", "500"))  # below this, fall back from PDF to REST
 OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
 DRY_RUN      = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "yes")
@@ -353,6 +354,54 @@ def opinion_text(oid):
     return ""
 
 
+def _pdf_ok(text):
+    """Quality gate: is extracted PDF text good enough to use without falling back to REST?
+    A failed or image-only extraction yields little or no text; a real opinion yields plenty.
+    Survivors of the Tier 1 screen are substantive, so genuine opinions clear this easily, and
+    only true extraction failures (image-only scans, download errors) fall through to REST."""
+    return bool(text) and len(text) >= PDF_MIN_CHARS and sum(c.isalpha() for c in text) >= 100
+
+
+def pdf_text(pdf_url, deadline=None):
+    """Extract opinion text from the PDF enclosure on storage.courtlistener.com. The enclosure
+    is a static file, so it needs no token and does not draw on the REST API daily rate limit.
+    Returns cleaned text, or "" on any failure (missing or non-http url, download error,
+    image-only PDF, or pypdf unavailable) so the caller can fall back to the REST API."""
+    if not pdf_url or not pdf_url.lower().startswith(("http://", "https://")):
+        return ""
+    try:
+        import pypdf
+    except Exception as e:
+        _dbg("pypdf unavailable (%s); using REST fallback" % e)
+        return ""
+    raw = None
+    for attempt in range(2):
+        if deadline and time.time() > deadline:
+            return ""
+        try:
+            req = urllib.request.Request(pdf_url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                raw = resp.read()
+            break
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
+            if attempt < 1:
+                if deadline and time.time() + 3 > deadline:
+                    return ""
+                _dbg("pdf download error (%s), retrying" % (getattr(e, "reason", e)))
+                time.sleep(3); continue
+            _dbg("pdf download failed (%s); using REST fallback" % (getattr(e, "reason", e)))
+            return ""
+    if not raw:
+        return ""
+    try:
+        reader = pypdf.PdfReader(io.BytesIO(raw))
+        text = "\n".join((p.extract_text() or "") for p in reader.pages)
+    except Exception as e:
+        _dbg("pdf parse failed (%s); using REST fallback" % e)
+        return ""
+    return re.sub(r"[ \t]+", " ", text).strip()
+
+
 def parse_json(s):
     s = s.strip()
     if s.startswith("```"):
@@ -529,9 +578,19 @@ def main():
                     skipped.append((name, "screen: %s" % (s.get("reason") or "not a fit")))
                     consec = 0; evaluated.add(cid); continue
                 time.sleep(0.4)
-            # full text, fetched once and reused by tiers 2 and 3
-            oid = opinion_id_of(r)
-            text = opinion_text(oid) if oid else ""
+            # Full text, fetched once and reused by tiers 2 and 3.
+            # Phase 2: read the PDF enclosure first (static file on storage.courtlistener.com,
+            # no REST quota, fast). Fall back to the REST API only when extraction is empty,
+            # too short, or unusable, so the worst case degrades to the prior REST behavior.
+            text = pdf_text(r.get("pdf_url"), deadline=run_start + BUDGET_SEC)
+            if _pdf_ok(text):
+                _dbg("text via pdf for %s (%d chars)" % (name, len(text)))
+            else:
+                oid = opinion_id_of(r)
+                rest = opinion_text(oid) if oid else ""
+                if rest:
+                    text = rest
+                    _dbg("text via rest for %s (%d chars)" % (name, len(text)))
             if not text:
                 skipped.append((name, "no opinion text available")); consec = 0; continue
             time.sleep(0.4)
