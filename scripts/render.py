@@ -51,7 +51,7 @@ def card_html(e):
     meta = (f'<span class="court">{_esc(COURT_LABELS[e["court"]])}</span>{div_part} \u00b7 decided '
             f'{_esc(_date_label(e["date"]))} \u00b7 {_esc(_no_label(e["dockets"]))} \u00b7 {_esc(e["disposition"])}')
     return (
-        f'      <article class="opinion" data-court="{e["court"]}" data-areas="{",".join(e["areas"])}" data-date="{e["date"]}">\n'
+        f'      <article id="op-{e["cluster_id"]}" class="opinion" data-court="{e["court"]}" data-areas="{",".join(e["areas"])}" data-date="{e["date"]}">\n'
         f'        <div class="op-head"><span class="op-name">{_esc(e["name"])}</span></div>\n'
         f'        <div class="op-meta">{meta}</div>\n'
         f'        <div class="op-tags">{tags}</div>\n'
