@@ -39,6 +39,11 @@ import render
 STORAGE = "https://storage.courtlistener.com/"
 DRY_RUN = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 PR_PATH = os.path.join(update.REPO, "scripts", "backfill_pr_body.md")
+# Cap how long one cluster's metadata lookups may take. cl_get honors a 429
+# Retry-After header literally, and CourtListener sets it to the full daily-reset
+# window (often hours); passing a deadline makes cl_get raise the 429 fast instead
+# of sleeping on it. Normal short retries for transient 5xx still happen.
+CL_DEADLINE_SEC = int(os.environ.get("OPINIONS_CL_DEADLINE_SEC", "30"))
 
 # The post-2014, four-court decisions harvested from the QPWB skills, resolved to
 # CourtListener clusters. (cluster_id, court_id). Comments name the case and the
@@ -86,7 +91,8 @@ def seed_result(cid, court_id):
     search result so update.py's helpers consume it unchanged. The PDF text is
     fetched later from storage and costs no REST quota; here we spend at most the
     cluster, lead-opinion, and docket metadata lookups."""
-    cl = update.cl_get("/api/rest/v4/clusters/%d/" % cid)
+    dl = time.time() + CL_DEADLINE_SEC
+    cl = update.cl_get("/api/rest/v4/clusters/%d/" % cid, deadline=dl)
     name = (cl.get("case_name") or cl.get("case_name_full") or "").strip()
     date_filed = (cl.get("date_filed") or "")[:10]
 
@@ -102,7 +108,7 @@ def seed_result(cid, court_id):
 
     local_path, download_url = "", ""
     if oid:
-        op = update.cl_get("/api/rest/v4/opinions/%d/" % oid)
+        op = update.cl_get("/api/rest/v4/opinions/%d/" % oid, deadline=dl)
         local_path = op.get("local_path") or ""
         download_url = op.get("download_url") or ""
     pdf_url = (STORAGE + local_path) if local_path else (
@@ -113,7 +119,7 @@ def seed_result(cid, court_id):
     durl = cl.get("docket")
     if durl:
         try:
-            d = update.cl_get(durl)
+            d = update.cl_get(durl, deadline=dl)
             docket_num = (d.get("docket_number") or "").strip()
             court_url = d.get("court") or ""
             m = re.search(r"/courts/([^/]+)/", court_url) if isinstance(court_url, str) else None
@@ -209,7 +215,7 @@ def run():
     print("seed: %d cluster(s) | archive has %d card(s) | screen=%s triage=%s summarize=%s"
           % (len(seed), len(have), update.SCREEN_MODEL or "off", update.TRIAGE_MODEL or "off", update.MODEL))
 
-    rows, new_cards = [], []
+    rows, new_cards, aborted = [], [], False
     for cid, court_id in seed:
         if cid in have:
             print("  - %d already in archive; skipping" % cid)
@@ -218,6 +224,14 @@ def run():
         try:
             r = seed_result(cid, court_id)
         except Exception as e:
+            if getattr(e, "code", None) == 429:
+                print("\nABORT: CourtListener returned HTTP 429 (daily 125-request budget exhausted). "
+                      "Stopping now instead of sleeping on the Retry-After window. "
+                      "Re-dispatch after the CourtListener budget resets.")
+                rows.append({"cid": cid, "name": "(cluster %d)" % cid, "status": "error",
+                             "detail": "HTTP 429 (CourtListener budget exhausted)"})
+                aborted = True
+                break
             print("  ! metadata fetch failed for %d: %s" % (cid, e))
             rows.append({"cid": cid, "name": "(cluster %d)" % cid, "status": "error", "detail": str(e)[:160]})
             continue
@@ -305,6 +319,9 @@ def run():
                  ("  REVIEW: " + "; ".join(problems)) if problems else ""))
 
     report = render_recall(rows, new_cards)
+    if aborted:
+        report = ("> Run aborted early: CourtListener daily request budget (HTTP 429) was exhausted, "
+                  "so not all seed cases were processed. Re-run after it resets.\n\n") + report
     print("\n" + report)
 
     if DRY_RUN:
