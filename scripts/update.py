@@ -370,6 +370,12 @@ def main():
     if not KEY:
         print("ERROR: ANTHROPIC_API_KEY is not set."); sys.exit(1)
 
+    # The PR step reads PR_PATH as its body. Guarantee the file exists on every exit
+    # path, including the no-candidates early return, so it never fails on a missing file.
+    # It is gitignored and not in the PR add-paths, so a no-op run writes it and opens no PR.
+    os.makedirs(os.path.dirname(PR_PATH), exist_ok=True)
+    open(PR_PATH, "w", encoding="utf-8").write("No update this run.\n")
+
     entries = json.load(open(JSON_PATH, encoding="utf-8")) if os.path.exists(JSON_PATH) else []
     have = {int(e["cluster_id"]) for e in entries if e.get("cluster_id")}
 
