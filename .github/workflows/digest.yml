@@ -43,7 +43,10 @@ jobs:
           # Variables (non-secret; optional, the script has sane defaults if unset):
           DIGEST_FROM: ${{ vars.DIGEST_FROM }}
           DIGEST_UNSUB: ${{ vars.DIGEST_UNSUB }}
+          DIGEST_UNSUB_EMAIL: ${{ vars.DIGEST_UNSUB_EMAIL }}
           DIGEST_POSTAL: ${{ vars.DIGEST_POSTAL }}
+          DIGEST_DISCLAIMER: ${{ vars.DIGEST_DISCLAIMER }}
+          DIGEST_PREHEADER: ${{ vars.DIGEST_PREHEADER }}
           SITE_URL: ${{ vars.SITE_URL }}
           # From the manual run inputs (default for the scheduled run):
           DIGEST_DAYS: ${{ github.event.inputs.days || '7' }}
