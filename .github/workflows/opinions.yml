@@ -39,6 +39,7 @@ jobs:
           OPINIONS_SCREEN_MODEL: claude-haiku-4-5-20251001   # tier 1: excerpt screen ($1/$5 per MTok)
           OPINIONS_TRIAGE_MODEL: claude-sonnet-4-6           # tier 2: full-read gate ($3/$15 per MTok)
           OPINIONS_MODEL: claude-opus-4-8                    # tier 3: public summary ($5/$25, effort=high by default)
+          OPINIONS_MAX: '40'                                 # candidates evaluated per run (headroom for heavy filing days)
         run: python scripts/update.py
 
       # Opens or updates a pull request only when the run changed tracked files.
