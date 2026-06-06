@@ -95,7 +95,7 @@ def render(entries=None):
            '    <title>horowitz.law: Georgia Appellate Watch</title>',
            '    <link>https://horowitz.law/opinions</link>',
            '    <atom:link href="https://horowitz.law/opinions.xml" rel="self" type="application/rss+xml" />',
-           '    <description>AI-assisted synopses of new Georgia appellate, Eleventh Circuit, and U.S. Supreme Court opinions, filtered for civil litigation and insurance-defense practice. Each synopsis is AI-drafted; the linked opinion is the authority. A curated core, not a complete docket.</description>',
+           '    <description>AI-assisted synopses of new Georgia appellate, Eleventh Circuit, and U.S. Supreme Court opinions, filtered for civil litigation and insurance practice. Each synopsis is AI-drafted; the linked opinion is the authority. A curated core, not a complete docket.</description>',
            '    <language>en-us</language>',
            f'    <lastBuildDate>{build}</lastBuildDate>',
            '    <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>']
