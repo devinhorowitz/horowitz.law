@@ -19,8 +19,11 @@ AREA_LABELS = {
     "premises": "premises", "negsec": "negligent security", "expert": "expert",
     "procedure": "procedure", "damages": "damages",
 }
-COURT_LABELS = {"ctapp": "Court of Appeals of Georgia", "scotga": "Supreme Court of Georgia"}
-TITLE_SUFFIX = {"ctapp": " (Ga. Ct. App.)", "scotga": " (Ga.)"}
+COURT_LABELS = {"ctapp": "Court of Appeals of Georgia", "scotga": "Supreme Court of Georgia",
+                "ca11": "U.S. Court of Appeals for the Eleventh Circuit",
+                "scotus": "Supreme Court of the United States"}
+TITLE_SUFFIX = {"ctapp": " (Ga. Ct. App.)", "scotga": " (Ga.)",
+                "ca11": " (11th Cir.)", "scotus": " (U.S.)"}
 _WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 _MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -89,10 +92,10 @@ def render(entries=None):
     out = ['<?xml version="1.0" encoding="UTF-8"?>',
            '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
            '  <channel>',
-           '    <title>horowitz.law \u2014 Georgia Appellate Watch</title>',
+           '    <title>horowitz.law: Georgia Appellate Watch</title>',
            '    <link>https://horowitz.law/opinions</link>',
            '    <atom:link href="https://horowitz.law/opinions.xml" rel="self" type="application/rss+xml" />',
-           '    <description>AI-assisted synopses of new Supreme Court of Georgia and Court of Appeals of Georgia opinions, filtered for civil litigation and insurance-defense practice. Each synopsis is AI-drafted; the linked opinion is the authority. A curated core, not a complete docket.</description>',
+           '    <description>AI-assisted synopses of new Georgia appellate, Eleventh Circuit, and U.S. Supreme Court opinions, filtered for civil litigation and insurance-defense practice. Each synopsis is AI-drafted; the linked opinion is the authority. A curated core, not a complete docket.</description>',
            '    <language>en-us</language>',
            f'    <lastBuildDate>{build}</lastBuildDate>',
            '    <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>']

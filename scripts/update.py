@@ -58,7 +58,7 @@ MODEL        = os.environ.get("OPINIONS_MODEL", "claude-opus-4-8")
 TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-4-6")
 SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5-20251001")
 VERSION      = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
-COURTS       = [c.strip() for c in os.environ.get("OPINIONS_COURTS", "ga,gactapp").split(",") if c.strip()]
+COURTS       = [c.strip() for c in os.environ.get("OPINIONS_COURTS", "ga,gactapp,ca11,scotus").split(",") if c.strip()]
 LOOKBACK     = int(os.environ.get("OPINIONS_LOOKBACK", "21"))
 MAX_RUN      = int(os.environ.get("OPINIONS_MAX", "25"))
 MAXCHARS     = int(os.environ.get("OPINIONS_MAXCHARS", "60000"))
@@ -70,38 +70,51 @@ BUDGET_SEC   = int(os.environ.get("OPINIONS_BUDGET_SEC", "480"))
 BREAKER      = int(os.environ.get("OPINIONS_BREAKER", "4"))
 SEARCH_BUDGET= int(os.environ.get("OPINIONS_SEARCH_BUDGET_SEC", "120"))
 
-COURT_MAP   = {"ga": "scotga", "gactapp": "ctapp"}
+COURT_MAP   = {"ga": "scotga", "gactapp": "ctapp", "ca11": "ca11", "scotus": "scotus"}
 VALID_AREAS = set(render.AREA_LABELS)
 CITE_RE = re.compile(r"\b\d+\s+(?:Ga\.?\s*App\.?|Ga\.?|S\.?\s*E\.?\s*2d|S\.?\s*E\.?|U\.?\s*S\.?|S\.?\s*Ct\.?|F\.?(?:2d|3d|4th)?|F\.?\s*Supp\.?)\s+\d+", re.I)
 
 SCREEN_SYSTEM = (
-    "You are a fast first-pass screener for a curated feed of Georgia appellate decisions "
-    "for an insurance-defense and civil-litigation audience. You see only a case name and a "
-    "short opening excerpt. Be permissive: your only job is to discard cases that cannot "
-    "possibly belong, not to judge relevance.\n\n"
-    "FAIL only if the case is clearly one of these: criminal (often captioned 'v. The State'), "
-    "habeas, family or domestic, juvenile or dependency ('In the Interest of'), probate or "
-    "wills, tax, workers' compensation, attorney discipline or bar admission, election, or "
-    "landlord-tenant or dispossessory; or it is a one-line order that merely grants or denies "
-    "an application or dismisses for failure to file, with no merits.\n\n"
+    "You are a fast first-pass screener for a curated feed of court decisions for a Georgia "
+    "insurance-defense and civil-litigation audience. The feed covers the Georgia appellate "
+    "courts plus the U.S. Court of Appeals for the Eleventh Circuit and the U.S. Supreme Court. "
+    "You see only a case name and a short opening excerpt. Be permissive: your only job is to "
+    "discard cases that cannot possibly belong, not to judge relevance.\n\n"
+    "FAIL only if the case is clearly one of these: criminal (often captioned 'v. The State' or "
+    "'United States v.'), habeas or post-conviction (including 28 U.S.C. 2254 or 2255), "
+    "immigration, prisoner civil rights, Social Security or veterans' benefits, family or "
+    "domestic, juvenile or dependency ('In the Interest of'), probate or wills, tax, workers' "
+    "compensation, attorney discipline or bar admission, election, or landlord-tenant or "
+    "dispossessory; or it is a one-line order that merely grants or denies an application or "
+    "dismisses for failure to file, with no merits.\n\n"
     "PASS everything else, including any general civil case and anything you are not sure "
     "about. A later step reads the full opinion, so when in doubt, PASS. "
     "Output ONLY a JSON object: {\"pass\": true or false, \"reason\": \"a few words\"}."
 )
 
 TRIAGE_SYSTEM = (
-    "You are the second-stage reviewer for a CURATED, NARROW feed of Georgia appellate "
-    "decisions for an insurance-defense and civil-litigation audience. A cheap first pass has "
-    "already removed the obviously unrelated cases. You are given the FULL text of one "
-    "opinion. Catch genuine relevance that a glance at the opening would miss, while keeping "
-    "the feed narrow.\n\n"
+    "You are the second-stage reviewer for a CURATED, NARROW feed of court decisions for a "
+    "Georgia insurance-defense and civil-litigation audience. The feed covers the Georgia "
+    "appellate courts, the U.S. Court of Appeals for the Eleventh Circuit, and the U.S. Supreme "
+    "Court. A cheap first pass has already removed the obviously unrelated cases. You are given "
+    "the FULL text of one opinion. Catch genuine relevance that a glance at the opening would "
+    "miss, while keeping the feed narrow.\n\n"
     "Mark relevant=true only if the opinion DECIDES or CLARIFIES a point in one of these "
     "areas, even if that point is not apparent from the caption or opening and even if it is a "
     "secondary holding: auto or UM/UIM, premises liability, negligent security, insurance "
-    "coverage or insurer bad faith, trucking or commercial motor carriers, apportionment of "
-    "fault, tort damages or medical causation, wrongful death, products liability, dram shop, "
-    "spoliation, Georgia tort reform (SB 68), expert or Daubert issues, or a civil procedure "
-    "or evidence rule of broad practical importance to civil defense litigators.\n\n"
+    "coverage or insurer bad faith, trucking or commercial motor carriers (including FAAAA "
+    "preemption and broker liability), apportionment of fault, tort damages or medical "
+    "causation, wrongful death, products liability, dram shop, spoliation, Georgia tort reform "
+    "(SB 68), expert or Daubert issues, arbitration under the FAA, or a civil procedure or "
+    "evidence rule of broad practical importance to civil defense litigators (including removal "
+    "and diversity jurisdiction, class actions, and punitive-damages due process).\n\n"
+    "For an Eleventh Circuit or U.S. Supreme Court opinion, apply this bar even more strictly: "
+    "include it only if a Georgia insurance-defense litigator would actually use the holding. "
+    "Exclude the large federal docket that does not bear on this practice, including federal "
+    "criminal, immigration, habeas and section 2255, prisoner civil rights, Social Security, "
+    "patent and other intellectual property, bankruptcy with no coverage or tort nexus, "
+    "employment discrimination (unless it announces a broad evidentiary or procedural rule), "
+    "and administrative or regulatory matters.\n\n"
     "Mark relevant=false if the opinion only MENTIONS such a topic in passing without "
     "deciding anything about it, if it is a routine and fact-bound application of a settled "
     "rule, or if it is otherwise out of scope (ordinary commercial or contract disputes, "
@@ -114,31 +127,38 @@ TRIAGE_SYSTEM = (
 )
 
 SYSTEM = (
-    "You are the editor of a CURATED, NARROW feed of new Georgia appellate decisions for an "
-    "insurance-defense and civil-litigation audience. Relevance and significance matter far "
-    "more than coverage. You are given the full text of one opinion, and a triage note from a "
-    "prior reviewer pointing to what is relevant. Decide whether it earns a place in the feed, "
-    "and if so write a short neutral digest.\n\n"
+    "You are the editor of a CURATED, NARROW feed of new court decisions for a Georgia "
+    "insurance-defense and civil-litigation audience. The feed covers the Georgia appellate "
+    "courts, the U.S. Court of Appeals for the Eleventh Circuit, and the U.S. Supreme Court. "
+    "Relevance and significance matter far more than coverage. You are given the full text of "
+    "one opinion, and a triage note from a prior reviewer pointing to what is relevant. Decide "
+    "whether it earns a place in the feed, and if so write a short neutral digest.\n\n"
     "INCLUDE (relevant=true) only if BOTH are true:\n"
     "  (1) Nexus. It involves one or more of: auto or UM/UIM, premises liability, negligent "
-    "security, insurance coverage or insurer bad faith, trucking or commercial motor carriers, "
-    "apportionment of fault, tort damages or medical causation, wrongful death, products "
-    "liability, dram shop, spoliation, Georgia tort reform (SB 68), or expert or Daubert "
-    "issues; OR it is a civil procedure or evidence decision that announces or clarifies a "
-    "rule of broad, practical importance to civil defense litigators.\n"
+    "security, insurance coverage or insurer bad faith, trucking or commercial motor carriers "
+    "(including FAAAA preemption and broker liability), apportionment of fault, tort damages or "
+    "medical causation, wrongful death, products liability, dram shop, spoliation, Georgia tort "
+    "reform (SB 68), expert or Daubert issues, or arbitration under the FAA; OR it is a civil "
+    "procedure or evidence decision that announces or clarifies a rule of broad, practical "
+    "importance to civil defense litigators (including removal and diversity jurisdiction, "
+    "class actions, and punitive-damages due process).\n"
     "  (2) Significance. It actually decides or clarifies something a practitioner would want "
     "to know. A routine, fact-bound application of a settled rule does not qualify.\n\n"
-    "EXCLUDE (relevant=false): criminal, habeas, family or domestic, juvenile or dependency, "
-    "probate or wills, tax, workers' compensation, attorney discipline or bar admission, "
-    "election, zoning, and governmental matters with no tort or insurance angle; landlord-"
-    "tenant and dispossessory cases; ordinary commercial, contract, business-tort, or debt-"
-    "collection disputes with no insurance or personal-injury nexus, unless the holding "
-    "establishes an evidentiary or procedural rule of broad importance to civil defense "
-    "practice; routine jurisdictional dispositions that merely apply a settled appellate rule "
-    "to the facts (late notice of appeal, non-final order without a Rule 54(b) certificate, "
-    "wrong appeal route, failure to file a brief, dismissal for want of prosecution), unless "
-    "the opinion announces or clarifies a rule of broader significance; and one-line orders "
-    "that merely grant or deny an application. Default to EXCLUSION on close calls.\n\n"
+    "For an Eleventh Circuit or U.S. Supreme Court opinion, apply the nexus even more strictly: "
+    "include it only if a Georgia insurance-defense litigator would actually use the holding.\n\n"
+    "EXCLUDE (relevant=false): criminal, habeas and section 2255, immigration, prisoner civil "
+    "rights, Social Security and veterans' benefits, patent and other intellectual property, "
+    "family or domestic, juvenile or dependency, probate or wills, tax, workers' compensation, "
+    "attorney discipline or bar admission, election, zoning, and governmental or regulatory "
+    "matters with no tort or insurance angle; landlord-tenant and dispossessory cases; ordinary "
+    "commercial, contract, business-tort, or debt-collection disputes with no insurance or "
+    "personal-injury nexus, unless the holding establishes an evidentiary or procedural rule of "
+    "broad importance to civil defense practice; routine jurisdictional dispositions that "
+    "merely apply a settled appellate rule to the facts (late notice of appeal, non-final order "
+    "without a Rule 54(b) certificate, wrong appeal route, failure to file a brief, dismissal "
+    "for want of prosecution), unless the opinion announces or clarifies a rule of broader "
+    "significance; and one-line orders that merely grant or deny an application. Default to "
+    "EXCLUSION on close calls.\n\n"
     "If you INCLUDE it, write the digest in this house style:\n"
     "  - A 2 to 4 sentence synopsis, then a separate one-sentence reason it matters.\n"
     "  - Neutral reporter voice. Lowercase party roles (plaintiff, defendant, insurer).\n"
@@ -146,14 +166,16 @@ SYSTEM = (
     "reversed in part; appeal dismissed; and so on).\n"
     "  - Be conservative. Describe only what the opinion holds. Do not overstate.\n"
     "  - Do NOT invent or include any case citations or reporter cites. Refer to the case by "
-    "party name only. A statutory cite in the form O.C.G.A. section X is fine only if the "
-    "opinion itself uses it.\n"
+    "party name only. A statutory cite is fine only if the opinion itself uses it (for example "
+    "O.C.G.A. section X, or a federal cite such as 28 U.S.C. section X).\n"
     "  - No em dashes. Use commas and periods. Use the Oxford comma. Write 'about' not "
     "'approximately'.\n\n"
     "Field rules:\n"
-    "  - court: 'scotga' for the Supreme Court of Georgia, 'ctapp' for the Court of Appeals of Georgia.\n"
-    "  - division: the Court of Appeals division if the opinion states one (for example "
-    "'First Division'), otherwise null.\n"
+    "  - court: 'scotga' for the Supreme Court of Georgia, 'ctapp' for the Court of Appeals of "
+    "Georgia, 'ca11' for the U.S. Court of Appeals for the Eleventh Circuit, 'scotus' for the "
+    "U.S. Supreme Court.\n"
+    "  - division: the Court of Appeals of Georgia division if the opinion states one (for "
+    "example 'First Division'), otherwise null. Federal opinions have no division.\n"
     "  - dockets: a list of docket numbers as strings.\n"
     "  - disposition: a short lowercase phrase.\n"
     "  - areas: one or more codes from EXACTLY this set, using only codes that genuinely fit: "
@@ -545,7 +567,7 @@ def main():
         areas = [a for a in (v.get("areas") or []) if a in VALID_AREAS]
         if not areas:
             skipped.append((name, "no recognized practice area")); continue
-        court = COURT_MAP.get(court_id) or (v.get("court") if v.get("court") in ("scotga", "ctapp") else None)
+        court = COURT_MAP.get(court_id) or (v.get("court") if v.get("court") in ("scotga", "ctapp", "ca11", "scotus") else None)
         if not court:
             skipped.append((name, "unrecognized court id %s" % court_id)); continue
         dockets = [str(d).strip() for d in (v.get("dockets") or []) if str(d).strip()] or ([docket] if docket else [""])
