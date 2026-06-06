@@ -1,0 +1,59 @@
+name: Georgia Appellate Watch digest
+
+on:
+  schedule:
+    - cron: '0 13 * * 1'      # Mondays at 13:00 UTC (about 8-9am Eastern). Adjust freely.
+  workflow_dispatch:           # run it by hand from the Actions tab
+    inputs:
+      days:
+        description: 'Lookback window in days'
+        required: false
+        default: '7'
+      dry_run:
+        description: 'Render a preview without sending (true/false)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  PYTHONUNBUFFERED: '1'
+
+concurrency:
+  group: gaw-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build and send the digest
+        env:
+          # Secrets (set under Settings > Secrets and variables > Actions > Secrets):
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          DIGEST_RECIPIENTS: ${{ secrets.DIGEST_RECIPIENTS }}
+          # Variables (non-secret; optional, the script has sane defaults if unset):
+          DIGEST_FROM: ${{ vars.DIGEST_FROM }}
+          DIGEST_UNSUB: ${{ vars.DIGEST_UNSUB }}
+          DIGEST_POSTAL: ${{ vars.DIGEST_POSTAL }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          # From the manual run inputs (default for the scheduled run):
+          DIGEST_DAYS: ${{ github.event.inputs.days || '7' }}
+          DIGEST_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: python scripts/digest.py
+
+      - name: Upload preview (dry run only)
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-preview
+          path: digest_preview.html
+          if-no-files-found: ignore
