@@ -21,7 +21,7 @@ Environment:
                      outside subscribers.
   DIGEST_PREVIEW     Where to write the rendered HTML in a dry run. Default digest_preview.html.
 """
-import os, json, time, html, datetime, textwrap
+import os, json, time, html, hashlib, datetime, textwrap
 import urllib.request, urllib.error
 import render  # shared COURT_LABELS / AREA_LABELS
 
@@ -176,16 +176,19 @@ def build_text(new):
     return "\n".join(lines)
 
 
-def send_one(to, subject, html_body, text_body):
+def send_one(to, subject, html_body, text_body, idem=None):
     body = {"from": FROM, "to": [to], "subject": subject, "html": html_body, "text": text_body}
     targets = (["<%s>" % UNSUB] if UNSUB else []) + ["<%s>" % UNSUB_MAILTO]
     hdrs = {"List-Unsubscribe": ", ".join(targets)}
     if UNSUB.lower().startswith("http"):
         hdrs["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     body["headers"] = hdrs
+    req_headers = {"Authorization": "Bearer %s" % API_KEY, "Content-Type": "application/json"}
+    if idem:
+        req_headers["Idempotency-Key"] = idem  # Resend dedupes a repeated key, so a retried run won't double-send
     req = urllib.request.Request(
         "https://api.resend.com/emails", data=json.dumps(body).encode("utf-8"),
-        headers={"Authorization": "Bearer %s" % API_KEY, "Content-Type": "application/json"}, method="POST")
+        headers=req_headers, method="POST")
     last = None
     for attempt in range(4):
         try:
@@ -235,10 +238,14 @@ def main():
         print("suppressed %d unsubscribed address(es)" % (len(RECIPIENTS) - len(recipients)))
     if not recipients:
         print("every configured recipient is on the suppression list; nothing to send."); return
+    # Signature of today's send (date + the exact cases) so a retry uses the same key per recipient.
+    sig = hashlib.sha1(("%s|%s" % (datetime.date.today().isoformat(),
+          ",".join(str(e.get("cluster_id")) for e in new))).encode("utf-8")).hexdigest()[:12]
     ok = 0
     for to in recipients:
+        idem = "gaw-%s-%s" % (sig, hashlib.sha1(to.lower().encode("utf-8")).hexdigest()[:8])
         try:
-            res = send_one(to, subject, html_body, text_body)
+            res = send_one(to, subject, html_body, text_body, idem=idem)
             print("  sent to %s (id=%s)" % (to, (res or {}).get("id", "?"))); ok += 1
         except Exception as ex:
             print("  FAILED to %s: %s" % (to, ex))
