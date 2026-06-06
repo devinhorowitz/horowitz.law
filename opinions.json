@@ -16,7 +16,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10862301/state-farm-mutual-automobile-insurance-company-v-charity-barnor-cooper/",
     "synopsis": "The Court of Appeals reversed the denial of summary judgment to State Farm and GEICO in a UM claim arising from a hit-and-run collision, holding the plaintiff was not entitled to UM benefits under either policy. Injured while making a delivery in a Turo-rented Buick, she was not an insured under the State Farm policy: the Buick was not a \"temporary substitute car\" because the scheduled vehicle it would have replaced had been sold, and the named-insured LLC is a separate legal entity from its members and managers.",
-    "why": "a plain-language win on UM coverage, reinforcing that \"temporary substitute\" and named-insured terms are enforced as written and that an LLC policyholder is distinct from the people who run it.",
+    "why": "Reads the 'temporary substitute car' and named-insured provisions strictly: a borrowed vehicle is not a temporary substitute once the scheduled car it would replace has been sold, and an LLC policyholder is a separate legal entity from its members and managers, which narrows who qualifies as an insured for UM purposes.",
     "first_seen": "2026-05-20"
   },
   {
@@ -35,7 +35,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10862062/john-johnson-v-christopher-b-everett/",
     "synopsis": "In a medical-malpractice case that ended in a defense verdict, the Court of Appeals held that the trial court mistakenly believed it had no choice but to let the jury consider the emergency-medical-care gross-negligence standard of O.C.G.A. § 51-1-29.5, an issue the parties had not listed in their pretrial order, when in fact the court had discretion to disallow it. The court vacated the denial of a new trial and remanded for the court to exercise that discretion, and found no error in admitting the defense expert's opinions or a complaint from another case.",
-    "why": "the pretrial order frames the issues, but the trial court keeps discretion over an issue omitted from it, and the decision reaffirms latitude on defense expert testimony.",
+    "why": "A pretrial order frames the issues for trial, but the court keeps discretion over an issue the parties left out of it, and treating that discretion as nonexistent is reversible error.",
     "first_seen": "2026-05-20"
   },
   {
@@ -53,7 +53,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10815924/monnie-loveless-v-gsh-investments-llc/",
     "synopsis": "The Court of Appeals reversed summary judgment for an apartment owner whose tenant's visitor was injured when an exterior wooden staircase collapsed, and affirmed the denial of the plaintiff's motions to compel. Before buying the complex the owner received an appraisal and an insurer survey flagging below-average condition and deferred maintenance, yet it never inspected the building exteriors or the stairways and kept no formal inspection process, relying on tenants to report problems. That evidence created a jury question on whether the owner had constructive knowledge of the hazard.",
-    "why": "a useful marker of how prior inspection reports and the absence of any inspection routine can defeat summary judgment by supplying constructive knowledge of a latent hazard.",
+    "why": "Prior reports flagging below-average condition, combined with the owner's lack of any inspection routine, can supply constructive knowledge of a hazard and create a jury question that defeats summary judgment.",
     "first_seen": "2026-03-26"
   },
   {
@@ -73,7 +73,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10809283/trever-cannon-v-safeco-insurance-company-of-illinois/",
     "synopsis": "The Court of Appeals reversed the dismissal of a failure-to-settle action against a liability insurer. After a $1.65 million excess judgment was entered against its insured following a fatal collision, the insured alleged that Safeco had interpleaded and tendered its $100,000 limits into the court registry without obtaining any release of the claims against him. Because an insurer must give equal consideration to the insured's interests and may be liable for an excess judgment for a negligent or bad-faith failure to settle, the complaint stated a claim.",
-    "why": "a pointed caution for carriers and defense counsel that tendering limits through a bare interpleader, without a release that protects the insured, may neither discharge the insurer nor foreclose an excess-judgment or bad-faith claim.",
+    "why": "Tendering policy limits by interpleader, without obtaining a release for the insured, does not by itself discharge the insurer or bar a later failure-to-settle or bad-faith claim.",
     "first_seen": "2026-03-16"
   },
   {
@@ -92,7 +92,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10809157/stephen-michael-sullivan-v-trustgard-insurance-company/",
     "synopsis": "The Court of Appeals reversed partial summary judgment that had set uninsured-motorist limits at $100,000 on a commercial auto policy. The insurer's application directed that its uninsured-motorist selection section was not to be used in Georgia and required a state-specific supplement, and neither that section nor the mandatory offer form was signed or initialed. Because the insurer never obtained a valid written election of reduced limits, the court held the coverage defaulted to the $1 million liability limit.",
-    "why": "a direct caution on the consequence of a defective uninsured-motorist offer, where without a compliant, signed selection the coverage tracks the bodily-injury liability limit under O.C.G.A. § 33-7-11.",
+    "why": "Without a compliant, signed election of reduced uninsured-motorist limits, the coverage defaults to the bodily-injury liability limit under O.C.G.A. § 33-7-11.",
     "first_seen": "2026-03-16"
   },
   {
@@ -110,7 +110,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10786768/radheshvar-llc-v-kenneth-a-perez-larios/",
     "synopsis": "The Court of Appeals affirmed the denial of summary judgment to a motel owner in a premises case brought by a guest's social visitor who was attacked in a breezeway. The owner argued the visitor was a licensee owed only a duty to avoid wilful or wanton injury, but the court held a jury could find he was an invitee, leaving the applicable standard of care for the factfinder.",
-    "why": "a reminder that invitee-versus-licensee status under O.C.G.A. §§ 51-3-1 and 51-3-2 is often a jury question, which can keep a premises defendant in the case past summary judgment.",
+    "why": "Invitee-versus-licensee status under O.C.G.A. §§ 51-3-1 and 51-3-2 is often a jury question, which can leave the standard of care for the factfinder and preclude summary judgment.",
     "first_seen": "2026-02-10"
   },
   {
@@ -129,7 +129,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10785227/james-giles-v-greenhouse-apartments-llc/",
     "synopsis": "The Court of Appeals affirmed summary judgment for an apartment owner and its manager in a negligent-security action by a tenant who was beaten by unknown assailants on the property. Applying the settled rule that a landlord is not an insurer of tenant safety and is liable only for reasonably foreseeable third-party criminal attacks, together with the equal-or-superior-knowledge doctrine, the court rejected the tenant's foreseeability and causation arguments.",
-    "why": "a defense affirmance on the common-law foreseeability framework that governed claims before SB 68. Claims arising on or after April 21, 2025 now run through the statutory regime at O.C.G.A. §§ 51-3-50 to 51-3-57, but the not-an-insurer and foreseeability principles remain the analytical core.",
+    "why": "Applies the pre-SB 68 common-law foreseeability framework along with the not-an-insurer and equal-or-superior-knowledge rules; for incidents on or after April 21, 2025 the analysis now runs through the statutory negligent-security regime at O.C.G.A. §§ 51-3-50 to 51-3-57, but these principles remain its analytical core.",
     "first_seen": "2026-02-06"
   },
   {
@@ -147,7 +147,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10779964/daniella-mejia-v-sk-battery-america-inc/",
     "synopsis": "In a wrongful-death action arising from a fatal fall at a battery-plant construction site, the Court of Appeals affirmed summary judgment for the premises defendants on assumption of the risk. The decedent, a foreman repeatedly trained on and warned about the full tie-off rule, stepped onto a red-taped, non-weight-bearing louver without tying off and fell more than fifty feet, so no jury question remained on whether he knowingly and voluntarily encountered an obvious danger under O.C.G.A. § 51-3-1.",
-    "why": "a reminder of the force of assumption of the risk and the invitee superior-knowledge framework, where documented safety warnings and the plaintiff's own written hazard acknowledgment carried summary judgment in a catastrophic-injury case.",
+    "why": "Repeated, documented safety training and the worker's own written hazard acknowledgment can establish assumption of the risk as a matter of law under O.C.G.A. § 51-3-1, even in a catastrophic-injury case.",
     "first_seen": "2026-01-27"
   },
   {
@@ -166,7 +166,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10715536/venetian-hills-apartments-llc-v-marie-hughes-as-authorized-administrator/",
     "synopsis": "In a wrongful-death action after a tenant died in a fire set during an assault by another tenant's guest, the Court of Appeals held the landlord was not entitled to judgment notwithstanding the verdict: it could be liable under O.C.G.A. § 44-7-14 for defective construction and missing fire-safety measures even after parting with possession, and the criminal acts did not demand a defense verdict. The court nonetheless vacated the judgment and ordered a full retrial because the jury charges conflated landlord-tenant and premises-liability law.",
-    "why": "it shows both the reach of landlord liability for code and fire-safety failures and how a charge that blends § 44-7-14 with § 51-3-1 can undo a plaintiff's verdict and force a retrial.",
+    "why": "A landlord can remain liable under O.C.G.A. § 44-7-14 for defective construction and missing fire-safety measures even after giving up possession, but jury charges that blend § 44-7-14 with § 51-3-1 premises law can require a full retrial.",
     "first_seen": "2025-10-31"
   },
   {
@@ -185,7 +185,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10713919/michael-williams-v-robert-reddick/",
     "synopsis": "The Court of Appeals reversed summary judgment for a defendant driver in a tractor-trailer collision case. The plaintiff had signed a limited liability release under O.C.G.A. § 33-24-41.1 that preserved claims to the extent other insurance was available, and a fact question remained on whether the employer's policy provided uninsured-motorist coverage, because an undated coverage summary did not establish a valid written rejection under O.C.G.A. § 33-7-11(a)(3).",
-    "why": "a practical lesson that a § 33-24-41.1 limited release does not end the case where other coverage may exist, and that proof of a written UM rejection must actually be in the record.",
+    "why": "A limited liability release under O.C.G.A. § 33-24-41.1 does not end the case where other coverage may exist, and a written uninsured-motorist rejection under O.C.G.A. § 33-7-11(a)(3) must actually appear in the record to be effective.",
     "first_seen": "2025-10-29"
   },
   {
@@ -202,8 +202,8 @@
       "premises"
     ],
     "url": "https://www.courtlistener.com/opinion/10704224/smg-construction-services-llc-v-cook/",
-    "synopsis": "The Supreme Court of Georgia vacated a Court of Appeals decision that had reversed summary judgment for a property owner whose independent contractor fell from an exposed second-story ledge. The Court held the Court of Appeals conflated actual and constructive knowledge and wrongly used constructive-knowledge principles to manufacture a fact question about the contractor's actual knowledge of the open, unguarded ledge. Because the lower court stopped there, it had not addressed all elements of the owner's defenses, so the case was remanded.",
-    "why": "a defense-favorable clarification from the high court that actual knowledge of an open and obvious hazard is analyzed on its own terms and is not blurred into the constructive-knowledge inquiry. This is the § 51-3-1 decision the Mejia panel applied.",
+    "synopsis": "The Supreme Court of Georgia vacated a Court of Appeals decision that had reversed summary judgment for a property owner whose independent contractor fell from an exposed second-story ledge. The Court held the Court of Appeals conflated actual and constructive knowledge and wrongly used constructive-knowledge principles to create a fact question about the contractor's actual knowledge of the open, unguarded ledge. Because the lower court stopped there, it had not addressed all elements of the owner's defenses, so the case was remanded.",
+    "why": "Actual knowledge of an open and obvious hazard is analyzed on its own terms under O.C.G.A. § 51-3-1 and is not blurred into the constructive-knowledge inquiry; this is the decision the Mejia panel applied.",
     "first_seen": "2025-10-15"
   },
   {
@@ -223,7 +223,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10669247/beverly-ferriero-v-progressive-premier-insurance-company-of-illinois/",
     "synopsis": "The Court of Appeals vacated the dismissal of a collision suit for failure to serve the defendant. The plaintiff had served Progressive as her uninsured-motorist carrier and pointed to a process server's affidavit and email showing copies left with the defendant's mother, and the trial court abused its discretion in finding no evidence of substitute service under O.C.G.A. § 9-11-4(e)(7) when that evidence was in the record.",
-    "why": "a service decision worth knowing from both sides, where substitute-service proof in the record must be addressed and the case turns on the diligence shown after the limitation period runs.",
+    "why": "Substitute-service proof under O.C.G.A. § 9-11-4(e)(7) that is in the record must be addressed before dismissing for lack of service, and once the limitation period has run the case turns on the plaintiff's diligence in perfecting service.",
     "first_seen": "2025-09-10"
   },
   {
@@ -243,7 +243,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10620084/john-doe-v-perry-jones/",
     "synopsis": "The Court of Appeals reversed the denial of partial summary judgment to a John Doe defendant, litigated in the name of the homeowners' uninsured-motorist carrier, after a phantom vehicle allegedly forced another driver into the plaintiffs' house. The plaintiff sought emotional-distress damages without a physical injury, and under Mayorga v. Benton he could not recover on a pecuniary-loss theory based on property damage alone.",
-    "why": "a helpful limit on emotional-distress recovery in property-damage cases, applied in a John Doe uninsured-motorist posture.",
+    "why": "Under Mayorga v. Benton, a plaintiff cannot recover emotional-distress damages without a physical injury on a pecuniary-loss theory based on property damage alone, here in a John Doe uninsured-motorist posture.",
     "first_seen": "2025-06-30"
   },
   {
@@ -262,7 +262,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10680420/walmart-stores-east-lp-v-leverette/",
     "synopsis": "The Supreme Court of Georgia vacated a $1 million \"nominal damages\" award in a premises injury case in which a shopper was struck by a heavy box. The Court held that nominal damages under Georgia law remain only a trivial sum, as at common law, and overruled the Court of Appeals precedent treating nominal damages as having no maximum. Because a million dollars is not a trivial sum, the judgment was vacated, with the remedy and invited-error questions left for the courts below.",
-    "why": "a significant damages decision that closes the door on outsized \"nominal\" awards and supplies a new tool against inflated verdicts.",
+    "why": "Nominal damages under Georgia law remain only a trivial sum, and the Court overruled precedent that had treated them as having no ceiling, so a seven-figure 'nominal' award cannot stand.",
     "first_seen": "2025-06-24"
   },
   {
@@ -281,7 +281,7 @@
     ],
     "url": "https://www.courtlistener.com/opinion/10614235/dennis-malcolm-patterson-v-united-services-automobile-association/",
     "synopsis": "The Court of Appeals affirmed the denial of uninsured-motorist coverage to an insured who was struck as a pedestrian and sought UM benefits from USAA. The policy required prompt notice as a condition precedent, and a twenty-one-month delay in notifying the insurer failed that requirement as a matter of law, with the insured's unawareness that UM coverage might apply not excusing the delay.",
-    "why": "a clean enforcement of the prompt-notice condition in first-party UM claims, and a reminder of how a long, unexplained reporting delay can forfeit coverage.",
+    "why": "A prompt-notice condition precedent in a first-party uninsured-motorist policy can be enforced as a matter of law, and a long, unexplained reporting delay, here twenty-one months, can forfeit coverage even if the insured did not realize UM might apply.",
     "first_seen": "2025-06-20"
   }
 ]
