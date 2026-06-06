@@ -1,11 +1,21 @@
 // functions/subscribe/confirm.js
 // GET /subscribe/confirm?e=<email>&t=<ts>&s=<hmac>
 //
-// Verifies the signed link from the confirmation email and flips the Resend contact
-// from pending (unsubscribed: true) to subscribed (unsubscribed: false). Links are
-// valid for 7 days and cannot be forged without SUBSCRIBE_SECRET.
+// Verifies the signed link from the confirmation email, then creates the contact in
+// Resend's global contacts: subscribed (unsubscribed: false), opted into the Topic,
+// and added to the Segment. Links are valid for 7 days and cannot be forged without
+// SUBSCRIBE_SECRET. Resend's model: Contacts are global; a Segment is for internal
+// targeting (broadcasts require a segment_id); a Topic carries the user-facing
+// unsubscribe preference.
 //
-// Uses the same environment variables as functions/subscribe/index.js.
+// Required Cloudflare Pages environment variables:
+//   RESEND_API_KEY     Resend API key with contacts access
+//   SUBSCRIBE_SECRET   the same secret used by functions/subscribe/index.js
+// Recommended (set both so phase-two broadcasts can target + scope correctly):
+//   RESEND_SEGMENT_ID  the Segment ID confirmed subscribers are added to
+//   RESEND_TOPIC_ID    the Topic ID confirmed subscribers are opted into
+// Optional:
+//   SITE_URL           site origin, only used for links on the result page
 
 const RESEND = "https://api.resend.com";
 const UA = "horowitz.law-subscribe/1.0 (+https://horowitz.law)";
@@ -28,6 +38,57 @@ function timingSafeEqual(a, b) {
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
+}
+
+function resendHeaders(env) {
+  return {
+    Authorization: `Bearer ${env.RESEND_API_KEY}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "User-Agent": UA, // Cloudflare in front of api.resend.com blocks default library agents (error 1010)
+  };
+}
+
+// Thin fetch wrapper: JSON-encodes the body when one is given.
+function rfetch(env, method, path, body) {
+  const init = { method, headers: resendHeaders(env) };
+  if (body !== null && body !== undefined) init.body = JSON.stringify(body);
+  return fetch(RESEND + path, init);
+}
+
+// Create the global contact subscribed, opted into the Topic, and in the Segment.
+// New contact: a single POST applies segment + topic inline. Existing contact: the
+// POST returns non-2xx (or upserts), so we follow with idempotent updates.
+async function subscribeConfirmed(env, email) {
+  const seg = env.RESEND_SEGMENT_ID;
+  const top = env.RESEND_TOPIC_ID;
+
+  const createBody = { email, unsubscribed: false };
+  if (seg) createBody.segments = [{ id: seg }];
+  if (top) createBody.topics = [{ id: top, subscription: "opt_in" }];
+
+  const created = await rfetch(env, "POST", "/contacts", createBody);
+  if (created.ok) return; // new contact: segment + topic already applied inline
+
+  // Contact already exists (or create was rejected). Ensure the end state another way.
+  const path = `/contacts/${encodeURIComponent(email)}`;
+
+  const patched = await rfetch(env, "PATCH", path, { unsubscribed: false });
+  if (!patched.ok) {
+    throw new Error(`confirm: create ${created.status}, patch ${patched.status}`);
+  }
+
+  if (top) {
+    // Raw endpoint takes a bare array body.
+    const t = await rfetch(env, "PATCH", `${path}/topics`, [{ id: top, subscription: "opt_in" }]);
+    if (!t.ok) throw new Error(`confirm: topics ${t.status}`);
+  }
+
+  if (seg) {
+    const s = await rfetch(env, "POST", `${path}/segments/${seg}`, null);
+    // Adding a contact already in the segment may return a 4xx; only treat 5xx as fatal.
+    if (!s.ok && s.status >= 500) throw new Error(`confirm: segment ${s.status}`);
+  }
 }
 
 function page(title, bodyHtml) {
@@ -55,23 +116,6 @@ function html(title, bodyHtml, status = 200) {
   });
 }
 
-async function markSubscribed(env, email) {
-  const r = await fetch(
-    `${RESEND}/audiences/${env.RESEND_AUDIENCE_ID}/contacts/${encodeURIComponent(email)}`,
-    {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "User-Agent": UA,
-      },
-      body: JSON.stringify({ unsubscribed: false }),
-    }
-  );
-  if (!r.ok) throw new Error(`patch: ${r.status}`);
-}
-
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -79,7 +123,7 @@ export async function onRequestGet(context) {
   const ts = url.searchParams.get("t") || "";
   const sig = url.searchParams.get("s") || "";
 
-  if (!env.RESEND_API_KEY || !env.RESEND_AUDIENCE_ID || !env.SUBSCRIBE_SECRET) {
+  if (!env.RESEND_API_KEY || !env.SUBSCRIBE_SECRET) {
     return html(
       "Not configured",
       `<h1>Not configured</h1><p class="muted">Subscription confirmation is not set up yet.</p>`,
@@ -111,7 +155,7 @@ export async function onRequestGet(context) {
   }
 
   try {
-    await markSubscribed(env, email);
+    await subscribeConfirmed(env, email);
   } catch (e) {
     return html(
       "Something went wrong",

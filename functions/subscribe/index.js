@@ -1,18 +1,18 @@
 // functions/subscribe/index.js
 // POST /subscribe -- double opt-in signup for the Georgia Appellate Watch digest.
 //
-// Adds the address to the Resend audience as PENDING (unsubscribed: true) and emails
-// an HMAC-signed confirmation link. The address only begins receiving once it is
-// confirmed at /subscribe/confirm, which flips unsubscribed to false. The Resend key
-// never reaches the browser; it lives only in the Pages environment.
+// This endpoint does NOT create a contact. It validates the address and emails an
+// HMAC-signed confirmation link. The contact is created in Resend only after the
+// link is clicked (see functions/subscribe/confirm.js), so unconfirmed addresses
+// never enter the contact list. The Resend key never reaches the browser; it lives
+// only in the Pages environment.
 //
 // Required Cloudflare Pages environment variables (Settings > Environment variables):
-//   RESEND_API_KEY       Resend API key with contacts + sending access
-//   RESEND_AUDIENCE_ID   the audience's ID
-//   SUBSCRIBE_SECRET     a long random string, e.g. `openssl rand -hex 32`
+//   RESEND_API_KEY    Resend API key with contacts + sending access
+//   SUBSCRIBE_SECRET  a long random string, e.g. `openssl rand -hex 32`
 // Optional:
-//   DIGEST_FROM          From header (default below; must be a Resend-verified sender)
-//   SITE_URL             site origin for the confirm link (default https://horowitz.law)
+//   DIGEST_FROM       From header (default below; must be a Resend-verified sender)
+//   SITE_URL          site origin for the confirm link (default https://horowitz.law)
 
 const RESEND = "https://api.resend.com";
 const UA = "horowitz.law-subscribe/1.0 (+https://horowitz.law)";
@@ -45,41 +45,8 @@ function resendHeaders(env) {
     Authorization: `Bearer ${env.RESEND_API_KEY}`,
     "Content-Type": "application/json",
     Accept: "application/json",
-    "User-Agent": UA, // a real UA: Cloudflare in front of api.resend.com blocks default library agents
+    "User-Agent": UA, // a real UA: Cloudflare in front of api.resend.com blocks default library agents (error 1010)
   };
-}
-
-// Returns the contact object if it exists, or null on 404.
-// NOTE: assumes Resend returns 404 for a missing contact looked up by email.
-async function getContact(env, email) {
-  const r = await fetch(
-    `${RESEND}/audiences/${env.RESEND_AUDIENCE_ID}/contacts/${encodeURIComponent(email)}`,
-    { headers: resendHeaders(env) }
-  );
-  if (r.status === 404) return null;
-  if (!r.ok) throw new Error(`get contact: ${r.status}`);
-  const d = await r.json();
-  return d && d.data ? d.data : d;
-}
-
-// Ensure the contact exists and is pending (unsubscribed: true), without
-// downgrading anyone already confirmed (caller checks that first).
-async function upsertPending(env, email) {
-  const create = await fetch(`${RESEND}/audiences/${env.RESEND_AUDIENCE_ID}/contacts`, {
-    method: "POST",
-    headers: resendHeaders(env),
-    body: JSON.stringify({ email, unsubscribed: true }),
-  });
-  if (create.ok) return;
-  // Already exists (or similar): make sure it is marked pending.
-  await fetch(
-    `${RESEND}/audiences/${env.RESEND_AUDIENCE_ID}/contacts/${encodeURIComponent(email)}`,
-    {
-      method: "PATCH",
-      headers: resendHeaders(env),
-      body: JSON.stringify({ unsubscribed: true }),
-    }
-  );
 }
 
 async function sendConfirmEmail(env, email, link) {
@@ -112,7 +79,7 @@ async function sendConfirmEmail(env, email, link) {
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  if (!env.RESEND_API_KEY || !env.RESEND_AUDIENCE_ID || !env.SUBSCRIBE_SECRET) {
+  if (!env.RESEND_API_KEY || !env.SUBSCRIBE_SECRET) {
     return json({ ok: false, message: "Subscriptions are not configured yet." }, 500);
   }
 
@@ -136,13 +103,6 @@ export async function onRequestPost(context) {
   }
 
   try {
-    const existing = await getContact(env, email);
-    if (existing && existing.unsubscribed === false) {
-      return json({ ok: true, message: "You are already subscribed." });
-    }
-
-    await upsertPending(env, email);
-
     const ts = Date.now();
     const sig = await hmacHex(env.SUBSCRIBE_SECRET, `${email}.${ts}`);
     const site = (env.SITE_URL || "https://horowitz.law").replace(/\/+$/, "");
