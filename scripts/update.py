@@ -35,6 +35,9 @@ Environment:
   OPINIONS_MAX_TOKENS      summarizer output token cap (default 4096)
   DRY_RUN                  if set to 1, evaluate and print but write nothing
   OPINIONS_DEBUG           if set to 1, log every model call and full API error bodies
+  OPINIONS_EFFORT          Opus reasoning effort high|medium|low (default medium); "" uses the API default
+  OPINIONS_BUDGET_SEC      wall-clock cap on the candidate loop in seconds (default 480)
+  OPINIONS_BREAKER         stop after this many consecutive API failures (default 4)
 """
 import os, re, sys, json, time, html, datetime
 import urllib.request, urllib.parse, urllib.error
@@ -60,6 +63,9 @@ MAXCHARS     = int(os.environ.get("OPINIONS_MAXCHARS", "60000"))
 OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
 DRY_RUN      = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "yes")
+EFFORT       = os.environ.get("OPINIONS_EFFORT", "medium").strip()
+BUDGET_SEC   = int(os.environ.get("OPINIONS_BUDGET_SEC", "480"))
+BREAKER      = int(os.environ.get("OPINIONS_BREAKER", "4"))
 
 COURT_MAP   = {"ga": "scotga", "gactapp": "ctapp"}
 VALID_AREAS = set(render.AREA_LABELS)
@@ -341,10 +347,13 @@ def summarize(court_id, name, docket, date_filed, text, note):
             "Triage note (what a prior reviewer flagged as relevant): %s\n\n"
             "OPINION TEXT (may be truncated):\n%s"
             % (court_id, name, docket, date_filed, note or "(none)", text[:MAXCHARS]))
-    # Opus 4.8 runs at effort=high by default (its accuracy lever) and does not take an
-    # extended-thinking budget, so neither is set here.
-    return anthropic_json({"model": MODEL, "max_tokens": OUT_TOKENS, "system": SYSTEM,
-                           "messages": [{"role": "user", "content": user}]}, "summarize")
+    # Opus reasoning effort (high|medium|low) trades accuracy against latency and cost; medium is
+    # ample for a short digest. Sent only to the summarizer, and only when EFFORT is non-empty.
+    body = {"model": MODEL, "max_tokens": OUT_TOKENS, "system": SYSTEM,
+            "messages": [{"role": "user", "content": user}]}
+    if EFFORT:
+        body["effort"] = EFFORT
+    return anthropic_json(body, "summarize")
 
 
 def main():
@@ -388,7 +397,12 @@ def main():
 
     added, flagged, skipped = [], [], []
     evaluated, n_screen, n_triage, n_opus = set(), 0, 0, 0
+    run_start, consec = time.time(), 0
     for r in cand:
+        if time.time() - run_start > BUDGET_SEC:
+            print("  ! time budget reached (%ds) after %d evaluated; finalizing with what is collected"
+                  % (BUDGET_SEC, len(evaluated)))
+            break
         cid = cluster_id_of(r)
         name = r.get("caseName") or r.get("caseNameFull") or ""
         court_id = r.get("court_id") or (COURTS[0])
@@ -402,13 +416,13 @@ def main():
                 s = screen(name, docket, snippet_of(r))
                 if not s.get("pass"):
                     skipped.append((name, "screen: %s" % (s.get("reason") or "not a fit")))
-                    evaluated.add(cid); continue
+                    consec = 0; evaluated.add(cid); continue
                 time.sleep(0.4)
             # full text, fetched once and reused by tiers 2 and 3
             oid = opinion_id_of(r)
             text = opinion_text(oid) if oid else ""
             if not text:
-                skipped.append((name, "no opinion text available")); continue
+                skipped.append((name, "no opinion text available")); consec = 0; continue
             time.sleep(0.4)
             # Tier 2: full-read relevance gate
             note = ""
@@ -417,15 +431,21 @@ def main():
                 t = triage(name, docket, text)
                 if not t.get("relevant") or (t.get("significance") or "").lower() == "low":
                     skipped.append((name, "triage: %s" % (t.get("reason") or "not relevant")))
-                    evaluated.add(cid); continue
+                    consec = 0; evaluated.add(cid); continue
                 note = t.get("note") or ""
                 time.sleep(0.4)
             # Tier 3: high-effort public summary
             n_opus += 1
             v = summarize(court_id, name, docket, date_filed, text, note)
+            consec = 0
             evaluated.add(cid)
         except Exception as e:
             print("  ! error on cluster %s (%s): %s" % (cid, name, e))
+            consec += 1
+            if consec >= BREAKER:
+                print("  ! %d consecutive failures; stopping early (API likely rate-limited). "
+                      "Unevaluated candidates roll to the next run." % consec)
+                break
             continue  # leave unseen so it is retried next run
 
         if not v.get("relevant"):
