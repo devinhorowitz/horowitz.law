@@ -183,7 +183,9 @@ def send_one(to, subject, html_body, text_body, idem=None):
     if UNSUB.lower().startswith("http"):
         hdrs["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     body["headers"] = hdrs
-    req_headers = {"Authorization": "Bearer %s" % API_KEY, "Content-Type": "application/json"}
+    req_headers = {"Authorization": "Bearer %s" % API_KEY, "Content-Type": "application/json",
+                   "Accept": "application/json",
+                   "User-Agent": "horowitz.law-appellate-watch/1.0 (+https://horowitz.law)"}
     if idem:
         req_headers["Idempotency-Key"] = idem  # Resend dedupes a repeated key, so a retried run won't double-send
     req = urllib.request.Request(
