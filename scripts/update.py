@@ -34,6 +34,7 @@ Environment:
   OPINIONS_MAXCHARS        opinion characters sent to triage and summarizer (default 60000)
   OPINIONS_MAX_TOKENS      summarizer output token cap (default 4096)
   DRY_RUN                  if set to 1, evaluate and print but write nothing
+  OPINIONS_DEBUG           if set to 1, log every model call and full API error bodies
 """
 import os, re, sys, json, time, html, datetime
 import urllib.request, urllib.parse, urllib.error
@@ -58,6 +59,7 @@ MAX_RUN      = int(os.environ.get("OPINIONS_MAX", "25"))
 MAXCHARS     = int(os.environ.get("OPINIONS_MAXCHARS", "60000"))
 OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
 DRY_RUN      = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
+DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "yes")
 
 COURT_MAP   = {"ga": "scotga", "gactapp": "ctapp"}
 VALID_AREAS = set(render.AREA_LABELS)
@@ -245,28 +247,77 @@ def parse_json(s):
         return json.loads(m.group(0))
 
 
-def anthropic_json(body):
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=json.dumps(body).encode("utf-8"),
-        headers={"content-type": "application/json", "x-api-key": KEY, "anthropic-version": VERSION},
-        method="POST")
-    with urllib.request.urlopen(req, timeout=240) as r:
-        data = json.loads(r.read().decode("utf-8"))
-    txt = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
-    return parse_json(txt)
+def _dbg(msg):
+    if DEBUG:
+        print("  . " + msg)
+
+
+def _retry_after(e):
+    try:
+        v = e.headers.get("retry-after")
+        return int(float(v)) if v else 0
+    except Exception:
+        return 0
+
+
+RETRY_STATUS = {429, 500, 502, 503, 529}
+
+
+def anthropic_json(body, label="call"):
+    """POST to the Messages API. Retries 429 and 5xx with backoff, and on a final
+    failure raises with the API's own error body so the cause names itself."""
+    model = body.get("model", "?")
+    last = None
+    for attempt in range(5):
+        t0 = time.time()
+        try:
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=json.dumps(body).encode("utf-8"),
+                headers={"content-type": "application/json", "x-api-key": KEY,
+                         "anthropic-version": VERSION},
+                method="POST")
+            with urllib.request.urlopen(req, timeout=240) as r:
+                data = json.loads(r.read().decode("utf-8"))
+            _dbg("%s %s ok in %.1fs (attempt %d)" % (label, model, time.time() - t0, attempt + 1))
+            txt = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+            try:
+                return parse_json(txt)
+            except Exception as pe:
+                raise RuntimeError("%s %s returned unparseable JSON: %s | head=%r"
+                                   % (label, model, pe, txt[:200]))
+        except urllib.error.HTTPError as e:
+            detail = ""
+            try:
+                detail = e.read().decode("utf-8", "replace")
+            except Exception:
+                pass
+            last = "%s %s -> HTTP %s: %s" % (label, model, e.code, (detail[:600] or e.reason))
+            if e.code in RETRY_STATUS and attempt < 4:
+                wait = _retry_after(e) or min(2 ** attempt * 2, 30)
+                _dbg("%s HTTP %s, retrying in %ss" % (label, e.code, wait))
+                time.sleep(wait); continue
+            raise RuntimeError(last)
+        except (urllib.error.URLError, TimeoutError) as e:
+            last = "%s %s -> network error: %s" % (label, model, getattr(e, "reason", e))
+            if attempt < 4:
+                wait = min(2 ** attempt * 2, 30)
+                _dbg("%s network error, retrying in %ss" % (label, wait))
+                time.sleep(wait); continue
+            raise RuntimeError(last)
+    raise RuntimeError(last or (label + " failed"))
 
 
 def screen(name, docket, snippet):
     user = "Case name: %s\nDocket: %s\nOpening excerpt:\n%s" % (name, docket, (snippet or "")[:1500])
     return anthropic_json({"model": SCREEN_MODEL, "max_tokens": 256, "system": SCREEN_SYSTEM,
-                           "messages": [{"role": "user", "content": user}]})
+                           "messages": [{"role": "user", "content": user}]}, "screen")
 
 
 def triage(name, docket, text):
     user = "Case name: %s\nDocket: %s\n\nFULL OPINION:\n%s" % (name, docket, text[:MAXCHARS])
     return anthropic_json({"model": TRIAGE_MODEL, "max_tokens": 1024, "system": TRIAGE_SYSTEM,
-                           "messages": [{"role": "user", "content": user}]})
+                           "messages": [{"role": "user", "content": user}]}, "triage")
 
 
 def summarize(court_id, name, docket, date_filed, text, note):
@@ -277,7 +328,7 @@ def summarize(court_id, name, docket, date_filed, text, note):
     # Opus 4.8 runs at effort=high by default (its accuracy lever) and does not take an
     # extended-thinking budget, so neither is set here.
     return anthropic_json({"model": MODEL, "max_tokens": OUT_TOKENS, "system": SYSTEM,
-                           "messages": [{"role": "user", "content": user}]})
+                           "messages": [{"role": "user", "content": user}]}, "summarize")
 
 
 def main():
