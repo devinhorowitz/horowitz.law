@@ -164,16 +164,32 @@ def cl_headers():
     return h
 
 
+CL_RETRY_STATUS = {429, 500, 502, 503, 504, 520, 522, 524}
+
+
 def cl_get(path):
     url = path if path.startswith("http") else "https://www.courtlistener.com" + path
-    for attempt in range(4):
+    last = None
+    for attempt in range(6):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=cl_headers()), timeout=60) as r:
                 return json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
-            if e.code == 429 and attempt < 3:
-                time.sleep(5 * (attempt + 1)); continue
+            last = e
+            if e.code in CL_RETRY_STATUS and attempt < 5:
+                wait = _retry_after(e) or min(5 * (attempt + 1), 60)
+                _dbg("courtlistener HTTP %s, retrying in %ss" % (e.code, wait))
+                time.sleep(wait); continue
             raise
+        except (urllib.error.URLError, TimeoutError) as e:
+            last = e
+            if attempt < 5:
+                wait = min(5 * (attempt + 1), 60)
+                _dbg("courtlistener network error (%s), retrying in %ss" % (getattr(e, "reason", e), wait))
+                time.sleep(wait); continue
+            raise
+    if last:
+        raise last
 
 
 def search_court(court, since):
@@ -350,7 +366,14 @@ def main():
 
     results = []
     for court in COURTS:
-        results += search_court(court, since)
+        try:
+            results += search_court(court, since)
+        except Exception as e:
+            print("  ! courtlistener search failed for %s: %s" % (court, e))
+    if not results:
+        print("no candidates returned from courtlistener "
+              "(search likely rate-limited); nothing written this run.")
+        return
     cand, ids = [], set()
     for r in results:
         cid = cluster_id_of(r)
