@@ -6,8 +6,18 @@
     <atom:link href="https://horowitz.law/opinions.xml" rel="self" type="application/rss+xml" />
     <description>AI-assisted synopses of new Supreme Court of Georgia and Court of Appeals of Georgia opinions, filtered for civil litigation and insurance-defense practice. Each synopsis is AI-drafted; the linked opinion is the authority. A curated core, not a complete docket.</description>
     <language>en-us</language>
-    <lastBuildDate>Thu, 04 Jun 2026 12:00:00 -0400</lastBuildDate>
+    <lastBuildDate>Fri, 05 Jun 2026 12:00:00 -0400</lastBuildDate>
     <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>
+    <item>
+      <title>Gamma Homes, LLC v. Atlanta Real Estate Specialty Group, LLC (Ga. Ct. App.)</title>
+      <link>https://www.courtlistener.com/opinion/10870596/gamma-homes-llc-v-atlanta-real-estate-specialty-group-llc/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10870596/gamma-homes-llc-v-atlanta-real-estate-specialty-group-llc/</guid>
+      <pubDate>Fri, 05 Jun 2026 12:00:00 -0400</pubDate>
+      <category>Court of Appeals of Georgia</category>
+      <category>procedure</category>
+      <category>damages</category>
+      <description><![CDATA[A group of real estate investment LLCs sued their property manager for breach of property management agreements, alleging failure to provide a final accounting and to remit funds owed at termination of the relationship. The trial court granted involuntary dismissal under O.C.G.A. section 9-11-41(b) after excluding three Buildium-generated reports as hearsay and finding insufficient evidence of damages. The Court of Appeals reversed, holding that the owner's uncontroverted testimony about consistent monthly distributions and his itemized calculation of at least $58,000 owed was sufficient to permit a damages award without those exhibits, and further holding that the excluded reports were admissible both as business records under O.C.G.A. section 24-8-803(6) and as party admissions under O.C.G.A. section 24-8-801(d)(2). Why it matters: The opinion clarifies that a lay witness with knowledge of how records were maintained and used may lay the business-records foundation even if that witness did not create the records, and that a property manager's routine reports to an owner qualify as party admissions, both points relevant to defense litigators handling document-authentication and damages-sufficiency issues in bench trials. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10870596/gamma-homes-llc-v-atlanta-real-estate-specialty-group-llc/]]></description>
+    </item>
     <item>
       <title>Warrington Enterprises, LLC v. Lopez (Ga. Ct. App.)</title>
       <link>https://www.courtlistener.com/opinion/10870108/warrington-enterprises-llc-v-marvin-lopez/</link>

@@ -285,5 +285,23 @@
     "url": "https://www.courtlistener.com/opinion/10614235/dennis-malcolm-patterson-v-united-services-automobile-association/",
     "synopsis": "The Court of Appeals affirmed the denial of uninsured-motorist coverage to an insured who was struck as a pedestrian and sought UM benefits from USAA. The policy required prompt notice as a condition precedent, and a twenty-one-month delay in notifying the insurer failed that requirement as a matter of law, with the insured's unawareness that UM coverage might apply not excusing the delay.",
     "why": "a clean enforcement of the prompt-notice condition in first-party UM claims, and a reminder of how a long, unexplained reporting delay can forfeit coverage."
+  },
+  {
+    "cluster_id": 10870596,
+    "name": "Gamma Homes, LLC v. Atlanta Real Estate Specialty Group, LLC",
+    "court": "ctapp",
+    "division": "Second Division",
+    "date": "2026-06-05",
+    "dockets": [
+      "A26A0226"
+    ],
+    "disposition": "reversed and remanded",
+    "areas": [
+      "procedure",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10870596/gamma-homes-llc-v-atlanta-real-estate-specialty-group-llc/",
+    "synopsis": "A group of real estate investment LLCs sued their property manager for breach of property management agreements, alleging failure to provide a final accounting and to remit funds owed at termination of the relationship. The trial court granted involuntary dismissal under O.C.G.A. section 9-11-41(b) after excluding three Buildium-generated reports as hearsay and finding insufficient evidence of damages. The Court of Appeals reversed, holding that the owner's uncontroverted testimony about consistent monthly distributions and his itemized calculation of at least $58,000 owed was sufficient to permit a damages award without those exhibits, and further holding that the excluded reports were admissible both as business records under O.C.G.A. section 24-8-803(6) and as party admissions under O.C.G.A. section 24-8-801(d)(2).",
+    "why": "The opinion clarifies that a lay witness with knowledge of how records were maintained and used may lay the business-records foundation even if that witness did not create the records, and that a property manager's routine reports to an owner qualify as party admissions, both points relevant to defense litigators handling document-authentication and damages-sufficiency issues in bench trials."
   }
 ]
