@@ -6,6 +6,15 @@ short teaser as a Resend *broadcast* to a Segment of confirmed subscribers. Each
 to its card on the site, and the synopsis is left on the page on purpose: the goal is to
 drive readers to horowitz.law, not to replace it.
 
+It also signals the week's CORRECTIONS. When the daily forward escalation or the weekend
+reverse sweep flags an earlier card as treated adversely by a later decision, that card's
+treatment_date is stamped. This digest reads the merged opinions.json, so it sees only
+corrections that have actually been merged, and lists any whose treatment_date falls inside
+the window under a "flagged this week" section. Run it last in the weekly cycle, after the
+daily updates and the weekend sweep, and after the week's correction PRs are merged, so the
+email reflects and signals the corrected state. (The workflow_dispatch trigger lets you run
+it by hand right after merging, if you want exact control.)
+
 Recipients and unsubscribes are managed by Resend, not by this script. The broadcast targets
 a Segment (everyone who confirmed via the double opt-in), is scoped to a Topic, and carries
 the {{{RESEND_UNSUBSCRIBE_URL}}} merge tag so each recipient gets a managed, per-topic
@@ -55,6 +64,10 @@ UNSUB_TAG = "{{{RESEND_UNSUBSCRIBE_URL}}}"
 # Palette drawn from the site's light theme, kept email-client safe.
 BG, CARD, FG, MUTED, ACCENT, BORDER = "#f5ede0", "#fffaf2", "#1a1a1a", "#6a6560", "#a4471a", "#d4cab8"
 
+# Treatment status labels for the corrections signal.
+STATUS_LABEL = {"caution": "Flagged for possible negative treatment",
+                "negative": "Negative treatment", "superseded": "Superseded"}
+
 
 def esc(s):
     return html.escape(s or "", quote=True)
@@ -72,11 +85,35 @@ def label_for(n):
     return "1 new opinion" if n == 1 else "%d new opinions" % n
 
 
+def label_corrections(n):
+    return "1 earlier decision flagged" if n == 1 else "%d earlier decisions flagged" % n
+
+
 def select(entries, days):
     since = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
     new = [e for e in entries if (e.get("first_seen") or e.get("date") or "") >= since]
     new.sort(key=lambda e: (e.get("first_seen") or e.get("date") or "", e.get("date") or ""), reverse=True)
     return new, since
+
+
+def select_corrections(entries, days):
+    """Cards whose treatment the machine recorded inside the window: the week's
+    corrections, where a later case treated an earlier card adversely. Read from
+    the merged opinions.json, so only corrections already merged are signaled."""
+    since = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+    cor = [e for e in entries
+           if (e.get("treatment") or "ok") != "ok" and (e.get("treatment_date") or "") >= since]
+    cor.sort(key=lambda e: (e.get("treatment_date") or "", e.get("date") or ""), reverse=True)
+    return cor
+
+
+def subject_line(new, corrections):
+    today = fmt_date(datetime.date.today().isoformat())
+    if new and corrections:
+        return "Georgia Appellate Watch: %s, %d flagged (week of %s)" % (label_for(len(new)), len(corrections), today)
+    if new:
+        return "Georgia Appellate Watch: %s (week of %s)" % (label_for(len(new)), today)
+    return "Georgia Appellate Watch: %s (week of %s)" % (label_corrections(len(corrections)), today)
 
 
 def case_block(e):
@@ -106,9 +143,43 @@ def case_block(e):
     )
 
 
-def build_html(new):
-    rows = "".join(case_block(e) for e in new)
-    intro = "%s added this week. Tap any case for the full holding and the opinion." % label_for(len(new))
+def correction_block(e):
+    url = "%s#op-%d" % (SITE, e["cluster_id"])
+    status = STATUS_LABEL.get(e.get("treatment"), "Flagged")
+    note = (e.get("treatment_note") or e.get("treatment_auto_note") or "").strip()
+    by = "; ".join(b.get("name", "") for b in (e.get("treated_by") or []) if b.get("name"))
+    detail = note or (("Cited by %s." % by) if by else "")
+    return (
+        '<tr><td style="padding:13px 0;border-bottom:1px solid %s;">' % BORDER
+        + '<a href="%s" style="font:600 16px/1.35 Georgia,&#39;Times New Roman&#39;,serif;'
+          'color:%s;text-decoration:none;">%s</a>' % (url, ACCENT, esc(e["name"]))
+        + '<div style="font:12px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:%s;'
+          'margin-top:4px;font-weight:600;">%s</div>' % (MUTED, esc(status))
+        + (('<div style="font:13px/1.55 Georgia,&#39;Times New Roman&#39;,serif;color:%s;'
+            'margin-top:6px;">%s</div>' % (FG, esc(detail))) if detail else "")
+        + '</td></tr>'
+    )
+
+
+def build_html(new, corrections):
+    subtitle = "new this week" if new else "flagged this week"
+    intro = ("%s added this week. Tap any case for the full holding and the opinion." % label_for(len(new))
+             if new else "No new decisions this week.")
+    new_section = (('<tr><td style="padding:0 28px;"><table role="presentation" width="100%%" '
+                    'cellpadding="0" cellspacing="0">%s</table></td></tr>'
+                    % "".join(case_block(e) for e in new)) if new else "")
+    corr_section = ""
+    if corrections:
+        corr_section = (
+            '<tr><td style="padding:18px 28px 0;">'
+            + '<div style="font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;color:%s;'
+              'border-top:1px solid %s;padding-top:16px;">// %s</div>' % (ACCENT, BORDER, esc(label_corrections(len(corrections))))
+            + '<div style="font:14px/1.55 Georgia,&#39;Times New Roman&#39;,serif;color:%s;margin-top:8px;">'
+              'These earlier decisions were flagged after later cases treated them adversely. '
+              'Confirm on a citator before relying.</div></td></tr>' % FG
+            + '<tr><td style="padding:4px 28px 0;"><table role="presentation" width="100%%" '
+              'cellpadding="0" cellspacing="0">%s</table></td></tr>' % "".join(correction_block(e) for e in corrections)
+        )
     foot = ["You are receiving this because you subscribed to the Georgia Appellate Watch digest."]
     foot.append('To stop receiving it, <a href="%s" style="color:%s;">unsubscribe</a>.' % (UNSUB_TAG, MUTED))
     if POSTAL:
@@ -130,12 +201,12 @@ def build_html(new):
         + '<div style="font:700 15px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;'
           'color:%s;letter-spacing:.5px;">horowitz.law</div>' % FG
         + '<div style="font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;color:%s;'
-          'margin-top:6px;">// Georgia Appellate Watch: new this week</div>' % ACCENT
+          'margin-top:6px;">// Georgia Appellate Watch: %s</div>' % (ACCENT, esc(subtitle))
         + '</td></tr>'
         + '<tr><td style="padding:6px 28px 0;font:15px/1.6 Georgia,&#39;Times New Roman&#39;,serif;color:%s;">' % FG
         + '<p style="margin:12px 0 2px;">%s</p></td></tr>' % esc(intro)
-        + '<tr><td style="padding:0 28px;"><table role="presentation" width="100%%" '
-          'cellpadding="0" cellspacing="0">%s</table></td></tr>' % rows
+        + new_section
+        + corr_section
         + '<tr><td align="center" style="padding:24px 28px 28px;">'
         + '<a href="%s" style="display:inline-block;background:%s;color:%s;'
           'font:600 14px/1 -apple-system,Segoe UI,Roboto,sans-serif;text-decoration:none;'
@@ -148,9 +219,10 @@ def build_html(new):
     )
 
 
-def build_text(new):
-    lines = ["Georgia Appellate Watch", "%s added this week." % label_for(len(new)), "",
-             "Read the summaries: %s" % SITE, ""]
+def build_text(new, corrections):
+    lines = ["Georgia Appellate Watch",
+             ("%s added this week." % label_for(len(new))) if new else "No new decisions this week.",
+             "", "Read the summaries: %s" % SITE, ""]
     for e in new:
         court = render.COURT_LABELS.get(e["court"], e["court"])
         bits = [court, "decided %s" % fmt_date(e.get("date", ""))]
@@ -163,6 +235,16 @@ def build_text(new):
             block += ["  %s" % line for line in textwrap.wrap(why, 76)]
         block += ["  %s#op-%d" % (SITE, e["cluster_id"]), ""]
         lines += block
+    if corrections:
+        lines += ["Flagged this week (confirm on a citator before relying):", ""]
+        for e in corrections:
+            status = STATUS_LABEL.get(e.get("treatment"), "Flagged")
+            note = (e.get("treatment_note") or e.get("treatment_auto_note") or "").strip()
+            block = ["- %s" % e["name"], "  %s" % status]
+            if note:
+                block += ["  %s" % line for line in textwrap.wrap(note, 76)]
+            block += ["  %s#op-%d" % (SITE, e["cluster_id"]), ""]
+            lines += block
     lines.append("You are receiving this because you subscribed to the Georgia Appellate Watch digest.")
     lines.append("Unsubscribe: %s" % UNSUB_TAG)
     if POSTAL:
@@ -219,12 +301,13 @@ def send_broadcast(subject, html_body, text_body, idem=None):
 def main():
     entries = json.load(open(JSON_PATH, encoding="utf-8"))
     new, since = select(entries, DAYS)
-    print("digest window: first_seen >= %s (%d days) | new cases: %d" % (since, DAYS, len(new)))
-    if not new:
-        print("nothing new in the window; not sending."); return
-    subject = "Georgia Appellate Watch: %s (week of %s)" % (
-        label_for(len(new)), fmt_date(datetime.date.today().isoformat()))
-    html_body, text_body = build_html(new), build_text(new)
+    corrections = select_corrections(entries, DAYS)
+    print("digest window: since %s (%d days) | new: %d | corrections: %d"
+          % (since, DAYS, len(new), len(corrections)))
+    if not new and not corrections:
+        print("nothing new and no corrections in the window; not sending."); return
+    subject = subject_line(new, corrections)
+    html_body, text_body = build_html(new, corrections), build_text(new, corrections)
     if DRY_RUN or not API_KEY:
         open(PREVIEW, "w", encoding="utf-8").write(html_body)
         why = "DIGEST_DRY_RUN" if DRY_RUN else "no RESEND_API_KEY"
@@ -233,13 +316,19 @@ def main():
         print("target segment: %s | topic: %s" % (SEGMENT_ID or "(unset)", TOPIC_ID or "(unset)"))
         print("note: {{{RESEND_UNSUBSCRIBE_URL}}} shows literally in this preview; Resend fills it per recipient.")
         for e in new:
-            print("  - %s [%s]" % (e["name"], ",".join(e.get("areas", []))))
+            print("  + new: %s [%s]" % (e["name"], ",".join(e.get("areas", []))))
+        for e in corrections:
+            print("  ~ flagged: %s [%s]" % (e["name"], e.get("treatment")))
         return
     if not SEGMENT_ID:
         print("RESEND_API_KEY is set but RESEND_SEGMENT_ID is empty; nothing to send."); return
-    # Signature of today's send (date + the exact cases) so a retry reuses the same key.
-    sig = hashlib.sha1(("%s|%s" % (datetime.date.today().isoformat(),
-          ",".join(str(e.get("cluster_id")) for e in new))).encode("utf-8")).hexdigest()[:12]
+    # Signature of today's send (date, the exact new cases, and the exact corrections and their
+    # status) so a retry reuses the same key but a changed set sends anew.
+    sig = hashlib.sha1(("%s|%s|%s" % (
+        datetime.date.today().isoformat(),
+        ",".join(str(e.get("cluster_id")) for e in new),
+        ",".join("%s:%s" % (e.get("cluster_id"), e.get("treatment")) for e in corrections),
+    )).encode("utf-8")).hexdigest()[:12]
     idem = "gaw-bcast-%s" % sig
     try:
         res = send_broadcast(subject, html_body, text_body, idem=idem) or {}
