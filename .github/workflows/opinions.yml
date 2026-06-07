@@ -2,7 +2,9 @@ name: Georgia Appellate Watch update
 
 on:
   schedule:
-    - cron: '17 11 * * *'   # daily at 11:17 UTC (about 6-7am Eastern). Adjust freely.
+    - cron: '17 */4 * * *'   # every 4 hours. A slot lost to an outage retries at the next slot
+                             # instead of waiting a full day. The guard step below keeps the
+                             # extra slots from reprocessing the same opinions. Adjust freely.
   workflow_dispatch: {}      # lets you run it by hand from the Actions tab
 
 permissions:
@@ -24,7 +26,31 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 45     # watchdog: a hung daily run fails fast instead of running to the 6h cap
     steps:
+      # Faster cadence is only safe if a slot does not redo work that is already
+      # waiting in an open PR. opinions_state.json advances only when that PR merges,
+      # so on a scheduled run, if an opinions PR is already open, skip: a later slot
+      # will run once it is merged. Manual runs never skip, so you can always force one.
+      # Fail-open: if the PR check itself errors, the run proceeds.
+      - name: Skip scheduled run if an opinions PR is already open
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            open=$(gh pr list --repo "$GITHUB_REPOSITORY" --head bot/opinions-update --state open --json number --jq 'length' 2>/dev/null || echo 0)
+            if [ "${open:-0}" != "0" ]; then
+              echo "An opinions PR is already open and awaiting merge; skipping this slot to avoid reprocessing."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "Manual run; not skipping."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -35,6 +61,7 @@ jobs:
         run: pip install --upgrade pypdf
 
       - name: Fetch, screen, triage, summarize, render
+        if: steps.guard.outputs.skip != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
@@ -53,6 +80,7 @@ jobs:
       # Opens or updates a pull request only when the run changed tracked files.
       # Confirm the latest tag at github.com/peter-evans/create-pull-request before pinning.
       - name: Open pull request
+        if: steps.guard.outputs.skip != 'true'
         uses: peter-evans/create-pull-request@v7
         with:
           branch: bot/opinions-update

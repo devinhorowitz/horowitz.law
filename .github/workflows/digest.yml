@@ -40,6 +40,7 @@ concurrency:
 jobs:
   digest:
     runs-on: ubuntu-latest
+    timeout-minutes: 20     # watchdog: the email broadcast is quick; fail fast if it stalls
     steps:
       - uses: actions/checkout@v4
 
