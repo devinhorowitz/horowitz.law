@@ -13,6 +13,10 @@ on:
         description: 'Render a preview without sending (true/false)'
         required: false
         default: 'false'
+      draft:
+        description: 'Create the broadcast but do not send it, to review in Resend (true/false)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
@@ -37,20 +41,21 @@ jobs:
 
       - name: Build and send the digest
         env:
-          # Secrets (set under Settings > Secrets and variables > Actions > Secrets):
+          # Secret (Settings > Secrets and variables > Actions > Secrets).
+          # IMPORTANT: broadcasts need a Full-access key (contacts + broadcast), not send-only.
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          DIGEST_RECIPIENTS: ${{ secrets.DIGEST_RECIPIENTS }}
-          # Variables (non-secret; optional, the script has sane defaults if unset):
+          # Variables (non-secret; Settings > Secrets and variables > Actions > Variables):
+          RESEND_SEGMENT_ID: ${{ vars.RESEND_SEGMENT_ID }}
+          RESEND_TOPIC_ID: ${{ vars.RESEND_TOPIC_ID }}
           DIGEST_FROM: ${{ vars.DIGEST_FROM }}
-          DIGEST_UNSUB: ${{ vars.DIGEST_UNSUB }}
-          DIGEST_UNSUB_EMAIL: ${{ vars.DIGEST_UNSUB_EMAIL }}
           DIGEST_POSTAL: ${{ vars.DIGEST_POSTAL }}
           DIGEST_DISCLAIMER: ${{ vars.DIGEST_DISCLAIMER }}
           DIGEST_PREHEADER: ${{ vars.DIGEST_PREHEADER }}
           SITE_URL: ${{ vars.SITE_URL }}
-          # From the manual run inputs (default for the scheduled run):
+          # From the manual run inputs (defaults for the scheduled run):
           DIGEST_DAYS: ${{ github.event.inputs.days || '7' }}
           DIGEST_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          DIGEST_DRAFT: ${{ github.event.inputs.draft || 'false' }}
         run: python scripts/digest.py
 
       - name: Upload preview (dry run only)
