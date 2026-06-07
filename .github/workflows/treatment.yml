@@ -1,0 +1,66 @@
+name: Georgia Appellate Watch treatment sweep
+
+# Reverse citation sweep. Runs on a weekend, when the daily updater finds no new
+# opinions and the CourtListener REST budget is free. Leave dry_run checked the
+# first time to preview the citing opinions and any flags in the run log without
+# writing anything or opening a PR; uncheck it (or let the cron run) to write.
+on:
+  schedule:
+    - cron: '17 13 * * 6'    # Saturdays at 13:17 UTC, clear of the daily 11:17 run
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (preview citing opinions + flags in the log; write nothing, open no PR)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  PYTHONUNBUFFERED: '1'
+
+# Separate group from the daily update and the backfill so none blocks another.
+concurrency:
+  group: opinions-treatment
+  cancel-in-progress: false
+
+jobs:
+  treatment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Sweep citations, classify treatment, flag adversely-treated cards
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          TREATMENT_MODEL: claude-sonnet-4-6     # full-read classifier ($3/$15 per MTok)
+        run: python scripts/treatment.py
+
+      # In a dry run the script writes nothing, so this finds no changes and opens
+      # no PR. In a real run it opens or updates one PR: the caution flags it raised
+      # (opinions.json + re-rendered html/xml), the sweep progress (treatment_state.json),
+      # and the run report as the body.
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: bot/opinions-treatment
+          title: 'Georgia Appellate Watch: treatment sweep'
+          commit-message: 'opinions: flag cards treated adversely by later decisions'
+          body-path: scripts/treatment_pr_body.md
+          labels: opinions, automated, treatment
+          delete-branch: true
+          add-paths: |
+            opinions.json
+            opinions.xml
+            opinions.html
+            archive.html
+            treatment_state.json

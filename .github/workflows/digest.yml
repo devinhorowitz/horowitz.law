@@ -1,8 +1,16 @@
 name: Georgia Appellate Watch digest
 
+# Runs LAST in the weekly cycle, on purpose. The daily update (forward treatment
+# escalation) and the Saturday reverse sweep both flag earlier cards that later
+# decisions treat adversely; those land in PRs you review and merge. This job
+# checks out main and reads the merged opinions.json, so it sends only what is
+# merged and signals any card flagged this week (a "flagged this week" section).
+# Keep it after the Saturday sweep and merge the week's correction PRs before it
+# runs; Monday gives the weekend as the buffer. To control timing exactly, merge
+# first, then trigger this by hand from the Actions tab.
 on:
   schedule:
-    - cron: '0 13 * * 1'      # Mondays at 13:00 UTC (about 8-9am Eastern). Adjust freely.
+    - cron: '0 13 * * 1'      # Mondays at 13:00 UTC (about 8-9am Eastern), after the Saturday sweep. Adjust freely.
   workflow_dispatch:           # run it by hand from the Actions tab
     inputs:
       days:
