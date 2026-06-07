@@ -30,6 +30,7 @@ concurrency:
 jobs:
   treatment:
     runs-on: ubuntu-latest
+    timeout-minutes: 350      # backstop under GitHub's 6h hard cap; a run finishes well before this
     steps:
       - uses: actions/checkout@v4
 
@@ -50,6 +51,13 @@ jobs:
           CL_PER_DAY: ${{ vars.CL_PER_DAY }}
           CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          # Long budget so a real run drains across rate windows in one pass; a dry-run preview stays short.
+          # The run is bounded by this, by CL_PER_DAY, and by the job timeout. Override via the TREATMENT_BUDGET_SEC repo Variable.
+          TREATMENT_BUDGET_SEC: ${{ inputs.dry_run && '900' || (vars.TREATMENT_BUDGET_SEC || '18000') }}
+          # Throughput ceilings raised for a real run so the backlog clears in one pass. They are ceilings, not targets:
+          # steady-state weeks have little to do. A dry-run preview keeps the small defaults. Override via repo Variables.
+          TREATMENT_PER_RUN: ${{ inputs.dry_run && '25' || (vars.TREATMENT_PER_RUN || '300') }}
+          TREATMENT_PER_CARD: ${{ inputs.dry_run && '6' || (vars.TREATMENT_PER_CARD || '50') }}
           TREATMENT_MODEL: claude-sonnet-4-6     # full-read classifier ($3/$15 per MTok)
         run: python scripts/treatment.py
 
