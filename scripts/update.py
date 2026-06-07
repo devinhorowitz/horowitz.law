@@ -45,7 +45,8 @@ import xml.etree.ElementTree as ET
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
-import render  # single source of truth renderer
+import render          # single source of truth renderer
+import treatment_core  # shared treatment-flag model (the forward escalation writes it)
 
 JSON_PATH  = os.path.join(REPO, "opinions.json")
 STATE_PATH = os.path.join(REPO, "opinions_state.json")
@@ -54,6 +55,7 @@ PR_PATH    = os.path.join(REPO, "scripts", "pr_body.md")
 KEY          = os.environ.get("ANTHROPIC_API_KEY", "")
 CL_TOKEN     = os.environ.get("COURTLISTENER_TOKEN", "")
 MODEL        = os.environ.get("OPINIONS_MODEL", "claude-opus-4-8")
+AUDIT_MODEL  = os.environ.get("OPINIONS_AUDIT_MODEL", MODEL)  # escalated treatment audit; Opus by default
 TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-4-6")
 SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5-20251001")
 VERSION      = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
@@ -122,11 +124,21 @@ TRIAGE_SYSTEM = (
     "application, is OUT even when the underlying case is an in-scope auto, premises, or tort "
     "matter, unless the order announces or clarifies a rule. Default to false on a close "
     "call.\n\n"
+    "ADVERSE TREATMENT OF THE FEED. You may also be given a list of CASES ALREADY IN THE FEED "
+    "(each as 'id: name'). Independently of relevance, check whether THIS opinion treats any of "
+    "those listed cases NEGATIVELY: overrules, reverses, abrogates, holds it superseded by "
+    "statute, limits or narrows the rule of, disapproves, or criticizes it as wrongly decided. "
+    "Merely citing, following, or distinguishing a listed case on its facts is NOT negative. Use "
+    "a LOW threshold: if you have any genuine doubt that the treatment might be negative, include "
+    "it, because a later step confirms. List each as {id (the listed integer id), kind, note (a "
+    "few words)}.\n\n"
     "Output ONLY a JSON object with keys: relevant (true or false), significance ('high', "
     "'medium', or 'low'), areas (a list of codes from: coverage, badfaith, auto, premises, "
     "negsec, expert, procedure, damages), note (one or two sentences telling the next reviewer "
     "exactly what in the opinion is relevant and worth summarizing, especially if it is "
-    "buried), reason (a few words). If relevant is false, areas and note may be empty."
+    "buried), treats (a list of negatively-treated feed cases as described above, or an empty "
+    "list), reason (a few words). If relevant is false, areas and note may be empty, but still "
+    "fill treats when the opinion negatively treats a listed case."
 )
 
 SYSTEM = (
@@ -489,8 +501,12 @@ def screen(name, docket, snippet):
                            "messages": [{"role": "user", "content": user}]}, "screen")
 
 
-def triage(name, docket, text):
+def triage(name, docket, text, feed_index=""):
     user = "Case name: %s\nDocket: %s\n\nFULL OPINION:\n%s" % (name, docket, text[:MAXCHARS])
+    if feed_index:
+        user += ("\n\nCASES ALREADY IN THE FEED (id: name). If THIS opinion treats any of them "
+                 "negatively, report them in `treats` (low threshold; a later step confirms):\n"
+                 + feed_index)
     return anthropic_json({"model": TRIAGE_MODEL, "max_tokens": 1024, "system": TRIAGE_SYSTEM,
                            "messages": [{"role": "user", "content": user}]}, "triage")
 
@@ -505,6 +521,41 @@ def summarize(court_id, name, docket, date_filed, text, note):
     return anthropic_json(body, "summarize")
 
 
+AUDIT_SYSTEM = (
+    "You are the senior editor auditing a HIGH-RISK citation event for a curated feed of court "
+    "decisions. A later opinion appears to treat a case ALREADY IN THE FEED negatively. You are "
+    "given (A) the FEED CARD: the cited case's name and the synopsis and 'why it matters' the "
+    "feed currently publishes for it, and (B) the LATER OPINION that cites it. Do two things.\n\n"
+    "1) TREATMENT. Decide how the later opinion treats the cited case AS TO THE PROPOSITION the "
+    "card publishes. It is NEGATIVE only if the later opinion overrules, reverses, abrogates, "
+    "holds it superseded by statute, limits or narrows its rule, disapproves, or criticizes it as "
+    "wrongly decided. Distinguishing on the facts without narrowing the rule is NOT negative; "
+    "following or citing in support is POSITIVE; a bare mention is NEUTRAL. Set affects_proposition "
+    "true only if the treatment bears on the card's published proposition, not some other point. "
+    "Be careful and conservative: a human confirms on a citator, but your read decides whether the "
+    "card is flagged at all.\n\n"
+    "2) CARD AUDIT. Separately, judge whether the card's published synopsis and 'why it matters' "
+    "are still ACCURATE in light of the later opinion. If the later opinion shows the card "
+    "overstates, misstates, or now needs qualification, set card_review true and say briefly what "
+    "to fix. If the card still reads correctly, even if it should now be flagged, card_review is "
+    "false.\n\n"
+    "Output ONLY a JSON object with keys: treatment ('positive', 'neutral', or 'negative'); kind "
+    "(one of overruled, reversed, abrogated, superseded by statute, limited, disapproved, "
+    "criticized, distinguished-narrowing, or null); affects_proposition (true or false); note (one "
+    "neutral sentence, no case citations, on the treatment); confidence ('high', 'medium', or "
+    "'low'); card_review (true or false); card_review_note (a brief note on what to fix, or empty)."
+)
+
+
+def treatment_audit(new_name, new_text, card):
+    prop = "%s\nSynopsis: %s\nWhy it matters: %s" % (
+        card.get("name", ""), card.get("synopsis", ""), card.get("why", ""))
+    user = ("FEED CARD (A):\n%s\n\nLATER OPINION THAT CITES IT (B) -- %s:\n%s"
+            % (prop, new_name, new_text[:MAXCHARS]))
+    return anthropic_json({"model": AUDIT_MODEL, "max_tokens": 700, "system": AUDIT_SYSTEM,
+                           "messages": [{"role": "user", "content": user}]}, "treatment-audit")
+
+
 def main():
     if not KEY:
         print("ERROR: ANTHROPIC_API_KEY is not set."); sys.exit(1)
@@ -517,6 +568,12 @@ def main():
 
     entries = json.load(open(JSON_PATH, encoding="utf-8")) if os.path.exists(JSON_PATH) else []
     have = {int(e["cluster_id"]) for e in entries if e.get("cluster_id")}
+    by_id = {int(e["cluster_id"]): e for e in entries if e.get("cluster_id")}
+    # Feed index for the triage adverse-treatment check: id and name of each live
+    # card (superseded ones excluded). Small next to an opinion; grows slowly.
+    feed_index = "\n".join("%d: %s" % (int(e["cluster_id"]), e.get("name", ""))
+                           for e in entries
+                           if e.get("cluster_id") and (e.get("treatment") or "ok") != "superseded")
 
     state = {}
     if os.path.exists(STATE_PATH):
@@ -558,7 +615,9 @@ def main():
           % (since, len(cand), SCREEN_MODEL or "off", TRIAGE_MODEL or "off", MODEL))
 
     added, flagged, skipped = [], [], []
-    evaluated, n_screen, n_triage, n_opus = set(), 0, 0, 0
+    treat_flags, audit_notes = [], []          # adverse treatment of existing cards (forward escalation)
+    evaluated, n_screen, n_triage, n_opus, n_audit = set(), 0, 0, 0, 0
+    treatment_changed = False
     consec = 0
     for r in cand:
         if time.time() - run_start > BUDGET_SEC:
@@ -600,7 +659,37 @@ def main():
             note = ""
             if TRIAGE_MODEL:
                 n_triage += 1
-                t = triage(name, docket, text)
+                t = triage(name, docket, text, feed_index)
+                # Forward escalation: if this opinion appears to treat a carded case
+                # negatively, that is a high-risk event for the feed. Confirm each
+                # with an Opus audit (which also re-checks the existing card), whether
+                # or not this opinion itself earns a place in the feed.
+                for tr in (t.get("treats") or []):
+                    try:
+                        card = by_id.get(int(tr.get("id")))
+                    except (TypeError, ValueError):
+                        card = None
+                    if not card or (card.get("treatment") or "ok") == "superseded":
+                        continue
+                    try:
+                        n_audit += 1
+                        a = treatment_audit(name, text, card)
+                    except Exception as ae:
+                        print("  ! treatment audit failed for card %s citing %s: %s"
+                              % (card.get("cluster_id"), name, ae))
+                        continue
+                    akind = (a.get("kind") or "").lower().strip() or None
+                    if (a.get("treatment") or "").lower() == "negative" and a.get("affects_proposition") \
+                            and akind in treatment_core.NEGATIVE_KINDS:
+                        citer = {"cluster_id": cid, "name": name, "court": COURT_MAP.get(court_id),
+                                 "date": date_filed, "kind": akind, "note": (a.get("note") or "").strip()}
+                        treatment_core.flag_caution(card, citer)
+                        treatment_changed = True
+                        treat_flags.append((card.get("name", ""), name, akind))
+                        print("  ~ adverse: %s treated by %s (%s)"
+                              % (card.get("name", "")[:40], name[:40], akind))
+                    if a.get("card_review"):
+                        audit_notes.append((card.get("name", ""), name, (a.get("card_review_note") or "").strip()))
                 if not t.get("relevant") or (t.get("significance") or "").lower() == "low":
                     skipped.append((name, "triage: %s" % (t.get("reason") or "not relevant")))
                     consec = 0; evaluated.add(cid); continue
@@ -664,13 +753,21 @@ def main():
         fr = dict(flagged).get(e["name"])
         if fr:
             lines.append("  - review: %s" % "; ".join(fr))
+    if treat_flags or audit_notes:
+        lines += ["", "Treatment flags this run (existing cards; confirm on Shepard\u2019s before relying):"]
+        for cardnm, newnm, kind in treat_flags:
+            lines.append("- **%s** -- possibly %s by the new decision %s. Raised to caution; confirm, "
+                         "then set `treatment` to negative or superseded, or back to ok." % (cardnm, kind, newnm))
+        for cardnm, newnm, rev in audit_notes:
+            if rev:
+                lines.append("- audit -- the **%s** card may need an edit in light of %s: %s" % (cardnm, newnm, rev))
     if skipped:
         lines += ["", "Screened or dropped this run (not added):"]
         lines += ["- %s: %s" % (n, why) for n, why in skipped]
-    if not added:
+    if not added and not treat_flags:
         lines += ["", "No new relevant opinions this run."]
     pr_body = "\n".join(lines) + "\n"
-    funnel = "screened %d, triaged %d, summarized %d" % (n_screen, n_triage, n_opus)
+    funnel = "screened %d, triaged %d, summarized %d, audited %d" % (n_screen, n_triage, n_opus, n_audit)
 
     if DRY_RUN:
         print("\n--- DRY RUN, nothing written (%s) ---\n%s" % (funnel, pr_body)); return
@@ -678,7 +775,7 @@ def main():
     os.makedirs(os.path.dirname(PR_PATH), exist_ok=True)
     open(PR_PATH, "w", encoding="utf-8").write(pr_body)
 
-    if not added:
+    if not added and not treatment_changed:
         print("no new opinions; files unchanged (%s, dropped %d)" % (funnel, len(skipped))); return
 
     entries += added
@@ -688,8 +785,8 @@ def main():
     state["updated"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     json.dump(state, open(STATE_PATH, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     n = render.render(entries)
-    print("rendered %d entries; added %d, flagged %d (%s, dropped %d)"
-          % (n, len(added), len(flagged), funnel, len(skipped)))
+    print("rendered %d entries; added %d, flagged %d, treatment %d (%s, dropped %d)"
+          % (n, len(added), len(flagged), len(treat_flags), funnel, len(skipped)))
 
 
 if __name__ == "__main__":
