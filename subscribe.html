@@ -6,7 +6,7 @@
    source: github.com/devinhorowitz/horowitz.law              
                                                                
    Subscribe form for the Georgia Appellate Watch weekly digest.
-   Posts to the /subscribe Cloudflare Pages Function, which adds
+   Posts to the /api/subscribe Cloudflare Pages Function, which adds
    the address to the Resend audience. Theme + shared behavior in
    /app.js; foundation in /base.css.
                                                                
@@ -169,7 +169,7 @@
       }
       btn.disabled = true;
       setStatus('Subscribing...', '');
-      fetch('/subscribe', {
+      fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email, company: company })

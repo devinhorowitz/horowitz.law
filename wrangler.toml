@@ -1,0 +1,17 @@
+# Cloudflare Pages configuration for horowitz.law
+#
+# Your Pages dashboard reports that environment variables are managed through
+# this file, so the plaintext (non-secret) variables must live here to actually
+# reach the Functions at runtime. SECRETS are NOT stored here: keep
+# RESEND_API_KEY and SUBSCRIBE_SECRET in the Pages dashboard as encrypted
+# Secrets (those still apply, and must never be committed to the repo).
+
+name = "horowitz-law"            # must match your Pages project name exactly (the name in your *.pages.dev URL)
+pages_build_output_dir = "."     # static site served from the repo root; no build step
+compatibility_date = "2025-05-01"
+
+[vars]
+DIGEST_FROM = "Georgia Appellate Watch <digest@horowitz.law>"
+RESEND_SEGMENT_ID = "1ae517f5-5981-4f7b-bed1-606cfa5649ab"
+RESEND_TOPIC_ID = "52b81509-0230-4d3d-b5ff-393409df3b2c"
+SITE_URL = "https://horowitz.law"
