@@ -95,6 +95,7 @@
   .sub-form button:disabled { opacity: 0.5; cursor: default; }
   /* honeypot: hidden from people, tempting to bots */
   .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  .sub-form .cf-turnstile { flex: 1 1 100%; margin: 2px 0; }
 
   .fineprint { font-size: 12px; color: var(--fg-muted); max-width: 56ch; }
   .status { font-size: 13.5px; margin: 4px 0 18px; min-height: 1.2em; }
@@ -106,6 +107,9 @@
   footer a { color: var(--fg-muted); text-decoration: none; border-bottom: 1px dotted transparent; transition: color .2s, border-color .2s; }
   footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 </style>
+
+<!-- Cloudflare Turnstile: bot challenge for the subscribe form (server-verified in /api/subscribe) -->
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -131,6 +135,8 @@
         <label for="company">Company</label>
         <input type="text" id="company" name="company" tabindex="-1" autocomplete="off">
       </div>
+      <!-- Cloudflare Turnstile widget; the site key is public (verified server-side in /api/subscribe). -->
+      <div class="cf-turnstile" data-sitekey="0x4AAAAAADgHP35h6RKKlqEG" data-action="subscribe" data-theme="auto"></div>
       <button type="submit" id="subBtn">Subscribe</button>
     </form>
 
@@ -147,6 +153,6 @@
 </div>
 
 <script src="/app.js?v=2026-05-31" defer></script>
-  <script src="/subscribe.js?v=2026-06-07" defer></script>
+  <script src="/subscribe.js?v=2026-06-07b" defer></script>
 </body>
 </html>
