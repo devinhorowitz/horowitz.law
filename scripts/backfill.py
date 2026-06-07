@@ -49,26 +49,15 @@ CL_DEADLINE_SEC = int(os.environ.get("OPINIONS_CL_DEADLINE_SEC", "30"))
 # CourtListener clusters. (cluster_id, court_id). Comments name the case and the
 # skill it came out of; court_id is re-derived from the docket at run time.
 SEED = [
-    # GA Supreme Court
-    (2812616,  "ga"),       # Phillips v. Harmon (2015) -- spoliation duty trigger
-    (3209755,  "ga"),       # Toyo Tire NA Mfg. v. Davis (2016) -- expert exclusion
-    (3219794,  "ga"),       # Scapa Dryer Fabrics v. Knight (2016) -- expert causation
-    (5749712,  "ga"),       # Martin v. Six Flags (2017) -- negligent security
-    (10366850, "ga"),       # Cooper Tire v. Koch (2018) -- spoliation
-    (10367320, "ga"),       # Quynn v. Hulsey (2020) -- negligent entrustment / apportionment
-    (10367651, "ga"),       # Adventure Motorsports Reins. v. Interstate Nat'l (2021) -- arbitration
-    (10680052, "ga"),       # Miller v. Golden Peanut Co. (2023) -- expert challenge
-    # GA Court of Appeals
-    (4323507,  "gactapp"),  # Richardson v. Locklyn (2016) -- offer of settlement
-    (4372487,  "gactapp"),  # Harris v. Mahone (2017) -- offer of settlement
-    (4406052,  "gactapp"),  # Hosp. Auth. of Valdosta v. Fender (2017) -- trucking
-    (4433323,  "gactapp"),  # Anderson v. Laureano (2017) -- offer of settlement
-    (4446479,  "gactapp"),  # H&E Innovation v. Shinhan Bank (2017) -- enforce settlement
-    (4549173,  "gactapp"),  # Coastal Bank v. Rawlins (2018) -- offer of settlement
-    (4503667,  "gactapp"),  # Stephens v. Castano-Castano (2018) -- enforce settlement
-    # Eleventh Circuit
-    (4426951,  "ca11"),     # Slater v. U.S. Steel (2017) -- judicial estoppel / bankruptcy
-    (9391147,  "ca11"),     # Aspen American Ins. v. Landstar Ranger (2023) -- broker FAAAA
+    # Retry set: the four seed cases that did NOT card in the first backfill run (PR #3).
+    # Ordered with Aspen first: it was the only one lost to a retrieval error (HTTP 429 on
+    # the last case last time), so it leads to guarantee it is fetched before any budget
+    # ceiling. The other three were funnel declines on the merits and are expected to drop
+    # again; they are re-tested here for the record, not forced in.
+    (9391147,  "ca11"),     # Aspen American Ins. v. Landstar Ranger (2023) -- broker FAAAA; expected to card (first run errored on HTTP 429 before scoring)
+    (4426951,  "ca11"),     # Slater v. U.S. Steel (2017) -- judicial estoppel / bankruptcy; first run declined (screen+triage+summarize, low)
+    (4433323,  "gactapp"),  # Anderson v. Laureano (2017) -- jurisdictional dismissal, no merits; first run declined (correct)
+    (4446479,  "gactapp"),  # H&E Innovation v. Shinhan Bank America (2017) -- first run declined (low / out of lane)
 ]
 
 
