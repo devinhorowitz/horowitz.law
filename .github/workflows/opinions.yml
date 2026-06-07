@@ -11,12 +11,9 @@ permissions:
   contents: write
   pull-requests: write
 
-# Workflow-wide environment.
-#  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 silences the Node 20 deprecation warning by
-#  running the prebuilt actions on Node 24 now (the default after June 16, 2026).
-#  PYTHONUNBUFFERED makes the script stream its log live instead of in one burst.
+# Workflow-wide environment. PYTHONUNBUFFERED makes the script stream its log live
+# instead of in one burst at the end.
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   PYTHONUNBUFFERED: '1'
 
 concurrency:
@@ -58,7 +55,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install --upgrade pypdf
+        run: pip install --upgrade "pypdf>=5,<6"
 
       - name: Fetch, screen, triage, summarize, render
         if: steps.guard.outputs.skip != 'true'
@@ -71,9 +68,12 @@ jobs:
           CL_PER_DAY: ${{ vars.CL_PER_DAY }}
           CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
           # Three-tier funnel, cheapest first. Model ids per the Anthropic models docs.
-          OPINIONS_SCREEN_MODEL: claude-haiku-4-5-20251001   # tier 1: excerpt screen ($1/$5 per MTok)
-          OPINIONS_TRIAGE_MODEL: claude-sonnet-4-6           # tier 2: full-read gate ($3/$15 per MTok)
-          OPINIONS_MODEL: claude-opus-4-8                    # tier 3: public summary ($5/$25, effort=high by default)
+          # Model ids. Set the matching repo Variable (Settings > Secrets and variables >
+          # Actions > Variables) to change a model without editing this file; the value
+          # after || is the fallback default. Update the Variable if a model is retired.
+          OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}   # tier 1: excerpt screen
+          OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-4-6' }}           # tier 2: full-read gate
+          OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-4-8' }}                            # tier 3: public summary
           OPINIONS_MAX: '80'                                 # candidates evaluated per run (headroom for heavy filing days)
         run: python scripts/update.py
 

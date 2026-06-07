@@ -20,7 +20,6 @@ permissions:
   pull-requests: write
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   PYTHONUNBUFFERED: '1'
 
 # Separate group from the daily update so a manual backfill neither blocks nor is
@@ -42,7 +41,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install --upgrade pypdf
+        run: pip install --upgrade "pypdf>=5,<6"
 
       - name: Seed the archive (screen as recall test, triage, summarize, render)
         env:
@@ -55,10 +54,10 @@ jobs:
           CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
           OPINIONS_SEED: ${{ inputs.seed }}
-          # Same three-tier funnel as the daily pipeline.
-          OPINIONS_SCREEN_MODEL: claude-haiku-4-5-20251001
-          OPINIONS_TRIAGE_MODEL: claude-sonnet-4-6
-          OPINIONS_MODEL: claude-opus-4-8
+          # Same three-tier funnel as the daily pipeline; same repo Variables.
+          OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}
+          OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-4-6' }}
+          OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-4-8' }}
         run: python scripts/backfill.py
 
       # In a dry run the script writes nothing, so this finds no changes and opens

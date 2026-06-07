@@ -1,0 +1,44 @@
+name: CI
+
+# Runs on every push or PR that touches the scripts or the workflows. Catches a
+# syntax error, a broken import, or a mis-uploaded filename (e.g. "cl rate.py"
+# with a space instead of cl_rate.py) immediately, as a red check on the commit,
+# instead of silently at the next scheduled run.
+on:
+  push:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install --upgrade "pypdf>=5,<6" pyyaml
+
+      - name: Compile and import every script
+        run: |
+          python -m py_compile scripts/*.py
+          cd scripts && python -c "import cl_rate, safeio, render, treatment_core, update, treatment, backfill, digest; print('all imports resolve')"
+
+      - name: Validate workflow YAML
+        run: python -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml')]; print('workflow YAML parses')"

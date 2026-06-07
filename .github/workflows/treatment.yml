@@ -19,7 +19,6 @@ permissions:
   pull-requests: write
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   PYTHONUNBUFFERED: '1'
 
 # Separate group from the daily update and the backfill so none blocks another.
@@ -39,7 +38,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install --upgrade pypdf
+        run: pip install --upgrade "pypdf>=5,<6"
 
       - name: Sweep citations, classify treatment, flag adversely-treated cards
         env:
@@ -58,7 +57,7 @@ jobs:
           # steady-state weeks have little to do. A dry-run preview keeps the small defaults. Override via repo Variables.
           TREATMENT_PER_RUN: ${{ inputs.dry_run && '25' || (vars.TREATMENT_PER_RUN || '300') }}
           TREATMENT_PER_CARD: ${{ inputs.dry_run && '6' || (vars.TREATMENT_PER_CARD || '50') }}
-          TREATMENT_MODEL: claude-sonnet-4-6     # full-read classifier ($3/$15 per MTok)
+          TREATMENT_MODEL: ${{ vars.TREATMENT_MODEL || 'claude-sonnet-4-6' }}     # full-read classifier; set the repo Variable to update without editing this file
         run: python scripts/treatment.py
 
       # In a dry run the script writes nothing, so this finds no changes and opens
