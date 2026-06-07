@@ -7,6 +7,7 @@ __pycache__/
 # (CI also gates commits with an explicit add-paths list.)
 scripts/pr_body.md
 scripts/backfill_pr_body.md
+scripts/treatment_pr_body.md
 
 # OS and editor cruft
 .DS_Store
