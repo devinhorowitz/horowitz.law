@@ -1,24 +1,31 @@
 #!/usr/bin/env python3
-"""Weekly email digest for Georgia Appellate Watch.
+"""Weekly email digest for Georgia Appellate Watch (Resend broadcast edition).
 
 Reads opinions.json, selects the cases first seen within the lookback window, and sends a
-short teaser email. Each case links to its card on the site, and the synopsis is left on the
-page on purpose: the goal is to drive readers to horowitz.law, not to replace it.
+short teaser as a Resend *broadcast* to a Segment of confirmed subscribers. Each case links
+to its card on the site, and the synopsis is left on the page on purpose: the goal is to
+drive readers to horowitz.law, not to replace it.
+
+Recipients and unsubscribes are managed by Resend, not by this script. The broadcast targets
+a Segment (everyone who confirmed via the double opt-in), is scoped to a Topic, and carries
+the {{{RESEND_UNSUBSCRIBE_URL}}} merge tag so each recipient gets a managed, per-topic
+unsubscribe link. There is no recipient list and no local suppression file.
 
 Environment:
-  RESEND_API_KEY     Resend API key. Required to actually send. Without it (or with
-                     DIGEST_DRY_RUN), the script renders a preview and sends nothing.
-  DIGEST_RECIPIENTS  Comma-separated recipient addresses. Keep this private (a secret).
+  RESEND_API_KEY     Resend API key with broadcast + contacts access (Full access). A
+                     send-only key will not work here, unlike the old per-email send.
+                     Without it (or with DIGEST_DRY_RUN), the script renders a preview only.
+  RESEND_SEGMENT_ID  The Segment confirmed subscribers are added to. Required to send.
+  RESEND_TOPIC_ID    The Topic to scope the send and the unsubscribe link. Recommended.
   DIGEST_FROM        From header. Default 'Georgia Appellate Watch <digest@horowitz.law>'.
-                     For a first test before verifying the domain in Resend, set this to
-                     'Georgia Appellate Watch <onboarding@resend.dev>'.
   DIGEST_DAYS        Lookback window in days. Default 7.
-  DIGEST_DRY_RUN     'true' to render a preview without sending. Default false.
+  DIGEST_DRY_RUN     'true' to render a preview without creating anything. Default false.
+  DIGEST_DRAFT       'true' to create the broadcast but NOT send it, so you can review and
+                     send it from the Resend dashboard. Default false (create and send).
   SITE_URL           Base page URL. Default 'https://horowitz.law/opinions'.
-  DIGEST_UNSUB       Unsubscribe target (an https URL for one-click, or a mailto). Optional
-                     while the only recipient is you; set it before adding outside subscribers.
-  DIGEST_POSTAL      Postal address line for the footer (CAN-SPAM). Set it before adding
-                     outside subscribers.
+  DIGEST_POSTAL      Optional physical address line for the footer.
+  DIGEST_DISCLAIMER  Optional footer line (e.g. not-legal-advice / attorney-advertising).
+  DIGEST_PREHEADER   Inbox preview line.
   DIGEST_PREVIEW     Where to write the rendered HTML in a dry run. Default digest_preview.html.
 """
 import os, json, time, html, hashlib, datetime, textwrap
@@ -30,30 +37,20 @@ JSON_PATH = os.path.join(REPO, "opinions.json")
 
 DAYS       = int((os.environ.get("DIGEST_DAYS") or "7"))
 DRY_RUN    = (os.environ.get("DIGEST_DRY_RUN") or "").lower() in ("1", "true", "yes")
+DRAFT      = (os.environ.get("DIGEST_DRAFT") or "").lower() in ("1", "true", "yes")  # create but do not send
 SITE       = (os.environ.get("SITE_URL") or "https://horowitz.law/opinions").rstrip("/")
 FROM       = os.environ.get("DIGEST_FROM") or "Georgia Appellate Watch <digest@horowitz.law>"
 API_KEY    = os.environ.get("RESEND_API_KEY") or ""
-RECIPIENTS = [a.strip() for a in (os.environ.get("DIGEST_RECIPIENTS") or "").split(",") if a.strip()]
-UNSUB      = os.environ.get("DIGEST_UNSUB") or ""             # https one-click endpoint, if you stand one up
-UNSUB_EMAIL= os.environ.get("DIGEST_UNSUB_EMAIL") or "unsubscribe@horowitz.law"  # mailto fallback, always compliant
-POSTAL     = os.environ.get("DIGEST_POSTAL") or ""            # CAN-SPAM: a real physical mailing address
-DISCLAIMER = os.environ.get("DIGEST_DISCLAIMER") or ""        # e.g. not-legal-advice / attorney-advertising line
+SEGMENT_ID = os.environ.get("RESEND_SEGMENT_ID") or ""        # broadcast recipients live here
+TOPIC_ID   = os.environ.get("RESEND_TOPIC_ID") or ""          # scopes the send + per-topic unsubscribe
+POSTAL     = os.environ.get("DIGEST_POSTAL") or ""            # optional physical address in the footer
+DISCLAIMER = os.environ.get("DIGEST_DISCLAIMER") or ""        # optional not-legal-advice / advertising line
 PREHEADER  = os.environ.get("DIGEST_PREHEADER") or "New Georgia appellate decisions in civil litigation and insurance practice."
 PREVIEW    = os.environ.get("DIGEST_PREVIEW") or os.path.join(REPO, "digest_preview.html")
 
-# Anyone who unsubscribes is dropped from every future send. Sources: the DIGEST_SUPPRESS
-# env (comma-separated) and a committed file (one address per line, '#' comments allowed).
-SUPPRESS_FILE = os.environ.get("DIGEST_SUPPRESS_FILE") or os.path.join(REPO, "digest_suppress.txt")
-SUPPRESS = set(a.strip().lower() for a in (os.environ.get("DIGEST_SUPPRESS") or "").split(",") if a.strip())
-try:
-    with open(SUPPRESS_FILE, encoding="utf-8") as _f:
-        for _line in _f:
-            _line = _line.split("#", 1)[0].strip().lower()
-            if _line:
-                SUPPRESS.add(_line)
-except FileNotFoundError:
-    pass
-UNSUB_MAILTO = "mailto:%s?subject=unsubscribe" % UNSUB_EMAIL
+# Resend fills this per recipient at send time; when a Topic is set, unsubscribing is scoped
+# to that Topic. It must appear in the body, so the broadcast has a working unsubscribe link.
+UNSUB_TAG = "{{{RESEND_UNSUBSCRIBE_URL}}}"
 
 # Palette drawn from the site's light theme, kept email-client safe.
 BG, CARD, FG, MUTED, ACCENT, BORDER = "#f5ede0", "#fffaf2", "#1a1a1a", "#6a6560", "#a4471a", "#d4cab8"
@@ -112,9 +109,8 @@ def case_block(e):
 def build_html(new):
     rows = "".join(case_block(e) for e in new)
     intro = "%s added this week. Tap any case for the full holding and the opinion." % label_for(len(new))
-    unsub_href = UNSUB if UNSUB else UNSUB_MAILTO
     foot = ["You are receiving this because you subscribed to the Georgia Appellate Watch digest."]
-    foot.append('To stop receiving it, <a href="%s" style="color:%s;">unsubscribe</a>.' % (esc(unsub_href), MUTED))
+    foot.append('To stop receiving it, <a href="%s" style="color:%s;">unsubscribe</a>.' % (UNSUB_TAG, MUTED))
     if POSTAL:
         foot.append(esc(POSTAL))
     if DISCLAIMER:
@@ -168,7 +164,7 @@ def build_text(new):
         block += ["  %s#op-%d" % (SITE, e["cluster_id"]), ""]
         lines += block
     lines.append("You are receiving this because you subscribed to the Georgia Appellate Watch digest.")
-    lines.append("Unsubscribe: %s" % (UNSUB or UNSUB_MAILTO))
+    lines.append("Unsubscribe: %s" % UNSUB_TAG)
     if POSTAL:
         lines.append(POSTAL)
     if DISCLAIMER:
@@ -176,20 +172,27 @@ def build_text(new):
     return "\n".join(lines)
 
 
-def send_one(to, subject, html_body, text_body, idem=None):
-    body = {"from": FROM, "to": [to], "subject": subject, "html": html_body, "text": text_body}
-    targets = (["<%s>" % UNSUB] if UNSUB else []) + ["<%s>" % UNSUB_MAILTO]
-    hdrs = {"List-Unsubscribe": ", ".join(targets)}
-    if UNSUB.lower().startswith("http"):
-        hdrs["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
-    body["headers"] = hdrs
+def send_broadcast(subject, html_body, text_body, idem=None):
+    # One request creates the broadcast targeting the Segment and, with send=true, sends it.
+    # Resend handles the recipient queue, throttling, and the per-recipient unsubscribe URL.
+    body = {
+        "from": FROM,
+        "subject": subject,
+        "html": html_body,
+        "text": text_body,
+        "segment_id": SEGMENT_ID,
+        "name": "Georgia Appellate Watch digest %s" % datetime.date.today().isoformat(),
+        "send": (not DRAFT),
+    }
+    if TOPIC_ID:
+        body["topic_id"] = TOPIC_ID
     req_headers = {"Authorization": "Bearer %s" % API_KEY, "Content-Type": "application/json",
                    "Accept": "application/json",
                    "User-Agent": "horowitz.law-appellate-watch/1.0 (+https://horowitz.law)"}
     if idem:
-        req_headers["Idempotency-Key"] = idem  # Resend dedupes a repeated key, so a retried run won't double-send
+        req_headers["Idempotency-Key"] = idem  # same key on a retried run, so it is not duplicated
     req = urllib.request.Request(
-        "https://api.resend.com/emails", data=json.dumps(body).encode("utf-8"),
+        "https://api.resend.com/broadcasts", data=json.dumps(body).encode("utf-8"),
         headers=req_headers, method="POST")
     last = None
     for attempt in range(4):
@@ -225,33 +228,29 @@ def main():
     if DRY_RUN or not API_KEY:
         open(PREVIEW, "w", encoding="utf-8").write(html_body)
         why = "DIGEST_DRY_RUN" if DRY_RUN else "no RESEND_API_KEY"
-        print("[%s] preview written to %s, nothing sent." % (why, PREVIEW))
+        print("[%s] preview written to %s, nothing created or sent." % (why, PREVIEW))
         print("subject: %s" % subject)
-        deliverable = [r for r in RECIPIENTS if r.lower() not in SUPPRESS]
-        print("recipients configured: %d | deliverable after suppression: %d | suppressed on file: %d"
-              % (len(RECIPIENTS), len(deliverable), len(SUPPRESS)))
+        print("target segment: %s | topic: %s" % (SEGMENT_ID or "(unset)", TOPIC_ID or "(unset)"))
+        print("note: {{{RESEND_UNSUBSCRIBE_URL}}} shows literally in this preview; Resend fills it per recipient.")
         for e in new:
             print("  - %s [%s]" % (e["name"], ",".join(e.get("areas", []))))
         return
-    if not RECIPIENTS:
-        print("RESEND_API_KEY is set but DIGEST_RECIPIENTS is empty; nothing to send."); return
-    recipients = [r for r in RECIPIENTS if r.lower() not in SUPPRESS]
-    if len(recipients) != len(RECIPIENTS):
-        print("suppressed %d unsubscribed address(es)" % (len(RECIPIENTS) - len(recipients)))
-    if not recipients:
-        print("every configured recipient is on the suppression list; nothing to send."); return
-    # Signature of today's send (date + the exact cases) so a retry uses the same key per recipient.
+    if not SEGMENT_ID:
+        print("RESEND_API_KEY is set but RESEND_SEGMENT_ID is empty; nothing to send."); return
+    # Signature of today's send (date + the exact cases) so a retry reuses the same key.
     sig = hashlib.sha1(("%s|%s" % (datetime.date.today().isoformat(),
           ",".join(str(e.get("cluster_id")) for e in new))).encode("utf-8")).hexdigest()[:12]
-    ok = 0
-    for to in recipients:
-        idem = "gaw-%s-%s" % (sig, hashlib.sha1(to.lower().encode("utf-8")).hexdigest()[:8])
-        try:
-            res = send_one(to, subject, html_body, text_body, idem=idem)
-            print("  sent to %s (id=%s)" % (to, (res or {}).get("id", "?"))); ok += 1
-        except Exception as ex:
-            print("  FAILED to %s: %s" % (to, ex))
-    print("done: %d of %d sent" % (ok, len(recipients)))
+    idem = "gaw-bcast-%s" % sig
+    try:
+        res = send_broadcast(subject, html_body, text_body, idem=idem) or {}
+    except Exception as ex:
+        print("FAILED to create/send broadcast: %s" % ex)
+        raise SystemExit(1)
+    bid = res.get("id", "?")
+    if DRAFT:
+        print("created DRAFT broadcast id=%s (not sent). Review and send it in the Resend dashboard." % bid)
+    else:
+        print("created and sent broadcast id=%s to segment %s (topic %s)." % (bid, SEGMENT_ID, TOPIC_ID or "none"))
 
 
 if __name__ == "__main__":
