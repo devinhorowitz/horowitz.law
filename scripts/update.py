@@ -14,8 +14,8 @@ expensive model only ever touches confirmed keepers:
                             catching holdings that are not visible from the opening.
   Tier 3  SUMMARIZE(Opus)   reads the FULL opinion plus the triage note and writes the
                             public-facing card in the house style. Final backstop: it can
-                            still decline. Runs at effort=high by default (its accuracy
-                            lever); Opus 4.8 does not take an extended-thinking budget.
+                            still decline. Opus 4.8 takes no extended-thinking budget and
+                            no "effort" parameter; the summarizer runs at the model default.
 
 Keepers are appended to opinions.json, opinions_state.json is updated, opinions.html
 and opinions.xml are re-rendered, and scripts/pr_body.md is written for the pull request.
@@ -35,7 +35,6 @@ Environment:
   OPINIONS_MAX_TOKENS      summarizer output token cap (default 4096)
   DRY_RUN                  if set to 1, evaluate and print but write nothing
   OPINIONS_DEBUG           if set to 1, log every model call and full API error bodies
-  OPINIONS_EFFORT          Opus reasoning effort high|medium|low (default medium); "" uses the API default
   OPINIONS_BUDGET_SEC      wall-clock cap on the candidate loop in seconds (default 480)
   OPINIONS_BREAKER         stop after this many consecutive API failures (default 4)
   OPINIONS_SEARCH_BUDGET_SEC  wall-clock cap on the CourtListener search phase (default 120)
@@ -66,7 +65,6 @@ PDF_MIN_CHARS= int(os.environ.get("OPINIONS_PDF_MIN_CHARS", "500"))  # below thi
 OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
 DRY_RUN      = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "yes")
-EFFORT       = os.environ.get("OPINIONS_EFFORT", "medium").strip()
 BUDGET_SEC   = int(os.environ.get("OPINIONS_BUDGET_SEC", "480"))
 BREAKER      = int(os.environ.get("OPINIONS_BREAKER", "4"))
 SEARCH_BUDGET= int(os.environ.get("OPINIONS_SEARCH_BUDGET_SEC", "120"))
@@ -502,12 +500,8 @@ def summarize(court_id, name, docket, date_filed, text, note):
             "Triage note (what a prior reviewer flagged as relevant): %s\n\n"
             "OPINION TEXT (may be truncated):\n%s"
             % (court_id, name, docket, date_filed, note or "(none)", text[:MAXCHARS]))
-    # Opus reasoning effort (high|medium|low) trades accuracy against latency and cost; medium is
-    # ample for a short digest. Sent only to the summarizer, and only when EFFORT is non-empty.
     body = {"model": MODEL, "max_tokens": OUT_TOKENS, "system": SYSTEM,
             "messages": [{"role": "user", "content": user}]}
-    if EFFORT:
-        body["effort"] = EFFORT
     return anthropic_json(body, "summarize")
 
 
