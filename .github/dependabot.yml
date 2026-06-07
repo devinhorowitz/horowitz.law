@@ -1,0 +1,15 @@
+version: 2
+# Keep the GitHub Actions used by the workflows (checkout, setup-python,
+# create-pull-request, upload-artifact) current. Dependabot opens a PR when a new
+# version is released, so the actions stay patched without hand-pinning a SHA that
+# would otherwise go stale. Action updates are infrequent, so this is low PR volume.
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+ 
