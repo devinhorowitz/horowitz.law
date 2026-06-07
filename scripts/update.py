@@ -28,9 +28,10 @@ Environment:
   OPINIONS_MODEL           Tier 3 summarizer (default claude-opus-4-8)
   OPINIONS_TRIAGE_MODEL    Tier 2 full-read gate (default claude-sonnet-4-6). "" disables it.
   OPINIONS_SCREEN_MODEL    Tier 1 excerpt screen (default claude-haiku-4-5-20251001). "" disables it.
-  OPINIONS_COURTS          CourtListener court ids (default "ga,gactapp")
+  OPINIONS_COURTS          CourtListener court ids (default "ga,gactapp,ca11,scotus")
   OPINIONS_LOOKBACK        fallback look-back window in days when state is empty (default 21)
-  OPINIONS_MAX             max opinions evaluated per run (default 25)
+  OPINIONS_MAX             max opinions evaluated per run (code default 25; the daily workflow raises it to 80 for heavy filing days)
+  OPINIONS_SEEN_CAP        max cluster ids kept in opinions_state.json seen list (default 5000; bounds state-file growth)
   OPINIONS_MAXCHARS        opinion characters sent to triage and summarizer (default 60000)
   OPINIONS_MAX_TOKENS      summarizer output token cap (default 4096)
   DRY_RUN                  if set to 1, evaluate and print but write nothing
@@ -75,6 +76,7 @@ VERSION      = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
 COURTS       = [c.strip() for c in os.environ.get("OPINIONS_COURTS", "ga,gactapp,ca11,scotus").split(",") if c.strip()]
 LOOKBACK     = int(os.environ.get("OPINIONS_LOOKBACK", "21"))
 MAX_RUN      = int(os.environ.get("OPINIONS_MAX", "25"))
+SEEN_CAP     = int(os.environ.get("OPINIONS_SEEN_CAP", "5000"))  # cap on seen_clusters kept in state (bounds growth)
 MAXCHARS     = int(os.environ.get("OPINIONS_MAXCHARS", "60000"))
 PDF_MIN_CHARS= int(os.environ.get("OPINIONS_PDF_MIN_CHARS", "500"))  # below this, fall back from PDF to REST
 OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
@@ -923,7 +925,12 @@ def main():
     entries += added
     safeio.atomic_write_json(JSON_PATH, entries)
     state["last_filed"] = max(e["date"] for e in entries)
-    state["seen_clusters"] = sorted(seen | evaluated | have | {e["cluster_id"] for e in added})
+    # Bound seen_clusters so opinions_state.json (committed in every opinions PR) cannot grow
+    # without limit. Cluster ids rise over time, so the newest SEEN_CAP always covers anything
+    # the rolling feed can surface; carded ids are re-added each run from `have` regardless, so
+    # trimming older ids here costs no dedup coverage.
+    seen_all = seen | evaluated | have | {e["cluster_id"] for e in added}
+    state["seen_clusters"] = sorted(seen_all)[-SEEN_CAP:]
     state["updated"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     safeio.atomic_write_json(STATE_PATH, state)
     n = render.render(entries)
