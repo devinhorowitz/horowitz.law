@@ -37,10 +37,18 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install dependencies
+        run: pip install --upgrade pypdf
+
       - name: Sweep citations, classify treatment, flag adversely-treated cards
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+          # CourtListener REST budget. Set these repo Variables on a tier change; unset = free-tier defaults in cl_rate.py.
+          CL_PER_MINUTE: ${{ vars.CL_PER_MINUTE }}
+          CL_PER_HOUR: ${{ vars.CL_PER_HOUR }}
+          CL_PER_DAY: ${{ vars.CL_PER_DAY }}
+          CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
           TREATMENT_MODEL: claude-sonnet-4-6     # full-read classifier ($3/$15 per MTok)
         run: python scripts/treatment.py

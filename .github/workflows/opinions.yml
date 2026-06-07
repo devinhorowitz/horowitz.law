@@ -38,6 +38,11 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+          # CourtListener REST budget. Set these repo Variables on a tier change; unset = free-tier defaults in cl_rate.py.
+          CL_PER_MINUTE: ${{ vars.CL_PER_MINUTE }}
+          CL_PER_HOUR: ${{ vars.CL_PER_HOUR }}
+          CL_PER_DAY: ${{ vars.CL_PER_DAY }}
+          CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
           # Three-tier funnel, cheapest first. Model ids per the Anthropic models docs.
           OPINIONS_SCREEN_MODEL: claude-haiku-4-5-20251001   # tier 1: excerpt screen ($1/$5 per MTok)
           OPINIONS_TRIAGE_MODEL: claude-sonnet-4-6           # tier 2: full-read gate ($3/$15 per MTok)

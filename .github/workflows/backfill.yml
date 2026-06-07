@@ -47,6 +47,11 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+          # CourtListener REST budget. Set these repo Variables on a tier change; unset = free-tier defaults in cl_rate.py.
+          CL_PER_MINUTE: ${{ vars.CL_PER_MINUTE }}
+          CL_PER_HOUR: ${{ vars.CL_PER_HOUR }}
+          CL_PER_DAY: ${{ vars.CL_PER_DAY }}
+          CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
           OPINIONS_SEED: ${{ inputs.seed }}
           # Same three-tier funnel as the daily pipeline.
