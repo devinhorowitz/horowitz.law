@@ -70,6 +70,7 @@ import update            # CourtListener + Anthropic plumbing, PDF extraction, h
 import render            # single source of truth renderer
 import treatment_core    # shared treatment-flag model
 import cl_rate           # shared CourtListener REST budget (limits, pacing, defer)
+import safeio            # crash-safe atomic writes
 
 JSON_PATH  = update.JSON_PATH
 STATE_PATH = os.path.join(update.REPO, "treatment_state.json")
@@ -314,6 +315,9 @@ def main():
                 api_fail = 0
             except cl_rate.RateBudgetExceeded:
                 stopped = "rest budget"; defer = cl_rate.PACER.defer_note(); break
+            except update.ConfigError as e:
+                print("  ! configuration error, stopping this sweep so it surfaces: %s" % e)
+                stopped = "configuration error"; break
             except Exception as e:
                 api_fail += 1
                 print("  ! classify failed citing=%s: %s" % (ccid, e))
@@ -384,10 +388,9 @@ def main():
 
     # Persist progress always; rewrite opinions.json and re-render only when a flag
     # actually changed a card (new_flags) -- state-only weeks still record progress.
-    json.dump({k: state[k] for k in sorted(state)}, open(STATE_PATH, "w", encoding="utf-8"),
-              ensure_ascii=False, indent=2)
+    safeio.atomic_write_json(STATE_PATH, {k: state[k] for k in sorted(state)})
     if new_flags:
-        json.dump(entries, open(JSON_PATH, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+        safeio.atomic_write_json(JSON_PATH, entries)
         render.render(entries)
         print("wrote treatment_state.json + opinions.json; re-rendered.")
     else:

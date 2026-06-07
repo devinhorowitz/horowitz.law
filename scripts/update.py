@@ -52,6 +52,14 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
 import render          # single source of truth renderer
 import treatment_core  # shared treatment-flag model (the forward escalation writes it)
+import safeio          # crash-safe atomic writes
+
+
+class ConfigError(RuntimeError):
+    """A non-transient, operator-fixable failure: a bad/expired API key, a
+    depleted credit balance, or a retired model id. Distinct from a transient
+    error so the run can stop fast and exit non-zero (surfacing it by email)
+    instead of silently deferring like it does for an outage or a rate limit."""
 
 JSON_PATH  = os.path.join(REPO, "opinions.json")
 STATE_PATH = os.path.join(REPO, "opinions_state.json")
@@ -266,6 +274,9 @@ def cl_get(path, deadline=None):
                     raise
                 _dbg("courtlistener HTTP %s, retrying in %ss" % (e.code, wait))
                 time.sleep(wait); continue
+            if e.code in (401, 403):
+                print("  ! CourtListener AUTHENTICATION failed (HTTP %s). Check the COURTLISTENER_TOKEN secret." % e.code)
+                raise ConfigError("courtlistener auth failed: HTTP %s" % e.code)
             raise
         except (urllib.error.URLError, TimeoutError) as e:
             last = e
@@ -517,6 +528,17 @@ def anthropic_json(body, label="call"):
                 else:
                     _dbg(msg)
                 time.sleep(wait); continue
+            lo = detail.lower()
+            if e.code in (401, 403):
+                print("  ! Anthropic AUTHENTICATION failed (HTTP %s) on %s. Check the ANTHROPIC_API_KEY secret." % (e.code, model))
+                raise ConfigError(last)
+            if e.code == 404 or ("model" in lo and any(s in lo for s in ("not found", "not_found", "does not exist", "deprecated", "retired"))):
+                print("  ! Anthropic MODEL problem (HTTP %s) for %r. It may be retired or misspelled; update the model id "
+                      "(repo Variable OPINIONS_SCREEN_MODEL / OPINIONS_TRIAGE_MODEL / OPINIONS_MODEL / TREATMENT_MODEL)." % (e.code, model))
+                raise ConfigError(last)
+            if e.code == 400 and any(s in lo for s in ("credit", "billing", "balance")):
+                print("  ! Anthropic CREDIT/billing problem (HTTP 400): %s. Check the account balance and limits." % (detail[:200].strip() or "see body"))
+                raise ConfigError(last)
             raise RuntimeError(last)
         except (urllib.error.URLError, TimeoutError) as e:
             last = "%s %s -> network error: %s" % (label, model, getattr(e, "reason", e))
@@ -707,6 +729,7 @@ def main():
     treatment_changed = False
     cl_deferred = 0                                # candidates deferred this run on the CourtListener budget
     consec = 0
+    cfg_error = False                              # set on a ConfigError (auth/model/credit); forces a non-zero exit
     for r in cand:
         if time.time() - run_start > BUDGET_SEC:
             print("  ! time budget reached (%ds) after %d evaluated; finalizing with what is collected"
@@ -774,6 +797,8 @@ def main():
                     try:
                         n_audit += 1
                         a = treatment_audit(name, text, card)
+                    except ConfigError:
+                        raise
                     except Exception as ae:
                         print("  ! treatment audit failed for card %s citing %s: %s"
                               % (card.get("cluster_id"), name, ae))
@@ -800,6 +825,10 @@ def main():
             v = summarize(court_id, name, docket, date_filed, text, note)
             consec = 0
             evaluated.add(cid)
+        except ConfigError as e:
+            print("  ! configuration error, stopping this run so it surfaces (nothing committed): %s" % e)
+            cfg_error = True
+            break
         except Exception as e:
             print("  ! error on cluster %s (%s): %s" % (cid, name, e))
             consec += 1
@@ -874,6 +903,12 @@ def main():
         ("; %d candidate(s) deferred to the next run (%s)" % (cl_deferred, cl_rate.PACER.defer_note()))
         if cl_deferred else "")
 
+    if cfg_error:
+        print("Stopped on a configuration error; nothing was committed. "
+              "Exiting non-zero so the failure is visible (e.g. emailed) rather than silently deferred.")
+        print(cl_line)
+        sys.exit(1)
+
     if DRY_RUN:
         print("\n--- DRY RUN, nothing written (%s) ---\n%s" % (funnel, pr_body))
         print(cl_line); return
@@ -886,11 +921,11 @@ def main():
         print(cl_line); return
 
     entries += added
-    json.dump(entries, open(JSON_PATH, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    safeio.atomic_write_json(JSON_PATH, entries)
     state["last_filed"] = max(e["date"] for e in entries)
     state["seen_clusters"] = sorted(seen | evaluated | have | {e["cluster_id"] for e in added})
     state["updated"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    json.dump(state, open(STATE_PATH, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    safeio.atomic_write_json(STATE_PATH, state)
     n = render.render(entries)
     print("rendered %d entries; added %d, flagged %d, treatment %d (%s, dropped %d)"
           % (n, len(added), len(flagged), len(treat_flags), funnel, len(skipped)))

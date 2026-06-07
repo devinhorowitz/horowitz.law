@@ -36,6 +36,7 @@ import os, re, sys, json, time
 import update
 import render
 import cl_rate           # shared CourtListener REST budget (limits, pacing, defer)
+import safeio            # crash-safe atomic writes
 
 STORAGE = "https://storage.courtlistener.com/"
 DRY_RUN = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
@@ -360,7 +361,7 @@ def run():
         return
 
     merged = entries + new_cards
-    json.dump(merged, open(update.JSON_PATH, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    safeio.atomic_write_json(update.JSON_PATH, merged)
     n = render.render(merged)
     _write_pr_body(report)
     print("wrote %d new card(s); opinions.json now %d; rendered %d into opinions.html and opinions.xml."

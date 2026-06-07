@@ -13,6 +13,7 @@ else in those files is touched.
 """
 import os, re, json, html, datetime
 from xml.sax.saxutils import escape as xml_escape
+import safeio          # crash-safe atomic writes
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_PATH    = os.path.join(REPO, "opinions.json")
@@ -144,8 +145,17 @@ def _inject(path, marker, block):
     pat = re.compile(r'(<!-- ' + marker + r':start.*?-->).*?<!-- ' + marker + r':end -->', re.S)
     doc = open(path, encoding="utf-8").read()
     repl = lambda m: m.group(1) + "\n" + block + "\n      <!-- " + marker + ":end -->"
-    doc = pat.sub(repl, doc, count=1)
-    open(path, "w", encoding="utf-8").write(doc)
+    doc, n = pat.subn(repl, doc, count=1)
+    if n != 1:
+        # The marker pair is the contract between the page and the renderer. If it
+        # is missing or malformed (a stray manual edit), fail loud rather than
+        # silently writing the page back with stale cards.
+        raise RuntimeError("render: %s:start/%s:end marker pair not found in %s" % (marker, marker, path))
+    # Keep the footer copyright year current so it does not rot to a stale year.
+    # A no-op when the year already matches, so it adds no spurious diff.
+    year = str(datetime.date.today().year)
+    doc = re.sub(r'(&copy;|\u00a9)\s*\d{4}', lambda m: m.group(1) + " " + year, doc)
+    safeio.atomic_write_text(path, doc)
 
 def render(entries=None):
     if entries is None:
@@ -181,7 +191,7 @@ def render(entries=None):
            '    <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>']
     out += [rss_item(e) for e in recent]
     out += ['  </channel>', '</rss>', '']
-    open(XML_PATH, "w", encoding="utf-8").write("\n".join(out))
+    safeio.atomic_write_text(XML_PATH, "\n".join(out))
     return len(recent), len(entries)
 
 if __name__ == "__main__":
