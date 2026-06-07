@@ -65,7 +65,7 @@ jobs:
       # (opinions.json + re-rendered html/xml), the sweep progress (treatment_state.json),
       # and the run report as the body.
       - name: Open pull request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: bot/opinions-treatment
           title: 'Georgia Appellate Watch: treatment sweep'

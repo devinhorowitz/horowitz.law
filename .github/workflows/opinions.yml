@@ -81,7 +81,7 @@ jobs:
       # Confirm the latest tag at github.com/peter-evans/create-pull-request before pinning.
       - name: Open pull request
         if: steps.guard.outputs.skip != 'true'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: bot/opinions-update
           title: 'Georgia Appellate Watch: new opinions'
