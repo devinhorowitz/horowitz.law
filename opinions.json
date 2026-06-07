@@ -283,5 +283,263 @@
     "synopsis": "The Court of Appeals affirmed the denial of uninsured-motorist coverage to an insured who was struck as a pedestrian and sought UM benefits from USAA. The policy required prompt notice as a condition precedent, and a twenty-one-month delay in notifying the insurer failed that requirement as a matter of law, with the insured's unawareness that UM coverage might apply not excusing the delay.",
     "why": "A prompt-notice condition precedent in a first-party uninsured-motorist policy can be enforced as a matter of law, and a long, unexplained reporting delay, here twenty-one months, can forfeit coverage even if the insured did not realize UM might apply.",
     "first_seen": "2025-06-20"
+  },
+  {
+    "cluster_id": 2812616,
+    "name": "Phillips v. Harmon",
+    "court": "scotga",
+    "division": null,
+    "date": "2015-06-29",
+    "dockets": [
+      "S14G1868",
+      "S14G1893",
+      "S14G1895"
+    ],
+    "disposition": "affirmed in part, reversed in part, and remanded",
+    "areas": [
+      "procedure",
+      "premises",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/2812616/phillips-v-harmon/",
+    "synopsis": "In a medical malpractice action, the Supreme Court of Georgia clarified that a defendant's duty to preserve evidence is triggered not only by actual or express notice of a claim from the plaintiff but whenever litigation is reasonably foreseeable to the party in control of the evidence, and that constructive notice may be shown by circumstances including the type and extent of injury, the clarity of fault, potential financial exposure, the frequency of litigation in similar circumstances, and the defendant's own conduct such as internal investigations and notification of counsel and insurers. The Court reversed the spoliation portion of the Court of Appeals judgment because the lower courts rested on the legally incorrect premise that actual notice from the plaintiff was required, and disapproved several Court of Appeals decisions to the extent they endorsed that analysis. The Court separately affirmed that the trial judge's ex parte communication with the deadlocked jury, conducted outside the presence of the parties and counsel and never disclosed before the verdict, violated the civil parties' right to be present and, under the unique circumstances including the inability to reconstruct the note, constituted harmful error requiring a new trial.",
+    "why": "The decision reframes the trigger for a defendant's evidence-preservation duty around a reasonable-foreseeability standard with enumerated factors, disapproving prior precedent that required actual notice, and confirms that substantive ex parte judge-jury communications in civil trials can require a new trial.",
+    "first_seen": "2015-06-29"
+  },
+  {
+    "cluster_id": 3209755,
+    "name": "Toyo Tire North America Manufacturing, Inc. v. Davis",
+    "court": "scotga",
+    "division": null,
+    "date": "2016-06-06",
+    "dockets": [
+      "S15G1804"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "damages",
+      "expert",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/3209755/toyo-tire-north-america-manufacturing-inc-v-davis/",
+    "synopsis": "In a continuing nuisance and trespass action by homeowners against a nearby manufacturing facility, the Supreme Court of Georgia held that a plaintiff who both occupies and owns the affected property may recover separately for past discomfort and annoyance and for the diminution in the property's market value, treating these as two distinct injuries rather than a double recovery, and it expressly overruled Stanfield v. Waste Management of Georgia. The Court also held that alleged deficiencies in an expert appraiser's methodology go to the admissibility of his testimony under OCGA sections 24-7-702 and 24-7-703, an issue committed to the trial court's gatekeeping discretion in the first instance, and not to whether his opinion suffices to defeat summary judgment on causation. Because the defendant had not moved to exclude the expert testimony in the trial court, the appellate courts could consider that testimony in assessing whether causation survived summary judgment. The Court affirmed the denial of summary judgment.",
+    "why": "The decision clarifies that past discomfort and annoyance damages and diminution in property value are separately recoverable in continuing nuisance cases and establishes that unchallenged expert testimony with methodological weaknesses may still be considered on summary judgment unless a Daubert exclusion motion is made to the trial court.",
+    "first_seen": "2016-06-06"
+  },
+  {
+    "cluster_id": 3219794,
+    "name": "Scapa Dryer Fabrics, Inc. v. Knight",
+    "court": "scotga",
+    "division": null,
+    "date": "2016-07-05",
+    "dockets": [
+      "S15G1278"
+    ],
+    "disposition": "reversed",
+    "areas": [
+      "expert",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/3219794/scapa-dryer-fabrics-inc-v-knight/",
+    "synopsis": "In an asbestos mesothelioma case, the Supreme Court of Georgia held that an expert's cumulative exposure opinion, which told the jury that any exposure above background, even de minimis, was a contributing cause of the disease, did not 'fit' the legal causation standard and was inadmissible under former OCGA section 24-9-67.1 (b). The Court reaffirmed that, while a plaintiff need not prove a substantial contribution, a de minimis contribution does not satisfy Georgia's 'contributing factor' causation standard, and an expert must tie a cumulative exposure opinion to a reliable estimate of actual exposure showing more than de minimis exposure. Because the expert did not condition his causation opinion on such an estimate, its admission was an abuse of the trial court's gatekeeping discretion. The Court reversed the Court of Appeals' affirmance of the judgment.",
+    "why": "The decision clarifies that expert causation testimony in toxic tort cases must satisfy the 'fit' requirement by being tied to a reliable estimate of more than de minimis exposure, and that an 'any exposure' or pure cumulative exposure theory unconnected to actual exposure is inadmissible.",
+    "first_seen": "2016-07-05"
+  },
+  {
+    "cluster_id": 5749712,
+    "name": "Martin v. Six Flags Over Georgia II, L.P.",
+    "court": "scotga",
+    "division": null,
+    "date": "2017-06-05",
+    "dockets": [
+      ""
+    ],
+    "disposition": "affirmed in part and reversed in part, and case remanded with direction",
+    "areas": [
+      "premises",
+      "negsec",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/5749712/martin-v-six-flags-over-georgia-ii-lp/",
+    "synopsis": "The Supreme Court of Georgia held that a premises owner can be liable under OCGA section 51-3-1 for a criminal attack that begins on its premises but is completed off-premises, when the injuries are a foreseeable proximate result of the owner's breach of its duty to keep the premises safe, expressly adopting the principle from Wilks v. Piggly Wiggly Southern. The court clarified that the bus stop where the attack concluded was not part of the park's 'approaches,' because the owner had not exercised the control and dominion required to extend its duty to that public way. On apportionment, the court held that an apportionment error under OCGA section 51-12-33 ordinarily requires a retrial limited to the apportionment of fault among tortfeasors, not a full retrial, because the allocation of relative fault is a step distinct from the determinations of liability and total damages. The court affirmed liability, reversed the Court of Appeals' order of a full retrial, and remanded for retrial limited to apportionment.",
+    "why": "The decision establishes that off-premises injuries can support landowner liability where the attack originates on the premises and is foreseeable, clarifies the 'approaches' and control-and-dominion analysis, and holds that apportionment error generally requires retrial only on apportionment rather than a full retrial.",
+    "first_seen": "2017-06-05"
+  },
+  {
+    "cluster_id": 10366850,
+    "name": "Cooper Tire & Rubber Company v. Koch",
+    "court": "scotga",
+    "division": null,
+    "date": "2018-03-15",
+    "dockets": [
+      "S17G0654"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "procedure",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10366850/cooper-tire-rubber-company-v-koch/",
+    "synopsis": "In a product liability action arising from a fatal single-vehicle crash following a tire tread separation, the defendant tire manufacturer sought dismissal or other sanctions for spoliation after the plaintiff allowed the vehicle and remaining tires to be crushed for scrap. The Supreme Court of Georgia held that the common-law duty to preserve relevant evidence is defined the same for plaintiffs and defendants, arising when a party actually anticipates or reasonably should anticipate litigation, though the practical timing of the duty may differ because plaintiffs generally control whether and when litigation is pursued. The court confirmed that the Phillips factors are a non-exclusive list, that the most severe sanctions are reserved for evidence lost intentionally in bad faith with uncurable prejudice, and that loss through mere negligence normally warrants lesser sanctions or none. Applying a summary judgment standard, the court affirmed the finding that the plaintiff had no duty to preserve at the time the evidence was destroyed.",
+    "why": "The decision clarifies that the duty to preserve evidence and the reasonable-foreseeability test apply equally to plaintiffs and defendants, sets out how the Phillips factors and sophistication of the party bear on when that duty is triggered, and confirms that severe spoliation sanctions require intentional bad faith while negligent loss warrants lesser or no sanctions.",
+    "first_seen": "2018-03-15"
+  },
+  {
+    "cluster_id": 10367320,
+    "name": "Quynn v. Hulsey",
+    "court": "scotga",
+    "division": null,
+    "date": "2020-11-02",
+    "dockets": [
+      "S19G1612"
+    ],
+    "disposition": "reversed",
+    "areas": [
+      "auto",
+      "damages",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10367320/quynn-v-hulsey/",
+    "synopsis": "In a wrongful death action arising from a truck striking and killing a pedestrian, the trial court granted partial summary judgment to the employer on the estate's claims for negligent entrustment, hiring, training, and supervision because the employer had admitted respondeat superior liability and no punitive damages claim survived. The Supreme Court of Georgia held that the apportionment statute, OCGA section 51-12-33, abrogated the decisional law 'Respondeat Superior Rule,' which had entitled an employer that conceded vicarious liability to summary judgment on direct-negligence claims absent a valid punitive damages claim. The Court reasoned that direct-negligence claims allege the employer's own fault, which the jury must consider under the statute, and that such fault is divisible from the employee's fault. The Court reversed and overruled contrary Court of Appeals decisions.",
+    "why": "The decision establishes that an employer's admission of respondeat superior no longer bars a plaintiff's negligent entrustment, hiring, training, supervision, and retention claims, so those direct-negligence claims may proceed to the jury alongside vicarious liability under OCGA section 51-12-33.",
+    "first_seen": "2020-11-02"
+  },
+  {
+    "cluster_id": 10367651,
+    "name": "Adventure Motorsports Reinsurance, Ltd. v. Interstate National Dealer Services, Inc.",
+    "court": "scotga",
+    "division": null,
+    "date": "2021-12-14",
+    "dockets": [
+      "S21G0008",
+      "S21G0015"
+    ],
+    "disposition": "reversed and remanded in part, vacated and remanded in part",
+    "areas": [
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10367651/adventure-motorsports-reinsurance-ltd-v-interstate-national-dealer/",
+    "synopsis": "The Supreme Court of Georgia held that vacatur of an arbitration award for manifest disregard of the law under OCGA section 9-9-13 (b) (5) requires concrete evidence that the arbitrator was conscious of the correct law and intentionally and knowingly chose to ignore it, and that a mere erroneous interpretation or misapplication of law to the facts does not suffice. Applying this standard, the court concluded that the arbitrator interpreted the parties' contracts and fashioned an equitable remedy that drew its essence from the agreements, and that nothing in the record showed a deliberate decision to disregard applicable law. The court reversed the Court of Appeals' decision vacating the confirmation of the award and remanded for consideration of the unresolved argument under OCGA section 9-9-13 (b) (3) that the arbitrator overstepped his authority, and it vacated and remanded the related appeal concerning a delayed-payment penalty as potentially no longer moot.",
+    "why": "The decision clarifies the demanding evidentiary threshold for vacating arbitration awards on manifest-disregard grounds under Georgia's Arbitration Code, an issue that recurs in disputes governed by arbitration clauses.",
+    "first_seen": "2021-12-14"
+  },
+  {
+    "cluster_id": 10680052,
+    "name": "Miller v. Golden Peanut Company, LLC",
+    "court": "scotga",
+    "division": null,
+    "date": "2023-08-21",
+    "dockets": [
+      "S22G0905"
+    ],
+    "disposition": "vacated and remanded with direction",
+    "areas": [
+      "expert",
+      "auto"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10680052/miller-v-golden-peanut-company-llc/",
+    "synopsis": "In a wrongful death action arising from a collision between a tractor-trailer and a car, the Supreme Court of Georgia held that the pre-2013 investigating officer rule, under which a law enforcement officer was treated as presumptively qualified as an expert on the cause of a collision, did not survive adoption of the current Evidence Code. Because OCGA section 24-7-702 contains no carve-out for law enforcement officers, a trial court must perform the same three-prong Daubert gatekeeping inquiry, qualification, reliability, and helpfulness, for expert opinion testimony from an investigating officer as for any other expert. The court found that the disputed accident-reconstruction opinions, including that the deceased driver was distracted, constituted expert rather than lay testimony, and that the trial court abused its discretion by assessing only qualification and not reliability or helpfulness. The court vacated the Court of Appeals' opinion, directed it to vacate the trial court's order, and remanded, and expressly disapproved Court of Appeals decisions applying the investigating officer rule to expert testimony in civil cases.",
+    "why": "The decision establishes that investigating officers who offer accident-reconstruction or causation opinions in civil cases are subject to the full Daubert reliability and helpfulness analysis, eliminating the prior presumption of expert qualification.",
+    "first_seen": "2023-08-21"
+  },
+  {
+    "cluster_id": 4323507,
+    "name": "Richardson v. Locklyn",
+    "court": "ctapp",
+    "division": null,
+    "date": "2016-11-15",
+    "dockets": [
+      "A16A0978"
+    ],
+    "disposition": "vacated and remanded with direction",
+    "areas": [
+      "procedure",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/4323507/richardson-v-locklyn/",
+    "synopsis": "In an auto-collision case where the jury verdict came in below 75 percent of the defendant's rejected settlement offer, the trial court denied the defendant's motion for attorney fees under OCGA section 9-11-68 by finding the offer was not made in good faith based on the offer's relationship to claimed medical expenses and the defendant's stipulation to liability. The Court of Appeals held for the first time that an evidentiary hearing is required before a trial court may rule on a fee request under OCGA section 9-11-68, that a timely objection asserting bad faith triggers the hearing requirement, and that the burden rests on the offeree to prove the absence of good faith. Adopting Florida's framework, the court held that good faith cannot be assessed on objective factors alone but must consider the offeror's subjective reasonable belief, and it vacated the judgment and remanded for a hearing.",
+    "why": "This decision establishes that an offeror's good faith under Georgia's offer-of-settlement statute is measured by the offeror's subjective reasonable belief rather than objective factors alone, places the burden on the offeree to show absence of good faith, and requires an evidentiary hearing triggered by a timely bad-faith objection.",
+    "first_seen": "2016-11-15"
+  },
+  {
+    "cluster_id": 4372487,
+    "name": "Harris v. Mahone",
+    "court": "ctapp",
+    "division": "Fifth Division",
+    "date": "2017-03-01",
+    "dockets": [
+      "A16A1748"
+    ],
+    "disposition": "affirmed in part, reversed in part, and remanded with direction",
+    "areas": [
+      "procedure",
+      "auto",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/4372487/harris-v-mahone/",
+    "synopsis": "In an auto negligence case, plaintiff sought attorney fees under OCGA Section 9-11-68 after recovering a verdict exceeding 125 percent of his pretrial counteroffer. The court held that a counteroffer made within 20 days of trial under subsection (a) must still remain open 30 days under subsection (c), and that fees under subsection (b)(2) run only from the date the offer is deemed rejected through entry of judgment. Because the counteroffer was deemed rejected three days after the trial concluded and plaintiff showed no fees incurred in the window between that date and judgment, no fees were recoverable; a counteroffer can avoid this result only by being withdrawn in writing before its expiration. The court separately reversed the denial of fees under OCGA Section 9-15-14, holding that counsel's statement in his place as to hours and reasonableness on a specific issue was sufficient proof.",
+    "why": "The decision clarifies the interplay of OCGA Section 9-11-68 subsections (a), (b)(2), and (c), holding that a near-trial counteroffer must remain open 30 days and that recoverable fees run only from the deemed-rejection date to judgment, and confirms that counsel's in-place statement of hours and reasonableness suffices to support a Section 9-15-14 fee motion.",
+    "first_seen": "2017-03-01"
+  },
+  {
+    "cluster_id": 4406052,
+    "name": "Hospital Authority of Valdosta/Lowndes County v. Fender",
+    "court": "ctapp",
+    "division": "First Division",
+    "date": "2017-06-23",
+    "dockets": [
+      "A17A0002",
+      "A17A0003"
+    ],
+    "disposition": "affirmed in part, reversed in part, and remanded in a17a0002; affirmed in a17a0003",
+    "areas": [
+      "damages",
+      "expert",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/4406052/hospital-authority-of-valdostalowndes-county-dba-south-georgia-medical/",
+    "synopsis": "In a medical malpractice action, the Court of Appeals held that a fact question existed on whether the new injury exception to the two-year statute of limitation in OCGA section 9-3-71(a) applied, where the patient remained asymptomatic for a period after an alleged misdiagnosis of carotid stenosis and later suffered a massive stroke, so the limitation period could begin on the date of the stroke. The court also held that the Respondeat Superior Rule, which entitles an employer to summary judgment on negligent hiring, training, supervision, and retention claims when it admits vicarious liability and no punitive damages are sought, was not superseded by the apportionment statute, OCGA section 51-12-33(b), reasoning that the statute does not apply to claims based on respondeat superior or to derivative claims that are merely duplicative of it. The court further affirmed denial of a motion under OCGA section 24-7-702(b) to exclude a medical expert's causation opinion. The court reversed summary judgment as to the negligent hiring claims and otherwise affirmed.",
+    "why": "The decision clarifies that Georgia's apportionment statute does not displace the Respondeat Superior Rule barring direct negligence claims against an employer that admits vicarious liability and faces no punitive damages claim, and it applies the new injury exception to the medical malpractice limitation period where a misdiagnosed patient remains asymptomatic before a later distinct injury.",
+    "first_seen": "2017-06-23"
+  },
+  {
+    "cluster_id": 4549173,
+    "name": "The Coastal Bank v. Rawlins",
+    "court": "ctapp",
+    "division": "First Division",
+    "date": "2018-10-29",
+    "dockets": [
+      "A18A1010"
+    ],
+    "disposition": "vacated and remanded with direction",
+    "areas": [
+      "procedure",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/4549173/the-coastal-bank-v-larry-rawlins-jr/",
+    "synopsis": "After prevailing on appeal and obtaining a judgment of no liability, defendant moved for attorney fees under Georgia's offer of settlement statute, OCGA Section 9-11-68, based on a rejected $3,000 offer. The trial court denied fees, finding the offer was not made in good faith, but relied exclusively on objective factors such as the offer's relationship to alleged damages. The Court of Appeals held that under the test adopted in Richardson v. Locklyn, a court cannot base a good-faith ruling solely on objective factors but must weigh those factors against the offeror's subjective belief in the strength of its defense, here the no-standing argument. The court vacated and remanded for application of the Richardson test.",
+    "why": "The decision clarifies that a good-faith determination under OCGA Section 9-11-68 requires weighing objective factors against the offeror's subjectively reasonable belief, and that exclusive reliance on objective factors is an abuse of discretion.",
+    "first_seen": "2018-10-29"
+  },
+  {
+    "cluster_id": 4503667,
+    "name": "Stephens v. Castano-Castano",
+    "court": "ctapp",
+    "division": "Third Division",
+    "date": "2018-05-29",
+    "dockets": [
+      "A18A0100"
+    ],
+    "disposition": "affirmed in part, reversed in part",
+    "areas": [
+      "auto",
+      "damages",
+      "expert",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/4503667/stephens-v-castano-castano/",
+    "synopsis": "In an auto collision case, the trial court excluded evidence that the plaintiff's treating physician held a lien on the lawsuit proceeds and barred questioning about an attorney-to-physician referral. The Court of Appeals held that evidence of the physician's lien-based financial interest in the verdict was admissible to show potential bias and affect credibility, and that the collateral source rule did not bar it because the plaintiff still owed the full cost of treatment and no benefit or write-off reduced the obligation. The court affirmed exclusion of the attorney-referral evidence, holding that the referral standing alone was insufficient to show bias and presented a danger of unfair prejudice, and it affirmed denial of the defendant's motion to enforce a purported settlement because the relied-upon email omitted the essential settlement amount. The court noted that any such financial-interest evidence remains subject to a Rule 403 analysis. The opinion is physical precedent only.",
+    "why": "The decision clarifies that a treating physician's lien on lawsuit proceeds is admissible to show financial interest and bias and is not barred by the collateral source rule, while a bare attorney-to-physician referral, standing alone, is not.",
+    "first_seen": "2018-05-29"
   }
 ]
