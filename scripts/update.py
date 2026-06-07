@@ -38,8 +38,10 @@ Environment:
   OPINIONS_BUDGET_SEC      wall-clock cap on the candidate loop in seconds (default 480)
   OPINIONS_BREAKER         stop after this many consecutive API failures (default 4)
   OPINIONS_SEARCH_BUDGET_SEC  wall-clock cap on the CourtListener search phase (default 120)
+  CL_PER_MINUTE / CL_PER_HOUR / CL_PER_DAY / CL_RATE_MARGIN  CourtListener REST budget (see cl_rate.py)
 """
 import os, re, sys, json, time, html, datetime, io
+import cl_rate           # shared CourtListener REST budget (limits, pacing, defer)
 import urllib.request, urllib.parse, urllib.error
 import xml.etree.ElementTree as ET
 
@@ -220,8 +222,18 @@ def cl_headers():
 CL_RETRY_STATUS = {429, 500, 502, 503, 504, 520, 522, 524}
 
 
+def _read_detail(e):
+    """Pull the 'detail' string out of a CourtListener error body (the throttle
+    message names the period and seconds to wait). The body can be read once."""
+    try:
+        return (json.loads(e.read().decode("utf-8")) or {}).get("detail", "") or ""
+    except Exception:
+        return ""
+
+
 def cl_get(path, deadline=None):
     url = path if path.startswith("http") else "https://www.courtlistener.com" + path
+    cl_rate.PACER.acquire(deadline)        # per-run budget + per-minute spacing; may defer
     last = None
     for attempt in range(4):
         if deadline and time.time() > deadline:
@@ -231,6 +243,18 @@ def cl_get(path, deadline=None):
                 return json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             last = e
+            if e.code == 429:
+                detail = _read_detail(e)
+                kind, wait = cl_rate.PACER.penalize(detail, _retry_after(e))
+                # A per-minute burst is worth a brief wait then retry; an hourly or
+                # daily ceiling is not. Defer instead of sleeping on a long window.
+                if kind == "short" and attempt < 3:
+                    w = wait or min(4 * (attempt + 1), 15)
+                    if deadline and time.time() + w > deadline:
+                        raise cl_rate.RateBudgetExceeded("courtlistener throttled: %s" % (detail or "429"))
+                    _dbg("courtlistener 429 (%s); waiting %ss then retry" % ((detail or "")[:60], w))
+                    time.sleep(w); continue
+                raise cl_rate.RateBudgetExceeded("courtlistener throttled: %s" % (detail or "429"))
             if e.code in CL_RETRY_STATUS and attempt < 3:
                 wait = _retry_after(e) or min(4 * (attempt + 1), 20)
                 if deadline and time.time() + wait > deadline:
@@ -343,7 +367,7 @@ def snippet_of(r):
     return r.get("snippet") or ""
 
 
-def opinion_id_of(r):
+def opinion_id_of(r, deadline=None):
     ops = r.get("opinions") or []
     if ops and isinstance(ops[0], dict) and ops[0].get("id"):
         return ops[0]["id"]
@@ -352,7 +376,7 @@ def opinion_id_of(r):
         return sib[0]
     cid = cluster_id_of(r)
     if cid:
-        cl = cl_get("/api/rest/v4/clusters/%d/" % cid)
+        cl = cl_get("/api/rest/v4/clusters/%d/" % cid, deadline)
         for s in (cl.get("sub_opinions") or []):
             m = re.search(r"/opinions/(\d+)/", s) if isinstance(s, str) else None
             if m:
@@ -360,8 +384,8 @@ def opinion_id_of(r):
     return None
 
 
-def opinion_text(oid):
-    o = cl_get("/api/rest/v4/opinions/%s/" % oid)
+def opinion_text(oid, deadline=None):
+    o = cl_get("/api/rest/v4/opinions/%s/" % oid, deadline)
     for f in ("plain_text", "html_with_citations", "html", "xml_harvard", "html_lawbox", "html_columbia"):
         v = o.get(f)
         if v:
@@ -646,12 +670,22 @@ def main():
             text = pdf_text(r.get("pdf_url"), deadline=run_start + BUDGET_SEC)
             if _pdf_ok(text):
                 _dbg("text via pdf for %s (%d chars)" % (name, len(text)))
+            elif cl_rate.remaining() > 0:
+                # REST fallback only when the PDF will not extract, and only while the
+                # shared CourtListener budget has room. The calls pace and deadline
+                # themselves through cl_get; if the budget runs out mid-fetch, defer
+                # this candidate to the next run rather than blocking.
+                dl = run_start + BUDGET_SEC
+                try:
+                    oid = opinion_id_of(r, deadline=dl)
+                    rest = opinion_text(oid, deadline=dl) if oid else ""
+                    if rest:
+                        text = rest
+                        _dbg("text via rest for %s (%d chars)" % (name, len(text)))
+                except cl_rate.RateBudgetExceeded:
+                    _dbg("courtlistener budget reached; deferring %s to next run" % name)
             else:
-                oid = opinion_id_of(r)
-                rest = opinion_text(oid) if oid else ""
-                if rest:
-                    text = rest
-                    _dbg("text via rest for %s (%d chars)" % (name, len(text)))
+                _dbg("courtlistener budget reached; deferring %s to next run" % name)
             if not text:
                 skipped.append((name, "no opinion text available")); consec = 0; continue
             time.sleep(0.4)

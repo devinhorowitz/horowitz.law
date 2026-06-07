@@ -35,6 +35,7 @@ Run via .github/workflows/backfill.yml (workflow_dispatch).
 import os, re, sys, json, time
 import update
 import render
+import cl_rate           # shared CourtListener REST budget (limits, pacing, defer)
 
 STORAGE = "https://storage.courtlistener.com/"
 DRY_RUN = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
@@ -216,8 +217,21 @@ def run():
             print("  - %d already in archive; skipping" % cid)
             rows.append({"cid": cid, "name": str(cid), "status": "skip-exists"})
             continue
+        if cl_rate.remaining() <= 0:
+            print("\nABORT: CourtListener per-run budget reached. "
+                  "Re-dispatch after the budget resets to continue the seed.")
+            aborted = True
+            break
         try:
             r = seed_result(cid, court_id)
+        except cl_rate.RateBudgetExceeded:
+            print("\nABORT: CourtListener throttled (per-run budget reached). "
+                  "Stopping now instead of sleeping on the reset window. "
+                  "Re-dispatch after the budget resets.")
+            rows.append({"cid": cid, "name": "(cluster %d)" % cid, "status": "error",
+                         "detail": "CourtListener budget exhausted"})
+            aborted = True
+            break
         except Exception as e:
             if getattr(e, "code", None) == 429:
                 print("\nABORT: CourtListener returned HTTP 429 (daily 125-request budget exhausted). "
@@ -234,11 +248,20 @@ def run():
         name = r["caseName"]; docket = r["docketNumber"]; date_filed = r["dateFiled"]; court_id = r["court_id"]
         url = "https://www.courtlistener.com" + r["absolute_url"]
 
-        text = update.pdf_text(r.get("pdf_url"))
+        tdl = time.time() + CL_DEADLINE_SEC
+        text = update.pdf_text(r.get("pdf_url"), deadline=tdl)
         src = "pdf"
         if not update._pdf_ok(text):
-            oid = update.opinion_id_of(r)
-            rest = update.opinion_text(oid) if oid else ""
+            try:
+                oid = update.opinion_id_of(r, deadline=tdl)
+                rest = update.opinion_text(oid, deadline=tdl) if oid else ""
+            except cl_rate.RateBudgetExceeded:
+                print("\nABORT: CourtListener throttled during text fetch. "
+                      "Re-dispatch after the budget resets.")
+                rows.append({"cid": cid, "name": name, "status": "error",
+                             "detail": "CourtListener budget exhausted"})
+                aborted = True
+                break
             if rest:
                 text, src = rest, "rest"
         if not text:

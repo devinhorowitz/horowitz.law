@@ -20,56 +20,66 @@ This is the thorough weekend backstop to the daily forward escalation in
 update.py: it walks the full citation graph, including criminal and out-of-scope
 citers the daily screen drops before triage ever sees them.
 
-Scope and budget. Only citers from the feed's own courts (Supreme Court of
-Georgia, Court of Appeals of Georgia, Eleventh Circuit, U.S. Supreme Court) are
-considered: only a court in the case's own hierarchy can treat it adversely, and
-that also bounds the work. A card is swept across its full citation history the
-first time (capped per run) and only for recent citers thereafter. Per-card and
-per-run caps, plus a hard CourtListener call ceiling, keep one run well inside the
-daily budget; anything not reached rolls to the next run. Built to run on a
-weekend, when the daily updater is idle and the REST budget is free.
+Budget. Every CourtListener REST call routes through cl_rate (the shared budget:
+configurable per-minute, per-hour, and per-day limits, with pacing and graceful
+defer). The sweep spends REST only on DISCOVERY: one call to resolve each card's
+lead opinion id (cached in state the moment it is resolved), and one or two to
+find its citers. Each citing opinion's TEXT comes from its free PDF (the same
+trick the daily pipeline uses), not a REST call, falling back to REST only when a
+PDF will not extract. When the shared budget runs out, the run stops cleanly and
+whatever it did not reach rolls to the next run; it never sleeps off a throttle.
+Built to run on a weekend, when the daily updater is idle and the budget is free.
+
+Scope. Only citers from the feed's own courts (Supreme Court of Georgia, Court of
+Appeals of Georgia, Eleventh Circuit, U.S. Supreme Court) count: only a court in
+the case's own hierarchy can treat it adversely. A card is swept across its full
+citation history the first time, and only for recent citers thereafter.
 
 State (treatment_state.json) holds, per card, the resolved lead opinion id and the
 set of citing clusters already evaluated. It changes only when new citers are
 seen, so a quiet week writes nothing and opens no PR.
 
-Reuses update.py (CourtListener + Anthropic plumbing), render.py, and
-treatment_core.py (the shared flag model).
+Reuses update.py (CourtListener + Anthropic plumbing, PDF extraction), render.py,
+treatment_core.py (the shared flag model), and cl_rate.py (the REST budget).
 
 Env:
   ANTHROPIC_API_KEY        required
-  COURTLISTENER_TOKEN      recommended (citation search + opinion text)
+  COURTLISTENER_TOKEN      recommended (citation search; raises the REST limit)
   TREATMENT_MODEL          classifier (default claude-sonnet-4-6)
   TREATMENT_LOOKBACK_DAYS  recent-citer window for already-swept cards (default 200)
   TREATMENT_PER_CARD       max new citers classified per card per run (default 6)
-  TREATMENT_PER_RUN        max new citers classified per run, all cards (default 40)
-  TREATMENT_CL_CALLS       hard CourtListener call ceiling per run (default 100)
-  TREATMENT_PAGES          citer search pages per card, 20 per page (default 3)
+  TREATMENT_PER_RUN        max new citers classified per run, all cards (default 25)
+  TREATMENT_PAGES          citer search pages per card, 20 per page (default 2)
+  TREATMENT_BUDGET_SEC     wall-clock cap on the run in seconds (default 900)
   TREATMENT_MAXCHARS       citing-opinion characters sent to the classifier (default 9000)
+  TREATMENT_PDF_MIN_CHARS  min extracted PDF chars to use before REST fallback (default 500)
+  CL_PER_MINUTE / CL_PER_HOUR / CL_PER_DAY / CL_RATE_MARGIN  REST budget (see cl_rate.py)
   DRY_RUN=1                evaluate and print; write nothing, open no PR
   OPINIONS_DEBUG=1         verbose (inherited from update.py)
 
 Run via .github/workflows/treatment.yml (weekend cron + manual dispatch).
 """
-import os, re, sys, json, time, datetime
+import os, re, sys, json, time, html, datetime
 import urllib.parse
-import update            # CourtListener + Anthropic plumbing and helpers
+import update            # CourtListener + Anthropic plumbing, PDF extraction, helpers
 import render            # single source of truth renderer
 import treatment_core    # shared treatment-flag model
+import cl_rate           # shared CourtListener REST budget (limits, pacing, defer)
 
 JSON_PATH  = update.JSON_PATH
 STATE_PATH = os.path.join(update.REPO, "treatment_state.json")
 PR_PATH    = os.path.join(update.REPO, "scripts", "treatment_pr_body.md")
 
-KEY          = update.KEY
-MODEL        = os.environ.get("TREATMENT_MODEL", "claude-sonnet-4-6")
-LOOKBACK_DAYS= int(os.environ.get("TREATMENT_LOOKBACK_DAYS", "200"))
-PER_CARD     = int(os.environ.get("TREATMENT_PER_CARD", "6"))
-PER_RUN      = int(os.environ.get("TREATMENT_PER_RUN", "40"))
-CL_CALLS_MAX = int(os.environ.get("TREATMENT_CL_CALLS", "100"))
-PAGES        = int(os.environ.get("TREATMENT_PAGES", "3"))
-MAXCHARS     = int(os.environ.get("TREATMENT_MAXCHARS", "9000"))
-DRY_RUN      = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
+KEY           = update.KEY
+MODEL         = os.environ.get("TREATMENT_MODEL", "claude-sonnet-4-6")
+LOOKBACK_DAYS = int(os.environ.get("TREATMENT_LOOKBACK_DAYS", "200"))
+PER_CARD      = int(os.environ.get("TREATMENT_PER_CARD", "6"))
+PER_RUN       = int(os.environ.get("TREATMENT_PER_RUN", "25"))
+PAGES         = int(os.environ.get("TREATMENT_PAGES", "2"))
+BUDGET_SEC    = int(os.environ.get("TREATMENT_BUDGET_SEC", "900"))
+MAXCHARS      = int(os.environ.get("TREATMENT_MAXCHARS", "9000"))
+PDF_MIN_CHARS = int(os.environ.get("TREATMENT_PDF_MIN_CHARS", "500"))
+DRY_RUN       = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 
 # CourtListener court ids whose decisions can bind or treat a card in our feed.
 SCOPE_COURTS = ["ga", "gactapp", "ca11", "scotus"]
@@ -102,20 +112,9 @@ TREATMENT_SYSTEM = (
 )
 
 
-class Budget:
-    """Hard ceiling on CourtListener calls for one run."""
-    def __init__(self, n):
-        self.left = n
-    def take(self):
-        if self.left <= 0:
-            raise RuntimeError("courtlistener call ceiling reached")
-        self.left -= 1
-
-
-def lead_opinion_id(cluster_id, budget):
+def lead_opinion_id(cluster_id, deadline):
     """Lead (first) sub-opinion id for a cluster, via the clusters endpoint."""
-    budget.take()
-    cl = update.cl_get("/api/rest/v4/clusters/%d/" % int(cluster_id))
+    cl = update.cl_get("/api/rest/v4/clusters/%d/" % int(cluster_id), deadline)
     for s in (cl.get("sub_opinions") or []):
         m = re.search(r"/opinions/(\d+)/", s) if isinstance(s, str) else None
         if m:
@@ -123,7 +122,7 @@ def lead_opinion_id(cluster_id, budget):
     return None
 
 
-def citing_results(opinion_id, since, budget):
+def citing_results(opinion_id, since, deadline):
     """In-scope opinions citing opinion_id, filed on/after `since`, newest first.
 
     Uses the search `cites:(id)` query with repeated court params (the REST API
@@ -135,13 +134,45 @@ def citing_results(opinion_id, since, budget):
     url = "https://www.courtlistener.com/api/rest/v4/search/?" + urllib.parse.urlencode(params)
     out, pages = [], 0
     while url and pages < PAGES:
-        budget.take()
-        data = update.cl_get(url)
+        data = update.cl_get(url, deadline)
         out += data.get("results", [])
         url = data.get("next")
         pages += 1
         time.sleep(0.5)
     return out
+
+
+def _rest_opinion_text(oid, deadline):
+    """REST fallback for opinion text (deadline-guarded and paced via cl_get)."""
+    o = update.cl_get("/api/rest/v4/opinions/%s/" % oid, deadline)
+    for f in ("plain_text", "html_with_citations", "html", "xml_harvard", "html_lawbox", "html_columbia"):
+        v = o.get(f)
+        if v:
+            if f != "plain_text":
+                v = html.unescape(re.sub(r"<[^>]+>", " ", v))
+            return re.sub(r"[ \t]+", " ", v).strip()
+    return ""
+
+
+def citer_text(r, deadline):
+    """Text of a citing opinion. PDF first (a free static fetch, no REST quota),
+    falling back to a REST call only when the PDF will not extract and the shared
+    budget has room. A RateBudgetExceeded propagates so the run can defer."""
+    ops = r.get("opinions") or []
+    op0 = ops[0] if ops and isinstance(ops[0], dict) else {}
+    pdf_url = op0.get("download_url") or ""
+    text = update.pdf_text(pdf_url, deadline=deadline) if pdf_url else ""
+    if bool(text) and len(text) >= PDF_MIN_CHARS and sum(c.isalpha() for c in text) >= 100:
+        return text
+    oid = op0.get("id")
+    if oid and cl_rate.remaining() > 0:
+        try:
+            return _rest_opinion_text(oid, deadline)
+        except cl_rate.RateBudgetExceeded:
+            raise
+        except Exception:
+            return ""
+    return ""
 
 
 def passage(text, name):
@@ -197,20 +228,25 @@ def main():
     if not isinstance(state, dict):
         state = {}
 
-    budget = Budget(CL_CALLS_MAX)
+    run_start = time.time()
+    deadline = run_start + BUDGET_SEC
     classified = 0
     report = []        # (card_name, citing_name, citing_date, verdict_str)
     new_flags = []     # card dicts newly raised to caution this run
     changed = False    # any tracked-file change (state grew, or a flag changed)
-    ceiling = False
+    stopped = ""       # why the run ended early, if it did
 
     # Never-swept cards first (full history), oldest first within each group so the
     # most-cited landmarks are worked through across the early runs.
     order = sorted(entries, key=lambda e: (str(e.get("cluster_id")) in state, e.get("date", "")))
 
     for card in order:
-        if classified >= PER_RUN or budget.left <= 2:
+        if classified >= PER_RUN:
             break
+        if cl_rate.remaining() <= 0:
+            stopped = "rest budget"; break
+        if time.time() - run_start > BUDGET_SEC:
+            stopped = "time budget"; break
         cid = card.get("cluster_id")
         if not cid:
             continue
@@ -224,20 +260,19 @@ def main():
         try:
             oid = st.get("oid")
             if oid is None:
-                oid = lead_opinion_id(int(cid), budget)
+                oid = lead_opinion_id(int(cid), deadline)
+                if oid:
+                    state[key] = {"oid": oid, "seen": sorted(seen)}   # cache id immediately
+                    changed = True
             if not oid:
-                state[key] = {"oid": None, "seen": sorted(seen)}   # do not refetch weekly
+                state[key] = {"oid": None, "seen": sorted(seen)}      # do not refetch weekly
                 changed = True
                 continue
             since = (card["date"] if first_time
                      else (datetime.date.today() - datetime.timedelta(days=LOOKBACK_DAYS)).isoformat())
-            citers = citing_results(int(oid), since, budget)
-        except RuntimeError as e:
-            if "ceiling" in str(e):
-                ceiling = True
-                break
-            print("  ! citation lookup failed for %s (%s): %s" % (cid, card.get("name"), e))
-            continue
+            citers = citing_results(int(oid), since, deadline)
+        except cl_rate.RateBudgetExceeded:
+            stopped = "rest budget"; break
         except Exception as e:
             print("  ! citation lookup failed for %s (%s): %s" % (cid, card.get("name"), e))
             continue
@@ -245,8 +280,10 @@ def main():
         before = set(seen)
         per_card = 0
         for r in citers:                               # newest first
-            if classified >= PER_RUN or per_card >= PER_CARD or budget.left <= 2:
+            if classified >= PER_RUN or per_card >= PER_CARD:
                 break
+            if time.time() - run_start > BUDGET_SEC:
+                stopped = "time budget"; break
             ccid = update.cluster_id_of(r)
             if not ccid or ccid == int(cid) or ccid in seen:
                 continue
@@ -256,16 +293,10 @@ def main():
             cdate = (r.get("dateFiled") or "")[:10]
             ccourt = r.get("court_id") or ""
             try:
-                budget.take()
-                oid2 = update.opinion_id_of(r)
-                ctext = update.opinion_text(oid2) if oid2 else ""
+                ctext = citer_text(r, deadline)
                 v = classify(card, cname, ctext)
-            except RuntimeError as e:
-                if "ceiling" in str(e):
-                    ceiling = True
-                    break
-                print("  ! classify failed citing=%s: %s" % (ccid, e))
-                continue
+            except cl_rate.RateBudgetExceeded:
+                stopped = "rest budget"; break
             except Exception as e:
                 print("  ! classify failed citing=%s: %s" % (ccid, e))
                 continue
@@ -289,7 +320,7 @@ def main():
         if first_time or seen != before:
             state[key] = {"oid": oid, "seen": sorted(seen)}
             changed = True
-        if ceiling:
+        if stopped:
             break
 
     # --- PR body ---
@@ -310,12 +341,13 @@ def main():
         lines.append("Citing opinions reviewed this run (logged, not all adverse):")
         for cardnm, cname, cdate, verdict in report:
             lines.append("- %s <- %s (%s): %s" % (cardnm, cname, cdate, verdict))
-    if ceiling:
-        lines += ["", "_CourtListener call ceiling reached; remaining cards roll to the next run._"]
+    if stopped:
+        lines += ["", "_Run stopped early (%s); remaining cards roll to the next run._" % stopped]
     pr_body = "\n".join(lines) + "\n"
 
-    print("\nclassified %d citing opinion(s); new flags: %d; CL calls left: %d%s"
-          % (classified, len(new_flags), budget.left, " (ceiling hit)" if ceiling else ""))
+    print("\nclassified %d citing opinion(s); new flags: %d; REST calls used: %d/%d%s"
+          % (classified, len(new_flags), cl_rate.PACER.calls, cl_rate.run_budget(),
+             (" (stopped: %s)" % stopped) if stopped else ""))
 
     if DRY_RUN:
         print("\n--- DRY RUN, nothing written ---\n" + pr_body)
