@@ -6,26 +6,34 @@ restrictive one given recent traffic is what controls. The free-tier defaults ar
 5 requests per minute, 50 per hour, and 125 per day; Free Law Project memberships
 raise them, and the numbers have moved before (every authenticated user once got
 5,000 per hour). So no script hardcodes a number. The limits live here, every
-CourtListener call routes through one shared pacer, and the pacer:
+CourtListener call routes through one shared pacer, and the pacer is a true
+rolling-window limiter:
 
-  * spaces calls so a run stays under the per-minute burst limit,
-  * stops a run cleanly at a per-run budget derived from the per-hour limit,
-  * never sleeps off a long (hourly or daily) throttle. It defers to the next
-    scheduled run instead of hanging, and
-  * tightens itself automatically when a 429 reports a lower limit than configured.
+  * it spaces calls under the per-minute burst limit,
+  * it tracks calls in rolling minute, hour, and day windows and, when a window is
+    full, WAITS for the oldest call to age out before allowing the next one,
+  * it never waits past the caller's deadline. A short deadline (the daily run)
+    means a full window makes the call defer, so the run stays fast and the work
+    rolls to the next run; a long deadline (the weekend sweep) means the run waits
+    across windows and DRAINS a backlog in a single run, with no second trigger and
+    no new credential, and
+  * it tightens itself automatically when a 429 reports a lower limit than
+    configured, and honors a 429's stated wait without sleeping past the deadline.
+
+So one knob, the caller's wall-clock budget, decides defer-vs-drain. Nothing about
+the backlog mechanism depends on the rate numbers, on branch protection, or on a
+personal access token.
 
 Configure with repo variables, all optional; an unset value falls back to the
 free-tier default:
 
   CL_PER_MINUTE   requests per minute            (default 5)
   CL_PER_HOUR     requests per hour              (default 50)
-  CL_PER_DAY      requests per day, advisory     (default 125)
+  CL_PER_DAY      requests per day               (default 125)
   CL_RATE_MARGIN  fraction of each limit to use  (default 0.8)
 
-On a tier change, set the variables that changed; no code moves. A backlog drains
-over successive scheduled runs (each does one batch of up to the per-run budget
-and persists its own cursor), so raising a limit or the run cadence drains it
-faster, again with no code change.
+On a tier change, set the variables that changed; no code moves, and a higher
+limit simply drains a backlog faster.
 
 Pure standard library, no imports of the project's own modules, so any script can
 depend on it without a cycle.
@@ -34,8 +42,9 @@ import os, re, time
 
 
 class RateBudgetExceeded(RuntimeError):
-    """The per-run CourtListener budget is spent, or a throttle makes further calls
-    impossible within the deadline. Callers stop and defer; they do not retry."""
+    """A call cannot be made within the caller's deadline because a rate window is
+    full (or a 429 wait is longer than the deadline). Callers stop and defer the
+    remaining work to the next run; they do not retry in a tight loop."""
 
 
 def _int_env(name, default):
@@ -53,6 +62,7 @@ def _float_env(name, default):
 
 
 DEFAULTS = {"minute": 5, "hour": 50, "day": 125}
+SPAN = {"minute": 60.0, "hour": 3600.0, "day": 86400.0}
 MARGIN = min(max(_float_env("CL_RATE_MARGIN", 0.8), 0.05), 1.0)
 
 _THROTTLE_RE = re.compile(r"(\d+)\s*/\s*(seconds?|sec|minutes?|min|hours?|hr|days?)", re.I)
@@ -78,9 +88,10 @@ def parse_throttle(detail):
 
 
 class Pacer:
-    """In-memory, per-run pacer. Each scheduled run is a fresh process, so no
-    cross-run state is needed: the schedule keeps separate runs in separate clock
-    hours, and a 429 from any same-hour overlap is handled by deferring."""
+    """In-memory, per-run rolling-window limiter. Each scheduled run is a fresh
+    process; the schedule keeps separate runs in separate clock hours, and a 429
+    from any same-hour overlap is absorbed by deferring, so no cross-run state is
+    needed."""
 
     def __init__(self):
         self.limits = {
@@ -88,66 +99,86 @@ class Pacer:
             "hour":   _int_env("CL_PER_HOUR",   DEFAULTS["hour"]),
             "day":    _int_env("CL_PER_DAY",    DEFAULTS["day"]),
         }
-        self.calls = 0          # REST calls accounted this run
-        self.last_ts = 0.0
-        self.last_wait = 0
+        self.events = []            # ascending timestamps of calls made this run
+        self.calls = 0              # total REST calls this run
+        self.blocked_until = 0.0    # a 429 told us to wait until this time
+        self.last_wait = 0.0
 
-    def per_minute(self):
-        return max(1, self.limits["minute"])
+    def per_minute(self): return max(1, self.limits["minute"])
+    def per_hour(self):   return max(1, self.limits["hour"])
+    def per_day(self):    return max(1, self.limits["day"])
 
-    def per_hour(self):
-        return max(1, self.limits["hour"])
-
-    def per_day(self):
-        return max(1, self.limits["day"])
+    def _budget(self, period):
+        return max(1, int(max(1, self.limits[period]) * MARGIN))
 
     def run_budget(self):
-        # A single run stays under the hourly limit (with margin) and never asks for
-        # more than the daily limit would allow either.
-        return max(1, min(int(self.per_hour() * MARGIN), int(self.per_day() * MARGIN)))
+        # The per-hour allowance (with margin). Informational; the rolling windows,
+        # not this number, are what acquire enforces.
+        return self._budget("hour")
 
     @property
     def remaining(self):
-        return self.run_budget() - self.calls
+        # Calls available in the current rolling hour, right now.
+        now = time.time()
+        self._prune(now)
+        within = sum(1 for t in self.events if now - t < SPAN["hour"])
+        return max(0, self._budget("hour") - within)
 
-    def _interval(self):
-        # Seconds between calls to stay under the per-minute burst limit.
-        return 60.0 / max(1.0, self.per_minute() * MARGIN)
+    def _prune(self, now):
+        if self.events:
+            self.events = [t for t in self.events if now - t < SPAN["day"]]
+
+    def _wait_needed(self, now):
+        """Seconds until a call may be made under all three rolling windows; 0 if
+        one may be made now."""
+        wait = 0.0
+        for period in ("minute", "hour", "day"):
+            span = SPAN[period]
+            budget = self._budget(period)
+            within = [t for t in self.events if now - t < span]
+            if len(within) >= budget:
+                # The (len - budget)-th oldest in-window call is the last that must
+                # age out for the count to drop below budget.
+                target = within[len(within) - budget]
+                wait = max(wait, (target + span) - now)
+        return max(0.0, wait)
 
     def acquire(self, deadline=None):
-        """Account for one upcoming REST call: enforce the per-run budget and space
-        calls under the per-minute limit. Raise RateBudgetExceeded to make the
-        caller stop and defer rather than block."""
-        if self.calls >= self.run_budget():
-            raise RateBudgetExceeded(
-                "per-run CourtListener budget reached (%d/hour, %d used)"
-                % (self.per_hour(), self.calls))
-        now = time.time()
-        wait = self._interval() - (now - self.last_ts)
-        if wait > 0:
+        """Account for one upcoming REST call. Wait as needed to stay within the
+        rolling windows (and any 429 wait), but never past `deadline`; if the wait
+        would exceed it, raise RateBudgetExceeded so the caller defers."""
+        while True:
+            now = time.time()
+            self._prune(now)
+            wait = self._wait_needed(now)
+            if self.blocked_until > now:
+                wait = max(wait, self.blocked_until - now)
+            if wait <= 0:
+                break
             if deadline is not None and now + wait > deadline:
-                raise RateBudgetExceeded("rate spacing would exceed the deadline")
+                raise RateBudgetExceeded(
+                    "CourtListener budget: next slot is %ds away, past the deadline" % int(wait))
+            self.last_wait = wait
             time.sleep(wait)
-        self.last_ts = time.time()
+        self.events.append(time.time())
         self.calls += 1
 
     def penalize(self, detail="", retry_after=0):
-        """Record a 429. Lower the reported limit (only ever downward), remember the
-        wait, and decide whether the run must defer. Returns (kind, wait) where kind
-        is 'short' (a per-minute burst, worth a brief wait then retry) or 'long' (an
-        hourly or daily ceiling, defer now and do not sleep on it)."""
+        """Record a 429: tighten the reported limit (only downward), set the wait
+        the server asked for, and classify it. Returns (kind, wait) where kind is
+        'short' (a per-minute burst) or 'long' (an hourly or daily ceiling)."""
         period, limit, wait = parse_throttle(detail)
         wait = retry_after or wait or 0
         if period and limit and limit < self.limits.get(period, limit):
-            self.limits[period] = limit                      # auto-tighten to reality
+            self.limits[period] = limit                  # auto-tighten to reality
+        if wait:
+            self.blocked_until = max(self.blocked_until, time.time() + wait)
         if period == "minute":
             kind = "short" if wait <= 75 else "long"
         elif period in ("hour", "day"):
             kind = "long"
         else:
             kind = "short" if (wait and wait <= 75) else "long"
-        if kind == "long":
-            self.calls = max(self.calls, self.run_budget())  # force the run to defer
         self.last_wait = wait
         return kind, wait
 

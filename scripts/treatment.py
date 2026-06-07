@@ -21,14 +21,17 @@ update.py: it walks the full citation graph, including criminal and out-of-scope
 citers the daily screen drops before triage ever sees them.
 
 Budget. Every CourtListener REST call routes through cl_rate (the shared budget:
-configurable per-minute, per-hour, and per-day limits, with pacing and graceful
-defer). The sweep spends REST only on DISCOVERY: one call to resolve each card's
-lead opinion id (cached in state the moment it is resolved), and one or two to
-find its citers. Each citing opinion's TEXT comes from its free PDF (the same
-trick the daily pipeline uses), not a REST call, falling back to REST only when a
-PDF will not extract. When the shared budget runs out, the run stops cleanly and
-whatever it did not reach rolls to the next run; it never sleeps off a throttle.
-Built to run on a weekend, when the daily updater is idle and the budget is free.
+configurable per-minute, per-hour, and per-day limits, paced as rolling windows).
+The sweep spends REST only on DISCOVERY: one call to resolve each card's lead
+opinion id (cached in state the moment it is resolved), and one or two to find its
+citers. Each citing opinion's TEXT comes from its free PDF (the same trick the
+daily pipeline uses), not a REST call, falling back to REST only when a PDF will
+not extract. Because the weekly run gets a long wall-clock budget
+(TREATMENT_BUDGET_SEC), when an hourly window fills the run WAITS for it to refill
+and keeps going, draining a backlog in one run with no second trigger; it is
+bounded by that budget, by the per-day limit, and by the job timeout. Only a
+backlog larger than a day's limit defers its tail to the next run. Built to run on
+a weekend, when the daily updater is idle and the budget is free.
 
 Scope. Only citers from the feed's own courts (Supreme Court of Georgia, Court of
 Appeals of Georgia, Eleventh Circuit, U.S. Supreme Court) count: only a court in
@@ -50,7 +53,8 @@ Env:
   TREATMENT_PER_CARD       max new citers classified per card per run (default 6)
   TREATMENT_PER_RUN        max new citers classified per run, all cards (default 25)
   TREATMENT_PAGES          citer search pages per card, 20 per page (default 2)
-  TREATMENT_BUDGET_SEC     wall-clock cap on the run in seconds (default 900)
+  TREATMENT_BUDGET_SEC     wall-clock cap; also how long one run will wait across rate
+                           windows to drain a backlog (default 900; the workflow raises it for the weekly sweep)
   TREATMENT_MAXCHARS       citing-opinion characters sent to the classifier (default 9000)
   TREATMENT_PDF_MIN_CHARS  min extracted PDF chars to use before REST fallback (default 500)
   CL_PER_MINUTE / CL_PER_HOUR / CL_PER_DAY / CL_RATE_MARGIN  REST budget (see cl_rate.py)
@@ -165,7 +169,7 @@ def citer_text(r, deadline):
     if bool(text) and len(text) >= PDF_MIN_CHARS and sum(c.isalpha() for c in text) >= 100:
         return text
     oid = op0.get("id")
-    if oid and cl_rate.remaining() > 0:
+    if oid:
         try:
             return _rest_opinion_text(oid, deadline)
         except cl_rate.RateBudgetExceeded:
@@ -243,8 +247,6 @@ def main():
     for card in order:
         if classified >= PER_RUN:
             break
-        if cl_rate.remaining() <= 0:
-            stopped = "rest budget"; break
         if time.time() - run_start > BUDGET_SEC:
             stopped = "time budget"; break
         cid = card.get("cluster_id")
@@ -345,8 +347,8 @@ def main():
         lines += ["", "_Run stopped early (%s); remaining cards roll to the next run._" % stopped]
     pr_body = "\n".join(lines) + "\n"
 
-    print("\nclassified %d citing opinion(s); new flags: %d; REST calls used: %d/%d%s"
-          % (classified, len(new_flags), cl_rate.PACER.calls, cl_rate.run_budget(),
+    print("\nclassified %d citing opinion(s); new flags: %d; CourtListener REST calls: %d%s"
+          % (classified, len(new_flags), cl_rate.PACER.calls,
              (" (stopped: %s)" % stopped) if stopped else ""))
 
     if DRY_RUN:
