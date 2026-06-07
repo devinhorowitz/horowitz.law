@@ -112,7 +112,13 @@ function page(title, bodyHtml) {
 function html(title, bodyHtml, status = 200) {
   return new Response(page(title, bodyHtml), {
     status,
-    headers: { "Content-Type": "text/html; charset=utf-8" },
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      // The confirm URL carries the signed token; keep it out of caches and out of any Referer.
+      "Cache-Control": "no-store",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+    },
   });
 }
 
@@ -130,10 +136,10 @@ export async function onRequestGet(context) {
       500
     );
   }
-  if (!email || !ts || !sig) {
+  if (!email || !ts || !sig || email.length > 254 || !/^[0-9a-f]{64}$/.test(sig)) {
     return html(
       "Invalid link",
-      `<h1>Invalid link</h1><p class="muted">This confirmation link is missing information. <a href="/subscribe">Try subscribing again</a>.</p>`,
+      `<h1>Invalid link</h1><p class="muted">This confirmation link is missing or malformed. <a href="/subscribe">Try subscribing again</a>.</p>`,
       400
     );
   }

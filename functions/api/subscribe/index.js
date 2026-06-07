@@ -8,11 +8,15 @@
 // only in the Pages environment.
 //
 // Required Cloudflare Pages environment variables (Settings > Environment variables):
-//   RESEND_API_KEY    Resend API key with contacts + sending access
-//   SUBSCRIBE_SECRET  a long random string, e.g. `openssl rand -hex 32`
+//   RESEND_API_KEY        Resend API key with contacts + sending access
+//   SUBSCRIBE_SECRET      a long random string, e.g. `openssl rand -hex 32`
+//   TURNSTILE_SECRET_KEY  Cloudflare Turnstile secret key (server-side only; pairs with the
+//                         public site key embedded in subscribe.html)
 // Optional:
-//   DIGEST_FROM       From header (default below; must be a Resend-verified sender)
-//   SITE_URL          site origin for the confirm link (default https://horowitz.law)
+//   DIGEST_FROM           From header (default below; must be a Resend-verified sender)
+//   SITE_URL              site origin for the confirm link (default https://horowitz.law)
+//   SUBSCRIBE_RATELIMIT   optional Workers rate-limit binding (see wrangler.toml); enforced
+//                         only when present, so it never blocks a correct deploy
 
 const RESEND = "https://api.resend.com";
 const UA = "horowitz.law-subscribe/1.0 (+https://horowitz.law)";
@@ -20,7 +24,12 @@ const UA = "horowitz.law-subscribe/1.0 (+https://horowitz.law)";
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+    },
   });
 }
 
@@ -77,10 +86,88 @@ async function sendConfirmEmail(env, email, link) {
   if (!r.ok) throw new Error(`send confirm: ${r.status}`);
 }
 
+// Verify a Turnstile token with Cloudflare's Siteverify API. Fails CLOSED: any non-success
+// verdict, a hostname or action mismatch, or a network error returns false, so an email is
+// never sent on an unverified request. The secret stays server-side; the browser sends only
+// the token. Tokens are single-use, so a replayed token is rejected here as a duplicate.
+async function verifyTurnstile(env, token, request) {
+  const form = new URLSearchParams();
+  form.set("secret", env.TURNSTILE_SECRET_KEY);
+  form.set("response", token);
+  const ip = request.headers.get("CF-Connecting-IP");
+  if (ip) form.set("remoteip", ip);
+
+  let data;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: form,
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    data = await r.json();
+  } catch {
+    return false; // network error or timeout -> fail closed
+  }
+  if (!data || data.success !== true) return false;
+
+  // Bind the token to this site and this form: reject one solved on another host or for
+  // another action, even if it is otherwise valid.
+  try {
+    const host = new URL(request.url).host;
+    if (data.hostname && data.hostname !== host) return false;
+  } catch {}
+  if (data.action && data.action !== "subscribe") return false;
+  return true;
+}
+
 export async function onRequestPost(context) {
   const { request, env } = context;
   if (!env.RESEND_API_KEY || !env.SUBSCRIBE_SECRET) {
     return json({ ok: false, message: "Subscriptions are not configured yet." }, 500);
+  }
+  if (!env.TURNSTILE_SECRET_KEY) {
+    return json({ ok: false, message: "Verification is not configured yet." }, 500);
+  }
+
+  // Same-origin only. A cross-site POST carries an Origin whose host will not match this
+  // endpoint's host; reject it. Same-origin requests always match, which also covers the
+  // apex, www, and the *.pages.dev preview without a hardcoded allowlist.
+  const origin = request.headers.get("Origin");
+  if (origin) {
+    let bad = true;
+    try { bad = new URL(origin).host !== new URL(request.url).host; } catch {}
+    if (bad) return json({ ok: false, message: "Request blocked." }, 403);
+  }
+
+  // Require a JSON body. This also forces a CORS preflight for any cross-origin caller,
+  // which the browser then blocks because no CORS headers are returned.
+  const ctype = (request.headers.get("Content-Type") || "").toLowerCase();
+  if (!ctype.includes("application/json")) {
+    return json({ ok: false, message: "Bad request." }, 415);
+  }
+  // A Turnstile token can be up to ~2 KB on its own, plus the email and JSON overhead;
+  // 8 KB blocks absurd payloads while leaving ample room for a legitimate request.
+  if (Number(request.headers.get("Content-Length") || "0") > 8192) {
+    return json({ ok: false, message: "Request too large." }, 413);
+  }
+
+  // Optional edge rate limit (defense in depth). Enforced only if the SUBSCRIBE_RATELIMIT
+  // binding is configured in wrangler.toml; skipped entirely otherwise, so it never blocks a
+  // correct deploy. The WAF rate-limiting rule is the primary limiter (see deploy notes).
+  if (env.SUBSCRIBE_RATELIMIT && typeof env.SUBSCRIBE_RATELIMIT.limit === "function") {
+    const ipKey = request.headers.get("CF-Connecting-IP") || "anon";
+    try {
+      const { success } = await env.SUBSCRIBE_RATELIMIT.limit({ key: ipKey });
+      if (!success) {
+        return json({ ok: false, message: "Too many attempts. Please wait a minute and try again." }, 429);
+      }
+    } catch {
+      /* never block legitimate users if the limiter itself errors */
+    }
   }
 
   let body;
@@ -92,14 +179,25 @@ export async function onRequestPost(context) {
 
   const email = body && typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const honeypot = body && typeof body.company === "string" ? body.company : "";
+  const token = body && typeof body.turnstileToken === "string" ? body.turnstileToken : "";
 
-  // Bot trap: the hidden field should always be empty. If filled, look successful but do nothing.
+  // Bot trap: the hidden field should always be empty. If filled, look successful but do
+  // nothing, and spend no verification or email call on it.
   if (honeypot) {
     return json({ ok: true, message: "Almost there. Check your inbox for a confirmation link." });
   }
 
   if (!validEmail(email)) {
     return json({ ok: false, message: "Please enter a valid email address." }, 422);
+  }
+
+  // Human-verification gate: confirm the Turnstile token with Cloudflare BEFORE sending any
+  // email, so a forged, missing, or replayed token can never trigger a message from our domain.
+  if (!token) {
+    return json({ ok: false, message: "Please complete the verification and try again." }, 400);
+  }
+  if (!(await verifyTurnstile(env, token, request))) {
+    return json({ ok: false, message: "Verification failed. Please reload the page and try again." }, 403);
   }
 
   try {
@@ -114,9 +212,11 @@ export async function onRequestPost(context) {
       message: "Almost there. Check your inbox for a confirmation link to finish subscribing.",
     });
   } catch (e) {
+    // 500, not 502: Cloudflare intercepts a 502 from a Function and serves its own error page;
+    // 500 passes through, so the browser receives this JSON and the form shows a real message.
     return json(
       { ok: false, message: "Something went wrong on our end. Please try again in a moment." },
-      502
+      500
     );
   }
 }
