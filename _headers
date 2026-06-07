@@ -1,6 +1,6 @@
 # =============================================================
-# Netlify _headers file for horowitz.law
-# Reference: https://docs.netlify.com/routing/headers/
+# _headers file for horowitz.law (Cloudflare Pages)
+# Reference: https://developers.cloudflare.com/pages/configuration/headers/
 #
 # Goal: bring the site from a B-grade to an A-grade on
 # securityheaders.com by adding modern security headers.
@@ -14,7 +14,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Cross-Origin-Opener-Policy: same-origin
   Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'inline-speculation-rules' 'sha256-GprSUo0oAooQ3fkyiEXOxOeGqNq7uHWnkt2if1JM+UQ=' 'sha256-8QD079uttdh6iO8GObIOlfAgn6UgIVVyTe+bb+Tzq3Y=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'inline-speculation-rules' 'sha256-GprSUo0oAooQ3fkyiEXOxOeGqNq7uHWnkt2if1JM+UQ=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'
 
 # -------------------------------------------------------------
 # Caching. Everything is cached hard for a year. base.css and
@@ -22,8 +22,7 @@
 # <script> references carry a ?v= version query that is bumped
 # on any deploy that changes them: a new version is a new URL,
 # so the browser refetches instead of serving a stale copy.
-# (Netlify _headers syntax; Cloudflare Pages reads the same
-# format at cutover.)
+# (Standard Cloudflare Pages _headers format.)
 # -------------------------------------------------------------
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable
