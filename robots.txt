@@ -1,4 +1,6 @@
 User-agent: *
+Disallow: /TESTBED/
+Disallow: /api/
 Allow: /
 
 Sitemap: https://horowitz.law/sitemap.xml
