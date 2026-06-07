@@ -541,5 +541,23 @@
     "synopsis": "In an auto collision case, the trial court excluded evidence that the plaintiff's treating physician held a lien on the lawsuit proceeds and barred questioning about an attorney-to-physician referral. The Court of Appeals held that evidence of the physician's lien-based financial interest in the verdict was admissible to show potential bias and affect credibility, and that the collateral source rule did not bar it because the plaintiff still owed the full cost of treatment and no benefit or write-off reduced the obligation. The court affirmed exclusion of the attorney-referral evidence, holding that the referral standing alone was insufficient to show bias and presented a danger of unfair prejudice, and it affirmed denial of the defendant's motion to enforce a purported settlement because the relied-upon email omitted the essential settlement amount. The court noted that any such financial-interest evidence remains subject to a Rule 403 analysis. The opinion is physical precedent only.",
     "why": "The decision clarifies that a treating physician's lien on lawsuit proceeds is admissible to show financial interest and bias and is not barred by the collateral source rule, while a bare attorney-to-physician referral, standing alone, is not.",
     "first_seen": "2018-05-29"
+  },
+  {
+    "cluster_id": 9391147,
+    "name": "Aspen American Insurance Company v. Landstar Ranger, Inc.",
+    "court": "ca11",
+    "division": null,
+    "date": "2023-04-13",
+    "dockets": [
+      "22-10740"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/9391147/aspen-american-insurance-company-v-landstar-ranger-inc/",
+    "synopsis": "After a thief posing as a registered carrier stole a shipment, the cargo owner's insurer sued the transportation broker for negligent selection of the carrier, and the district court dismissed the claims as preempted by the FAAAA. The Eleventh Circuit affirmed, holding that the FAAAA's express preemption provision bars state-law negligence claims against a broker based on carrier selection because such claims relate to a broker's service with respect to the transportation of property. The court further held that the FAAAA's safety exception does not save the claims because a broker's carrier-selection services have only an indirect, not a direct, connection to motor vehicles, so the claims are not 'with respect to motor vehicles.'",
+    "why": "This decision establishes binding Eleventh Circuit authority that the FAAAA preempts state-law negligent-carrier-selection claims against freight brokers and that the safety exception does not apply to such broker claims, defining the scope of broker liability in trucking cases in the circuit.",
+    "first_seen": "2023-04-13"
   }
 ]
