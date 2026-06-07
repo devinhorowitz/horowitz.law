@@ -6,7 +6,7 @@ name: Georgia Appellate Watch treatment sweep
 # writing anything or opening a PR; uncheck it (or let the cron run) to write.
 on:
   schedule:
-    - cron: '17 13 * * 6'    # Saturdays at 13:17 UTC, clear of the daily 11:17 run
+    - cron: '17 13 * * 6'    # Saturdays at 13:17 UTC, about an hour after the 12:17 daily slot (the daily runs at :17 past every fourth hour)
   workflow_dispatch:
     inputs:
       dry_run:
