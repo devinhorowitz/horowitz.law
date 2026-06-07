@@ -38,6 +38,9 @@ Environment:
   OPINIONS_BUDGET_SEC      wall-clock cap on the candidate loop in seconds (default 480)
   OPINIONS_BREAKER         stop after this many consecutive API failures (default 4)
   OPINIONS_SEARCH_BUDGET_SEC  wall-clock cap on the CourtListener search phase (default 120)
+  ANTHROPIC_STATUS         status-page preflight: on (log + skip on a confirmed API outage),
+                           warn (log only), or off (no check). Default on. Fail-open on any error.
+  ANTHROPIC_STATUS_URL     status summary endpoint (default https://status.anthropic.com/api/v2/summary.json)
   CL_PER_MINUTE / CL_PER_HOUR / CL_PER_DAY / CL_RATE_MARGIN  CourtListener REST budget (see cl_rate.py)
 """
 import os, re, sys, json, time, html, datetime, io
@@ -72,6 +75,8 @@ DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "ye
 BUDGET_SEC   = int(os.environ.get("OPINIONS_BUDGET_SEC", "480"))
 BREAKER      = int(os.environ.get("OPINIONS_BREAKER", "4"))
 SEARCH_BUDGET= int(os.environ.get("OPINIONS_SEARCH_BUDGET_SEC", "120"))
+STATUS_URL   = os.environ.get("ANTHROPIC_STATUS_URL", "https://status.anthropic.com/api/v2/summary.json")
+STATUS_MODE  = (os.environ.get("ANTHROPIC_STATUS", "on") or "on").strip().lower()  # on | warn | off
 
 COURT_MAP   = {"ga": "scotga", "gactapp": "ctapp", "ca11": "ca11", "scotus": "scotus"}
 VALID_AREAS = set(render.AREA_LABELS)
@@ -505,8 +510,12 @@ def anthropic_json(body, label="call"):
                 pass
             last = "%s %s -> HTTP %s: %s" % (label, model, e.code, (detail[:600] or e.reason))
             if e.code in RETRY_STATUS and attempt < 4:
-                wait = _retry_after(e) or min(2 ** attempt * 2, 30)
-                _dbg("%s HTTP %s, retrying in %ss" % (label, e.code, wait))
+                wait = min(_retry_after(e) or min(2 ** attempt * 2, 30), 60)
+                msg = "%s HTTP %s, retrying in %ss (attempt %d/5)" % (label, e.code, wait, attempt + 1)
+                if e.code == 429:
+                    print("  ! Anthropic rate/credit limit: " + msg)   # surfaced, not debug-only
+                else:
+                    _dbg(msg)
                 time.sleep(wait); continue
             raise RuntimeError(last)
         except (urllib.error.URLError, TimeoutError) as e:
@@ -517,6 +526,47 @@ def anthropic_json(body, label="call"):
                 time.sleep(wait); continue
             raise RuntimeError(last)
     raise RuntimeError(last or (label + " failed"))
+
+
+def anthropic_status():
+    """Best-effort read of Anthropic's public status page (Statuspage v2 JSON).
+
+    Returns (level, description). level is one of:
+      operational  every signal nominal
+      degraded     a minor/major incident or the API component is degraded/partial
+      outage       the Claude API component is in a major outage, or the page's
+                   blended indicator is 'critical' (a strong, rarely-false signal)
+      unknown      the check is disabled or the page could not be read/parsed
+
+    Fail-open by design: any network or parse error returns ('unknown', ...),
+    and the caller proceeds with the run. This check can skip a run on a
+    confirmed outage; it can never block one because the status page is down.
+    """
+    if STATUS_MODE == "off" or not STATUS_URL:
+        return ("unknown", "status check disabled")
+    try:
+        req = urllib.request.Request(STATUS_URL, headers={"User-Agent": UA, "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            data = json.loads(r.read().decode("utf-8", "replace"))
+    except Exception as e:
+        return ("unknown", "status check unavailable (%s)" % (getattr(e, "reason", None) or e))
+    status    = data.get("status") or {}
+    indicator = (status.get("indicator") or "none").strip().lower()
+    desc      = (status.get("description") or "").strip() or indicator
+    # The blended indicator covers the whole page; find the Claude API component
+    # specifically, since that is the only thing this pipeline depends on.
+    api_state = ""
+    for c in (data.get("components") or []):
+        nm = (c.get("name") or "").lower()
+        if "api" in nm and ("anthropic" in nm or "claude" in nm):
+            api_state = (c.get("status") or "").strip().lower()
+            break
+    detail = "%s (Claude API: %s)" % (desc, api_state or indicator)
+    if api_state == "major_outage" or indicator == "critical":
+        return ("outage", detail)
+    if indicator in ("minor", "major") or api_state in ("degraded_performance", "partial_outage"):
+        return ("degraded", detail)
+    return ("operational", desc)
 
 
 def screen(name, docket, snippet):
@@ -583,12 +633,25 @@ def treatment_audit(new_name, new_text, card):
 def main():
     if not KEY:
         print("ERROR: ANTHROPIC_API_KEY is not set."); sys.exit(1)
+    if not CL_TOKEN:
+        print("  ! warning: COURTLISTENER_TOKEN not set; CourtListener REST limits will be tighter.")
 
     # The PR step reads PR_PATH as its body. Guarantee the file exists on every exit
     # path, including the no-candidates early return, so it never fails on a missing file.
     # It is gitignored and not in the PR add-paths, so a no-op run writes it and opens no PR.
     os.makedirs(os.path.dirname(PR_PATH), exist_ok=True)
     open(PR_PATH, "w", encoding="utf-8").write("No update this run.\n")
+
+    # Anthropic status preflight. Log the current status every run; on a confirmed
+    # API outage, skip cleanly without fetching, screening, or marking anything, so
+    # the next scheduled run retries in a few hours instead of the day's work being
+    # lost. Fail-open: an unknown/unreachable status never blocks the run.
+    slevel, sdesc = anthropic_status()
+    print("Anthropic status: %s%s" % (sdesc, "" if slevel in ("operational", "unknown") else " [%s]" % slevel))
+    if slevel == "outage" and STATUS_MODE == "on":
+        print("  ! Anthropic API is in a reported outage; skipping this run. "
+              "Nothing was fetched or marked seen, so the next scheduled run will retry.")
+        return
 
     entries = json.load(open(JSON_PATH, encoding="utf-8")) if os.path.exists(JSON_PATH) else []
     have = {int(e["cluster_id"]) for e in entries if e.get("cluster_id")}
@@ -642,6 +705,7 @@ def main():
     treat_flags, audit_notes = [], []          # adverse treatment of existing cards (forward escalation)
     evaluated, n_screen, n_triage, n_opus, n_audit = set(), 0, 0, 0, 0
     treatment_changed = False
+    cl_deferred = 0                                # candidates deferred this run on the CourtListener budget
     consec = 0
     for r in cand:
         if time.time() - run_start > BUDGET_SEC:
@@ -683,8 +747,10 @@ def main():
                         text = rest
                         _dbg("text via rest for %s (%d chars)" % (name, len(text)))
                 except cl_rate.RateBudgetExceeded:
+                    cl_deferred += 1
                     _dbg("courtlistener budget reached; deferring %s to next run" % name)
             else:
+                cl_deferred += 1
                 _dbg("courtlistener budget reached; deferring %s to next run" % name)
             if not text:
                 skipped.append((name, "no opinion text available")); consec = 0; continue
@@ -803,14 +869,21 @@ def main():
     pr_body = "\n".join(lines) + "\n"
     funnel = "screened %d, triaged %d, summarized %d, audited %d" % (n_screen, n_triage, n_opus, n_audit)
 
+    cl_line = "CourtListener REST calls: %d%s" % (
+        cl_rate.PACER.calls,
+        ("; %d candidate(s) deferred to the next run (%s)" % (cl_deferred, cl_rate.PACER.defer_note()))
+        if cl_deferred else "")
+
     if DRY_RUN:
-        print("\n--- DRY RUN, nothing written (%s) ---\n%s" % (funnel, pr_body)); return
+        print("\n--- DRY RUN, nothing written (%s) ---\n%s" % (funnel, pr_body))
+        print(cl_line); return
 
     os.makedirs(os.path.dirname(PR_PATH), exist_ok=True)
     open(PR_PATH, "w", encoding="utf-8").write(pr_body)
 
     if not added and not treatment_changed:
-        print("no new opinions; files unchanged (%s, dropped %d)" % (funnel, len(skipped))); return
+        print("no new opinions; files unchanged (%s, dropped %d)" % (funnel, len(skipped)))
+        print(cl_line); return
 
     entries += added
     json.dump(entries, open(JSON_PATH, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
@@ -821,6 +894,7 @@ def main():
     n = render.render(entries)
     print("rendered %d entries; added %d, flagged %d, treatment %d (%s, dropped %d)"
           % (n, len(added), len(flagged), len(treat_flags), funnel, len(skipped)))
+    print(cl_line)
 
 
 if __name__ == "__main__":

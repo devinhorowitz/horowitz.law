@@ -57,6 +57,7 @@ Env:
                            windows to drain a backlog (default 900; the workflow raises it for the weekly sweep)
   TREATMENT_MAXCHARS       citing-opinion characters sent to the classifier (default 9000)
   TREATMENT_PDF_MIN_CHARS  min extracted PDF chars to use before REST fallback (default 500)
+  TREATMENT_BREAKER        stop after this many consecutive model-call failures (default 4)
   CL_PER_MINUTE / CL_PER_HOUR / CL_PER_DAY / CL_RATE_MARGIN  REST budget (see cl_rate.py)
   DRY_RUN=1                evaluate and print; write nothing, open no PR
   OPINIONS_DEBUG=1         verbose (inherited from update.py)
@@ -83,6 +84,7 @@ PAGES         = int(os.environ.get("TREATMENT_PAGES", "2"))
 BUDGET_SEC    = int(os.environ.get("TREATMENT_BUDGET_SEC", "900"))
 MAXCHARS      = int(os.environ.get("TREATMENT_MAXCHARS", "9000"))
 PDF_MIN_CHARS = int(os.environ.get("TREATMENT_PDF_MIN_CHARS", "500"))
+BREAKER       = int(os.environ.get("TREATMENT_BREAKER", "4"))   # stop after this many consecutive API failures
 DRY_RUN       = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 
 # CourtListener court ids whose decisions can bind or treat a card in our feed.
@@ -227,6 +229,16 @@ def main():
     os.makedirs(os.path.dirname(PR_PATH), exist_ok=True)
     open(PR_PATH, "w", encoding="utf-8").write("No treatment changes this run.\n")
 
+    # Anthropic status preflight (shared with the daily). On a confirmed API outage,
+    # skip the sweep cleanly rather than spending CourtListener and model budget on
+    # calls that will fail. Fail-open: unknown/unreachable status proceeds.
+    slevel, sdesc = update.anthropic_status()
+    print("Anthropic status: %s%s" % (sdesc, "" if slevel in ("operational", "unknown") else " [%s]" % slevel))
+    if slevel == "outage" and update.STATUS_MODE == "on":
+        print("  ! Anthropic API is in a reported outage; skipping this sweep. The next run will retry.")
+        open(PR_PATH, "w", encoding="utf-8").write("Skipped: Anthropic API outage.\n")
+        return
+
     entries = json.load(open(JSON_PATH, encoding="utf-8"))
     state = json.load(open(STATE_PATH, encoding="utf-8")) if os.path.exists(STATE_PATH) else {}
     if not isinstance(state, dict):
@@ -239,6 +251,8 @@ def main():
     new_flags = []     # card dicts newly raised to caution this run
     changed = False    # any tracked-file change (state grew, or a flag changed)
     stopped = ""       # why the run ended early, if it did
+    defer = ""         # operator-facing detail when stopped on the rate budget
+    api_fail = 0       # consecutive model-call failures (circuit breaker)
 
     # Never-swept cards first (full history), oldest first within each group so the
     # most-cited landmarks are worked through across the early runs.
@@ -274,7 +288,7 @@ def main():
                      else (datetime.date.today() - datetime.timedelta(days=LOOKBACK_DAYS)).isoformat())
             citers = citing_results(int(oid), since, deadline)
         except cl_rate.RateBudgetExceeded:
-            stopped = "rest budget"; break
+            stopped = "rest budget"; defer = cl_rate.PACER.defer_note(); break
         except Exception as e:
             print("  ! citation lookup failed for %s (%s): %s" % (cid, card.get("name"), e))
             continue
@@ -297,10 +311,17 @@ def main():
             try:
                 ctext = citer_text(r, deadline)
                 v = classify(card, cname, ctext)
+                api_fail = 0
             except cl_rate.RateBudgetExceeded:
-                stopped = "rest budget"; break
+                stopped = "rest budget"; defer = cl_rate.PACER.defer_note(); break
             except Exception as e:
+                api_fail += 1
                 print("  ! classify failed citing=%s: %s" % (ccid, e))
+                if api_fail >= BREAKER:
+                    stopped = "Anthropic API errors"
+                    print("  ! %d consecutive model-call failures; stopping early. "
+                          "Remaining cards roll to the next run." % api_fail)
+                    break
                 continue
 
             seen.add(ccid)
@@ -344,12 +365,13 @@ def main():
         for cardnm, cname, cdate, verdict in report:
             lines.append("- %s <- %s (%s): %s" % (cardnm, cname, cdate, verdict))
     if stopped:
-        lines += ["", "_Run stopped early (%s); remaining cards roll to the next run._" % stopped]
+        lines += ["", "_Run stopped early (%s%s); remaining cards roll to the next run._"
+                  % (stopped, "; " + defer if defer else "")]
     pr_body = "\n".join(lines) + "\n"
 
     print("\nclassified %d citing opinion(s); new flags: %d; CourtListener REST calls: %d%s"
           % (classified, len(new_flags), cl_rate.PACER.calls,
-             (" (stopped: %s)" % stopped) if stopped else ""))
+             (" (stopped: %s%s)" % (stopped, "; " + defer if defer else "")) if stopped else ""))
 
     if DRY_RUN:
         print("\n--- DRY RUN, nothing written ---\n" + pr_body)

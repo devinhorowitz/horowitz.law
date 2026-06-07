@@ -218,27 +218,31 @@ def run():
             rows.append({"cid": cid, "name": str(cid), "status": "skip-exists"})
             continue
         if cl_rate.remaining() <= 0:
-            print("\nABORT: CourtListener per-run budget reached. "
-                  "Re-dispatch after the budget resets to continue the seed.")
+            note = cl_rate.PACER.defer_note()
+            print("\nABORT: CourtListener hourly budget reached%s. "
+                  "Re-dispatch after the budget resets to continue the seed."
+                  % ((" -- " + note) if note else ""))
             aborted = True
             break
         try:
             r = seed_result(cid, court_id)
         except cl_rate.RateBudgetExceeded:
-            print("\nABORT: CourtListener throttled (per-run budget reached). "
+            note = cl_rate.PACER.defer_note()
+            print("\nABORT: CourtListener throttled%s. "
                   "Stopping now instead of sleeping on the reset window. "
-                  "Re-dispatch after the budget resets.")
+                  "Re-dispatch after the budget resets." % ((" -- " + note) if note else ""))
             rows.append({"cid": cid, "name": "(cluster %d)" % cid, "status": "error",
-                         "detail": "CourtListener budget exhausted"})
+                         "detail": "CourtListener throttled: %s" % (note or "budget exhausted")})
             aborted = True
             break
         except Exception as e:
             if getattr(e, "code", None) == 429:
-                print("\nABORT: CourtListener returned HTTP 429 (daily 125-request budget exhausted). "
+                note = cl_rate.PACER.defer_note()
+                print("\nABORT: CourtListener returned HTTP 429%s. "
                       "Stopping now instead of sleeping on the Retry-After window. "
-                      "Re-dispatch after the CourtListener budget resets.")
+                      "Re-dispatch after the CourtListener budget resets." % ((" -- " + note) if note else ""))
                 rows.append({"cid": cid, "name": "(cluster %d)" % cid, "status": "error",
-                             "detail": "HTTP 429 (CourtListener budget exhausted)"})
+                             "detail": "HTTP 429 (%s)" % (note or "CourtListener budget exhausted")})
                 aborted = True
                 break
             print("  ! metadata fetch failed for %d: %s" % (cid, e))
@@ -256,10 +260,11 @@ def run():
                 oid = update.opinion_id_of(r, deadline=tdl)
                 rest = update.opinion_text(oid, deadline=tdl) if oid else ""
             except cl_rate.RateBudgetExceeded:
-                print("\nABORT: CourtListener throttled during text fetch. "
-                      "Re-dispatch after the budget resets.")
+                note = cl_rate.PACER.defer_note()
+                print("\nABORT: CourtListener throttled during text fetch%s. "
+                      "Re-dispatch after the budget resets." % ((" -- " + note) if note else ""))
                 rows.append({"cid": cid, "name": name, "status": "error",
-                             "detail": "CourtListener budget exhausted"})
+                             "detail": "CourtListener throttled: %s" % (note or "budget exhausted")})
                 aborted = True
                 break
             if rest:
@@ -338,9 +343,11 @@ def run():
 
     report = render_recall(rows, new_cards)
     if aborted:
-        report = ("> Run aborted early: CourtListener daily request budget (HTTP 429) was exhausted, "
-                  "so not all seed cases were processed. Re-run after it resets.\n\n") + report
+        note = cl_rate.PACER.defer_note()
+        report = ("> Run aborted early: CourtListener budget reached%s, so not all seed cases were "
+                  "processed. Re-run after it resets.\n\n" % ((" (" + note + ")") if note else "")) + report
     print("\n" + report)
+    print("CourtListener REST calls: %d" % cl_rate.PACER.calls)
 
     if DRY_RUN:
         print("DRY_RUN: nothing written. %d card(s) would be added.\n" % len(new_cards))

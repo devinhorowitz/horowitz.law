@@ -102,7 +102,9 @@ class Pacer:
         self.events = []            # ascending timestamps of calls made this run
         self.calls = 0              # total REST calls this run
         self.blocked_until = 0.0    # a 429 told us to wait until this time
-        self.last_wait = 0.0
+        self.last_wait = 0.0        # seconds of the most recent wait / would-be wait
+        self.last_period = None     # which window bound it: 'minute' | 'hour' | 'day'
+        self._blocked_period = None # period of the most recent 429, if known
 
     def per_minute(self): return max(1, self.limits["minute"])
     def per_hour(self):   return max(1, self.limits["hour"])
@@ -129,9 +131,9 @@ class Pacer:
             self.events = [t for t in self.events if now - t < SPAN["day"]]
 
     def _wait_needed(self, now):
-        """Seconds until a call may be made under all three rolling windows; 0 if
-        one may be made now."""
-        wait = 0.0
+        """Return (seconds, period): the wait until a call may be made under all
+        three rolling windows (0 if one may be made now), and which window binds."""
+        wait, which = 0.0, None
         for period in ("minute", "hour", "day"):
             span = SPAN[period]
             budget = self._budget(period)
@@ -140,8 +142,10 @@ class Pacer:
                 # The (len - budget)-th oldest in-window call is the last that must
                 # age out for the count to drop below budget.
                 target = within[len(within) - budget]
-                wait = max(wait, (target + span) - now)
-        return max(0.0, wait)
+                w = (target + span) - now
+                if w > wait:
+                    wait, which = w, period
+        return max(0.0, wait), which
 
     def acquire(self, deadline=None):
         """Account for one upcoming REST call. Wait as needed to stay within the
@@ -150,15 +154,16 @@ class Pacer:
         while True:
             now = time.time()
             self._prune(now)
-            wait = self._wait_needed(now)
-            if self.blocked_until > now:
-                wait = max(wait, self.blocked_until - now)
+            wait, which = self._wait_needed(now)
+            if self.blocked_until - now > wait:
+                wait, which = self.blocked_until - now, (self._blocked_period or which)
             if wait <= 0:
                 break
+            self.last_wait, self.last_period = wait, which
             if deadline is not None and now + wait > deadline:
                 raise RateBudgetExceeded(
-                    "CourtListener budget: next slot is %ds away, past the deadline" % int(wait))
-            self.last_wait = wait
+                    "CourtListener %s limit reached; about %ds until a slot frees"
+                    % (which or "rate", int(wait)))
             time.sleep(wait)
         self.events.append(time.time())
         self.calls += 1
@@ -173,14 +178,36 @@ class Pacer:
             self.limits[period] = limit                  # auto-tighten to reality
         if wait:
             self.blocked_until = max(self.blocked_until, time.time() + wait)
+        if period:
+            self._blocked_period = period
         if period == "minute":
             kind = "short" if wait <= 75 else "long"
         elif period in ("hour", "day"):
             kind = "long"
         else:
             kind = "short" if (wait and wait <= 75) else "long"
-        self.last_wait = wait
+        self.last_wait, self.last_period = wait, period
         return kind, wait
+
+    def defer_note(self):
+        """A short, operator-facing line explaining the most recent rate wait or
+        deferral: which limit bound, its configured value, and roughly how long
+        until it frees. Empty string if nothing has been recorded."""
+        if not self.last_wait:
+            return ""
+        secs = int(self.last_wait)
+        if secs >= 3600:
+            human = "about %.1f hours" % (secs / 3600.0)
+        elif secs >= 90:
+            human = "about %d minutes" % round(secs / 60.0)
+        else:
+            human = "about %d seconds" % secs
+        period = self.last_period
+        if period in ("minute", "hour", "day"):
+            lim = self.limits.get(period)
+            limtxt = " (%d/%s)" % (lim, period) if lim else ""
+            return "CourtListener %s limit%s; %s until it frees" % (period, limtxt, human)
+        return "CourtListener rate limit; %s until it frees" % human
 
 
 PACER = Pacer()
@@ -191,3 +218,4 @@ def per_hour():   return PACER.per_hour()
 def per_day():    return PACER.per_day()
 def run_budget(): return PACER.run_budget()
 def remaining():  return PACER.remaining
+def defer_note(): return PACER.defer_note()
