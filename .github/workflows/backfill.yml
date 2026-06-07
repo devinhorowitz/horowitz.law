@@ -64,7 +64,7 @@ jobs:
       # no PR. In a real run it opens or updates one PR with the recall report as
       # the body and the grown opinions.json plus re-rendered html/xml.
       - name: Open pull request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: bot/opinions-backfill
           title: 'Georgia Appellate Watch: backfill (skill seed)'
