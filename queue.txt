@@ -1,0 +1,28 @@
+# Georgia Appellate Watch -- case queue (inbox)
+#
+# Add a case to the feed by pasting its CourtListener opinion URL on its own line
+# below and committing this file. A push to queue.txt runs the case through the
+# funnel and opens a pull request for your review; nothing goes live until you
+# merge it. You can also run it by hand from Actions > "Georgia Appellate Watch
+# queue" (with "resolve only" first to check what a line resolves to).
+#
+# One case per line. Accepted forms:
+#   https://www.courtlistener.com/opinion/10862301/state-farm-v-.../   (paste the URL)
+#   10862301                                                            (bare cluster id)
+#   10862301:gactapp                                                    (cluster:court, if the
+#                                                                        court will not auto-derive;
+#                                                                        court in ga|gactapp|ca11|scotus)
+#
+# Add a trailing "!" to force a case past the relevance gate (it is still subject
+# to your PR review):
+#   10862301 !
+#
+# Anything after "#" is a comment. Each case is screened: a case judged out of
+# scope is reported in the PR rather than carded (force with "!" to override).
+#
+# After a run this file is drained automatically: carded, gated-out, declined, and
+# already-on-the-site lines are removed and reported in the PR; lines deferred on the
+# CourtListener budget stay to retry; unresolved lines are parked here as comments
+# with the reason, for you to fix or delete.
+#
+# --- queue below this line ---
