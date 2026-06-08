@@ -38,7 +38,7 @@ jobs:
       - name: Compile and import every script
         run: |
           python -m py_compile scripts/*.py
-          cd scripts && python -c "import cl_rate, safeio, render, treatment_core, update, treatment, backfill, digest, queue_cases; print('all imports resolve')"
+          cd scripts && python -c "import cl_rate, safeio, render, treatment_core, update, treatment, backfill, digest, queue_cases, assess_precedential; print('all imports resolve')"
 
       - name: Validate workflow YAML
         run: python -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml')]; print('workflow YAML parses')"

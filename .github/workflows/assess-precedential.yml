@@ -1,0 +1,62 @@
+name: Georgia Appellate Watch precedential backfill
+
+# One-off, manual only. Stamps `precedential` on existing cards from CourtListener
+# metadata and opens a PR. Idempotent: cards already labeled are skipped, so re-dispatch
+# to finish a budget-deferred run; once everything is labeled it is a no-op. Leave dry_run
+# checked the first time to preview the labels in the log without writing or opening a PR.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (preview the labels in the log; write nothing, open no PR)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  PYTHONUNBUFFERED: '1'
+
+concurrency:
+  group: opinions-precedential
+  cancel-in-progress: false
+
+jobs:
+  assess:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Assess precedential status from CourtListener metadata
+        env:
+          COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+          # CourtListener REST budget. Set these repo Variables on a tier change; unset = free-tier defaults in cl_rate.py.
+          CL_PER_MINUTE: ${{ vars.CL_PER_MINUTE }}
+          CL_PER_HOUR: ${{ vars.CL_PER_HOUR }}
+          CL_PER_DAY: ${{ vars.CL_PER_DAY }}
+          CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: python scripts/assess_precedential.py
+
+      # In a dry run the script writes nothing, so this finds no changes and opens no PR.
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: bot/opinions-precedential
+          title: 'Georgia Appellate Watch: backfill precedential status on existing cards'
+          commit-message: 'opinions: backfill precedential status on existing cards'
+          body-path: scripts/assess_precedential_pr_body.md
+          labels: opinions, automated
+          delete-branch: true
+          add-paths: |
+            opinions.json
+            opinions.xml
+            opinions.html
+            archive.html
