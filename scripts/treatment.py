@@ -164,22 +164,21 @@ def _rest_opinion_text(oid, deadline):
 def citer_text(r, deadline):
     """Text of a citing opinion. PDF first (a free static fetch, no REST quota),
     falling back to a REST call only when the PDF will not extract and the shared
-    budget has room. A RateBudgetExceeded propagates so the run can defer."""
+    budget has room. The REST fallback reads every sub-opinion (lead plus any
+    concurrences and dissents), so a citation discussed in a writing other than the
+    first is not missed. A RateBudgetExceeded propagates so the run can defer."""
     ops = r.get("opinions") or []
     op0 = ops[0] if ops and isinstance(ops[0], dict) else {}
     pdf_url = op0.get("download_url") or ""
     text = update.pdf_text(pdf_url, deadline=deadline) if pdf_url else ""
     if bool(text) and len(text) >= PDF_MIN_CHARS and sum(c.isalpha() for c in text) >= 100:
         return text
-    oid = op0.get("id")
-    if oid:
-        try:
-            return _rest_opinion_text(oid, deadline)
-        except cl_rate.RateBudgetExceeded:
-            raise
-        except Exception:
-            return ""
-    return ""
+    try:
+        return update.opinion_text_full(r, deadline)
+    except cl_rate.RateBudgetExceeded:
+        raise
+    except Exception:
+        return ""
 
 
 def passage(text, name):

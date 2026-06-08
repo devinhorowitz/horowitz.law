@@ -90,7 +90,7 @@ STATUS_MODE  = (os.environ.get("ANTHROPIC_STATUS", "on") or "on").strip().lower(
 
 COURT_MAP   = {"ga": "scotga", "gactapp": "ctapp", "ca11": "ca11", "scotus": "scotus"}
 VALID_AREAS = set(render.AREA_LABELS)
-CITE_RE = re.compile(r"\b\d+\s+(?:Ga\.?\s*App\.?|Ga\.?|S\.?\s*E\.?\s*2d|S\.?\s*E\.?|U\.?\s*S\.?|S\.?\s*Ct\.?|F\.?(?:2d|3d|4th)?|F\.?\s*Supp\.?)\s+\d+", re.I)
+CITE_RE = re.compile(r"\b\d+\s+(?:Ga\.?\s*App\.?|Ga\.?|S\.?\s*E\.?\s*2d|S\.?\s*E\.?|U\.?\s*S\.?|S\.?\s*Ct\.?|L\.?\s*Ed\.?\s*(?:2d)?|F\.?(?:2d|3d|4th)?|F\.?\s*Supp\.?|WL)\s+\d+", re.I)
 
 SCREEN_SYSTEM = (
     "You are a fast first-pass screener for a curated feed of court decisions for a Georgia "
@@ -453,6 +453,23 @@ def opinion_text_full(r, deadline=None):
         if t:
             parts.append(t)
     return "\n\n".join(parts)
+
+
+def cluster_precedential_status(r, deadline=None):
+    """Best-effort CourtListener precedential_status for a candidate's cluster, passed
+    to the summarizer as a publication-status hint. Empty string on any failure so it
+    never blocks the run (the summarizer still reads the opinion's own designation); a
+    ConfigError still propagates, since that is an operator-fixable auth problem."""
+    cid = cluster_id_of(r)
+    if not cid:
+        return ""
+    try:
+        cl = cl_get("/api/rest/v4/clusters/%d/" % cid, deadline)
+        return (cl.get("precedential_status") or "").strip()
+    except ConfigError:
+        raise
+    except Exception:
+        return ""
 
 
 def opinion_text(oid, deadline=None):
@@ -896,7 +913,8 @@ def main():
                 time.sleep(0.4)
             # Tier 3: high-effort public summary
             n_opus += 1
-            v = summarize(court_id, name, docket, date_filed, text, note)
+            cl_status = cluster_precedential_status(r, deadline=run_start + BUDGET_SEC)
+            v = summarize(court_id, name, docket, date_filed, text, note, cl_status=cl_status)
             consec = 0
             evaluated.add(cid)
         except ConfigError as e:
