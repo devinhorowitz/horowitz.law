@@ -77,10 +77,24 @@ jobs:
           OPINIONS_MAX: '80'                                 # candidates evaluated per run (headroom for heavy filing days)
         run: python scripts/update.py
 
+      # Decide whether this run changed site content (which goes through a review PR) or
+      # only the seen-state bookkeeping on a no-op (which is committed straight to main).
+      - name: Classify what changed
+        id: classify
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          if [ -n "$(git status --porcelain -- opinions.json opinions.xml opinions.html archive.html)" ]; then
+            echo "kind=content" >> "$GITHUB_OUTPUT"
+          elif [ -n "$(git status --porcelain -- opinions_state.json)" ]; then
+            echo "kind=state" >> "$GITHUB_OUTPUT"
+          else
+            echo "kind=none" >> "$GITHUB_OUTPUT"
+          fi
+
       # Opens or updates a pull request only when the run changed tracked files.
       # Confirm the latest tag at github.com/peter-evans/create-pull-request before pinning.
       - name: Open pull request
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.guard.outputs.skip != 'true' && steps.classify.outputs.kind == 'content'
         uses: peter-evans/create-pull-request@v8
         with:
           branch: bot/opinions-update
@@ -95,3 +109,15 @@ jobs:
             opinions_state.json
             opinions.html
             archive.html
+
+      # No-op run: the funnel marked the cases it screened as seen so the next run does not
+      # re-evaluate them. That is bookkeeping, not editorial content, so commit it straight
+      # to main with no review PR. [skip ci] keeps the push from triggering other workflows.
+      - name: Commit seen-state on a no-op run
+        if: steps.guard.outputs.skip != 'true' && steps.classify.outputs.kind == 'state'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add opinions_state.json
+          git commit -m "opinions: mark screened cases seen [skip ci]"
+          git push origin HEAD:main
