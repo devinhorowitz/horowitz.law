@@ -20,7 +20,12 @@ caveat, so the binary is what matters for reliance.
 Env:
   COURTLISTENER_TOKEN       recommended (cluster metadata lookups)
   DRY_RUN=1                 print the labels in the log; write nothing, open no PR
-  OPINIONS_CL_DEADLINE_SEC  per-cluster metadata deadline (default 30)
+  OPINIONS_CL_DEADLINE_SEC  per-call wall-clock deadline, seconds (default 1200).
+                            Long by design: this is a one-off drain, so the shared
+                            limiter should WAIT out CourtListener's per-minute window
+                            rather than defer the rest to another dispatch. At the
+                            free-tier 5/min this paces the sweep at about four cards a
+                            minute, so all of today's cards drain in a single run.
 
 Run via .github/workflows/assess-precedential.yml (workflow_dispatch).
 """
@@ -32,7 +37,11 @@ import safeio            # crash-safe atomic writes
 
 DRY_RUN     = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 PR_PATH     = os.path.join(update.REPO, "scripts", "assess_precedential_pr_body.md")
-CL_DEADLINE = int(os.environ.get("OPINIONS_CL_DEADLINE_SEC", "30"))
+# Long by default: a one-off backfill should DRAIN in one run, so the shared limiter
+# waits out CourtListener's per-minute window rather than deferring the remaining cards
+# (the daily funnel uses a short deadline for the opposite, stay-fast reason). The env
+# var still overrides if a future tier or card count makes a different budget sensible.
+CL_DEADLINE = int(os.environ.get("OPINIONS_CL_DEADLINE_SEC", "1200"))
 
 # CourtListener precedential_status -> feed vocabulary. Only 'unpublished' renders a
 # caveat; 'published' and 'unknown' both render no badge, so the mapping only needs to
