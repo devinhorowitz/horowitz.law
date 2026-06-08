@@ -15,6 +15,18 @@
   var cards = Array.prototype.slice.call(document.querySelectorAll('.opinion'));
   if (!cards.length) return;
 
+  // Precompute a lowercased text haystack per card so substring search stays
+  // fast as the record grows. Done before the NEW badge is appended so the
+  // badge text does not pollute matches. textContent only, never innerHTML, to
+  // satisfy the site's require-trusted-types-for CSP.
+  cards.forEach(function (c) { c._hay = c.textContent.toLowerCase(); });
+
+  var searchBox = document.getElementById('searchBox');
+  var searchCount = document.getElementById('searchCount');
+  var query = '';
+  var yearBlocks = Array.prototype.slice.call(document.querySelectorAll('.archive-year-block'));
+  var yearLinks = Array.prototype.slice.call(document.querySelectorAll('.year-nav a'));
+
   // --- NEW badges + "new this week" count, from each card's date ---
   var newCount = 0;
   cards.forEach(function (c) {
@@ -57,18 +69,37 @@
   }
 
   function apply() {
+    var tokens = query ? query.split(/\s+/) : [];
     var shown = 0;
     cards.forEach(function (c) {
       var okCourt = courtFilter === 'all' || c.getAttribute('data-court') === courtFilter;
       var areas = (c.getAttribute('data-areas') || '').split(',');
       var okArea = areaFilter === 'all' || areas.indexOf(areaFilter) > -1;
       var okNew = !newOnly || c.dataset.isnew === '1';
-      var visible = okCourt && okArea && okNew;
+      var okText = true;
+      for (var i = 0; i < tokens.length; i++) {
+        if (c._hay.indexOf(tokens[i]) === -1) { okText = false; break; }
+      }
+      var visible = okCourt && okArea && okNew && okText;
       c.hidden = !visible;
       if (visible) shown++;
     });
+
+    // On the archive, cards are grouped into year sections with a jump nav;
+    // hide any section (and its nav link) whose cards are now all hidden.
+    yearBlocks.forEach(function (sec) {
+      sec.hidden = !sec.querySelector('.opinion:not([hidden])');
+    });
+    yearLinks.forEach(function (a) {
+      var id = (a.getAttribute('href') || '').slice(1);
+      var sec = id && document.getElementById(id);
+      var block = sec && sec.closest && sec.closest('.archive-year-block');
+      if (block) a.style.display = block.hidden ? 'none' : '';
+    });
+
     var empty = document.getElementById('empty');
     if (empty) empty.hidden = shown > 0;
+    if (searchCount) searchCount.textContent = query ? (shown + ' of ' + cards.length) : '';
   }
 
   document.querySelectorAll('[data-court-filter]').forEach(function (ch) {
@@ -94,6 +125,20 @@
       newToggle.setAttribute('aria-pressed', newOnly ? 'true' : 'false');
       apply();
     });
+  }
+
+  if (searchBox) {
+    searchBox.addEventListener('input', function () {
+      query = searchBox.value.trim().toLowerCase();
+      apply();
+    });
+    searchBox.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { searchBox.value = ''; query = ''; apply(); }
+    });
+    try {
+      var q0 = new URLSearchParams(location.search).get('q');
+      if (q0) { searchBox.value = q0; query = q0.trim().toLowerCase(); }
+    } catch (e) {}
   }
 
   apply();

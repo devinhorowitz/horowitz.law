@@ -182,6 +182,11 @@
   @media (hover: hover) { .chip:hover { border-color: var(--accent); color: var(--accent); } }
   .chip[aria-pressed="true"] { border-color: var(--accent); color: var(--bg); background: var(--accent); }
   .filters.last { margin-bottom: 34px; }
+  .filters.search { margin-bottom: 12px; }
+  .searchbox { font: inherit; font-size: 13px; padding: 6px 11px; min-width: 240px; max-width: 380px; flex: 1 1 240px; color: inherit; background: transparent; border: 1px solid var(--fg-muted); border-radius: 6px; }
+  .searchbox:focus { outline: none; border-color: var(--accent); }
+  .searchbox::placeholder { color: var(--fg-muted); opacity: 0.85; }
+  .searchcount { font-size: 11px; color: var(--fg-muted); letter-spacing: 0.04em; }
 
   /* opinion cards */
   .opinion { border: 1px solid var(--border); border-left: 2px solid var(--border); padding: 20px 22px; margin-bottom: 18px; transition: border-color .2s; }
@@ -253,6 +258,12 @@
     <div class="newflag" id="newFlag">
       <span class="dot"></span>
       <span class="label"><span id="newCount">0</span> new this week</span>
+    </div>
+
+    <div class="filters search" role="search">
+      <span class="filters-label">find</span>
+      <input id="searchBox" type="search" class="searchbox" placeholder="case name, party, citation…" aria-label="Search opinions by case name, party, or citation" autocomplete="off" spellcheck="false">
+      <span class="searchcount" id="searchCount" aria-live="polite"></span>
     </div>
 
     <div class="filters" role="group" aria-label="Filter by court">
@@ -477,6 +488,6 @@
 
 </div>
 <script src="/app.js?v=2026-05-31" defer></script>
-<script src="/opinions.js?v=2026-06-05" defer></script>
+<script src="/opinions.js?v=2026-06-08" defer></script>
 </body>
 </html>
