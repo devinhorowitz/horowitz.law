@@ -17,7 +17,8 @@
     "url": "https://www.courtlistener.com/opinion/10862301/state-farm-mutual-automobile-insurance-company-v-charity-barnor-cooper/",
     "synopsis": "The Court of Appeals reversed the denial of summary judgment to State Farm and GEICO in a UM claim arising from a hit-and-run collision, holding the plaintiff was not entitled to UM benefits under either policy. Injured while making a delivery in a Turo-rented Buick, she was not an insured under the State Farm policy: the Buick was not a \"temporary substitute car\" because the scheduled vehicle it would have replaced had been sold, and the named-insured LLC is a separate legal entity from its members and managers.",
     "why": "Reads the 'temporary substitute car' and named-insured provisions strictly: a borrowed vehicle is not a temporary substitute once the scheduled car it would replace has been sold, and an LLC policyholder is a separate legal entity from its members and managers, which narrows who qualifies as an insured for UM purposes.",
-    "first_seen": "2026-05-20"
+    "first_seen": "2026-05-20",
+    "precedential": "published"
   },
   {
     "cluster_id": 10862062,
