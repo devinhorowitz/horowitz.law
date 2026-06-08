@@ -1,0 +1,74 @@
+name: Validate court registry
+
+# Monthly check that every court id pinned in scripts/jurisdictions.py still
+# resolves in CourtListener and is in use. On drift it opens (or comments on) a
+# single deduplicated issue; when validation passes again it closes that issue.
+# An operational failure (auth, network, throttle) fails the job so it is visible
+# as a red run, distinct from a drift finding (which is a green run plus an issue).
+on:
+  schedule:
+    - cron: '20 9 1 * *'   # 09:20 UTC on the 1st of each month (clear of the daily :17 slots)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  PYTHONUNBUFFERED: '1'
+
+concurrency:
+  group: gaw-validate-courts
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Validate configured court ids against CourtListener
+        id: validate
+        env:
+          COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+        run: |
+          set +e
+          ( cd scripts && python courts.py --validate )
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # 0 = clean, 3 = drift (handled below), 2 (or anything else) = operational failure.
+          if [ "$code" != "0" ] && [ "$code" != "3" ]; then
+            exit "$code"
+          fi
+
+      - name: Open or update the drift flag
+        if: ${{ steps.validate.outputs.code == '3' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Court registry drift detected"
+          existing=$(gh issue list --state open --search "$title in:title" --json number,title \
+            --jq "[.[] | select(.title==\"$title\")] | .[0].number" 2>/dev/null || true)
+          if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+            gh issue comment "$existing" --body-file scripts/court_drift.md
+          else
+            gh issue create --title "$title" --body-file scripts/court_drift.md
+          fi
+
+      - name: Close the drift flag when clean
+        if: ${{ steps.validate.outputs.code == '0' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Court registry drift detected"
+          for n in $(gh issue list --state open --search "$title in:title" --json number,title \
+            --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
+            gh issue comment "$n" --body "Resolved: the monthly court-registry validation now passes."
+            gh issue close "$n"
+          done
