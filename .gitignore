@@ -9,6 +9,7 @@ scripts/pr_body.md
 scripts/backfill_pr_body.md
 scripts/treatment_pr_body.md
 scripts/queue_cases_pr_body.md
+scripts/assess_precedential_pr_body.md
 
 # OS and editor cruft
 .DS_Store
