@@ -746,6 +746,43 @@ def treatment_audit(new_name, new_text, card):
                            "messages": [{"role": "user", "content": user}]}, "treatment-audit")
 
 
+# Party-name matching for the screen override in the candidate loop. A case can
+# return to the feed at a higher court under the same caption (the Supreme Court
+# reviewing a decision we carded from the Court of Appeals), and the caption can
+# flip on appeal, so match on distinctive surname tokens, order-independent.
+# Institutional and noise words are dropped so a shared insurer name alone cannot
+# trigger a match, and the threshold is two shared tokens.
+_NAME_STOP = {
+    "the", "and", "for", "versus", "etal", "et", "al", "ex", "rel",
+    "inc", "incorporated", "llc", "llp", "corp", "corporation", "company", "companies",
+    "ltd", "limited", "group", "holdings", "partners", "partnership", "associates",
+    "association", "services", "service", "systems", "enterprises", "trust", "estate",
+    "bank", "fund", "foundation", "insurance", "insurers", "insurer", "indemnity",
+    "casualty", "mutual", "auto", "automobile", "assurance", "underwriters", "national",
+    "american", "general", "first", "united", "state", "states", "farm", "county",
+    "city", "department", "board", "commission", "authority", "district", "georgia",
+    "hospital", "health", "medical", "center", "transport", "transportation", "logistics",
+    "trucking", "construction", "properties", "property", "management", "realty",
+    "investments", "capital", "financial", "credit", "wrecker", "towing", "doe", "john",
+    "jane", "unknown",
+}
+
+
+def party_tokens(name):
+    """Distinctive party tokens from a case caption, lowercased and split on
+    non-alphanumerics (so a hyphenated surname yields two tokens); drops digits,
+    short tokens, and the institutional/noise stoplist."""
+    toks = re.split(r"[^a-z0-9]+", (name or "").lower())
+    return {t for t in toks if len(t) >= 4 and not t.isdigit() and t not in _NAME_STOP}
+
+
+def party_match(name, card_token_sets):
+    """True if `name` shares at least two distinctive party tokens with any carded
+    case, identifying a likely repeat appearance regardless of caption order."""
+    t = party_tokens(name)
+    return any(len(t & cs) >= 2 for cs in card_token_sets)
+
+
 def main():
     if not KEY:
         print("ERROR: ANTHROPIC_API_KEY is not set."); sys.exit(1)
@@ -824,6 +861,10 @@ def main():
     cl_deferred = 0                                # candidates deferred this run on the CourtListener budget
     consec = 0
     cfg_error = False                              # set on a ConfigError (auth/model/credit); forces a non-zero exit
+    # Party tokens of every carded case, for the screen override below. Cards with
+    # fewer than two distinctive tokens can never reach the two-token threshold, so
+    # drop them here.
+    card_token_sets = [s for s in (party_tokens(e.get("name", "")) for e in entries) if len(s) >= 2]
     for r in cand:
         if time.time() - run_start > BUDGET_SEC:
             print("  ! time budget reached (%ds) after %d evaluated; finalizing with what is collected"
@@ -841,8 +882,18 @@ def main():
                 n_screen += 1
                 s = screen(name, docket, snippet_of(r))
                 if not s.get("pass"):
-                    skipped.append((name, "screen: %s" % (s.get("reason") or "not a fit")))
-                    consec = 0; evaluated.add(cid); continue
+                    # A repeat appearance of a carded case (same parties, e.g. the
+                    # Supreme Court reviewing a decision we carded from the Court of
+                    # Appeals) must not be screened out, or we would miss flagging the
+                    # earlier card if this opinion reverses it. When the parties match
+                    # an existing card, skip the screen drop and let triage run the
+                    # forward treatment escalation.
+                    if party_match(name, card_token_sets):
+                        print("  + screen override: %s shares parties with a carded case; routing to triage to check treatment"
+                              % (name[:60]))
+                    else:
+                        skipped.append((name, "screen: %s" % (s.get("reason") or "not a fit")))
+                        consec = 0; evaluated.add(cid); continue
                 time.sleep(0.4)
             # Full text, fetched once and reused by tiers 2 and 3.
             # Phase 2: read the PDF enclosure first (static file on storage.courtlistener.com,
@@ -1012,7 +1063,20 @@ def main():
     open(PR_PATH, "w", encoding="utf-8").write(pr_body)
 
     if not added and not treatment_changed:
-        print("no new opinions; files unchanged (%s, dropped %d)" % (funnel, len(skipped)))
+        # Nothing to card, but persist the clusters fully evaluated this run as seen, so the
+        # next scheduled run does not re-screen and re-triage the same recent opinions during
+        # a no-card stretch. Deferred or rolled-over candidates are deliberately not in
+        # `evaluated`, so they still retry. seen_clusters is bookkeeping, not editorial
+        # content, so the workflow commits this straight to main rather than through the PR.
+        seen_all = seen | evaluated | have
+        if seen_all != seen:
+            state["seen_clusters"] = sorted(seen_all)[-SEEN_CAP:]
+            state["updated"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            safeio.atomic_write_json(STATE_PATH, state)
+            print("no new opinions; marked %d cluster(s) seen so they are not re-screened (%s, dropped %d)"
+                  % (len(seen_all - seen), funnel, len(skipped)))
+        else:
+            print("no new opinions; files unchanged (%s, dropped %d)" % (funnel, len(skipped)))
         print(cl_line); return
 
     entries += added
