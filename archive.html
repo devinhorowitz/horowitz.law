@@ -170,14 +170,6 @@
   .searchcount { font-size: 11px; color: var(--fg-muted); letter-spacing: 0.04em; }
   .empty { color: var(--fg-muted); font-size: 14px; margin-top: 18px; }
 
-  /* new-this-week signal */
-  .newflag { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 22px; }
-  .newflag .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px var(--accent); flex: none; }
-  .newflag.off { color: var(--fg-muted); }
-  .newflag.off .dot { background: var(--fg-muted); box-shadow: none; }
-  @media (prefers-reduced-motion: no-preference) { .newflag.live .dot { animation: pulse 1.7s ease-in-out infinite; } }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
-
   /* filters */
   .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
   .filters-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.18em; color: var(--fg-muted); margin-right: 4px; }
@@ -193,12 +185,8 @@
 
   /* opinion cards */
   .opinion { border: 1px solid var(--border); border-left: 2px solid var(--border); padding: 20px 22px; margin-bottom: 18px; transition: border-color .2s; }
-  .opinion.is-new { border-left-color: var(--accent); }
   .op-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
   .op-name { font-size: 16px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; }
-  .badge-new { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; color: var(--bg); background: var(--accent); padding: 2px 7px; white-space: nowrap; flex: none; }
-  @media (prefers-reduced-motion: no-preference) { .badge-new { animation: glow 2.2s ease-in-out infinite; } }
-  @keyframes glow { 0%,100% { box-shadow: 0 0 0 rgba(255,158,94,0); } 50% { box-shadow: 0 0 9px rgba(255,158,94,0.55); } }
   .op-meta { font-size: 12px; color: var(--fg-muted); margin: 9px 0 12px; letter-spacing: 0.02em; }
   .op-meta .court { color: var(--fg); }
   .op-noprec { color: var(--accent); font-weight: 600; }
@@ -285,7 +273,7 @@
 
       <section class="archive-year-block" aria-labelledby="y2026">
         <h2 class="archive-year" id="y2026">2026</h2>
-      <article id="op-10862301" class="opinion" data-court="ctapp" data-areas="coverage,auto" data-date="2026-05-20">
+      <article id="op-10862301" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="coverage,auto" data-date="2026-05-20">
         <div class="op-head"><span class="op-name">State Farm Mut. Auto. Ins. Co. &amp; GEICO Indemnity Co. v. Barnor-Cooper</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, Fourth Division · decided May 20, 2026 · Nos. A26A0526 &amp; A26A0550 · reversed</div>
         <div class="op-tags"><span class="tag">coverage</span><span class="tag">auto</span></div>
@@ -297,7 +285,7 @@
         </div>
       </article>
 
-      <article id="op-10862062" class="opinion" data-court="ctapp" data-areas="procedure,expert" data-date="2026-05-20">
+      <article id="op-10862062" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="procedure,expert" data-date="2026-05-20">
         <div class="op-head"><span class="op-name">Johnson v. Everett</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, Fourth Division · decided May 20, 2026 · No. A26A0099 · vacated and remanded in part</div>
         <div class="op-tags"><span class="tag">procedure</span><span class="tag">expert</span></div>
@@ -309,7 +297,7 @@
         </div>
       </article>
 
-      <article id="op-10815924" class="opinion" data-court="ctapp" data-areas="premises" data-date="2026-03-26">
+      <article id="op-10815924" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="premises" data-date="2026-03-26">
         <div class="op-head"><span class="op-name">Loveless v. GSH Investments, LLC</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, First Division · decided Mar 26, 2026 · No. A26A0113 · affirmed in part, reversed in part</div>
         <div class="op-tags"><span class="tag">premises</span></div>
@@ -321,7 +309,7 @@
         </div>
       </article>
 
-      <article id="op-10809283" class="opinion" data-court="ctapp" data-areas="coverage,badfaith,auto" data-date="2026-03-16">
+      <article id="op-10809283" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="coverage,badfaith,auto" data-date="2026-03-16">
         <div class="op-head"><span class="op-name">Cannon v. Safeco Insurance Co. of Illinois</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, First Division · decided Mar 16, 2026 · No. A25A1847 · reversed</div>
         <div class="op-tags"><span class="tag">coverage</span><span class="tag">bad faith</span><span class="tag">auto</span></div>
@@ -333,7 +321,7 @@
         </div>
       </article>
 
-      <article id="op-10809157" class="opinion" data-court="ctapp" data-areas="coverage,auto" data-date="2026-03-16">
+      <article id="op-10809157" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="coverage,auto" data-date="2026-03-16">
         <div class="op-head"><span class="op-name">Sullivan v. Trustgard Insurance Co.</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, First Division · decided Mar 16, 2026 · No. A25A1720 · reversed</div>
         <div class="op-tags"><span class="tag">coverage</span><span class="tag">auto</span></div>
@@ -345,7 +333,7 @@
         </div>
       </article>
 
-      <article id="op-10786768" class="opinion" data-court="ctapp" data-areas="premises" data-date="2026-02-10">
+      <article id="op-10786768" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="premises" data-date="2026-02-10">
         <div class="op-head"><span class="op-name">Radheshvar, LLC v. Perez Larios</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, Fourth Division · decided Feb 10, 2026 · No. A25A1723 · affirmed</div>
         <div class="op-tags"><span class="tag">premises</span></div>
@@ -357,7 +345,7 @@
         </div>
       </article>
 
-      <article id="op-10785227" class="opinion" data-court="ctapp" data-areas="negsec,premises" data-date="2026-02-06">
+      <article id="op-10785227" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="negsec,premises" data-date="2026-02-06">
         <div class="op-head"><span class="op-name">Giles v. Greenhouse Apartments, LLC</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, Fourth Division · decided Feb 6, 2026 · No. A25A2143 · affirmed</div>
         <div class="op-tags"><span class="tag">negligent security</span><span class="tag">premises</span></div>
@@ -369,7 +357,7 @@
         </div>
       </article>
 
-      <article id="op-10779964" class="opinion" data-court="ctapp" data-areas="premises" data-date="2026-01-27">
+      <article id="op-10779964" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="premises" data-date="2026-01-27">
         <div class="op-head"><span class="op-name">Mejia v. SK Battery America, Inc.</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, Second Division · decided Jan 27, 2026 · No. A25A2164 · affirmed</div>
         <div class="op-tags"><span class="tag">premises</span></div>
@@ -384,7 +372,7 @@
 
       <section class="archive-year-block" aria-labelledby="y2025">
         <h2 class="archive-year" id="y2025">2025</h2>
-      <article id="op-10715536" class="opinion" data-court="ctapp" data-areas="premises,negsec" data-date="2025-10-31">
+      <article id="op-10715536" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="premises,negsec" data-date="2025-10-31">
         <div class="op-head"><span class="op-name">Venetian Hills Apartments, LLC v. Hughes</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, Second Division · decided Oct 31, 2025 · No. A25A1091 · vacated and remanded</div>
         <div class="op-tags"><span class="tag">premises</span><span class="tag">negligent security</span></div>
@@ -396,7 +384,7 @@
         </div>
       </article>
 
-      <article id="op-10713919" class="opinion" data-court="ctapp" data-areas="auto,coverage" data-date="2025-10-29">
+      <article id="op-10713919" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="auto,coverage" data-date="2025-10-29">
         <div class="op-head"><span class="op-name">Williams v. Reddick</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, Fourth Division · decided Oct 29, 2025 · No. A25A1226 · reversed</div>
         <div class="op-tags"><span class="tag">auto</span><span class="tag">coverage</span></div>
@@ -408,7 +396,7 @@
         </div>
       </article>
 
-      <article id="op-10704224" class="opinion" data-court="scotga" data-areas="premises" data-date="2025-10-15">
+      <article id="op-10704224" class="opinion" data-court="scotga" data-system="state" data-jurisdiction="ga" data-areas="premises" data-date="2025-10-15">
         <div class="op-head"><span class="op-name">SMG Construction Services, LLC v. Cook</span></div>
         <div class="op-meta"><span class="court">Supreme Court of Georgia</span> · decided Oct 15, 2025 · No. S25G0389 · vacated and remanded</div>
         <div class="op-tags"><span class="tag">premises</span></div>
@@ -420,7 +408,7 @@
         </div>
       </article>
 
-      <article id="op-10669247" class="opinion" data-court="ctapp" data-areas="procedure,coverage,auto" data-date="2025-09-10">
+      <article id="op-10669247" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="procedure,coverage,auto" data-date="2025-09-10">
         <div class="op-head"><span class="op-name">Ferriero v. Progressive Premier Insurance Co.</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, Fifth Division · decided Sep 10, 2025 · No. A25A0999 · vacated and remanded</div>
         <div class="op-tags"><span class="tag">procedure</span><span class="tag">coverage</span><span class="tag">auto</span></div>
@@ -432,7 +420,7 @@
         </div>
       </article>
 
-      <article id="op-10620084" class="opinion" data-court="ctapp" data-areas="coverage,auto,damages" data-date="2025-06-30">
+      <article id="op-10620084" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="coverage,auto,damages" data-date="2025-06-30">
         <div class="op-head"><span class="op-name">John Doe v. Jones</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, Second Division · decided Jun 30, 2025 · No. A25A0077 · reversed</div>
         <div class="op-tags"><span class="tag">coverage</span><span class="tag">auto</span><span class="tag">damages</span></div>
@@ -444,7 +432,7 @@
         </div>
       </article>
 
-      <article id="op-10680420" class="opinion" data-court="scotga" data-areas="damages,premises" data-date="2025-06-24">
+      <article id="op-10680420" class="opinion" data-court="scotga" data-system="state" data-jurisdiction="ga" data-areas="damages,premises" data-date="2025-06-24">
         <div class="op-head"><span class="op-name">Walmart Stores East, LP v. Leverette</span></div>
         <div class="op-meta"><span class="court">Supreme Court of Georgia</span> · decided Jun 24, 2025 · No. S24G1104 · vacated and remanded</div>
         <div class="op-tags"><span class="tag">damages</span><span class="tag">premises</span></div>
@@ -456,7 +444,7 @@
         </div>
       </article>
 
-      <article id="op-10614235" class="opinion" data-court="ctapp" data-areas="coverage,auto" data-date="2025-06-20">
+      <article id="op-10614235" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="coverage,auto" data-date="2025-06-20">
         <div class="op-head"><span class="op-name">Patterson v. United Services Automobile Association</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, Fifth Division · decided Jun 20, 2025 · No. A25A0259 · affirmed</div>
         <div class="op-tags"><span class="tag">coverage</span><span class="tag">auto</span></div>
@@ -471,7 +459,7 @@
 
       <section class="archive-year-block" aria-labelledby="y2023">
         <h2 class="archive-year" id="y2023">2023</h2>
-      <article id="op-10680052" class="opinion" data-court="scotga" data-areas="expert,auto" data-date="2023-08-21">
+      <article id="op-10680052" class="opinion" data-court="scotga" data-system="state" data-jurisdiction="ga" data-areas="expert,auto" data-date="2023-08-21">
         <div class="op-head"><span class="op-name">Miller v. Golden Peanut Company, LLC</span></div>
         <div class="op-meta"><span class="court">Supreme Court of Georgia</span> · decided Aug 21, 2023 · No. S22G0905 · vacated and remanded with direction</div>
         <div class="op-tags"><span class="tag">expert</span><span class="tag">auto</span></div>
@@ -483,7 +471,7 @@
         </div>
       </article>
 
-      <article id="op-9391147" class="opinion" data-court="ca11" data-areas="procedure" data-date="2023-04-13">
+      <article id="op-9391147" class="opinion" data-court="ca11" data-system="federal" data-jurisdiction="ga" data-areas="procedure" data-date="2023-04-13">
         <div class="op-head"><span class="op-name">Aspen American Insurance Company v. Landstar Ranger, Inc.</span></div>
         <div class="op-meta"><span class="court">U.S. Court of Appeals for the Eleventh Circuit</span> · decided Apr 13, 2023 · No. 22-10740 · affirmed</div>
         <div class="op-tags"><span class="tag">procedure</span></div>
@@ -498,7 +486,7 @@
 
       <section class="archive-year-block" aria-labelledby="y2021">
         <h2 class="archive-year" id="y2021">2021</h2>
-      <article id="op-10367651" class="opinion" data-court="scotga" data-areas="procedure" data-date="2021-12-14">
+      <article id="op-10367651" class="opinion" data-court="scotga" data-system="state" data-jurisdiction="ga" data-areas="procedure" data-date="2021-12-14">
         <div class="op-head"><span class="op-name">Adventure Motorsports Reinsurance, Ltd. v. Interstate National Dealer Services, Inc.</span></div>
         <div class="op-meta"><span class="court">Supreme Court of Georgia</span> · decided Dec 14, 2021 · Nos. S21G0008 &amp; S21G0015 · reversed and remanded in part, vacated and remanded in part</div>
         <div class="op-tags"><span class="tag">procedure</span></div>
@@ -513,7 +501,7 @@
 
       <section class="archive-year-block" aria-labelledby="y2020">
         <h2 class="archive-year" id="y2020">2020</h2>
-      <article id="op-10367320" class="opinion" data-court="scotga" data-areas="auto,damages,procedure" data-date="2020-11-02">
+      <article id="op-10367320" class="opinion" data-court="scotga" data-system="state" data-jurisdiction="ga" data-areas="auto,damages,procedure" data-date="2020-11-02">
         <div class="op-head"><span class="op-name">Quynn v. Hulsey</span></div>
         <div class="op-meta"><span class="court">Supreme Court of Georgia</span> · decided Nov 2, 2020 · No. S19G1612 · reversed</div>
         <div class="op-tags"><span class="tag">auto</span><span class="tag">damages</span><span class="tag">procedure</span></div>
@@ -528,7 +516,7 @@
 
       <section class="archive-year-block" aria-labelledby="y2018">
         <h2 class="archive-year" id="y2018">2018</h2>
-      <article id="op-4549173" class="opinion" data-court="ctapp" data-areas="procedure,damages" data-date="2018-10-29">
+      <article id="op-4549173" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="procedure,damages" data-date="2018-10-29">
         <div class="op-head"><span class="op-name">The Coastal Bank v. Rawlins</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, First Division · decided Oct 29, 2018 · No. A18A1010 · vacated and remanded with direction</div>
         <div class="op-tags"><span class="tag">procedure</span><span class="tag">damages</span></div>
@@ -540,7 +528,7 @@
         </div>
       </article>
 
-      <article id="op-4503667" class="opinion" data-court="ctapp" data-areas="auto,damages,expert,procedure" data-date="2018-05-29">
+      <article id="op-4503667" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="auto,damages,expert,procedure" data-date="2018-05-29">
         <div class="op-head"><span class="op-name">Stephens v. Castano-Castano</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, Third Division · decided May 29, 2018 · No. A18A0100 · affirmed in part, reversed in part</div>
         <div class="op-tags"><span class="tag">auto</span><span class="tag">damages</span><span class="tag">expert</span><span class="tag">procedure</span></div>
@@ -552,7 +540,7 @@
         </div>
       </article>
 
-      <article id="op-10366850" class="opinion" data-court="scotga" data-areas="procedure,damages" data-date="2018-03-15">
+      <article id="op-10366850" class="opinion" data-court="scotga" data-system="state" data-jurisdiction="ga" data-areas="procedure,damages" data-date="2018-03-15">
         <div class="op-head"><span class="op-name">Cooper Tire &amp; Rubber Company v. Koch</span></div>
         <div class="op-meta"><span class="court">Supreme Court of Georgia</span> · decided Mar 15, 2018 · No. S17G0654 · affirmed</div>
         <div class="op-tags"><span class="tag">procedure</span><span class="tag">damages</span></div>
@@ -567,7 +555,7 @@
 
       <section class="archive-year-block" aria-labelledby="y2017">
         <h2 class="archive-year" id="y2017">2017</h2>
-      <article id="op-4406052" class="opinion" data-court="ctapp" data-areas="damages,expert,procedure" data-date="2017-06-23">
+      <article id="op-4406052" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="damages,expert,procedure" data-date="2017-06-23">
         <div class="op-head"><span class="op-name">Hospital Authority of Valdosta/Lowndes County v. Fender</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, First Division · decided Jun 23, 2017 · Nos. A17A0002 &amp; A17A0003 · affirmed in part, reversed in part, and remanded in a17a0002; affirmed in a17a0003</div>
         <div class="op-tags"><span class="tag">damages</span><span class="tag">expert</span><span class="tag">procedure</span></div>
@@ -579,7 +567,7 @@
         </div>
       </article>
 
-      <article id="op-5749712" class="opinion" data-court="scotga" data-areas="premises,negsec,damages" data-date="2017-06-05">
+      <article id="op-5749712" class="opinion" data-court="scotga" data-system="state" data-jurisdiction="ga" data-areas="premises,negsec,damages" data-date="2017-06-05">
         <div class="op-head"><span class="op-name">Martin v. Six Flags Over Georgia II, L.P.</span></div>
         <div class="op-meta"><span class="court">Supreme Court of Georgia</span> · decided Jun 5, 2017 · No.  · affirmed in part and reversed in part, and case remanded with direction</div>
         <div class="op-tags"><span class="tag">premises</span><span class="tag">negligent security</span><span class="tag">damages</span></div>
@@ -591,7 +579,7 @@
         </div>
       </article>
 
-      <article id="op-4372487" class="opinion" data-court="ctapp" data-areas="procedure,auto,damages" data-date="2017-03-01">
+      <article id="op-4372487" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="procedure,auto,damages" data-date="2017-03-01">
         <div class="op-head"><span class="op-name">Harris v. Mahone</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span>, Fifth Division · decided Mar 1, 2017 · No. A16A1748 · affirmed in part, reversed in part, and remanded with direction</div>
         <div class="op-tags"><span class="tag">procedure</span><span class="tag">auto</span><span class="tag">damages</span></div>
@@ -606,7 +594,7 @@
 
       <section class="archive-year-block" aria-labelledby="y2016">
         <h2 class="archive-year" id="y2016">2016</h2>
-      <article id="op-4323507" class="opinion" data-court="ctapp" data-areas="procedure,damages" data-date="2016-11-15">
+      <article id="op-4323507" class="opinion" data-court="ctapp" data-system="state" data-jurisdiction="ga" data-areas="procedure,damages" data-date="2016-11-15">
         <div class="op-head"><span class="op-name">Richardson v. Locklyn</span></div>
         <div class="op-meta"><span class="court">Court of Appeals of Georgia</span> · decided Nov 15, 2016 · No. A16A0978 · vacated and remanded with direction</div>
         <div class="op-tags"><span class="tag">procedure</span><span class="tag">damages</span></div>
@@ -618,7 +606,7 @@
         </div>
       </article>
 
-      <article id="op-3219794" class="opinion" data-court="scotga" data-areas="expert,damages" data-date="2016-07-05">
+      <article id="op-3219794" class="opinion" data-court="scotga" data-system="state" data-jurisdiction="ga" data-areas="expert,damages" data-date="2016-07-05">
         <div class="op-head"><span class="op-name">Scapa Dryer Fabrics, Inc. v. Knight</span></div>
         <div class="op-meta"><span class="court">Supreme Court of Georgia</span> · decided Jul 5, 2016 · No. S15G1278 · reversed</div>
         <div class="op-tags"><span class="tag">expert</span><span class="tag">damages</span></div>
@@ -630,7 +618,7 @@
         </div>
       </article>
 
-      <article id="op-3209755" class="opinion" data-court="scotga" data-areas="damages,expert,procedure" data-date="2016-06-06">
+      <article id="op-3209755" class="opinion" data-court="scotga" data-system="state" data-jurisdiction="ga" data-areas="damages,expert,procedure" data-date="2016-06-06">
         <div class="op-head"><span class="op-name">Toyo Tire North America Manufacturing, Inc. v. Davis</span></div>
         <div class="op-meta"><span class="court">Supreme Court of Georgia</span> · decided Jun 6, 2016 · No. S15G1804 · affirmed</div>
         <div class="op-tags"><span class="tag">damages</span><span class="tag">expert</span><span class="tag">procedure</span></div>
@@ -645,7 +633,7 @@
 
       <section class="archive-year-block" aria-labelledby="y2015">
         <h2 class="archive-year" id="y2015">2015</h2>
-      <article id="op-2812616" class="opinion" data-court="scotga" data-areas="procedure,premises,damages" data-date="2015-06-29">
+      <article id="op-2812616" class="opinion" data-court="scotga" data-system="state" data-jurisdiction="ga" data-areas="procedure,premises,damages" data-date="2015-06-29">
         <div class="op-head"><span class="op-name">Phillips v. Harmon</span></div>
         <div class="op-meta"><span class="court">Supreme Court of Georgia</span> · decided Jun 29, 2015 · Nos. S14G1868 &amp; S14G1893 &amp; S14G1895 · affirmed in part, reversed in part, and remanded</div>
         <div class="op-tags"><span class="tag">procedure</span><span class="tag">premises</span><span class="tag">damages</span></div>
@@ -676,6 +664,6 @@
 
 </div>
 <script src="/app.js?v=2026-05-31" defer></script>
-<script src="/opinions.js?v=2026-06-08" defer></script>
+<script src="/opinions.js?v=2026-06-08b" defer></script>
 </body>
 </html>
