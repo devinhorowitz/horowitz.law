@@ -1,0 +1,86 @@
+name: Georgia Appellate Watch queue
+
+# Add a case by committing its CourtListener URL (or cluster id) to queue.txt: this
+# runs it through the funnel and opens the editorial PR you review and merge. Manual
+# dispatch is also available -- e.g. to retry deferred lines, or with resolve_only to
+# validate resolution first without spending any model calls.
+on:
+  push:
+    branches: [main]          # main only: the bot PR branch rewrites queue.txt, and that
+                              # push must NOT re-trigger this workflow (it would loop).
+    paths: ['queue.txt']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (preview cards + outcomes in the log; write nothing, open no PR)'
+        type: boolean
+        default: false
+      resolve_only:
+        description: 'Resolve only (look up cluster/court/text and print; call no model, change nothing)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  PYTHONUNBUFFERED: '1'
+
+# Own group, separate from the daily update and the backfill, so a queue run neither
+# blocks nor is blocked by them. Each opens its own PR branch off main.
+concurrency:
+  group: opinions-queue
+  cancel-in-progress: false
+
+jobs:
+  queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45     # watchdog: bound a stuck run well under GitHub's 6h cap
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install --upgrade "pypdf>=5,<6"
+
+      - name: Screen queued case(s) through the funnel and render
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+          # CourtListener REST budget. Set these repo Variables on a tier change; unset = free-tier defaults in cl_rate.py.
+          CL_PER_MINUTE: ${{ vars.CL_PER_MINUTE }}
+          CL_PER_HOUR: ${{ vars.CL_PER_HOUR }}
+          CL_PER_DAY: ${{ vars.CL_PER_DAY }}
+          CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
+          # Same models as the daily pipeline (same repo Variables). The queue skips the
+          # Tier-1 Haiku screen, so OPINIONS_SCREEN_MODEL is not set here. The treatment
+          # audit and status preflight use update.py's defaults unless their Variables are set.
+          OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-4-6' }}   # tier 2: full-read gate
+          OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-4-8' }}                    # tier 3: public summary
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          QUEUE_RESOLVE_ONLY: ${{ inputs.resolve_only && '1' || '' }}
+        run: python scripts/queue_cases.py
+
+      # In dry_run / resolve_only the script writes nothing, so this finds no changes
+      # and opens no PR. Otherwise it opens or updates one PR with the run report as the
+      # body, the new card(s) in opinions.json, the re-rendered html/xml, and the drained
+      # queue.txt. Confirm the latest tag at github.com/peter-evans/create-pull-request.
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: bot/opinions-queue
+          title: 'Georgia Appellate Watch: queued case(s)'
+          commit-message: 'opinions: screen queued case(s) into the feed'
+          body-path: scripts/queue_cases_pr_body.md
+          labels: opinions, automated, queue
+          delete-branch: true
+          add-paths: |
+            opinions.json
+            opinions.xml
+            opinions.html
+            archive.html
+            queue.txt
