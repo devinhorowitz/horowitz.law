@@ -35,17 +35,19 @@ import re
 # --- the registry ------------------------------------------------------------
 # label:  jurisdiction name (used in prompts in a later phase)
 # courts: feed order. cl = CourtListener court id; key = internal/display key;
-#         label = human name; suffix = short citation suffix for titles/RSS.
+#         label = human name; suffix = short citation suffix for titles/RSS;
+#         system = "state" or "federal", the federal-vs-state grouping the site
+#         filters on (a state court is always state; ca11/scotus always federal).
 # docket_re / cite_re: jurisdiction-flavored patterns (state courts + the
 #         relevant federal circuit and the U.S. Supreme Court).
 JURISDICTIONS = {
     "ga": {
         "label": "Georgia",
         "courts": [
-            {"cl": "ga",      "key": "scotga", "label": "Supreme Court of Georgia",                       "suffix": " (Ga.)"},
-            {"cl": "gactapp", "key": "ctapp",  "label": "Court of Appeals of Georgia",                    "suffix": " (Ga. Ct. App.)"},
-            {"cl": "ca11",    "key": "ca11",   "label": "U.S. Court of Appeals for the Eleventh Circuit", "suffix": " (11th Cir.)"},
-            {"cl": "scotus",  "key": "scotus", "label": "Supreme Court of the United States",             "suffix": " (U.S.)"},
+            {"cl": "ga",      "key": "scotga", "label": "Supreme Court of Georgia",                       "suffix": " (Ga.)",          "system": "state"},
+            {"cl": "gactapp", "key": "ctapp",  "label": "Court of Appeals of Georgia",                    "suffix": " (Ga. Ct. App.)", "system": "state"},
+            {"cl": "ca11",    "key": "ca11",   "label": "U.S. Court of Appeals for the Eleventh Circuit", "suffix": " (11th Cir.)",     "system": "federal"},
+            {"cl": "scotus",  "key": "scotus", "label": "Supreme Court of the United States",             "suffix": " (U.S.)",         "system": "federal"},
         ],
         # Ga. Court of Appeals (A24A1234) and Supreme Court of Georgia (S24A1234 /
         # S24G1234) share letter+yy+letter+4; federal dockets are yy-NNNNN (4-5
@@ -82,7 +84,9 @@ COURTS_ALL = [c["cl"] for c in _courts]                 # full CourtListener id 
 COURTS = [c.strip() for c in os.environ.get("OPINIONS_COURTS", ",".join(COURTS_ALL)).split(",") if c.strip()]
 COURT_MAP = {c["cl"]: c["key"] for c in _courts}        # CourtListener id -> internal key
 COURT_LABELS = {c["key"]: c["label"] for c in _courts}  # internal key -> human label
+COURT_SYSTEM = {c["key"]: c["system"] for c in _courts}  # internal key -> "state" | "federal"
 TITLE_SUFFIX = {c["key"]: c["suffix"] for c in _courts}  # internal key -> citation suffix
 VALID_KEYS = tuple(c["key"] for c in _courts)           # internal keys (fallback validation)
+JURISDICTION = ACTIVE                                    # active jurisdiction key, e.g. "ga"
 DOCKET_RE = re.compile(_cfg["docket_re"])
 CITE_RE = re.compile(_cfg["cite_re"], re.I)

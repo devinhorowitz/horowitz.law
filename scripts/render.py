@@ -34,6 +34,7 @@ AREA_LABELS = {
     "procedure": "procedure", "damages": "damages",
 }
 COURT_LABELS = jurisdictions.COURT_LABELS   # internal key -> human label
+COURT_SYSTEM = jurisdictions.COURT_SYSTEM   # internal key -> "state" | "federal"
 TITLE_SUFFIX = jurisdictions.TITLE_SUFFIX   # internal key -> short citation suffix
 _WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 _MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -111,13 +112,21 @@ def card_html(e):
     prec_meta = f' \u00b7 <span class="op-noprec">{_esc(prec_note)}</span>' if prec_note else ""
     prec_attr = f' data-precedential="{prec}"' if prec_note else ""
     banner = _treatment_banner(e)
+    # Federal-vs-state is the primary axis the page filters on; jurisdiction (the
+    # state) is secondary. system is a stable property of the court. jurisdiction
+    # falls back to the active jurisdiction for cards that predate per-card
+    # stamping; once a second state is added, the pipeline stamps it on the card
+    # (a federal opinion can be relevant to more than one state, so it cannot be
+    # derived from the court alone).
+    system = COURT_SYSTEM.get(e["court"], "")
+    juris = e.get("jurisdiction") or jurisdictions.JURISDICTION
     div_part = f", {_esc(e['division'])}" if e.get("division") else ""
     tags = "".join(f'<span class="tag">{_esc(AREA_LABELS[c])}</span>' for c in e["areas"])
     meta = (f'<span class="court">{_esc(COURT_LABELS[e["court"]])}</span>{div_part} \u00b7 decided '
             f'{_esc(_date_label(e["date"]))} \u00b7 {_esc(_no_label(e["dockets"]))} \u00b7 {_esc(e["disposition"])}'
             + prec_meta)
     return (
-        f'      <article id="op-{e["cluster_id"]}" class="opinion" data-court="{e["court"]}" data-areas="{",".join(e["areas"])}" data-date="{e["date"]}"{attr}{prec_attr}>\n'
+        f'      <article id="op-{e["cluster_id"]}" class="opinion" data-court="{e["court"]}" data-system="{system}" data-jurisdiction="{juris}" data-areas="{",".join(e["areas"])}" data-date="{e["date"]}"{attr}{prec_attr}>\n'
         f'{banner}'
         f'        <div class="op-head"><span class="op-name">{_esc(e["name"])}</span></div>\n'
         f'        <div class="op-meta">{meta}</div>\n'
