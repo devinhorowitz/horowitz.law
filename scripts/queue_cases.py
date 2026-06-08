@@ -194,6 +194,18 @@ def run():
     print("queue: %d active line(s) | archive has %d card(s) | screen=off(curated) triage=%s summarize=%s"
           % (len(active), len(have), update.TRIAGE_MODEL or "off", update.MODEL))
 
+    # first_seen for a queued card: today if the decision falls inside the public feed's
+    # rolling window (so it appears on /opinions and the digest's #op- anchor resolves),
+    # otherwise its filing date. Older cards render only in /archive, like backfilled ones,
+    # so stamping them "today" would announce them as new this week with a link that misses.
+    today_iso = datetime.date.today().isoformat()
+    try:
+        win_cutoff = datetime.date.today().replace(
+            year=datetime.date.today().year - render.WINDOW_YEARS).isoformat()
+    except ValueError:                          # Feb 29 -> Feb 28 in a non-leap target year
+        win_cutoff = datetime.date.today().replace(
+            year=datetime.date.today().year - render.WINDOW_YEARS, day=28).isoformat()
+
     # Per source-line outcome: line_outcome[idx] = (action, detail)
     #   "remove" -> drop the line (decided; reported in the PR body)
     #   "keep"   -> leave the line active (deferred; retried on the next run)
@@ -258,8 +270,7 @@ def run():
         text = update.pdf_text(r.get("pdf_url"), deadline=tdl)
         if not update._pdf_ok(text):
             try:
-                oid = update.opinion_id_of(r, deadline=tdl)
-                rest = update.opinion_text(oid, deadline=tdl) if oid else ""
+                rest = update.opinion_text_full(r, deadline=tdl)
                 if rest:
                     text = rest
             except cl_rate.RateBudgetExceeded:
@@ -320,7 +331,8 @@ def run():
                 continue
             note = t.get("note") or ""
             time.sleep(0.4)
-            v = update.summarize(court_id, name, docket, date_filed, text, note)
+            v = update.summarize(court_id, name, docket, date_filed, text, note,
+                                 cl_status=r.get("precedential_status", ""))
         except update.ConfigError as e:
             print("  ! configuration error, stopping this run so it surfaces (nothing committed): %s" % e)
             cfg_error = True
@@ -363,7 +375,8 @@ def run():
                 "division": (v.get("division") or None), "date": date_filed,
                 "dockets": dockets or [""], "disposition": disp, "areas": areas, "url": url,
                 "synopsis": synopsis, "why": why,
-                "first_seen": datetime.date.today().isoformat()}  # added today: surfaces in the next digest
+                "precedential": (v.get("precedential") or "unknown"),
+                "first_seen": today_iso if date_filed >= win_cutoff else date_filed}
         added.append(card)
         have.add(cid)                              # dedupe within this run
         line_outcome[idx] = ("remove", None)
@@ -413,7 +426,7 @@ def run():
         if added:
             entries += added
         safeio.atomic_write_json(update.JSON_PATH, entries)
-        n = render.render(entries)
+        n, _total = render.render(entries)   # render returns (recent_shown, total)
         print("rendered %d entries; added %d, treatment %d." % (n, len(added), len(treat_flags)))
     if queue_changed:
         safeio.atomic_write_text(QUEUE_PATH, new_text)

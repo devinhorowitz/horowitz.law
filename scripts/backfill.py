@@ -87,15 +87,15 @@ def seed_result(cid, court_id):
     name = (cl.get("case_name") or cl.get("case_name_full") or "").strip()
     date_filed = (cl.get("date_filed") or "")[:10]
 
-    oid = None
+    oids = []
     for s in (cl.get("sub_opinions") or []):
         if isinstance(s, int):
-            oid = s
-            break
-        m = re.search(r"/opinions/(\d+)/", s) if isinstance(s, str) else None
-        if m:
-            oid = int(m.group(1))
-            break
+            oids.append(s)
+        else:
+            m = re.search(r"/opinions/(\d+)/", s) if isinstance(s, str) else None
+            if m:
+                oids.append(int(m.group(1)))
+    oid = oids[0] if oids else None     # lead (first) sub-opinion drives the PDF url
 
     local_path, download_url = "", ""
     if oid:
@@ -128,7 +128,8 @@ def seed_result(cid, court_id):
         "dateFiled": date_filed,
         "absolute_url": cl.get("absolute_url") or ("/opinion/%d/" % cid),
         "pdf_url": pdf_url,
-        "opinions": [{"id": oid}] if oid else [],
+        "precedential_status": (cl.get("precedential_status") or ""),
+        "opinions": [{"id": i} for i in oids],
     }
 
 
@@ -258,8 +259,7 @@ def run():
         src = "pdf"
         if not update._pdf_ok(text):
             try:
-                oid = update.opinion_id_of(r, deadline=tdl)
-                rest = update.opinion_text(oid, deadline=tdl) if oid else ""
+                rest = update.opinion_text_full(r, deadline=tdl)
             except cl_rate.RateBudgetExceeded:
                 note = cl_rate.PACER.defer_note()
                 print("\nABORT: CourtListener throttled during text fetch%s. "
@@ -293,7 +293,8 @@ def run():
 
         # Tier 3 -- summarize (drafts the card)
         try:
-            v = update.summarize(court_id, name, docket, date_filed, text, note)
+            v = update.summarize(court_id, name, docket, date_filed, text, note,
+                                 cl_status=r.get("precedential_status", ""))
         except Exception as e:
             print("  ! summarize failed for %s (%d): %s" % (name, cid, e))
             rows.append({"cid": cid, "name": name, "status": "error", "detail": "summarize: %s" % str(e)[:140]})
@@ -333,6 +334,7 @@ def run():
                 "division": (v.get("division") or None), "date": date_filed,
                 "dockets": dockets or [""], "disposition": disp, "areas": areas, "url": url,
                 "synopsis": synopsis, "why": why,
+                "precedential": (v.get("precedential") or "unknown"),
                 "first_seen": date_filed}  # filing date, so the digest does not treat it as new
         new_cards.append(card)
         row["status"] = "card"
@@ -362,7 +364,7 @@ def run():
 
     merged = entries + new_cards
     safeio.atomic_write_json(update.JSON_PATH, merged)
-    n = render.render(merged)
+    n, _total = render.render(merged)   # render returns (recent_shown, total)
     _write_pr_body(report)
     print("wrote %d new card(s); opinions.json now %d; rendered %d into opinions.html and opinions.xml."
           % (len(new_cards), len(merged), n))

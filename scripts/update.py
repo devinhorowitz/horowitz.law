@@ -201,6 +201,10 @@ SYSTEM = (
     "  - State the disposition (affirmed; reversed; vacated and remanded; affirmed in part, "
     "reversed in part; appeal dismissed; and so on).\n"
     "  - Be conservative. Describe only what the opinion holds. Do not overstate.\n"
+    "  - The text may contain a majority or per curiam opinion followed by separate "
+    "concurrences and dissents. Summarize ONLY the opinion of the court (the majority "
+    "or per curiam holding). Never state a concurrence's or dissent's position as the "
+    "court's holding; note a significant dissent only as a dissent if it matters.\n"
     "  - Do NOT invent or include any case citations or reporter cites. Refer to the case by "
     "party name only. A statutory cite is fine only if the opinion itself uses it (for example "
     "O.C.G.A. section X, or a federal cite such as 28 U.S.C. section X).\n"
@@ -217,10 +221,17 @@ SYSTEM = (
     "  - areas: one or more codes from EXACTLY this set, using only codes that genuinely fit: "
     "coverage, badfaith, auto, premises, negsec, expert, procedure, damages.\n"
     "  - significance: 'high', 'medium', or 'low'. If you would rate it 'low', set relevant=false instead.\n"
+    "  - precedential: 'published' for a published, citable precedential decision; 'unpublished' if "
+    "the court marked it not for publication or non-precedential (for example a 'DO NOT PUBLISH' or "
+    "'NOT FOR PUBLICATION' designation, or an Eleventh Circuit unpublished opinion); 'physical precedent' "
+    "for a Court of Appeals of Georgia opinion marked physical precedent only under Court of Appeals Rule "
+    "33.2 (less than full concurrence in the division); 'unknown' only if the text gives no indication. "
+    "Decide from the opinion's own designation; the publication-status metadata above is a hint, not "
+    "controlling.\n"
     "  - confidence: 'high', 'medium', or 'low'.\n\n"
     "Output ONLY a JSON object, no markdown and no commentary, with these keys: relevant, "
     "court, division, dockets, disposition, areas, name, synopsis, why, significance, "
-    "confidence. If relevant is false, the remaining fields may be empty."
+    "confidence, precedential. If relevant is false, the remaining fields may be empty."
 )
 
 
@@ -317,7 +328,11 @@ def cluster_id_of(r):
 
 
 ATOM = "{http://www.w3.org/2005/Atom}"
-DOCKET_RE = re.compile(r"\bA\d{2}[A-Z]\d{4}\b")
+# Docket formats across the four courts: Ga. Court of Appeals (A24A1234) and Supreme
+# Court of Georgia (S24A1234 / S24G1234) share the letter+yy+letter+4 shape; federal
+# appellate and Supreme Court dockets are yy-NNNNN (4-5 digits, kept tight to avoid
+# matching statute cites like 51-12). A fallback only; the summarizer supplies dockets.
+DOCKET_RE = re.compile(r"\b(?:[AS]\d{2}[A-Z]\d{4}|\d{2}-\d{4,5})\b")
 
 
 def feed_get(url, deadline=None):
@@ -400,6 +415,44 @@ def opinion_id_of(r, deadline=None):
             if m:
                 return int(m.group(1))
     return None
+
+
+def opinion_ids_of(r, deadline=None):
+    """Every sub-opinion id for a result/cluster (lead, concurrences, dissents), so
+    the REST fallback can read the whole decision rather than only the first writing."""
+    ops = r.get("opinions") or []
+    ids = [o["id"] for o in ops if isinstance(o, dict) and o.get("id")]
+    if ids:
+        return ids
+    sib = [s for s in (r.get("sibling_ids") or []) if s]
+    if sib:
+        return list(sib)
+    cid = cluster_id_of(r)
+    if not cid:
+        return []
+    cl = cl_get("/api/rest/v4/clusters/%d/" % cid, deadline)
+    out = []
+    for s in (cl.get("sub_opinions") or []):
+        if isinstance(s, int):
+            out.append(s)
+        else:
+            m = re.search(r"/opinions/(\d+)/", s) if isinstance(s, str) else None
+            if m:
+                out.append(int(m.group(1)))
+    return out
+
+
+def opinion_text_full(r, deadline=None):
+    """Concatenated text of every sub-opinion in the cluster, mirroring the full
+    slip-opinion PDF. The REST fallback uses this so a cluster whose lead opinion is
+    not listed first never yields only a dissent; the summarizer is separately
+    instructed to summarize only the court's holding."""
+    parts = []
+    for oid in opinion_ids_of(r, deadline):
+        t = opinion_text(oid, deadline)
+        if t:
+            parts.append(t)
+    return "\n\n".join(parts)
 
 
 def opinion_text(oid, deadline=None):
@@ -593,6 +646,25 @@ def anthropic_status():
     return ("operational", desc)
 
 
+def clip(text, limit=None):
+    """Trim opinion text to `limit` characters for the model while keeping the head
+    AND the tail. An opinion's disposition ('Judgment affirmed.') and any dissents
+    sit at the very end, so a head-only cut can hide the disposition or make a
+    dissent the last thing read. Keeping both ends preserves the issue, the holding,
+    the disposition, and the ending, dropping only the long middle, with a marker so
+    the reader knows text was omitted."""
+    limit = limit or MAXCHARS
+    if not text:
+        return ""
+    if len(text) <= limit:
+        return text
+    marker = "\n\n[... middle of the opinion omitted for length ...]\n\n"
+    body = max(limit - len(marker), 1000)
+    head = int(body * 0.72)
+    tail = body - head
+    return text[:head] + marker + text[-tail:]
+
+
 def screen(name, docket, snippet):
     user = "Case name: %s\nDocket: %s\nOpening excerpt:\n%s" % (name, docket, (snippet or "")[:1500])
     return anthropic_json({"model": SCREEN_MODEL, "max_tokens": 256, "system": SCREEN_SYSTEM,
@@ -600,7 +672,7 @@ def screen(name, docket, snippet):
 
 
 def triage(name, docket, text, feed_index=""):
-    user = "Case name: %s\nDocket: %s\n\nFULL OPINION:\n%s" % (name, docket, text[:MAXCHARS])
+    user = "Case name: %s\nDocket: %s\n\nFULL OPINION:\n%s" % (name, docket, clip(text))
     if feed_index:
         user += ("\n\nCASES ALREADY IN THE FEED (id: name). If THIS opinion treats any of them "
                  "negatively, report them in `treats` (low threshold; a later step confirms):\n"
@@ -609,11 +681,12 @@ def triage(name, docket, text, feed_index=""):
                            "messages": [{"role": "user", "content": user}]}, "triage")
 
 
-def summarize(court_id, name, docket, date_filed, text, note):
+def summarize(court_id, name, docket, date_filed, text, note, cl_status=""):
     user = ("Court (CourtListener id): %s\nCase name: %s\nDocket: %s\nDate filed: %s\n\n"
+            "Publication status (CourtListener metadata, may be blank): %s\n\n"
             "Triage note (what a prior reviewer flagged as relevant): %s\n\n"
-            "OPINION TEXT (may be truncated):\n%s"
-            % (court_id, name, docket, date_filed, note or "(none)", text[:MAXCHARS]))
+            "OPINION TEXT (the middle may be omitted for length):\n%s"
+            % (court_id, name, docket, date_filed, cl_status or "(unknown)", note or "(none)", clip(text)))
     body = {"model": MODEL, "max_tokens": OUT_TOKENS, "system": SYSTEM,
             "messages": [{"role": "user", "content": user}]}
     return anthropic_json(body, "summarize")
@@ -649,7 +722,7 @@ def treatment_audit(new_name, new_text, card):
     prop = "%s\nSynopsis: %s\nWhy it matters: %s" % (
         card.get("name", ""), card.get("synopsis", ""), card.get("why", ""))
     user = ("FEED CARD (A):\n%s\n\nLATER OPINION THAT CITES IT (B) -- %s:\n%s"
-            % (prop, new_name, new_text[:MAXCHARS]))
+            % (prop, new_name, clip(new_text)))
     return anthropic_json({"model": AUDIT_MODEL, "max_tokens": 700, "system": AUDIT_SYSTEM,
                            "messages": [{"role": "user", "content": user}]}, "treatment-audit")
 
@@ -766,8 +839,7 @@ def main():
                 # this candidate to the next run rather than blocking.
                 dl = run_start + BUDGET_SEC
                 try:
-                    oid = opinion_id_of(r, deadline=dl)
-                    rest = opinion_text(oid, deadline=dl) if oid else ""
+                    rest = opinion_text_full(r, deadline=dl)
                     if rest:
                         text = rest
                         _dbg("text via rest for %s (%d chars)" % (name, len(text)))
@@ -859,6 +931,7 @@ def main():
         entry = {"cluster_id": cid, "name": (v.get("name") or name).strip(), "court": court,
                  "division": (v.get("division") or None), "date": date_filed, "dockets": dockets,
                  "disposition": disp, "areas": areas, "url": url, "synopsis": synopsis, "why": why,
+                 "precedential": (v.get("precedential") or "unknown"),
                  "first_seen": datetime.date.today().isoformat()}
 
         reasons = []
@@ -933,7 +1006,7 @@ def main():
     state["seen_clusters"] = sorted(seen_all)[-SEEN_CAP:]
     state["updated"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     safeio.atomic_write_json(STATE_PATH, state)
-    n = render.render(entries)
+    n, _total = render.render(entries)   # render returns (recent_shown, total); n is the rolling-window count
     print("rendered %d entries; added %d, flagged %d, treatment %d (%s, dropped %d)"
           % (n, len(added), len(flagged), len(treat_flags), funnel, len(skipped)))
     print(cl_line)

@@ -47,13 +47,31 @@ def _date_label(iso):
 def _no_label(dockets):
     return ("Nos. " + " & ".join(dockets)) if len(dockets) > 1 else ("No. " + dockets[0])
 
+def _eastern_offset(d):
+    """US Eastern UTC offset for a date: EDT (-0400) from the 2nd Sunday of March to
+    the 1st Sunday of November, EST (-0500) otherwise. (Date-level; the 2 a.m.
+    transition does not matter for a noon pubDate.)"""
+    mar1 = datetime.date(d.year, 3, 1)
+    dst_start = mar1 + datetime.timedelta(days=(6 - mar1.weekday()) % 7 + 7)  # 2nd Sunday of March
+    nov1 = datetime.date(d.year, 11, 1)
+    dst_end = nov1 + datetime.timedelta(days=(6 - nov1.weekday()) % 7)        # 1st Sunday of November
+    return "-0400" if dst_start <= d < dst_end else "-0500"
+
 def _rfc822(iso):
     d = datetime.date.fromisoformat(iso)
-    off = "-0500" if d.month in (1, 2, 12) else "-0400"
-    return f"{_WD[d.weekday()]}, {d.day:02d} {_MO[d.month - 1]} {d.year} 12:00:00 {off}"
+    return f"{_WD[d.weekday()]}, {d.day:02d} {_MO[d.month - 1]} {d.year} 12:00:00 {_eastern_offset(d)}"
 
 def _esc(t):  # HTML text content (leave quotes alone)
     return html.escape(t, quote=False)
+
+def _attr(t):  # HTML attribute value (escape quotes too)
+    return html.escape(t or "", quote=True)
+
+def _valid_date(iso):
+    try:
+        datetime.date.fromisoformat((iso or "")[:10]); return True
+    except (ValueError, TypeError):
+        return False
 
 def _sorted(entries):
     return sorted(entries, key=lambda e: (e["date"], int(e.get("cluster_id", 0))), reverse=True)
@@ -89,13 +107,19 @@ def _treatment_banner(e):
 def card_html(e):
     treat = e.get("treatment") or "ok"
     attr = f' data-treatment="{treat}"' if treat != "ok" else ""
+    prec = (e.get("precedential") or "").strip().lower()
+    prec_note = {"unpublished": "unpublished, not binding precedent",
+                 "physical precedent": "physical precedent only, not binding"}.get(prec, "")
+    prec_meta = f' \u00b7 <span class="op-noprec">{_esc(prec_note)}</span>' if prec_note else ""
+    prec_attr = f' data-precedential="{prec}"' if prec_note else ""
     banner = _treatment_banner(e)
     div_part = f", {_esc(e['division'])}" if e.get("division") else ""
     tags = "".join(f'<span class="tag">{_esc(AREA_LABELS[c])}</span>' for c in e["areas"])
     meta = (f'<span class="court">{_esc(COURT_LABELS[e["court"]])}</span>{div_part} \u00b7 decided '
-            f'{_esc(_date_label(e["date"]))} \u00b7 {_esc(_no_label(e["dockets"]))} \u00b7 {_esc(e["disposition"])}')
+            f'{_esc(_date_label(e["date"]))} \u00b7 {_esc(_no_label(e["dockets"]))} \u00b7 {_esc(e["disposition"])}'
+            + prec_meta)
     return (
-        f'      <article id="op-{e["cluster_id"]}" class="opinion" data-court="{e["court"]}" data-areas="{",".join(e["areas"])}" data-date="{e["date"]}"{attr}>\n'
+        f'      <article id="op-{e["cluster_id"]}" class="opinion" data-court="{e["court"]}" data-areas="{",".join(e["areas"])}" data-date="{e["date"]}"{attr}{prec_attr}>\n'
         f'{banner}'
         f'        <div class="op-head"><span class="op-name">{_esc(e["name"])}</span></div>\n'
         f'        <div class="op-meta">{meta}</div>\n'
@@ -103,7 +127,7 @@ def card_html(e):
         f'        <p class="op-synopsis">{_esc(e["synopsis"])}</p>\n'
         f'        <p class="op-why"><strong>Why it matters:</strong> {_esc(e["why"])}</p>\n'
         f'        <div class="op-foot">\n'
-        f'          <span class="op-source"><a href="{e["url"]}" target="_blank" rel="noopener noreferrer">Read the opinion on CourtListener \u2192</a></span>\n'
+        f'          <span class="op-source"><a href="{_attr(e["url"])}" target="_blank" rel="noopener noreferrer">Read the opinion on CourtListener \u2192</a></span>\n'
         f'          <span class="op-disclaimer">AI-drafted summary \u00b7 verify against the opinion</span>\n'
         f'        </div>\n'
         f'      </article>'
@@ -111,11 +135,14 @@ def card_html(e):
 
 def rss_item(e):
     cats = [COURT_LABELS[e["court"]]] + [AREA_LABELS[c] for c in e["areas"]]
-    desc = f'{e["synopsis"]} Why it matters: {e["why"]} AI-drafted summary. Verify against the opinion. {e["url"]}'
+    prec = (e.get("precedential") or "").strip().lower()
+    prec_txt = {"unpublished": " Unpublished; not binding precedent.",
+                "physical precedent": " Physical precedent only; not binding."}.get(prec, "")
+    desc = f'{e["synopsis"]} Why it matters: {e["why"]}{prec_txt} AI-drafted summary. Verify against the opinion. {e["url"]}'
     lines = ["    <item>",
              f"      <title>{xml_escape(e['name'] + TITLE_SUFFIX[e['court']])}</title>",
-             f"      <link>{e['url']}</link>",
-             f'      <guid isPermaLink="true">{e["url"]}</guid>',
+             f"      <link>{xml_escape(e['url'])}</link>",
+             f'      <guid isPermaLink="true">{xml_escape(e["url"])}</guid>',
              f"      <pubDate>{_rfc822(e['date'])}</pubDate>"]
     lines += [f"      <category>{xml_escape(c)}</category>" for c in cats]
     lines += [f"      <description><![CDATA[{desc}]]></description>", "    </item>"]
@@ -160,6 +187,11 @@ def _inject(path, marker, block):
 def render(entries=None):
     if entries is None:
         entries = json.load(open(JSON_PATH, encoding="utf-8"))
+    for e in entries:
+        if not _valid_date(e.get("date")):
+            print("render: skipping a card with an unparseable date %r (%s)"
+                  % (e.get("date"), (e.get("name") or "?")[:50]))
+    entries = [e for e in entries if _valid_date(e.get("date"))]
     entries = _sorted(entries)
 
     cutoff = _cutoff_iso()
