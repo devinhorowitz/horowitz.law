@@ -14,6 +14,7 @@ else in those files is touched.
 import os, re, json, html, datetime
 from xml.sax.saxutils import escape as xml_escape
 import safeio          # crash-safe atomic writes
+import jurisdictions   # per-jurisdiction court labels and citation suffixes
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_PATH    = os.path.join(REPO, "opinions.json")
@@ -32,11 +33,8 @@ AREA_LABELS = {
     "premises": "premises", "negsec": "negligent security", "expert": "expert",
     "procedure": "procedure", "damages": "damages",
 }
-COURT_LABELS = {"ctapp": "Court of Appeals of Georgia", "scotga": "Supreme Court of Georgia",
-                "ca11": "U.S. Court of Appeals for the Eleventh Circuit",
-                "scotus": "Supreme Court of the United States"}
-TITLE_SUFFIX = {"ctapp": " (Ga. Ct. App.)", "scotga": " (Ga.)",
-                "ca11": " (11th Cir.)", "scotus": " (U.S.)"}
+COURT_LABELS = jurisdictions.COURT_LABELS   # internal key -> human label
+TITLE_SUFFIX = jurisdictions.TITLE_SUFFIX   # internal key -> short citation suffix
 _WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 _MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 

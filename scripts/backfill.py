@@ -302,7 +302,7 @@ def run():
 
         areas = [a for a in (v.get("areas") or []) if a in update.VALID_AREAS]
         court = update.COURT_MAP.get(court_id) or (
-            v.get("court") if v.get("court") in ("scotga", "ctapp", "ca11", "scotus") else None)
+            v.get("court") if v.get("court") in update.VALID_KEYS else None)
         dockets = [str(d).strip() for d in (v.get("dockets") or []) if str(d).strip()] or ([docket] if docket else [])
         disp = (v.get("disposition") or "").strip().lower()
         synopsis = (v.get("synopsis") or "").strip()

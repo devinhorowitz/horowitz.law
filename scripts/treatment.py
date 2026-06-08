@@ -89,7 +89,7 @@ BREAKER       = int(os.environ.get("TREATMENT_BREAKER", "4"))   # stop after thi
 DRY_RUN       = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 
 # CourtListener court ids whose decisions can bind or treat a card in our feed.
-SCOPE_COURTS = ["ga", "gactapp", "ca11", "scotus"]
+SCOPE_COURTS = update.COURTS_ALL   # full CL id set for the active jurisdiction
 COURT_MAP    = update.COURT_MAP    # CL court id -> our internal code
 
 TREATMENT_SYSTEM = (

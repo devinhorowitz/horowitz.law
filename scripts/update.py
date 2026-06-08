@@ -29,6 +29,7 @@ Environment:
   OPINIONS_TRIAGE_MODEL    Tier 2 full-read gate (default claude-sonnet-4-6). "" disables it.
   OPINIONS_SCREEN_MODEL    Tier 1 excerpt screen (default claude-haiku-4-5-20251001). "" disables it.
   OPINIONS_COURTS          CourtListener court ids (default "ga,gactapp,ca11,scotus")
+  OPINIONS_JURISDICTION    active jurisdiction key from jurisdictions.py (default "ga")
   OPINIONS_LOOKBACK        fallback look-back window in days when state is empty (default 21)
   OPINIONS_MAX             max opinions evaluated per run (code default 25; the daily workflow raises it to 80 for heavy filing days)
   OPINIONS_SEEN_CAP        max cluster ids kept in opinions_state.json seen list (default 5000; bounds state-file growth)
@@ -54,6 +55,7 @@ sys.path.insert(0, os.path.join(REPO, "scripts"))
 import render          # single source of truth renderer
 import treatment_core  # shared treatment-flag model (the forward escalation writes it)
 import safeio          # crash-safe atomic writes
+import jurisdictions   # per-jurisdiction court config (court map, labels, patterns)
 
 
 class ConfigError(RuntimeError):
@@ -73,7 +75,7 @@ AUDIT_MODEL  = os.environ.get("OPINIONS_AUDIT_MODEL", MODEL)  # escalated treatm
 TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-4-6")
 SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5-20251001")
 VERSION      = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
-COURTS       = [c.strip() for c in os.environ.get("OPINIONS_COURTS", "ga,gactapp,ca11,scotus").split(",") if c.strip()]
+COURTS       = jurisdictions.COURTS         # CL ids the feed iterates (OPINIONS_COURTS narrows it)
 LOOKBACK     = int(os.environ.get("OPINIONS_LOOKBACK", "21"))
 MAX_RUN      = int(os.environ.get("OPINIONS_MAX", "25"))
 SEEN_CAP     = int(os.environ.get("OPINIONS_SEEN_CAP", "5000"))  # cap on seen_clusters kept in state (bounds growth)
@@ -88,9 +90,11 @@ SEARCH_BUDGET= int(os.environ.get("OPINIONS_SEARCH_BUDGET_SEC", "120"))
 STATUS_URL   = os.environ.get("ANTHROPIC_STATUS_URL", "https://status.anthropic.com/api/v2/summary.json")
 STATUS_MODE  = (os.environ.get("ANTHROPIC_STATUS", "on") or "on").strip().lower()  # on | warn | off
 
-COURT_MAP   = {"ga": "scotga", "gactapp": "ctapp", "ca11": "ca11", "scotus": "scotus"}
+COURT_MAP   = jurisdictions.COURT_MAP       # CL court id -> our internal key
+COURTS_ALL  = jurisdictions.COURTS_ALL      # full CL id set, ignoring the OPINIONS_COURTS override
+VALID_KEYS  = jurisdictions.VALID_KEYS      # internal court keys (fallback validation)
 VALID_AREAS = set(render.AREA_LABELS)
-CITE_RE = re.compile(r"\b\d+\s+(?:Ga\.?\s*App\.?|Ga\.?|S\.?\s*E\.?\s*2d|S\.?\s*E\.?|U\.?\s*S\.?|S\.?\s*Ct\.?|L\.?\s*Ed\.?\s*(?:2d)?|F\.?(?:2d|3d|4th)?|F\.?\s*Supp\.?|WL)\s+\d+", re.I)
+CITE_RE = jurisdictions.CITE_RE
 
 SCREEN_SYSTEM = (
     "You are a fast first-pass screener for a curated feed of court decisions for a Georgia "
@@ -328,11 +332,9 @@ def cluster_id_of(r):
 
 
 ATOM = "{http://www.w3.org/2005/Atom}"
-# Docket formats across the four courts: Ga. Court of Appeals (A24A1234) and Supreme
-# Court of Georgia (S24A1234 / S24G1234) share the letter+yy+letter+4 shape; federal
-# appellate and Supreme Court dockets are yy-NNNNN (4-5 digits, kept tight to avoid
-# matching statute cites like 51-12). A fallback only; the summarizer supplies dockets.
-DOCKET_RE = re.compile(r"\b(?:[AS]\d{2}[A-Z]\d{4}|\d{2}-\d{4,5})\b")
+# Docket-number fallback (the summarizer normally supplies dockets); the pattern
+# is jurisdiction-specific and lives in the registry.
+DOCKET_RE = jurisdictions.DOCKET_RE
 
 
 def feed_get(url, deadline=None):
@@ -938,7 +940,7 @@ def main():
         areas = [a for a in (v.get("areas") or []) if a in VALID_AREAS]
         if not areas:
             skipped.append((name, "no recognized practice area")); continue
-        court = COURT_MAP.get(court_id) or (v.get("court") if v.get("court") in ("scotga", "ctapp", "ca11", "scotus") else None)
+        court = COURT_MAP.get(court_id) or (v.get("court") if v.get("court") in VALID_KEYS else None)
         if not court:
             skipped.append((name, "unrecognized court id %s" % court_id)); continue
         dockets = [str(d).strip() for d in (v.get("dockets") or []) if str(d).strip()] or ([docket] if docket else [""])
