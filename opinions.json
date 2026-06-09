@@ -249,7 +249,6 @@
     ],
     "disposition": "reversed",
     "areas": [
-      "coverage",
       "auto",
       "damages"
     ],
@@ -313,7 +312,6 @@
     "disposition": "affirmed in part, reversed in part, and remanded",
     "areas": [
       "procedure",
-      "premises",
       "damages"
     ],
     "url": "https://www.courtlistener.com/opinion/2812616/phillips-v-harmon/",
