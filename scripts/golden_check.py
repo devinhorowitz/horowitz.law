@@ -164,10 +164,11 @@ def summarize_check():
             print("  FAIL %-55s summarize error: %s" % (name[:55], str(e)[:80]))
             continue
         produced = _produced_areas(v)
+        addl = len(v.get("additional_holdings") or [])
         missing = expect - produced
         if not missing:
             ok += 1
-            print("  ok   %-55s areas %s" % (name[:55], ",".join(sorted(produced)) or "(none)"))
+            print("  ok   %-55s areas %s (holdings %d)" % (name[:55], ",".join(sorted(produced)) or "(none)", 1 + addl))
         else:
             regressions.append((name, "missing %s (produced %s)"
                                 % (",".join(sorted(missing)), ",".join(sorted(produced)) or "(none)")))
