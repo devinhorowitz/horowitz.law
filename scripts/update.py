@@ -37,6 +37,7 @@ Environment:
   OPINIONS_SEEN_CAP        max cluster ids kept in opinions_state.json seen list (default 5000; bounds state-file growth)
   OPINIONS_MAXCHARS        opinion characters sent to triage and summarizer (default 60000)
   OPINIONS_MAX_TOKENS      summarizer output token cap (default 4096)
+  OPINIONS_TEMPERATURE     sampling temperature for all model calls (default 0, deterministic)
   DRY_RUN                  if set to 1, evaluate and print but write nothing
   OPINIONS_DEBUG           if set to 1, log every model call and full API error bodies
   OPINIONS_BUDGET_SEC      wall-clock cap on the candidate loop in seconds (default 480)
@@ -87,6 +88,7 @@ SEEN_CAP     = int(os.environ.get("OPINIONS_SEEN_CAP", "5000"))  # cap on seen_c
 MAXCHARS     = int(os.environ.get("OPINIONS_MAXCHARS", "60000"))
 PDF_MIN_CHARS= int(os.environ.get("OPINIONS_PDF_MIN_CHARS", "500"))  # below this, fall back from PDF to REST
 OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
+TEMPERATURE  = float(os.environ.get("OPINIONS_TEMPERATURE", "0"))  # sampling temperature for every model call; 0 = deterministic, which removes the run-to-run tagging variance and lets the golden guards hold a stable baseline
 DRY_RUN      = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "yes")
 BUDGET_SEC   = int(os.environ.get("OPINIONS_BUDGET_SEC", "480"))
@@ -577,6 +579,7 @@ RETRY_STATUS = {429, 500, 502, 503, 529}
 def anthropic_json(body, label="call"):
     """POST to the Messages API. Retries 429 and 5xx with backoff, and on a final
     failure raises with the API's own error body so the cause names itself."""
+    body.setdefault("temperature", TEMPERATURE)
     model = body.get("model", "?")
     last = None
     for attempt in range(5):
