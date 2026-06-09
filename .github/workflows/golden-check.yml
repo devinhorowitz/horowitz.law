@@ -1,17 +1,20 @@
 name: golden-check
 
 # Regression guard for the opinions funnel. Run by hand from the Actions tab.
-#   check  re-runs the real screen+triage tiers against cached opinion text and reports
-#          any regression. No CourtListener calls; safe to run after any prompt change.
-#   build  fetches and caches opinion text for entries missing it (one-time CL cost),
-#          then commits the updated scripts/golden_set.json. Run after adding cases.
+#   check      re-runs the real screen+triage tiers against cached opinion text and reports
+#              any regression. No CourtListener calls; safe to run after any prompt change.
+#   build      fetches and caches opinion text for entries missing it (one-time CL cost),
+#              then commits the updated scripts/golden_set.json. Run after adding cases.
+#   summarize  re-runs the real Opus summarizer on the cached keepers and asserts the
+#              produced areas still cover each case's expected areas. No CourtListener calls;
+#              spends Opus budget, so run it on a summarizer change. Exits nonzero on a drop.
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "check (re-run tiers on cached text) or build (fetch+cache opinion text)"
+        description: "check (screen+triage on cached text), build (fetch+cache text), or summarize (re-run the summarizer and assert area coverage)"
         type: choice
-        options: [check, build]
+        options: [check, build, summarize]
         default: check
 
 permissions:
@@ -38,6 +41,7 @@ jobs:
           # what production actually runs.
           OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}
           OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-4-6' }}
+          OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-4-8' }}
         run: python scripts/golden_check.py ${{ inputs.mode }}
 
       # build refreshes the cached text in scripts/golden_set.json; persist it. The cache is
