@@ -276,6 +276,8 @@ def render(entries=None):
     # is not present, so a missing archive.html never breaks the feed render.
     if os.path.exists(ARCHIVE_PATH):
         _inject(ARCHIVE_PATH, "archive", archive_html(entries))
+        _inject(ARCHIVE_PATH, "areachips", _area_chips())
+        _inject(ARCHIVE_PATH, "jurisdictions", _jurisdiction_options())
 
     # RSS: same rolling window as the page.
     build = _rfc822(recent[0]["date"]) if recent else _rfc822(datetime.date.today().isoformat())
