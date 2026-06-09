@@ -6,8 +6,18 @@
     <atom:link href="https://horowitz.law/opinions.xml" rel="self" type="application/rss+xml" />
     <description>AI-assisted synopses of new Georgia appellate, Eleventh Circuit, and U.S. Supreme Court opinions, filtered for civil litigation and insurance practice. Each synopsis is AI-drafted; the linked opinion is the authority. A curated core, not a complete docket. This feed covers the most recent two years; older opinions are archived by year at https://horowitz.law/archive.</description>
     <language>en-us</language>
-    <lastBuildDate>Mon, 08 Jun 2026 12:00:00 -0400</lastBuildDate>
+    <lastBuildDate>Tue, 09 Jun 2026 12:00:00 -0400</lastBuildDate>
     <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>
+    <item>
+      <title>Vu v. City of Atlanta (Ga. Ct. App.)</title>
+      <link>https://www.courtlistener.com/opinion/10872456/jenny-vu-v-city-of-atlanta/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10872456/jenny-vu-v-city-of-atlanta/</guid>
+      <pubDate>Tue, 09 Jun 2026 12:00:00 -0400</pubDate>
+      <category>Court of Appeals of Georgia</category>
+      <category>auto</category>
+      <category>procedure</category>
+      <description><![CDATA[A city employee driving a city-owned truck rear-ended plaintiff's car, and plaintiff served a municipal ante litem notice demanding $1,000,000. The trial court dismissed the suit, accepting the city's argument that the notice failed to state a 'specific amount' under OCGA § 36-33-5(e) because it exceeded the $500,000 sovereign-immunity waiver for negligent motor-vehicle use. The Court of Appeals reversed, holding that OCGA § 36-92-2 does not cap or limit the waiver but automatically waives immunity up to $500,000 while specifying ways to increase it, and reaffirming that the demanded amount need not be one the municipality is capable of accepting. Why it matters: The decision clarifies that a municipal ante litem notice satisfies the specific-amount requirement of OCGA § 36-33-5(e) even when the demand exceeds the automatic sovereign-immunity waiver under OCGA § 36-92-2. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10872456/jenny-vu-v-city-of-atlanta/]]></description>
+    </item>
     <item>
       <title>GoAuto Insurance Company v. 2B Claims Services Inc. (11th Cir.)</title>
       <link>https://www.courtlistener.com/opinion/10872097/goauto-insurance-company-v-2b-claims-services-inc/</link>

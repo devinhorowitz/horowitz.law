@@ -608,5 +608,25 @@
     "why": "The decision clarifies that a third-party claims adjuster owes no duty to advise an insurer about its own extracontractual bad-faith exposure and that an insurer's independent settlement and payment decisions, not the adjuster's handling, control causation in a negligence claim against the adjuster.",
     "precedential": "unpublished",
     "first_seen": "2026-06-08"
+  },
+  {
+    "cluster_id": 10872456,
+    "name": "Vu v. City of Atlanta",
+    "court": "ctapp",
+    "division": "Third Division",
+    "date": "2026-06-09",
+    "dockets": [
+      "A26A0563"
+    ],
+    "disposition": "reversed",
+    "areas": [
+      "auto",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10872456/jenny-vu-v-city-of-atlanta/",
+    "synopsis": "A city employee driving a city-owned truck rear-ended plaintiff's car, and plaintiff served a municipal ante litem notice demanding $1,000,000. The trial court dismissed the suit, accepting the city's argument that the notice failed to state a 'specific amount' under OCGA § 36-33-5(e) because it exceeded the $500,000 sovereign-immunity waiver for negligent motor-vehicle use. The Court of Appeals reversed, holding that OCGA § 36-92-2 does not cap or limit the waiver but automatically waives immunity up to $500,000 while specifying ways to increase it, and reaffirming that the demanded amount need not be one the municipality is capable of accepting.",
+    "why": "The decision clarifies that a municipal ante litem notice satisfies the specific-amount requirement of OCGA § 36-33-5(e) even when the demand exceeds the automatic sovereign-immunity waiver under OCGA § 36-92-2.",
+    "precedential": "published",
+    "first_seen": "2026-06-09"
   }
 ]
