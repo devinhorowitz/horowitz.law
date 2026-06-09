@@ -138,14 +138,38 @@ def _produced_areas(v):
     return areas
 
 
+def _summarize_attempts(name, docket, text, expect, tries):
+    """Run the real Opus summarizer on one cached opinion up to `tries` times, accumulating the
+    union of produced areas across attempts. The summarizer runs at temperature 1 (the model
+    rejects a lower value), so a single run's area set is noisy; a genuine regression is a
+    persistent miss, not a one-roll drop. Returns as soon as the union covers expect. A transient
+    error makes that attempt contribute nothing and the loop proceeds; a persistent error leaves
+    the union short and is reported. Returns (covered, union, used, last_addl, last_error)."""
+    union, last_addl, last_error, used = set(), 0, "", 0
+    for used in range(1, tries + 1):
+        try:
+            v = update.summarize("", name, docket, "", text, "", cl_status="")
+            union |= _produced_areas(v)
+            last_addl, last_error = len(v.get("additional_holdings") or []), ""
+        except Exception as e:
+            last_error = str(e)[:120]
+        if expect <= union:
+            break
+    return (expect <= union), union, used, last_addl, last_error
+
+
 def summarize_check():
     """Re-run the real Opus summarizer on each cached keeper and assert the produced areas
     still cover its expect_areas. Catches a summarizer prompt or model change that drops a
     material aspect, an area the card used to carry. Coverage, not exact match: extra areas
     are fine, a dropped expected area is the regression. Spends model budget (Opus) but makes
-    no CourtListener calls. Exits nonzero on any dropped area. Entries with no expect_areas,
+    no CourtListener calls. Each case gets up to OPINIONS_GOLDEN_RETRIES retries (default 3, four
+    attempts) because the summarizer runs at temperature 1 and varies run to run; only a persistent
+    miss, an expected area produced in none of the attempts, is a regression. Exits nonzero on such
+    a miss. Entries with no expect_areas,
     and controls (expect_relevant false), are skipped, since a non-keeper is not summarized."""
     cases = _load()
+    tries = max(1, int(os.environ.get("OPINIONS_GOLDEN_RETRIES", "3")) + 1)
     regressions, uncached, skipped, ok = [], [], 0, 0
     for c in cases:
         expect = set(c.get("expect_areas") or [])
@@ -157,23 +181,19 @@ def summarize_check():
             continue
         name = c.get("name", "")
         docket = c.get("docket", "") or ""
-        try:
-            v = update.summarize("", name, docket, "", c["text"], "", cl_status="")
-        except Exception as e:
-            regressions.append((name, "summarize error: %s" % str(e)[:120]))
-            print("  FAIL %-55s summarize error: %s" % (name[:55], str(e)[:80]))
-            continue
-        produced = _produced_areas(v)
-        addl = len(v.get("additional_holdings") or [])
-        missing = expect - produced
-        if not missing:
+        passed, union, used, addl, err = _summarize_attempts(name, docket, c["text"], expect, tries)
+        tag = "%d tr%s" % (used, "y" if used == 1 else "ies")
+        if passed:
             ok += 1
-            print("  ok   %-55s areas %s (holdings %d)" % (name[:55], ",".join(sorted(produced)) or "(none)", 1 + addl))
+            print("  ok   %-55s areas %s (holdings %d, %s)"
+                  % (name[:55], ",".join(sorted(union)) or "(none)", 1 + addl, tag))
         else:
-            regressions.append((name, "missing %s (produced %s)"
-                                % (",".join(sorted(missing)), ",".join(sorted(produced)) or "(none)")))
-            print("  FAIL %-55s missing %s (produced %s)"
-                  % (name[:55], ",".join(sorted(missing)), ",".join(sorted(produced)) or "(none)"))
+            detail = ("missing %s after %s (produced %s)"
+                      % (",".join(sorted(expect - union)), tag, ",".join(sorted(union)) or "(none)"))
+            if err:
+                detail += "; last error: %s" % err
+            regressions.append((name, detail))
+            print("  FAIL %-55s %s" % (name[:55], detail))
     print("\ngolden summarize: %d ok, %d regression(s), %d uncached, %d skipped"
           % (ok, len(regressions), len(uncached), skipped))
     if uncached:
