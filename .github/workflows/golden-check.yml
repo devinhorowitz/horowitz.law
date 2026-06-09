@@ -1,0 +1,56 @@
+name: golden-check
+
+# Regression guard for the opinions funnel. Run by hand from the Actions tab.
+#   check  re-runs the real screen+triage tiers against cached opinion text and reports
+#          any regression. No CourtListener calls; safe to run after any prompt change.
+#   build  fetches and caches opinion text for entries missing it (one-time CL cost),
+#          then commits the updated scripts/golden_set.json. Run after adding cases.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check (re-run tiers on cached text) or build (fetch+cache opinion text)"
+        type: choice
+        options: [check, build]
+        default: check
+
+permissions:
+  contents: write          # build commits the cached scripts/golden_set.json
+
+concurrency:
+  group: golden-check
+  cancel-in-progress: false
+
+jobs:
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Run golden ${{ inputs.mode }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+          # Use the same screen and triage models as the daily funnel, so the guard tests
+          # what production actually runs.
+          OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}
+          OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-4-6' }}
+        run: python scripts/golden_check.py ${{ inputs.mode }}
+
+      # build refreshes the cached text in scripts/golden_set.json; persist it. The cache is
+      # data, not editorial content, so it commits straight to main. [skip ci] avoids retriggering.
+      - name: Commit cached golden set
+        if: inputs.mode == 'build'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain -- scripts/golden_set.json)" ]; then
+            git add scripts/golden_set.json
+            git commit -m "golden: cache opinion text for the regression set [skip ci]"
+            git push origin HEAD:main
+          else
+            echo "no golden-set changes to commit"
+          fi
