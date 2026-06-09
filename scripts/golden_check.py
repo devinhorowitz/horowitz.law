@@ -6,18 +6,24 @@ model change that quietly starts dropping cases the funnel used to keep (or star
 controls it used to drop). It does not chase recall or measure how much the funnel misses;
 it only guards against silent regression on a fixed set.
 
-Two modes:
-  build  fetch and cache each case's opinion text once (the only CourtListener spend).
-         Re-run only when adding cases; entries that already have text are left alone.
-  check  re-run the real screen and triage tiers against the cached text and compare to
-         each case's expected verdict. Makes no CourtListener calls, so it is cheap to run
-         on every prompt change or on spare model budget. Exits nonzero on any regression.
+Three modes:
+  build      fetch and cache each case's opinion text once (the only CourtListener spend).
+             Re-run only when adding cases; entries that already have text are left alone.
+  check      re-run the real screen and triage tiers against the cached text and compare to
+             each case's expected verdict. Makes no CourtListener calls, so it is cheap to run
+             on every prompt change or on spare model budget. Exits nonzero on any regression.
+  summarize  re-run the real Opus summarizer on each cached keeper and assert the produced
+             practice areas still cover the case's expected areas. Catches a summarizer change
+             that drops a material aspect. Makes no CourtListener calls but spends model budget
+             (Opus), so run it on a summarizer change rather than daily. Exits nonzero on any
+             dropped area.
 
 It reuses the funnel's own tiers and fetch path (imported from update.py), so it tests the
 actual pipeline rather than a copy. It cards nothing and never writes opinions.json.
 
-  python scripts/golden_check.py build   # needs COURTLISTENER_TOKEN
-  python scripts/golden_check.py check   # needs ANTHROPIC_API_KEY
+  python scripts/golden_check.py build       # needs COURTLISTENER_TOKEN
+  python scripts/golden_check.py check       # needs ANTHROPIC_API_KEY
+  python scripts/golden_check.py summarize   # needs ANTHROPIC_API_KEY
 """
 import json
 import os
@@ -120,6 +126,71 @@ def check():
     return 1 if regressions else 0
 
 
+def _produced_areas(v):
+    """The practice areas a summarize result covers: the primary holding's areas plus any
+    additional holdings' areas, each filtered to the valid taxonomy, exactly as the funnel
+    records them. A union, so a card that reorganizes coverage across holdings still counts
+    every area it covers."""
+    areas = set(a for a in (v.get("areas") or []) if a in update.VALID_AREAS)
+    for h in (v.get("additional_holdings") or []):
+        if isinstance(h, dict):
+            areas |= set(a for a in (h.get("areas") or []) if a in update.VALID_AREAS)
+    return areas
+
+
+def summarize_check():
+    """Re-run the real Opus summarizer on each cached keeper and assert the produced areas
+    still cover its expect_areas. Catches a summarizer prompt or model change that drops a
+    material aspect, an area the card used to carry. Coverage, not exact match: extra areas
+    are fine, a dropped expected area is the regression. Spends model budget (Opus) but makes
+    no CourtListener calls. Exits nonzero on any dropped area. Entries with no expect_areas,
+    and controls (expect_relevant false), are skipped, since a non-keeper is not summarized."""
+    cases = _load()
+    regressions, uncached, skipped, ok = [], [], 0, 0
+    for c in cases:
+        expect = set(c.get("expect_areas") or [])
+        if not bool(c.get("expect_relevant", True)) or not expect:
+            skipped += 1
+            continue
+        if not c.get("text"):
+            uncached.append(c.get("name", "?"))
+            continue
+        name = c.get("name", "")
+        docket = c.get("docket", "") or ""
+        try:
+            v = update.summarize("", name, docket, "", c["text"], "", cl_status="")
+        except Exception as e:
+            regressions.append((name, "summarize error: %s" % str(e)[:120]))
+            print("  FAIL %-55s summarize error: %s" % (name[:55], str(e)[:80]))
+            continue
+        produced = _produced_areas(v)
+        missing = expect - produced
+        if not missing:
+            ok += 1
+            print("  ok   %-55s areas %s" % (name[:55], ",".join(sorted(produced)) or "(none)"))
+        else:
+            regressions.append((name, "missing %s (produced %s)"
+                                % (",".join(sorted(missing)), ",".join(sorted(produced)) or "(none)")))
+            print("  FAIL %-55s missing %s (produced %s)"
+                  % (name[:55], ",".join(sorted(missing)), ",".join(sorted(produced)) or "(none)"))
+    print("\ngolden summarize: %d ok, %d regression(s), %d uncached, %d skipped"
+          % (ok, len(regressions), len(uncached), skipped))
+    if uncached:
+        print("uncached (run `build` first): %s" % ", ".join(uncached))
+
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        try:
+            with open(summary, "a", encoding="utf-8") as f:
+                f.write("### Golden-set summarize\n\n- %d ok, %d regression(s), %d uncached, %d skipped\n"
+                        % (ok, len(regressions), len(uncached), skipped))
+                for nm, det in regressions:
+                    f.write("- FAIL %s: %s\n" % (nm, det))
+        except Exception as e:
+            print("  . summary write skipped: %s" % e)
+    return 1 if regressions else 0
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "check"
     if mode == "build":
@@ -127,7 +198,9 @@ def main():
         return 0
     if mode == "check":
         return check()
-    print("usage: golden_check.py [build|check]")
+    if mode == "summarize":
+        return summarize_check()
+    print("usage: golden_check.py [build|check|summarize]")
     return 2
 
 
