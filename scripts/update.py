@@ -28,6 +28,7 @@ Environment:
   OPINIONS_MODEL           Tier 3 summarizer (default claude-opus-4-8)
   OPINIONS_TRIAGE_MODEL    Tier 2 full-read gate (default claude-sonnet-4-6). "" disables it.
   OPINIONS_SCREEN_MODEL    Tier 1 excerpt screen (default claude-haiku-4-5-20251001). "" disables it.
+  OPINIONS_CROSSCHECK_MODEL  fidelity check on each drafted card (default = the triage model). "" disables it.
   OPINIONS_COURTS          CourtListener court ids (default "ga,gactapp,ca11,scotus")
   OPINIONS_JURISDICTION    active jurisdiction key from jurisdictions.py (default "ga")
   OPINIONS_LOOKBACK        fallback look-back window in days when state is empty (default 21)
@@ -75,6 +76,7 @@ MODEL        = os.environ.get("OPINIONS_MODEL", "claude-opus-4-8")
 AUDIT_MODEL  = os.environ.get("OPINIONS_AUDIT_MODEL", MODEL)  # escalated treatment audit; Opus by default
 TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-4-6")
 SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5-20251001")
+CROSSCHECK_MODEL = os.environ.get("OPINIONS_CROSSCHECK_MODEL", TRIAGE_MODEL)  # fidelity check on each card; a different model than the Opus summarizer so it is not grading its own work; "" disables
 VERSION      = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
 COURTS       = jurisdictions.COURTS         # CL ids the feed iterates (OPINIONS_COURTS narrows it)
 LOOKBACK     = int(os.environ.get("OPINIONS_LOOKBACK", "21"))
@@ -752,6 +754,48 @@ def treatment_audit(new_name, new_text, card):
                            "messages": [{"role": "user", "content": user}]}, "treatment-audit")
 
 
+CROSSCHECK_SYSTEM = (
+    "You audit a drafted summary of a court opinion for fidelity to the opinion itself, the last "
+    "check before a human editor sees it. You are given the full opinion text and a drafted summary "
+    "of what the court held, with its disposition. Decide ONLY whether the summary accurately states "
+    "the court's actual holding and disposition. FLAG it if the summary misstates the holding, "
+    "overstates how broadly the court ruled, attributes a holding or reasoning the court did not "
+    "reach, gets the disposition or who prevailed backwards, or asserts a fact the opinion does not "
+    "support. Do NOT flag a summary for omitting detail, for word choice, or for emphasis, so long as "
+    "what it does say is correct. If you are genuinely unsure whether the holding is stated "
+    "correctly, FLAG it, because every flag is reviewed by a person and a wrong summary costs more "
+    "than a second look. Output ONLY a JSON object: {\"verdict\": \"match\" or \"flag\", \"reason\": "
+    "\"one sentence; for a flag, name the specific discrepancy\"}."
+)
+
+
+def crosscheck(name, text, entry):
+    """Independent fidelity check on a drafted card: a model other than the Opus summarizer reads the
+    opinion against the drafted holding and flags a summary that misstates it. Flag-and-surface, so it
+    never drops a card; the verdict rides the PR for the editor to judge. Conservative: only an explicit
+    'match' clears, anything else is treated as a flag. Fail-open: any error returns an 'unavailable'
+    verdict so the card still surfaces, marked for a manual look. Reuses the opinion text already in
+    hand, so it costs one model call and no CourtListener calls."""
+    if not CROSSCHECK_MODEL:
+        return None
+    holdings = [{"areas": entry["areas"], "synopsis": entry["synopsis"], "why": entry["why"]}]
+    holdings += entry.get("additional_holdings", [])
+    drafted = "\n\n".join(
+        "Holding %d (areas: %s)\nSynopsis: %s\nWhy it matters: %s"
+        % (i + 1, ", ".join(h["areas"]), h["synopsis"], h["why"])
+        for i, h in enumerate(holdings))
+    user = ("Case name: %s\nDisposition as drafted: %s\n\nDRAFTED SUMMARY:\n%s\n\nFULL OPINION:\n%s"
+            % (name, entry.get("disposition") or "(none stated)", drafted, clip(text)))
+    try:
+        r = anthropic_json({"model": CROSSCHECK_MODEL, "max_tokens": 400, "system": CROSSCHECK_SYSTEM,
+                            "messages": [{"role": "user", "content": user}]}, "crosscheck")
+        verdict = "match" if (r.get("verdict") or "").strip().lower() == "match" else "flag"
+        return {"verdict": verdict, "reason": (r.get("reason") or "").strip()}
+    except Exception as e:
+        print("  ! cross-check unavailable for %s: %s" % (name[:40], e))
+        return {"verdict": "unavailable", "reason": str(e)[:160]}
+
+
 # Party-name matching for the screen override in the candidate loop. A case can
 # return to the feed at a higher court under the same caption (the Supreme Court
 # reviewing a decision we carded from the Court of Appeals), and the caption can
@@ -825,10 +869,12 @@ def _log_run(rec):
                     "- screened %d, triaged %d, summarized %d, audited %d\n"
                     "- carded %d, flagged %d, treatment %d\n"
                     "- dropped %d (screen %d, triage %d, summarizer %d, other %d)\n"
+                    "- CourtListener calls %d, cross-check flags %d\n"
                     % (rec.get("ts", ""), rec.get("screened", 0), rec.get("triaged", 0),
                        rec.get("summarized", 0), rec.get("audited", 0), rec.get("carded", 0),
                        rec.get("flagged", 0), rec.get("treatment", 0), rec.get("dropped", 0),
-                       d.get("screen", 0), d.get("triage", 0), d.get("summarizer", 0), d.get("other", 0)))
+                       d.get("screen", 0), d.get("triage", 0), d.get("summarizer", 0), d.get("other", 0),
+                       rec.get("cl_calls", 0), rec.get("crosscheck_flags", 0)))
         except Exception as e:
             print("  . run summary write skipped: %s" % e)
 
@@ -905,6 +951,7 @@ def main():
           % (since, len(cand), SCREEN_MODEL or "off", TRIAGE_MODEL or "off", MODEL))
 
     added, flagged, skipped = [], [], []
+    crosschecks = {}   # cluster_id -> {"verdict", "reason"} from the fidelity guard; surfaced in the PR, not written to opinions.json
     treat_flags, audit_notes = [], []          # adverse treatment of existing cards (forward escalation)
     evaluated, n_screen, n_triage, n_opus, n_audit = set(), 0, 0, 0, 0
     treatment_changed = False
@@ -1083,6 +1130,9 @@ def main():
         if reasons:
             flagged.append((entry["name"], reasons))
 
+        cc = crosscheck(entry["name"], text, entry)
+        if cc:
+            crosschecks[cid] = cc
         added.append(entry)
         hold_note = (", %d holdings" % (1 + len(additional_holdings))) if additional_holdings else ""
         print("  + %s [%s] %s (sig=%s%s)" % (entry["name"], ",".join(areas), disp, v.get("significance"), hold_note))
@@ -1097,6 +1147,13 @@ def main():
         fr = dict(flagged).get(e["name"])
         if fr:
             lines.append("  - review: %s" % "; ".join(fr))
+        cc = crosschecks.get(e["cluster_id"])
+        if cc and cc["verdict"] == "flag":
+            lines.append("  - cross-check FLAG: %s" % (cc["reason"] or "the summary may misstate the holding; verify against the opinion"))
+        elif cc and cc["verdict"] == "unavailable":
+            lines.append("  - cross-check could not run (%s); verify this card manually" % cc["reason"])
+        elif cc:
+            lines.append("  - cross-check: holding matches the opinion")
     if treat_flags or audit_notes:
         lines += ["", "Treatment flags this run (existing cards; confirm on Shepard\u2019s before relying):"]
         for cardnm, newnm, kind in treat_flags:
@@ -1138,6 +1195,8 @@ def main():
         "screened": n_screen, "triaged": n_triage, "summarized": n_opus, "audited": n_audit,
         "evaluated": len(evaluated), "carded": len(added), "flagged": len(flagged),
         "treatment": len(treat_flags), "dropped": len(skipped), "drops": _drop_counts(skipped),
+        "cl_calls": cl_rate.PACER.calls,
+        "crosscheck_flags": sum(1 for c in crosschecks.values() if c["verdict"] == "flag"),
     })
 
     if not added and not treatment_changed:
