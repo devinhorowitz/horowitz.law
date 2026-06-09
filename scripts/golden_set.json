@@ -1,0 +1,128 @@
+[
+  {
+    "cluster_id": 10862301,
+    "name": "State Farm Mut. Auto. Ins. Co. & GEICO Indemnity Co. v. Barnor-Cooper",
+    "docket": "A26A0526",
+    "expect_relevant": true,
+    "expect_areas": [
+      "coverage",
+      "auto"
+    ],
+    "note": "seeded from a carded opinion; expected to clear screen+triage",
+    "text": ""
+  },
+  {
+    "cluster_id": 10862062,
+    "name": "Johnson v. Everett",
+    "docket": "A26A0099",
+    "expect_relevant": true,
+    "expect_areas": [
+      "procedure",
+      "expert"
+    ],
+    "note": "seeded from a carded opinion; expected to clear screen+triage",
+    "text": ""
+  },
+  {
+    "cluster_id": 10815924,
+    "name": "Loveless v. GSH Investments, LLC",
+    "docket": "A26A0113",
+    "expect_relevant": true,
+    "expect_areas": [
+      "premises"
+    ],
+    "note": "seeded from a carded opinion; expected to clear screen+triage",
+    "text": ""
+  },
+  {
+    "cluster_id": 10809283,
+    "name": "Cannon v. Safeco Insurance Co. of Illinois",
+    "docket": "A25A1847",
+    "expect_relevant": true,
+    "expect_areas": [
+      "coverage",
+      "badfaith",
+      "auto"
+    ],
+    "note": "seeded from a carded opinion; expected to clear screen+triage",
+    "text": ""
+  },
+  {
+    "cluster_id": 10785227,
+    "name": "Giles v. Greenhouse Apartments, LLC",
+    "docket": "A25A2143",
+    "expect_relevant": true,
+    "expect_areas": [
+      "negsec",
+      "premises"
+    ],
+    "note": "seeded from a carded opinion; expected to clear screen+triage",
+    "text": ""
+  },
+  {
+    "cluster_id": 10620084,
+    "name": "John Doe v. Jones",
+    "docket": "A25A0077",
+    "expect_relevant": true,
+    "expect_areas": [
+      "coverage",
+      "auto",
+      "damages"
+    ],
+    "note": "seeded from a carded opinion; expected to clear screen+triage",
+    "text": ""
+  },
+  {
+    "cluster_id": 4503667,
+    "name": "Stephens v. Castano-Castano",
+    "docket": "A18A0100",
+    "expect_relevant": true,
+    "expect_areas": [
+      "auto",
+      "damages",
+      "expert",
+      "procedure"
+    ],
+    "note": "seeded from a carded opinion; expected to clear screen+triage",
+    "text": ""
+  },
+  {
+    "cluster_id": 10669247,
+    "name": "Ferriero v. Progressive Premier Insurance Co.",
+    "docket": "A25A0999",
+    "expect_relevant": true,
+    "expect_areas": [
+      "procedure",
+      "coverage",
+      "auto"
+    ],
+    "note": "seeded from a carded opinion; expected to clear screen+triage",
+    "text": ""
+  },
+  {
+    "cluster_id": 2812616,
+    "name": "Phillips v. Harmon",
+    "docket": "S14G1868",
+    "expect_relevant": true,
+    "expect_areas": [
+      "procedure",
+      "premises",
+      "damages"
+    ],
+    "note": "seeded from a carded opinion; expected to clear screen+triage",
+    "text": ""
+  },
+  {
+    "cluster_id": 3209755,
+    "name": "Toyo Tire North America Manufacturing, Inc. v. Davis",
+    "docket": "S15G1804",
+    "expect_relevant": true,
+    "expect_areas": [
+      "damages",
+      "expert",
+      "procedure"
+    ],
+    "note": "seeded from a carded opinion; expected to clear screen+triage",
+    "text": ""
+  }
+]
