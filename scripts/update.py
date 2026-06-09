@@ -66,6 +66,7 @@ class ConfigError(RuntimeError):
 
 JSON_PATH  = os.path.join(REPO, "opinions.json")
 STATE_PATH = os.path.join(REPO, "opinions_state.json")
+LOG_PATH   = os.path.join(REPO, "opinions_pipeline_log.jsonl")  # append-only per-run health log (observability)
 PR_PATH    = os.path.join(REPO, "scripts", "pr_body.md")
 
 KEY          = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -788,6 +789,50 @@ def party_match(name, card_token_sets):
     return any(len(t & cs) >= 2 for cs in card_token_sets)
 
 
+def _drop_counts(skipped):
+    """Break the run's dropped candidates down by the tier that dropped them, read
+    from the reason prefix. The screen and triage counts are the recall signal: how
+    much each cheap tier discarded before a human ever saw it."""
+    c = {"screen": 0, "triage": 0, "summarizer": 0, "other": 0}
+    for _name, reason in skipped:
+        if reason.startswith("screen:"):
+            c["screen"] += 1
+        elif reason.startswith("triage:"):
+            c["triage"] += 1
+        elif reason.startswith("summarizer:"):
+            c["summarizer"] += 1
+        else:
+            c["other"] += 1
+    return c
+
+
+def _log_run(rec):
+    """Append one JSON line of per-run stats to LOG_PATH for observability, and, when
+    running under Actions, also write a readable summary to the run page. Best-effort:
+    a logging failure must never fail the run."""
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+    except Exception as e:
+        print("  . run-log append skipped: %s" % e)
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        d = rec.get("drops", {})
+        try:
+            with open(summary, "a", encoding="utf-8") as f:
+                f.write(
+                    "### Funnel run %s\n\n"
+                    "- screened %d, triaged %d, summarized %d, audited %d\n"
+                    "- carded %d, flagged %d, treatment %d\n"
+                    "- dropped %d (screen %d, triage %d, summarizer %d, other %d)\n"
+                    % (rec.get("ts", ""), rec.get("screened", 0), rec.get("triaged", 0),
+                       rec.get("summarized", 0), rec.get("audited", 0), rec.get("carded", 0),
+                       rec.get("flagged", 0), rec.get("treatment", 0), rec.get("dropped", 0),
+                       d.get("screen", 0), d.get("triage", 0), d.get("summarizer", 0), d.get("other", 0)))
+        except Exception as e:
+            print("  . run summary write skipped: %s" % e)
+
+
 def main():
     if not KEY:
         print("ERROR: ANTHROPIC_API_KEY is not set."); sys.exit(1)
@@ -1085,6 +1130,15 @@ def main():
 
     os.makedirs(os.path.dirname(PR_PATH), exist_ok=True)
     open(PR_PATH, "w", encoding="utf-8").write(pr_body)
+
+    # Per-run health record (every non-dry run, no-op or not), so the funnel's activity
+    # and how much each tier discards are visible without reading raw logs.
+    _log_run({
+        "ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "screened": n_screen, "triaged": n_triage, "summarized": n_opus, "audited": n_audit,
+        "evaluated": len(evaluated), "carded": len(added), "flagged": len(flagged),
+        "treatment": len(treat_flags), "dropped": len(skipped), "drops": _drop_counts(skipped),
+    })
 
     if not added and not treatment_changed:
         # Nothing to card, but persist the clusters fully evaluated this run as seen, so the
