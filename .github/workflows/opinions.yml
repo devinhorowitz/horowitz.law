@@ -10,6 +10,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write          # the failure-alert step opens or comments on a tracking issue
 
 # Workflow-wide environment. PYTHONUNBUFFERED makes the script stream its log live
 # instead of in one burst at the end.
@@ -48,9 +49,9 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: '3.12'
 
@@ -85,17 +86,17 @@ jobs:
         run: |
           if [ -n "$(git status --porcelain -- opinions.json opinions.xml opinions.html archive.html)" ]; then
             echo "kind=content" >> "$GITHUB_OUTPUT"
-          elif [ -n "$(git status --porcelain -- opinions_state.json)" ]; then
+          elif [ -n "$(git status --porcelain -- opinions_state.json opinions_pipeline_log.jsonl)" ]; then
             echo "kind=state" >> "$GITHUB_OUTPUT"
           else
             echo "kind=none" >> "$GITHUB_OUTPUT"
           fi
 
       # Opens or updates a pull request only when the run changed tracked files.
-      # Confirm the latest tag at github.com/peter-evans/create-pull-request before pinning.
+      # Pinned to a commit SHA below; the trailing # v8 is the readable version. Bump both together when updating.
       - name: Open pull request
         if: steps.guard.outputs.skip != 'true' && steps.classify.outputs.kind == 'content'
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           branch: bot/opinions-update
           title: 'Georgia Appellate Watch: new opinions'
@@ -110,14 +111,33 @@ jobs:
             opinions.html
             archive.html
 
-      # No-op run: the funnel marked the cases it screened as seen so the next run does not
-      # re-evaluate them. That is bookkeeping, not editorial content, so commit it straight
-      # to main with no review PR. [skip ci] keeps the push from triggering other workflows.
-      - name: Commit seen-state on a no-op run
+      # No-op run: the funnel carded nothing, so there is no review PR. It still records this
+      # run's health stats, and marks the clusters it screened as seen so the next run does not
+      # re-evaluate them. Both are bookkeeping, not editorial content, so they go straight to
+      # main with no PR. [skip ci] keeps the push from triggering other workflows. (On a content
+      # run the stats line is not persisted here; that run is documented by its PR and opinions.json.)
+      - name: Commit run stats and seen-state on a no-op run
         if: steps.guard.outputs.skip != 'true' && steps.classify.outputs.kind == 'state'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add opinions_state.json
-          git commit -m "opinions: mark screened cases seen [skip ci]"
+          git add opinions_state.json opinions_pipeline_log.jsonl
+          git commit -m "opinions: record run stats; mark screened cases seen [skip ci]"
           git push origin HEAD:main
+
+      # Surfaces a broken run instead of letting it fail silently. Runs only on failure,
+      # finds the one open tracking issue and comments, or opens it the first time, so
+      # repeated failures collect on a single issue rather than spamming new ones.
+      - name: Report a failed run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="A scheduled opinions funnel run failed. ${run_url}"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Opinions funnel run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions funnel run failures" --body "$body"
+          fi
