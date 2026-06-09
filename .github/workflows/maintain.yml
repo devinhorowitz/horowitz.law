@@ -1,0 +1,57 @@
+name: opinions-maintenance
+
+# Budget-gated maintenance for the opinions funnel. Daily, off-peak, and self-gating.
+# It always runs the CourtListener-free golden regression check, and, only when the
+# funnel has left comfortable CourtListener headroom, re-validates a small rotating
+# slice of already-published cards. It commits nothing; findings go to the run summary
+# and a tracking issue. Scheduled at 13:37 UTC, offset from the funnel's :17 ticks and
+# clear of the Thursday 21:00 to 23:59 PT CourtListener maintenance window.
+on:
+  schedule:
+    - cron: '37 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read          # reads the repo and the pipeline log; commits nothing
+  issues: write           # opens or updates the maintenance findings issue
+
+concurrency:
+  group: opinions-maintenance
+  cancel-in-progress: false
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Run maintenance
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+          # Same models the funnel uses, so the golden check and the cross-check test
+          # what production actually runs.
+          OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}
+          OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-4-6' }}
+          OPINIONS_CROSSCHECK_MODEL: ${{ vars.OPINIONS_CROSSCHECK_MODEL || 'claude-sonnet-4-6' }}
+          # Reserve and slice are repo-variable tunable; defaults are conservative.
+          OPINIONS_MAINT_RESERVE: ${{ vars.OPINIONS_MAINT_RESERVE || '50' }}
+          OPINIONS_MAINT_SLICE: ${{ vars.OPINIONS_MAINT_SLICE || '3' }}
+        run: python scripts/maintain.py
+
+      - name: Report maintenance findings
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="Opinions maintenance flagged a finding or hit an error. ${run_url}"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Opinions maintenance findings' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body "$body"
+          fi
