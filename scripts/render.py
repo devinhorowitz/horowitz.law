@@ -103,6 +103,40 @@ def _treatment_banner(e):
             f'<span class="op-treat-label">{_TREAT_LABEL.get(t, "Flagged")}</span> '
             f'{body}{_TREAT_TAIL.get(t, "")}</div>\n')
 
+def all_areas(e):
+    """Union of a card's practice areas across its primary and any additional
+    holdings, order-preserving (primary areas first). Drives the card's tag row,
+    its data-areas attribute, and its RSS categories, so a card with two holdings
+    in different areas is found under either area's filter."""
+    out = list(e.get("areas") or [])
+    for h in (e.get("additional_holdings") or []):
+        for a in (h.get("areas") or []):
+            if a not in out:
+                out.append(a)
+    return out
+
+
+def _area_chips():
+    """The practice-area filter chips for opinions.html, generated from AREA_LABELS
+    so the taxonomy lives in one place. Injected between the areachips markers."""
+    out = ['      <button class="chip" type="button" data-area-filter="all" aria-pressed="true">all</button>']
+    for code, label in AREA_LABELS.items():
+        out.append('      <button class="chip" type="button" data-area-filter="%s" aria-pressed="false">%s</button>'
+                   % (code, _esc(label)))
+    return "\n".join(out)
+
+
+def _jurisdiction_options():
+    """The jurisdiction <select> options for opinions.html, generated from the
+    registry so adding a state is one registry entry. The active jurisdiction is
+    selected. Injected between the jurisdictions markers (nested in the select)."""
+    out = []
+    for key, label in jurisdictions.ALL_JURISDICTIONS:
+        sel = " selected" if key == jurisdictions.JURISDICTION else ""
+        out.append('          <option value="%s"%s>%s</option>' % (key, sel, _esc(label.lower())))
+    return "\n".join(out)
+
+
 def card_html(e):
     treat = e.get("treatment") or "ok"
     attr = f' data-treatment="{treat}"' if treat != "ok" else ""
@@ -120,19 +154,39 @@ def card_html(e):
     # derived from the court alone).
     system = COURT_SYSTEM.get(e["court"], "")
     juris = e.get("jurisdiction") or jurisdictions.JURISDICTION
+    areas_all = all_areas(e)
     div_part = f", {_esc(e['division'])}" if e.get("division") else ""
-    tags = "".join(f'<span class="tag">{_esc(AREA_LABELS[c])}</span>' for c in e["areas"])
+    tags = "".join(f'<span class="tag">{_esc(AREA_LABELS[c])}</span>' for c in areas_all)
     meta = (f'<span class="court">{_esc(COURT_LABELS[e["court"]])}</span>{div_part} \u00b7 decided '
             f'{_esc(_date_label(e["date"]))} \u00b7 {_esc(_no_label(e["dockets"]))} \u00b7 {_esc(e["disposition"])}'
             + prec_meta)
+    # One synopsis and reason for the common single-holding opinion (markup
+    # unchanged). When a decision has additional distinct holdings, each renders as
+    # its own equally weighted block labeled with its areas, so a salient secondary
+    # holding is never crowded out and stays reachable under its own area filter.
+    additional = e.get("additional_holdings") or []
+    if additional:
+        def _holding(h_areas, syn, why):
+            ht = "".join(f'<span class="tag">{_esc(AREA_LABELS[c])}</span>' for c in h_areas)
+            return (f'          <div class="op-holding">\n'
+                    f'            <div class="op-holding-areas">{ht}</div>\n'
+                    f'            <p class="op-synopsis">{_esc(syn)}</p>\n'
+                    f'            <p class="op-why"><strong>Why it matters:</strong> {_esc(why)}</p>\n'
+                    f'          </div>\n')
+        blocks = _holding(e["areas"], e["synopsis"], e["why"])
+        for h in additional:
+            blocks += _holding(h.get("areas") or [], h.get("synopsis") or "", h.get("why") or "")
+        body = f'        <div class="op-holdings">\n{blocks}        </div>\n'
+    else:
+        body = (f'        <p class="op-synopsis">{_esc(e["synopsis"])}</p>\n'
+                f'        <p class="op-why"><strong>Why it matters:</strong> {_esc(e["why"])}</p>\n')
     return (
-        f'      <article id="op-{e["cluster_id"]}" class="opinion" data-court="{e["court"]}" data-system="{system}" data-jurisdiction="{juris}" data-areas="{",".join(e["areas"])}" data-date="{e["date"]}"{attr}{prec_attr}>\n'
+        f'      <article id="op-{e["cluster_id"]}" class="opinion" data-court="{e["court"]}" data-system="{system}" data-jurisdiction="{juris}" data-areas="{",".join(areas_all)}" data-date="{e["date"]}"{attr}{prec_attr}>\n'
         f'{banner}'
         f'        <div class="op-head"><span class="op-name">{_esc(e["name"])}</span></div>\n'
         f'        <div class="op-meta">{meta}</div>\n'
         f'        <div class="op-tags">{tags}</div>\n'
-        f'        <p class="op-synopsis">{_esc(e["synopsis"])}</p>\n'
-        f'        <p class="op-why"><strong>Why it matters:</strong> {_esc(e["why"])}</p>\n'
+        f'{body}'
         f'        <div class="op-foot">\n'
         f'          <span class="op-source"><a href="{_attr(e["url"])}" target="_blank" rel="noopener noreferrer">Read the opinion on CourtListener \u2192</a></span>\n'
         f'          <span class="op-disclaimer">AI-drafted summary \u00b7 verify against the opinion</span>\n'
@@ -141,11 +195,13 @@ def card_html(e):
     )
 
 def rss_item(e):
-    cats = [COURT_LABELS[e["court"]]] + [AREA_LABELS[c] for c in e["areas"]]
+    cats = [COURT_LABELS[e["court"]]] + [AREA_LABELS[c] for c in all_areas(e)]
     prec = (e.get("precedential") or "").strip().lower()
     prec_txt = {"unpublished": " Unpublished; not binding precedent.",
                 "physical precedent": " Physical precedent only; not binding."}.get(prec, "")
-    desc = f'{e["synopsis"]} Why it matters: {e["why"]}{prec_txt} AI-drafted summary. Verify against the opinion. {e["url"]}'
+    extra = "".join(f' Also: {h.get("synopsis", "")} Why it matters: {h.get("why", "")}'
+                    for h in (e.get("additional_holdings") or []))
+    desc = f'{e["synopsis"]} Why it matters: {e["why"]}{extra}{prec_txt} AI-drafted summary. Verify against the opinion. {e["url"]}'
     lines = ["    <item>",
              f"      <title>{xml_escape(e['name'] + TITLE_SUFFIX[e['court']])}</title>",
              f"      <link>{xml_escape(e['url'])}</link>",
@@ -176,9 +232,12 @@ def archive_html(entries):
     return nav + "\n\n" + "\n\n".join(blocks)
 
 def _inject(path, marker, block):
-    pat = re.compile(r'(<!-- ' + marker + r':start.*?-->).*?<!-- ' + marker + r':end -->', re.S)
+    # Capture the start marker's leading indent and reuse it for the regenerated
+    # end marker, so a marker pair nested at any depth (for example inside a
+    # <select>) stays aligned. Behavior-neutral for the existing top-level markers.
+    pat = re.compile(r'([ \t]*)(<!-- ' + marker + r':start.*?-->).*?<!-- ' + marker + r':end -->', re.S)
     doc = open(path, encoding="utf-8").read()
-    repl = lambda m: m.group(1) + "\n" + block + "\n      <!-- " + marker + ":end -->"
+    repl = lambda m: m.group(1) + m.group(2) + "\n" + block + "\n" + m.group(1) + "<!-- " + marker + ":end -->"
     doc, n = pat.subn(repl, doc, count=1)
     if n != 1:
         # The marker pair is the contract between the page and the renderer. If it
@@ -206,6 +265,12 @@ def render(entries=None):
 
     # Public feed: rolling WINDOW_YEARS window.
     _inject(HTML_PATH, "opinions", "\n\n".join(card_html(e) for e in recent))
+
+    # Filter chrome generated from a single source: the practice-area chips from
+    # AREA_LABELS, the jurisdiction options from the registry. Keeps the page's
+    # filters from drifting out of sync with the taxonomy as either one grows.
+    _inject(HTML_PATH, "areachips", _area_chips())
+    _inject(HTML_PATH, "jurisdictions", _jurisdiction_options())
 
     # Full archive: everything, grouped by year. Skipped gracefully if the file
     # is not present, so a missing archive.html never breaks the feed render.

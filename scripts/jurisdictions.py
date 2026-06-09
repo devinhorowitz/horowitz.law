@@ -88,5 +88,6 @@ COURT_SYSTEM = {c["key"]: c["system"] for c in _courts}  # internal key -> "stat
 TITLE_SUFFIX = {c["key"]: c["suffix"] for c in _courts}  # internal key -> citation suffix
 VALID_KEYS = tuple(c["key"] for c in _courts)           # internal keys (fallback validation)
 JURISDICTION = ACTIVE                                    # active jurisdiction key, e.g. "ga"
+ALL_JURISDICTIONS = [(k, v["label"]) for k, v in JURISDICTIONS.items()]  # (key, label) per registered jurisdiction, for the page's jurisdiction selector
 DOCKET_RE = re.compile(_cfg["docket_re"])
 CITE_RE = re.compile(_cfg["cite_re"], re.I)

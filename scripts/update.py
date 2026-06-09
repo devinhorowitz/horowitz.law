@@ -156,8 +156,9 @@ TRIAGE_SYSTEM = (
     "Output ONLY a JSON object with keys: relevant (true or false), significance ('high', "
     "'medium', or 'low'), areas (a list of codes from: coverage, badfaith, auto, premises, "
     "negsec, expert, procedure, damages), note (one or two sentences telling the next reviewer "
-    "exactly what in the opinion is relevant and worth summarizing, especially if it is "
-    "buried), treats (a list of negatively-treated feed cases as described above, or an empty "
+    "exactly what in the opinion is relevant and worth summarizing, especially if it is buried, "
+    "and flagging when the opinion decides more than one distinct salient holding), treats (a "
+    "list of negatively-treated feed cases as described above, or an empty "
     "list), reason (a few words). If relevant is false, areas and note may be empty, but still "
     "fill treats when the opinion negatively treats a listed case."
 )
@@ -201,6 +202,7 @@ SYSTEM = (
     "on close calls.\n\n"
     "If you INCLUDE it, write the digest in this house style:\n"
     "  - A 2 to 4 sentence synopsis, then a separate one-sentence reason it matters, written neutrally. State the decision's practical significance to anyone practicing in the area: the rule it establishes, clarifies, or changes, and the consequence that follows. Write it from no party's side. Do not frame the decision as helping or hurting plaintiffs, defendants, insurers, or insureds, and do not use words like win, loss, victory, blow, caution for carriers, defense-friendly, or plaintiff-friendly. Say what the decision does, not who it helps.\n"
+    "  - Most opinions decide a single salient point: summarize it in 'synopsis' and 'why', and leave 'additional_holdings' empty. But when one opinion decides TWO OR MORE genuinely distinct salient holdings in DIFFERENT areas (for example an insurance-coverage holding and an unrelated expert-admissibility holding), do not collapse them into one and do not let the more prominent holding crowd out the other. Put the first holding in 'synopsis', 'why', and 'areas', and put each further holding in 'additional_holdings' as its own object, written to the same standard and neither subordinated nor dropped. This is only for separate holdings on different points, not for the several steps of a single holding, and it is rare: most cards have no additional holdings.\n"
     "  - Neutral reporter voice. Lowercase party roles (plaintiff, defendant, insurer).\n"
     "  - State the disposition (affirmed; reversed; vacated and remanded; affirmed in part, "
     "reversed in part; appeal dismissed; and so on).\n"
@@ -224,6 +226,9 @@ SYSTEM = (
     "  - disposition: a short lowercase phrase.\n"
     "  - areas: one or more codes from EXACTLY this set, using only codes that genuinely fit: "
     "coverage, badfaith, auto, premises, negsec, expert, procedure, damages.\n"
+    "  - additional_holdings: an empty list for the usual single-holding opinion; otherwise a list "
+    "of objects, one per salient holding beyond the first, each with 'areas' (codes from the same set), "
+    "'synopsis' (2 to 4 sentences), and 'why' (one sentence), all under the same rules as above.\n"
     "  - significance: 'high', 'medium', or 'low'. If you would rate it 'low', set relevant=false instead.\n"
     "  - precedential: 'published' for a published, citable precedential decision; 'unpublished' if "
     "the court marked it not for publication or non-precedential (for example a 'DO NOT PUBLISH' or "
@@ -234,8 +239,8 @@ SYSTEM = (
     "controlling.\n"
     "  - confidence: 'high', 'medium', or 'low'.\n\n"
     "Output ONLY a JSON object, no markdown and no commentary, with these keys: relevant, "
-    "court, division, dockets, disposition, areas, name, synopsis, why, significance, "
-    "confidence, precedential. If relevant is false, the remaining fields may be empty."
+    "court, division, dockets, disposition, areas, name, synopsis, why, additional_holdings, "
+    "significance, confidence, precedential. If relevant is false, the remaining fields may be empty."
 )
 
 
@@ -999,16 +1004,32 @@ def main():
         synopsis = (v.get("synopsis") or "").strip()
         why = (v.get("why") or "").strip()
 
+        # Additional distinct holdings (rare). Each is validated like the primary
+        # and dropped if malformed; stored only when present, so a single-holding
+        # card's shape is unchanged.
+        additional_holdings = []
+        for h in (v.get("additional_holdings") or []):
+            if not isinstance(h, dict):
+                continue
+            h_areas = [a for a in (h.get("areas") or []) if a in VALID_AREAS]
+            h_syn = (h.get("synopsis") or "").strip()
+            h_why = (h.get("why") or "").strip()
+            if h_areas and h_syn and h_why:
+                additional_holdings.append({"areas": h_areas, "synopsis": h_syn, "why": h_why})
+
         entry = {"cluster_id": cid, "name": (v.get("name") or name).strip(), "court": court,
                  "division": (v.get("division") or None), "date": date_filed, "dockets": dockets,
                  "disposition": disp, "areas": areas, "url": url, "synopsis": synopsis, "why": why,
                  "precedential": (v.get("precedential") or "unknown"),
                  "first_seen": datetime.date.today().isoformat()}
+        if additional_holdings:
+            entry["additional_holdings"] = additional_holdings
 
         reasons = []
         if (v.get("confidence") or "").lower() == "low":
             reasons.append("low confidence")
-        if CITE_RE.search(synopsis) or CITE_RE.search(why):
+        if (CITE_RE.search(synopsis) or CITE_RE.search(why)
+                or any(CITE_RE.search(h["synopsis"]) or CITE_RE.search(h["why"]) for h in additional_holdings)):
             reasons.append("contains a reporter-style citation")
         if not disp:
             reasons.append("no disposition")
@@ -1018,13 +1039,16 @@ def main():
             flagged.append((entry["name"], reasons))
 
         added.append(entry)
-        print("  + %s [%s] %s (sig=%s)" % (entry["name"], ",".join(areas), disp, v.get("significance")))
+        hold_note = (", %d holdings" % (1 + len(additional_holdings))) if additional_holdings else ""
+        print("  + %s [%s] %s (sig=%s%s)" % (entry["name"], ",".join(areas), disp, v.get("significance"), hold_note))
 
     lines = ["## Georgia Appellate Watch: %d new opinion(s)" % len(added), ""]
     for e in added:
         cl = render.COURT_LABELS[e["court"]]
-        lines.append("- **%s** (%s, %s): %s. areas: %s. Read: %s"
-                     % (e["name"], cl, e["date"], e["disposition"] or "(none)", ", ".join(e["areas"]), e["url"]))
+        hold_note = " [%d holdings]" % (1 + len(e["additional_holdings"])) if e.get("additional_holdings") else ""
+        lines.append("- **%s** (%s, %s): %s. areas: %s%s. Read: %s"
+                     % (e["name"], cl, e["date"], e["disposition"] or "(none)",
+                        ", ".join(render.all_areas(e)), hold_note, e["url"]))
         fr = dict(flagged).get(e["name"])
         if fr:
             lines.append("  - review: %s" % "; ".join(fr))
