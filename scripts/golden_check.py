@@ -72,7 +72,7 @@ def _kept(c):
     docket = c.get("docket", "") or ""
     text = c.get("text") or ""
     s = update.screen(name, docket, text[:SNIPPET_CHARS])
-    if not s.get("relevant"):
+    if not s.get("pass"):
         return False, "screen dropped: %s" % (s.get("reason") or "not a fit")
     t = update.triage(name, docket, text)
     if not t.get("relevant"):
