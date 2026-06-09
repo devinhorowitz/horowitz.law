@@ -588,5 +588,25 @@
     "why": "This decision establishes binding Eleventh Circuit authority that the FAAAA preempts state-law negligent-carrier-selection claims against freight brokers and that the safety exception does not apply to such broker claims, defining the scope of broker liability in trucking cases in the circuit.",
     "first_seen": "2023-04-13",
     "precedential": "published"
+  },
+  {
+    "cluster_id": 10872097,
+    "name": "GoAuto Insurance Company v. 2B Claims Services Inc.",
+    "court": "ca11",
+    "division": null,
+    "date": "2026-06-08",
+    "dockets": [
+      "24-13643"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "badfaith",
+      "auto"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10872097/goauto-insurance-company-v-2b-claims-services-inc/",
+    "synopsis": "An insurer sued the third-party claims adjuster it hired, alleging the adjuster negligently failed to advise it about the risk of excess bad-faith liability after the insurer let a checks-in-hand policy-limits deadline pass and later settled for about $220,000 above the policy limits. Applying Florida bad-faith law, the Eleventh Circuit affirmed summary judgment for the adjuster, holding that a claims adjuster has no duty to advise an insurer about its own legal risk of excess bad-faith exposure because such advice constitutes legal advice, and that the insurer's own decision to demand signed releases and not deliver the checks by the deadline, not the adjuster's conduct, proximately caused the excess settlement. The court noted the insurer knew of the checks-in-hand requirement eleven days before the deadline and could have delivered the checks.",
+    "why": "The decision clarifies that a third-party claims adjuster owes no duty to advise an insurer about its own extracontractual bad-faith exposure and that an insurer's independent settlement and payment decisions, not the adjuster's handling, control causation in a negligence claim against the adjuster.",
+    "precedential": "unpublished",
+    "first_seen": "2026-06-08"
   }
 ]
