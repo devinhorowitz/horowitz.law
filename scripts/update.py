@@ -29,6 +29,7 @@ Environment:
   OPINIONS_TRIAGE_MODEL    Tier 2 full-read gate (default claude-sonnet-4-6). "" disables it.
   OPINIONS_SCREEN_MODEL    Tier 1 excerpt screen (default claude-haiku-4-5-20251001). "" disables it.
   OPINIONS_CROSSCHECK_MODEL  fidelity check on each drafted card (default = the triage model). "" disables it.
+  OPINIONS_COMPLETENESS_MODEL  completeness check on each drafted card (default = the triage model). "" disables it.
   OPINIONS_COURTS          CourtListener court ids (default "ga,gactapp,ca11,scotus")
   OPINIONS_JURISDICTION    active jurisdiction key from jurisdictions.py (default "ga")
   OPINIONS_LOOKBACK        fallback look-back window in days when state is empty (default 21)
@@ -77,6 +78,7 @@ AUDIT_MODEL  = os.environ.get("OPINIONS_AUDIT_MODEL", MODEL)  # escalated treatm
 TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-4-6")
 SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5-20251001")
 CROSSCHECK_MODEL = os.environ.get("OPINIONS_CROSSCHECK_MODEL", TRIAGE_MODEL)  # fidelity check on each card; a different model than the Opus summarizer so it is not grading its own work; "" disables
+COMPLETENESS_MODEL = os.environ.get("OPINIONS_COMPLETENESS_MODEL", TRIAGE_MODEL)  # completeness check on each card: flags a material holding in a covered area the card omits; a different model than the Opus summarizer; "" disables
 VERSION      = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
 COURTS       = jurisdictions.COURTS         # CL ids the feed iterates (OPINIONS_COURTS narrows it)
 LOOKBACK     = int(os.environ.get("OPINIONS_LOOKBACK", "21"))
@@ -796,6 +798,54 @@ def crosscheck(name, text, entry):
         return {"verdict": "unavailable", "reason": str(e)[:160]}
 
 
+COMPLETENESS_SYSTEM = (
+    "You audit a drafted summary of a court opinion for COMPLETENESS, for a curated feed for a "
+    "Georgia civil-litigation and insurance audience. The feed covers only these practice areas: "
+    "auto or UM/UIM, premises liability, negligent security, insurance coverage or insurer bad "
+    "faith, expert-testimony admissibility, civil procedure, and damages. You are given the full "
+    "opinion and a drafted summary that already captures one or more holdings. Decide ONLY whether "
+    "the opinion squarely decides a SEPARATE, MATERIAL holding in one of those covered areas that "
+    "the drafted summary leaves out, in its main holding or any additional holding. FLAG it only "
+    "when the omitted point is a holding the court actually reached AND material enough to merit "
+    "its own line in the feed, such as a second independent ground of decision, a dispositive "
+    "ruling on a covered issue, or a distinct holding in a different covered area. Do NOT flag for: "
+    "a point outside the covered areas; a standard of review, a subsidiary step, or procedural "
+    "recitation that is not itself a holding; dicta; or mere detail, emphasis, or wording, so long "
+    "as what the summary captures is itself a correct holding. When you are unsure the omitted "
+    "point rises to a separate material holding, do NOT flag, because a false flag costs review "
+    "time. Output ONLY a JSON object: {\"verdict\": \"complete\" or \"flag\", \"reason\": \"one "
+    "sentence; for a flag, name the omitted holding and its covered area\"}."
+)
+
+
+def completeness_check(name, text, entry):
+    """Independent completeness check on a drafted card: a model other than the Opus summarizer
+    reads the opinion against the drafted holding(s) and flags a separate, material holding in a
+    covered area that the card leaves out. Flag-and-surface, so it never drops a card; the verdict
+    rides the PR for the editor to judge. Conservative: only an explicit 'complete' clears, anything
+    else is treated as a flag. Fail-open: any error returns an 'unavailable' verdict so the card
+    still surfaces, marked for a manual look. Reuses the opinion text already in hand, so it costs
+    one model call and no CourtListener calls."""
+    if not COMPLETENESS_MODEL:
+        return None
+    holdings = [{"areas": entry["areas"], "synopsis": entry["synopsis"], "why": entry["why"]}]
+    holdings += entry.get("additional_holdings", [])
+    drafted = "\n\n".join(
+        "Holding %d (areas: %s)\nSynopsis: %s\nWhy it matters: %s"
+        % (i + 1, ", ".join(h["areas"]), h["synopsis"], h["why"])
+        for i, h in enumerate(holdings))
+    user = ("Case name: %s\nDisposition as drafted: %s\n\nDRAFTED SUMMARY:\n%s\n\nFULL OPINION:\n%s"
+            % (name, entry.get("disposition") or "(none stated)", drafted, clip(text)))
+    try:
+        r = anthropic_json({"model": COMPLETENESS_MODEL, "max_tokens": 400, "system": COMPLETENESS_SYSTEM,
+                            "messages": [{"role": "user", "content": user}]}, "completeness")
+        verdict = "complete" if (r.get("verdict") or "").strip().lower() == "complete" else "flag"
+        return {"verdict": verdict, "reason": (r.get("reason") or "").strip()}
+    except Exception as e:
+        print("  ! completeness check unavailable for %s: %s" % (name[:40], e))
+        return {"verdict": "unavailable", "reason": str(e)[:160]}
+
+
 # Party-name matching for the screen override in the candidate loop. A case can
 # return to the feed at a higher court under the same caption (the Supreme Court
 # reviewing a decision we carded from the Court of Appeals), and the caption can
@@ -869,12 +919,12 @@ def _log_run(rec):
                     "- screened %d, triaged %d, summarized %d, audited %d\n"
                     "- carded %d, flagged %d, treatment %d\n"
                     "- dropped %d (screen %d, triage %d, summarizer %d, other %d)\n"
-                    "- CourtListener calls %d, cross-check flags %d\n"
+                    "- CourtListener calls %d, cross-check flags %d, completeness flags %d\n"
                     % (rec.get("ts", ""), rec.get("screened", 0), rec.get("triaged", 0),
                        rec.get("summarized", 0), rec.get("audited", 0), rec.get("carded", 0),
                        rec.get("flagged", 0), rec.get("treatment", 0), rec.get("dropped", 0),
                        d.get("screen", 0), d.get("triage", 0), d.get("summarizer", 0), d.get("other", 0),
-                       rec.get("cl_calls", 0), rec.get("crosscheck_flags", 0)))
+                       rec.get("cl_calls", 0), rec.get("crosscheck_flags", 0), rec.get("completeness_flags", 0)))
         except Exception as e:
             print("  . run summary write skipped: %s" % e)
 
@@ -952,6 +1002,7 @@ def main():
 
     added, flagged, skipped = [], [], []
     crosschecks = {}   # cluster_id -> {"verdict", "reason"} from the fidelity guard; surfaced in the PR, not written to opinions.json
+    completeness = {}  # cluster_id -> {"verdict", "reason"} from the completeness guard; surfaced in the PR, not written to opinions.json
     treat_flags, audit_notes = [], []          # adverse treatment of existing cards (forward escalation)
     evaluated, n_screen, n_triage, n_opus, n_audit = set(), 0, 0, 0, 0
     treatment_changed = False
@@ -1133,6 +1184,9 @@ def main():
         cc = crosscheck(entry["name"], text, entry)
         if cc:
             crosschecks[cid] = cc
+        cp = completeness_check(entry["name"], text, entry)
+        if cp:
+            completeness[cid] = cp
         added.append(entry)
         hold_note = (", %d holdings" % (1 + len(additional_holdings))) if additional_holdings else ""
         print("  + %s [%s] %s (sig=%s%s)" % (entry["name"], ",".join(areas), disp, v.get("significance"), hold_note))
@@ -1154,6 +1208,13 @@ def main():
             lines.append("  - cross-check could not run (%s); verify this card manually" % cc["reason"])
         elif cc:
             lines.append("  - cross-check: holding matches the opinion")
+        cp = completeness.get(e["cluster_id"])
+        if cp and cp["verdict"] == "flag":
+            lines.append("  - completeness FLAG: %s" % (cp["reason"] or "the opinion may decide a material point in a covered area the card omits; verify against the opinion"))
+        elif cp and cp["verdict"] == "unavailable":
+            lines.append("  - completeness check could not run (%s); verify this card manually" % cp["reason"])
+        elif cp:
+            lines.append("  - completeness: no material holding omitted")
     if treat_flags or audit_notes:
         lines += ["", "Treatment flags this run (existing cards; confirm on Shepard\u2019s before relying):"]
         for cardnm, newnm, kind in treat_flags:
@@ -1197,6 +1258,7 @@ def main():
         "treatment": len(treat_flags), "dropped": len(skipped), "drops": _drop_counts(skipped),
         "cl_calls": cl_rate.PACER.calls,
         "crosscheck_flags": sum(1 for c in crosschecks.values() if c["verdict"] == "flag"),
+        "completeness_flags": sum(1 for c in completeness.values() if c["verdict"] == "flag"),
     })
 
     if not added and not treatment_changed:
