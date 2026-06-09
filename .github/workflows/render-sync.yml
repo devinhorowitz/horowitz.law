@@ -1,0 +1,74 @@
+name: Georgia Appellate Watch render sync
+
+# Safety net for the rendered pages. opinions.json is the source of truth; the
+# pages (opinions.html, archive.html, opinions.xml) are generated from it by
+# scripts/render.py and are supposed to stay in lockstep. They can fall out of
+# sync two ways: a page uploaded by hand from a working copy whose opinions.json
+# was behind main (which silently reverts whatever cards the pipeline added in the
+# meantime), or the rolling two-year feed window aging a card out between renders.
+# This re-renders from the committed opinions.json and, only if the pages have
+# drifted, opens a review PR to correct them. It never touches opinions.json.
+
+on:
+  schedule:
+    - cron: '37 5 * * *'     # once a day, offset from the every-4-hours update run. Drift is
+                             # rare, so a daily net is enough; run it on demand from the
+                             # Actions tab any time. Adjust freely.
+  workflow_dispatch: {}      # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  PYTHONUNBUFFERED: '1'
+
+concurrency:
+  group: opinions-render
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10      # render is seconds of work; fail fast if something hangs
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      # Re-render the three output files from the committed opinions.json. Pure standard
+      # library, no API keys and no network, so this is cheap and safe to run often.
+      # render() is deterministic: on a repo whose pages already match opinions.json this
+      # changes nothing, so the PR step below then opens nothing.
+      - name: Re-render pages from opinions.json
+        run: python scripts/render.py
+
+      # If, and only if, the committed pages had drifted from what render() produces, there
+      # are now changes to stage and this opens (or updates) a single review PR. opinions.json
+      # is read-only here and is never staged, so this can only correct the rendered output,
+      # never the data. Confirm the latest tag at github.com/peter-evans/create-pull-request
+      # before pinning.
+      - name: Open a render-sync PR if the pages drifted
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: bot/opinions-render
+          title: 'Georgia Appellate Watch: re-render pages from opinions.json'
+          commit-message: 'opinions: re-render pages to match opinions.json'
+          body: |
+            Automated re-render. The committed `opinions.html`, `archive.html`, or
+            `opinions.xml` had drifted from what `scripts/render.py` produces from the
+            current `opinions.json`, and this brings them back in sync.
+
+            This usually means either a page was uploaded by hand from a working copy whose
+            `opinions.json` was behind `main` (which silently reverts cards the pipeline had
+            added), or the rolling two-year feed window aged a card out since the last render.
+            Review the diff: it should only add, restore, or drop cards, never change wording.
+            `opinions.json` is not touched by this workflow.
+          labels: opinions, automated, render
+          delete-branch: true
+          add-paths: |
+            opinions.html
+            archive.html
+            opinions.xml
