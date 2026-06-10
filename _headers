@@ -59,6 +59,9 @@
 /health.txt
   X-Robots-Tag: noindex
 
+/.github/*
+  X-Robots-Tag: noindex
+
 # -------------------------------------------------------------
 # Caching. Versioned assets are cached hard for a year. base.css,
 # app.js, opinions.js, and subscribe.js are safe to cache this
