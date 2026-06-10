@@ -86,7 +86,7 @@ jobs:
         run: |
           if [ -n "$(git status --porcelain -- opinions.json opinions.xml opinions.html archive.html)" ]; then
             echo "kind=content" >> "$GITHUB_OUTPUT"
-          elif [ -n "$(git status --porcelain -- opinions_state.json opinions_pipeline_log.jsonl)" ]; then
+          elif [ -n "$(git status --porcelain -- opinions_state.json opinions_pipeline_log.jsonl opinions_rejections.jsonl)" ]; then
             echo "kind=state" >> "$GITHUB_OUTPUT"
           else
             echo "kind=none" >> "$GITHUB_OUTPUT"
@@ -110,6 +110,7 @@ jobs:
             opinions_state.json
             opinions.html
             archive.html
+            opinions_rejections.jsonl
 
       # No-op run: the funnel carded nothing, so there is no review PR. It still records this
       # run's health stats, and marks the clusters it screened as seen so the next run does not
@@ -121,7 +122,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add opinions_state.json opinions_pipeline_log.jsonl
+          git add opinions_state.json opinions_pipeline_log.jsonl opinions_rejections.jsonl 2>/dev/null || git add opinions_state.json opinions_pipeline_log.jsonl
           git commit -m "opinions: record run stats; mark screened cases seen [skip ci]"
           git push origin HEAD:main
 
