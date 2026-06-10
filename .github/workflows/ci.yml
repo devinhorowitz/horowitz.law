@@ -1,18 +1,37 @@
 name: CI
 
-# Runs on every push or PR that touches the scripts or the workflows. Catches a
-# syntax error, a broken import, or a mis-uploaded filename (e.g. "cl rate.py"
-# with a space instead of cl_rate.py) immediately, as a red check on the commit,
-# instead of silently at the next scheduled run.
+# Runs on every push or PR that touches the pipeline or the site surface.
+# Catches, as a red check on the commit instead of silently at the next
+# scheduled run: a syntax error or broken import; a mis-uploaded filename
+# (e.g. "cl rate.py" with a space, also caught by check_site); a CSP hash
+# that no longer matches the inline script; a stale ?v= asset token; a
+# malformed feed or sitemap; and a hand-edited generated page that drifted
+# from what render.py produces.
 on:
   push:
     paths:
       - 'scripts/**'
       - '.github/workflows/**'
+      - '*.html'
+      - '*.js'
+      - 'base.css'
+      - '_headers'
+      - 'robots.txt'
+      - 'sitemap.xml'
+      - 'opinions.json'
+      - 'functions/**'
   pull_request:
     paths:
       - 'scripts/**'
       - '.github/workflows/**'
+      - '*.html'
+      - '*.js'
+      - 'base.css'
+      - '_headers'
+      - 'robots.txt'
+      - 'sitemap.xml'
+      - 'opinions.json'
+      - 'functions/**'
 
 permissions:
   contents: read
@@ -38,7 +57,28 @@ jobs:
       - name: Compile and import every script
         run: |
           python -m py_compile scripts/*.py
-          cd scripts && python -c "import cl_rate, safeio, jurisdictions, render, treatment_core, update, treatment, backfill, digest, queue_cases, assess_precedential, courts; print('all imports resolve')"
+          cd scripts && python -c "import cl_rate, safeio, jurisdictions, render, treatment_core, update, treatment, backfill, digest, queue_cases, assess_precedential, courts, golden_check, check_site; print('all imports resolve')"
 
       - name: Validate workflow YAML
         run: python -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml')]; print('workflow YAML parses')"
+
+      - name: JS syntax
+        run: |
+          node --check app.js
+          node --check opinions.js
+          node --check subscribe.js
+          node --check functions/api/subscribe/index.js
+          node --check functions/api/subscribe/confirm.js
+
+      - name: Site invariants (CSP hash, ?v tokens, scripts/ names, XML)
+        run: python scripts/check_site.py
+
+      # The committed pages must be exactly what render.py produces from the
+      # committed opinions.json; a hand-uploaded stale page fails here at push
+      # time instead of waiting for the daily render-sync net. (Once a year, on
+      # the first push after Jan 1, this fails with footer-year diffs until the
+      # render-sync rollover PR merges; the diff itself says so.)
+      - name: Render idempotency
+        run: |
+          python scripts/render.py
+          git diff --exit-code -- opinions.html archive.html opinions.xml sitemap.xml index.html resume.html colophon.html subscribe.html 404.html

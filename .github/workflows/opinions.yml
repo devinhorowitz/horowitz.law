@@ -110,6 +110,7 @@ jobs:
             opinions_state.json
             opinions.html
             archive.html
+            sitemap.xml
             opinions_rejections.jsonl
 
       # No-op run: the funnel carded nothing, so there is no review PR. It still records this

@@ -17,6 +17,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write          # the failure-alert step opens or comments on a tracking issue
 
 env:
   PYTHONUNBUFFERED: '1'
@@ -78,4 +79,22 @@ jobs:
             opinions.xml
             opinions.html
             archive.html
+            sitemap.xml
             treatment_state.json
+
+      # Surfaces a broken run instead of letting it fail silently: comments on the one
+      # open tracking issue, or opens it the first time, so repeated failures collect
+      # on a single issue rather than spamming new ones.
+      - name: Report a failed run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="A scheduled treatment sweep run failed. ${run_url}"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Treatment sweep run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Treatment sweep run failures" --body "$body"
+          fi

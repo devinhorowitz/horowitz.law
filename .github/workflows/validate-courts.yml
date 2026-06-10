@@ -61,6 +61,23 @@ jobs:
             gh issue create --title "$title" --body-file scripts/court_drift.md
           fi
 
+      # Surfaces a broken run instead of letting it fail silently: comments on the one
+      # open tracking issue, or opens it the first time, so repeated failures collect
+      # on a single issue rather than spamming new ones.
+      - name: Report a failed run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="A court-registry validation (operational failure, not drift) run failed. ${run_url}"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Court-registry validation run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Court-registry validation run failures" --body "$body"
+          fi
+
       - name: Close the drift flag when clean
         if: ${{ steps.validate.outputs.code == '0' }}
         env:

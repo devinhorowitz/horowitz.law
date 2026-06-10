@@ -19,6 +19,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write          # the failure-alert step opens or comments on a tracking issue
 
 env:
   PYTHONUNBUFFERED: '1'
@@ -68,7 +69,34 @@ jobs:
             `opinions.json` is not touched by this workflow.
           labels: opinions, automated, render
           delete-branch: true
+          # The three generated pages, plus the files render.py now also keeps
+          # current: sitemap lastmod for the pages it owns, and the footer year
+          # on the static pages (which only ever changes on the Jan 1 rollover,
+          # so this daily net carries that PR).
           add-paths: |
             opinions.html
             archive.html
             opinions.xml
+            sitemap.xml
+            index.html
+            resume.html
+            colophon.html
+            subscribe.html
+            404.html
+
+      # Surfaces a broken run instead of letting it fail silently: comments on the one
+      # open tracking issue, or opens it the first time, so repeated failures collect
+      # on a single issue rather than spamming new ones.
+      - name: Report a failed run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="A scheduled render-sync run failed. ${run_url}"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Render-sync run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Render-sync run failures" --body "$body"
+          fi

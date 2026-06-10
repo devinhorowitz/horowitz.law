@@ -23,6 +23,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write          # the failure-alert step opens or comments on a tracking issue
 
 env:
   PYTHONUNBUFFERED: '1'
@@ -35,6 +36,14 @@ concurrency:
 
 jobs:
   queue:
+    # A queue PR merge pushes the drained queue.txt back to main, which matches this
+    # workflow's own path filter; the rerun would only no-op. Skip it outright: the
+    # merge commit message carries the bot branch name (merge commit) or the PR title
+    # (squash), neither of which appears on a human queue edit.
+    if: >-
+      github.event_name != 'push' ||
+      (!contains(github.event.head_commit.message, 'bot/opinions-queue') &&
+       !contains(github.event.head_commit.message, 'queued case'))
     runs-on: ubuntu-latest
     timeout-minutes: 45     # watchdog: bound a stuck run well under GitHub's 6h cap
     steps:
@@ -83,4 +92,22 @@ jobs:
             opinions.xml
             opinions.html
             archive.html
+            sitemap.xml
             queue.txt
+
+      # Surfaces a broken run instead of letting it fail silently: comments on the one
+      # open tracking issue, or opens it the first time, so repeated failures collect
+      # on a single issue rather than spamming new ones.
+      - name: Report a failed run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="A queue run failed. ${run_url}"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Queue run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Queue run failures" --body "$body"
+          fi

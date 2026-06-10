@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: write
+  issues: write          # the failure-alert step opens or comments on a tracking issue
 
 concurrency:
   group: keepalive
@@ -38,3 +39,20 @@ jobs:
           git add .github/keepalive.txt
           git commit -m "chore: keepalive [skip ci]" || { echo "nothing to commit"; exit 0; }
           git push
+
+      # Surfaces a broken run instead of letting it fail silently: comments on the one
+      # open tracking issue, or opens it the first time, so repeated failures collect
+      # on a single issue rather than spamming new ones.
+      - name: Report a failed run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="A keepalive run failed. ${run_url}"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Keepalive run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Keepalive run failures" --body "$body"
+          fi
