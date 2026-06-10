@@ -585,7 +585,20 @@
     "synopsis": "After a thief posing as a registered carrier stole a shipment, the cargo owner's insurer sued the transportation broker for negligent selection of the carrier, and the district court dismissed the claims as preempted by the FAAAA. The Eleventh Circuit affirmed, holding that the FAAAA's express preemption provision bars state-law negligence claims against a broker based on carrier selection because such claims relate to a broker's service with respect to the transportation of property. The court further held that the FAAAA's safety exception does not save the claims because a broker's carrier-selection services have only an indirect, not a direct, connection to motor vehicles, so the claims are not 'with respect to motor vehicles.'",
     "why": "This decision establishes binding Eleventh Circuit authority that the FAAAA preempts state-law negligent-carrier-selection claims against freight brokers and that the safety exception does not apply to such broker claims, defining the scope of broker liability in trucking cases in the circuit.",
     "first_seen": "2023-04-13",
-    "precedential": "published"
+    "precedential": "published",
+    "treated_by": [
+      {
+        "cluster_id": 10858760,
+        "name": "Montgomery v. Caribe Transport II, LLC",
+        "court": "scotus",
+        "date": "2026-05-14",
+        "kind": "abrogated",
+        "note": "The later Supreme Court opinion holds that the FAAAA's safety exception does apply to state-law negligent-hiring claims against brokers because such claims are 'with respect to motor vehicles,' directly rejecting the Eleventh Circuit's contrary holding in the cited case that the safety exception does not save such claims."
+      }
+    ],
+    "treatment_auto_note": "Possibly abrogated by a later in-scope decision (Montgomery v. Caribe Transport II, LLC). Confirm on Shepard's.",
+    "treatment_date": "2026-06-10",
+    "treatment": "caution"
   },
   {
     "cluster_id": 10872097,
