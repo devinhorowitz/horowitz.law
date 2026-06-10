@@ -69,6 +69,7 @@ jobs:
           node --check subscribe.js
           node --check functions/api/subscribe/index.js
           node --check functions/api/subscribe/confirm.js
+          node --check functions/_middleware.js
 
       - name: Site invariants (CSP hash, ?v tokens, scripts/ names, XML)
         run: python scripts/check_site.py
