@@ -37,7 +37,7 @@ Environment:
   DIGEST_PREHEADER   Inbox preview line.
   DIGEST_PREVIEW     Where to write the rendered HTML in a dry run. Default digest_preview.html.
 """
-import os, json, time, html, hashlib, datetime, textwrap
+import os, json, time, html, datetime, textwrap
 import urllib.request, urllib.error
 import render  # shared COURT_LABELS / AREA_LABELS
 
@@ -254,48 +254,148 @@ def build_text(new, corrections):
     return "\n".join(lines)
 
 
-def send_broadcast(subject, html_body, text_body, idem=None):
-    # One request creates the broadcast targeting the Segment and, with send=true, sends it.
-    # Resend handles the recipient queue, throttling, and the per-recipient unsubscribe URL.
-    body = {
-        "from": FROM,
-        "subject": subject,
-        "html": html_body,
-        "text": text_body,
-        "segment_id": SEGMENT_ID,
-        "name": "Georgia Appellate Watch digest %s" % datetime.date.today().isoformat(),
-        "send": (not DRAFT),
-    }
-    if TOPIC_ID:
-        body["topic_id"] = TOPIC_ID
-    req_headers = {"Authorization": "Bearer %s" % API_KEY, "Content-Type": "application/json",
-                   "Accept": "application/json",
-                   "User-Agent": "horowitz.law-appellate-watch/1.0 (+https://horowitz.law)"}
-    if idem:
-        req_headers["Idempotency-Key"] = idem  # same key on a retried run, so it is not duplicated
-    req = urllib.request.Request(
-        "https://api.resend.com/broadcasts", data=json.dumps(body).encode("utf-8"),
-        headers=req_headers, method="POST")
+UA_DIGEST = "horowitz.law-appellate-watch/1.0 (+https://horowitz.law)"
+
+
+def _req(method, path, body=None):
+    """One Resend API call. JSON in, JSON out; raises urllib.error.HTTPError on
+    a non-2xx so callers can read the status and body."""
+    headers = {"Authorization": "Bearer %s" % API_KEY, "Accept": "application/json",
+               "User-Agent": UA_DIGEST}
+    data = None
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+        data = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request("https://api.resend.com" + path, data=data,
+                                 headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def find_existing_broadcast(name):
+    """The broadcast already created under `name`, or None.
+
+    This name lookup is the dedup key for the whole send path. Resend honors the
+    Idempotency-Key header only on POST /emails and /emails/batch (per its
+    idempotency docs), NOT on /broadcasts, so a retried create after a lost
+    response would otherwise make a second broadcast and mail every subscriber
+    twice. The name is date-stamped, so one exists per send day at most.
+    Best-effort: returns None on any error and lets the caller decide. First page
+    only, which is ample at this volume."""
+    try:
+        data = _req("GET", "/broadcasts") or {}
+        for b in (data.get("data") or []):
+            if b.get("name") == name:
+                return b
+    except Exception as e:
+        print("  ! broadcast existence check unavailable: %s" % e)
+    return None
+
+
+def send_existing_broadcast(bid):
+    """Send an already-created broadcast by id. Retries transient failures, and
+    treats an 'already sent/queued' rejection as success, so a retried send on the
+    same id can never duplicate the mailing."""
     last = None
-    for attempt in range(4):
+    for attempt in range(3):
         try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                return json.loads(r.read().decode("utf-8"))
+            return _req("POST", "/broadcasts/%s/send" % bid, {}) or {"id": bid}
         except urllib.error.HTTPError as e:
             detail = ""
             try:
                 detail = e.read().decode("utf-8")[:300]
             except Exception:
                 pass
-            if e.code in (429, 500, 502, 503, 504) and attempt < 3:
-                time.sleep(3 * (attempt + 1)); last = e; continue
-            raise RuntimeError("HTTP %s: %s" % (e.code, detail or e.reason))
+            low = detail.lower()
+            if e.code in (400, 409, 422) and ("already" in low or "sent" in low or "queued" in low):
+                print("  . broadcast %s reports already sent or queued; treating as success" % bid)
+                return {"id": bid}
+            last = "send HTTP %s: %s" % (e.code, detail or e.reason)
+            if e.code in (429, 500, 502, 503, 504) and attempt < 2:
+                time.sleep(3 * (attempt + 1)); continue
+            raise RuntimeError(last)
         except urllib.error.URLError as e:
-            if attempt < 3:
-                time.sleep(3 * (attempt + 1)); last = e; continue
-            raise
-    if last:
-        raise last
+            last = "send network error: %s" % getattr(e, "reason", e)
+            if attempt < 2:
+                time.sleep(3 * (attempt + 1)); continue
+            raise RuntimeError(last)
+    raise RuntimeError(last or "broadcast send failed")
+
+
+def send_broadcast(subject, html_body, text_body, name):
+    """Create the day's broadcast and (unless DRAFT) send it, duplicate-proof.
+
+    Create and send are deliberately separate calls: the create is guarded by the
+    name lookup (before the first attempt and again before every retry), and the
+    send is by id with 'already sent' treated as success, so neither half can
+    double-mail on a lost response. If a create fails ambiguously AND the existence
+    check is also unavailable, this raises rather than blindly re-creating: a
+    missed digest (surfaced red by the workflow's failure alert, resendable by
+    hand) costs less than mailing the whole list twice. A leftover draft from a
+    previously interrupted run is adopted and sent, so recovery is automatic."""
+    created = find_existing_broadcast(name)
+    if created:
+        print("  . broadcast %r already exists (id=%s, status=%s); adopting it"
+              % (name, created.get("id"), created.get("status") or "?"))
+    else:
+        body = {
+            "from": FROM,
+            "subject": subject,
+            "html": html_body,
+            "text": text_body,
+            "segment_id": SEGMENT_ID,
+            "name": name,
+            "send": False,
+        }
+        if TOPIC_ID:
+            body["topic_id"] = TOPIC_ID
+        last = None
+        for attempt in range(4):
+            try:
+                created = _req("POST", "/broadcasts", body) or {}
+                break
+            except urllib.error.HTTPError as e:
+                detail = ""
+                try:
+                    detail = e.read().decode("utf-8")[:300]
+                except Exception:
+                    pass
+                last = "create HTTP %s: %s" % (e.code, detail or e.reason)
+                if e.code in (429, 500, 502, 503, 504) and attempt < 3:
+                    time.sleep(3 * (attempt + 1))
+                    existing = find_existing_broadcast(name)
+                    if existing:
+                        print("  . retry found the broadcast already created (id=%s); adopting it"
+                              % existing.get("id"))
+                        created = existing
+                        break
+                    continue
+                raise RuntimeError(last)
+            except urllib.error.URLError as e:
+                last = "create network error: %s" % getattr(e, "reason", e)
+                if attempt < 3:
+                    time.sleep(3 * (attempt + 1))
+                    existing = find_existing_broadcast(name)
+                    if existing:
+                        print("  . retry found the broadcast already created (id=%s); adopting it"
+                              % existing.get("id"))
+                        created = existing
+                        break
+                    continue
+                raise RuntimeError(last)
+        if created is None:
+            raise RuntimeError(last or "broadcast create failed")
+    bid = created.get("id")
+    if not bid:
+        raise RuntimeError("broadcast create returned no id: %r" % (created,))
+    if DRAFT:
+        return {"id": bid, "sent": False}
+    status = (created.get("status") or "").lower()
+    if status and status != "draft":
+        print("  . broadcast %s is already %s; not sending again" % (bid, status))
+        return {"id": bid, "sent": True}
+    send_existing_broadcast(bid)
+    return {"id": bid, "sent": True}
 
 
 def main():
@@ -322,16 +422,27 @@ def main():
         return
     if not SEGMENT_ID:
         print("RESEND_API_KEY is set but RESEND_SEGMENT_ID is empty; nothing to send."); return
-    # Signature of today's send (date, the exact new cases, and the exact corrections and their
-    # status) so a retry reuses the same key but a changed set sends anew.
-    sig = hashlib.sha1(("%s|%s|%s" % (
-        datetime.date.today().isoformat(),
-        ",".join(str(e.get("cluster_id")) for e in new),
-        ",".join("%s:%s" % (e.get("cluster_id"), e.get("treatment")) for e in corrections),
-    )).encode("utf-8")).hexdigest()[:12]
-    idem = "gaw-bcast-%s" % sig
+    # Compliance gate. A commercial email must carry a valid physical postal address
+    # (CAN-SPAM), and bar advertising rules may require an identification line. The
+    # safeguard is structural: an empty DIGEST_POSTAL refuses to send rather than
+    # quietly mailing without it. Override once with DIGEST_ALLOW_NO_POSTAL=1.
+    if not POSTAL:
+        if (os.environ.get("DIGEST_ALLOW_NO_POSTAL") or "").lower() in ("1", "true", "yes"):
+            print("  ! WARNING: DIGEST_POSTAL is empty; sending anyway because "
+                  "DIGEST_ALLOW_NO_POSTAL is set. Set the DIGEST_POSTAL repo Variable.")
+        else:
+            print("REFUSING TO SEND: DIGEST_POSTAL is empty. A commercial email needs a "
+                  "physical postal address in the footer (CAN-SPAM); set the DIGEST_POSTAL "
+                  "repo Variable. To send anyway this once, set DIGEST_ALLOW_NO_POSTAL=1.")
+            raise SystemExit(1)
+    if not DISCLAIMER:
+        print("  ! note: DIGEST_DISCLAIMER is empty; confirm no identification or "
+              "advertising line is required for this audience.")
+    # The date-stamped name is the duplicate-proofing key for the whole send path;
+    # see send_broadcast. One broadcast per send day, found by name on any retry.
+    name = "Georgia Appellate Watch digest %s" % datetime.date.today().isoformat()
     try:
-        res = send_broadcast(subject, html_body, text_body, idem=idem) or {}
+        res = send_broadcast(subject, html_body, text_body, name) or {}
     except Exception as ex:
         print("FAILED to create/send broadcast: %s" % ex)
         raise SystemExit(1)

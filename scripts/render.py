@@ -28,6 +28,22 @@ XML_PATH     = os.path.join(REPO, "opinions.xml")
 WINDOW_YEARS = 2
 ARCHIVE_URL  = "https://horowitz.law/archive"
 
+SITEMAP_PATH = os.path.join(REPO, "sitemap.xml")
+# Pages outside the marker-injection set whose footer year would otherwise rot on
+# Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
+# place, writing only when the year actually changed, so it is a no-op all year;
+# render-sync's add-paths carries the rollover PR.
+STATIC_PAGES = [os.path.join(REPO, p) for p in
+                ("index.html", "resume.html", "colophon.html", "subscribe.html", "404.html")]
+
+_YEAR_RE = re.compile(r'(&copy;|\u00a9)\s*\d{4}')
+
+def _stamp_year(doc):
+    """Rewrite any footer copyright year to the current year. A no-op when the
+    year already matches, so it adds no spurious diff."""
+    year = str(datetime.date.today().year)
+    return _YEAR_RE.sub(lambda m: m.group(1) + " " + year, doc)
+
 AREA_LABELS = {
     "coverage": "coverage", "badfaith": "bad faith", "auto": "auto",
     "premises": "premises", "negsec": "negligent security", "expert": "expert",
@@ -202,6 +218,9 @@ def rss_item(e):
     extra = "".join(f' Also: {h.get("synopsis", "")} Why it matters: {h.get("why", "")}'
                     for h in (e.get("additional_holdings") or []))
     desc = f'{e["synopsis"]} Why it matters: {e["why"]}{extra}{prec_txt} AI-drafted summary. Verify against the opinion. {e["url"]}'
+    # CDATA is verbatim: a literal "]]>" anywhere in the card text would terminate the
+    # section early and break the feed. Standard split-escape keeps the XML well-formed.
+    desc = desc.replace("]]>", "]]]]><![CDATA[>")
     lines = ["    <item>",
              f"      <title>{xml_escape(e['name'] + TITLE_SUFFIX[e['court']])}</title>",
              f"      <link>{xml_escape(e['url'])}</link>",
@@ -245,9 +264,7 @@ def _inject(path, marker, block):
         # silently writing the page back with stale cards.
         raise RuntimeError("render: %s:start/%s:end marker pair not found in %s" % (marker, marker, path))
     # Keep the footer copyright year current so it does not rot to a stale year.
-    # A no-op when the year already matches, so it adds no spurious diff.
-    year = str(datetime.date.today().year)
-    doc = re.sub(r'(&copy;|\u00a9)\s*\d{4}', lambda m: m.group(1) + " " + year, doc)
+    doc = _stamp_year(doc)
     safeio.atomic_write_text(path, doc)
 
 def render(entries=None):
@@ -298,7 +315,41 @@ def render(entries=None):
     out += [rss_item(e) for e in recent]
     out += ['  </channel>', '</rss>', '']
     safeio.atomic_write_text(XML_PATH, "\n".join(out))
+
+    # Footer year on the non-generated pages: stamped in place (no markers involved),
+    # written only when the year actually changed, so this is inert all year and the
+    # Jan 1 rollover rides the next render-sync or content PR.
+    for p in STATIC_PAGES:
+        if os.path.exists(p):
+            doc = open(p, encoding="utf-8").read()
+            stamped = _stamp_year(doc)
+            if stamped != doc:
+                safeio.atomic_write_text(p, stamped)
+
+    _update_sitemap(recent, entries)
     return len(recent), len(entries)
+
+
+def _update_sitemap(recent, entries):
+    """Keep sitemap lastmod current for the two pages this renderer owns. The value
+    is the newest decision date, deterministic from the data, so a re-render with
+    unchanged cards changes nothing and the CI idempotency check stays green. The
+    other URLs' lastmod stay hand-set. Skipped gracefully if the file is absent."""
+    if not os.path.exists(SITEMAP_PATH):
+        return
+    doc = open(SITEMAP_PATH, encoding="utf-8").read()
+
+    def set_lastmod(d, loc, date):
+        pat = re.compile(r'(<loc>%s</loc>\s*<lastmod>)[^<]*(</lastmod>)' % re.escape(loc))
+        return pat.sub(lambda m: m.group(1) + date + m.group(2), d, count=1)
+
+    new = doc
+    if recent:                              # recent arrives sorted desc; [0] is newest
+        new = set_lastmod(new, "https://horowitz.law/opinions", recent[0]["date"])
+    if entries:                             # entries likewise sorted desc
+        new = set_lastmod(new, "https://horowitz.law/archive", entries[0]["date"])
+    if new != doc:
+        safeio.atomic_write_text(SITEMAP_PATH, new)
 
 if __name__ == "__main__":
     r, t = render()

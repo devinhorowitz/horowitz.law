@@ -31,6 +31,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import update  # the real tiers (screen, triage) and fetch path (opinion_text_full), so the guard tests production
+import safeio  # crash-safe atomic writes (golden_set.json is committed; never truncate-write it)
 
 GOLDEN_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden_set.json")
 SNIPPET_CHARS = 1500  # screen reads an opening excerpt; mirror its own [:1500] slice
@@ -41,9 +42,9 @@ def _load():
 
 
 def _save(cases):
-    with open(GOLDEN_PATH, "w", encoding="utf-8") as f:
-        json.dump(cases, f, ensure_ascii=False, indent=2)
-        f.write("\n")
+    # Atomic: build mode commits this file straight to main, so a truncating write
+    # killed mid-flight (timeout, runner eviction) would commit a corrupt set.
+    safeio.atomic_write_text(GOLDEN_PATH, json.dumps(cases, ensure_ascii=False, indent=2) + "\n")
 
 
 def build():

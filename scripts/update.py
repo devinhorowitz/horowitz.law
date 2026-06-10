@@ -945,8 +945,10 @@ def _log_rejections(records):
             with open(REJECT_PATH, "r", encoding="utf-8") as f:
                 old = [ln for ln in f.read().splitlines() if ln.strip()]
         new = old + [json.dumps(r, separators=(",", ":"), ensure_ascii=False) for r in records]
-        with open(REJECT_PATH, "w", encoding="utf-8") as f:
-            f.write("\n".join(new[-REJECT_CAP:]) + "\n")
+        # Atomic: this file is staged and committed by the workflow, so a truncating
+        # write killed mid-flight would commit a corrupt log. Same discipline as
+        # opinions.json and opinions_state.json.
+        safeio.atomic_write_text(REJECT_PATH, "\n".join(new[-REJECT_CAP:]) + "\n")
     except Exception as e:
         print("  . rejection-log write skipped: %s" % e)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
@@ -1087,25 +1089,38 @@ def main():
             # no REST quota, fast). Fall back to the REST API only when extraction is empty,
             # too short, or unusable, so the worst case degrades to the prior REST behavior.
             text = pdf_text(r.get("pdf_url"), deadline=run_start + BUDGET_SEC)
+            deferred = False
             if _pdf_ok(text):
                 _dbg("text via pdf for %s (%d chars)" % (name, len(text)))
-            elif cl_rate.remaining() > 0:
-                # REST fallback only when the PDF will not extract, and only while the
-                # shared CourtListener budget has room. The calls pace and deadline
-                # themselves through cl_get; if the budget runs out mid-fetch, defer
-                # this candidate to the next run rather than blocking.
-                dl = run_start + BUDGET_SEC
-                try:
-                    rest = opinion_text_full(r, deadline=dl)
-                    if rest:
-                        text = rest
-                        _dbg("text via rest for %s (%d chars)" % (name, len(text)))
-                except cl_rate.RateBudgetExceeded:
-                    cl_deferred += 1
-                    _dbg("courtlistener budget reached; deferring %s to next run" % name)
             else:
-                cl_deferred += 1
-                _dbg("courtlistener budget reached; deferring %s to next run" % name)
+                # The PDF gave nothing usable (empty, image-only, or header junk below the
+                # quality gate). Blank it so junk can never reach triage: a triage verdict
+                # on garbage marks the cluster evaluated and silently drops a possibly
+                # relevant case for good. Then fall back to REST, with the same gate.
+                text = ""
+                if cl_rate.remaining() > 0:
+                    # REST fallback only while the shared CourtListener budget has room.
+                    # The calls pace and deadline themselves through cl_get; if the budget
+                    # runs out mid-fetch, defer this candidate to the next run.
+                    dl = run_start + BUDGET_SEC
+                    try:
+                        rest = opinion_text_full(r, deadline=dl)
+                        if _pdf_ok(rest):
+                            text = rest
+                            _dbg("text via rest for %s (%d chars)" % (name, len(text)))
+                    except cl_rate.RateBudgetExceeded:
+                        cl_deferred += 1
+                        deferred = True
+                        _dbg("courtlistener budget reached; deferring %s to next run" % name)
+                else:
+                    cl_deferred += 1
+                    deferred = True
+                    _dbg("courtlistener budget reached; deferring %s to next run" % name)
+            if deferred and not text:
+                # A budget deferral is not a drop: it is already counted in cl_deferred and
+                # reported in the CL line, and the cluster stays unevaluated so the next run
+                # retries it. Listing it under "dropped" would poison the recall review.
+                continue
             if not text:
                 skipped.append((name, "no opinion text available")); consec = 0; continue
             time.sleep(0.4)

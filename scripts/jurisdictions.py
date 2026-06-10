@@ -54,8 +54,10 @@ JURISDICTIONS = {
         # digits, kept tight to avoid matching statute cites like 51-12).
         "docket_re": r"\b(?:[AS]\d{2}[A-Z]\d{4}|\d{2}-\d{4,5})\b",
         # Ga. reporters (Ga., Ga. App., S.E.2d) + federal (U.S., S. Ct., L. Ed.,
-        # F./F.2d/3d/4th, F. Supp., Westlaw).
-        "cite_re": r"\b\d+\s+(?:Ga\.?\s*App\.?|Ga\.?|S\.?\s*E\.?\s*2d|S\.?\s*E\.?|U\.?\s*S\.?|S\.?\s*Ct\.?|L\.?\s*Ed\.?\s*(?:2d)?|F\.?(?:2d|3d|4th)?|F\.?\s*Supp\.?|WL)\s+\d+",
+        # F./F.2d/3d/4th, F. Supp., Westlaw). A bare "F" requires its period so a
+        # stray "F 150" in a synopsis is not flagged as a reporter citation;
+        # "F2d"/"F3d"/"F4th" without the period still match.
+        "cite_re": r"\b\d+\s+(?:Ga\.?\s*App\.?|Ga\.?|S\.?\s*E\.?\s*2d|S\.?\s*E\.?|U\.?\s*S\.?|S\.?\s*Ct\.?|L\.?\s*Ed\.?\s*(?:2d)?|F\.(?:2d|3d|4th)?|F(?:2d|3d|4th)|F\.?\s*Supp\.?|WL)\s+\d+",
     },
 }
 
