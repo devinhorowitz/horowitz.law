@@ -11,7 +11,7 @@ record lives in archive.html, grouped by decision year; nothing is removed
 there. Cards are written between the start/end markers in each file; nothing
 else in those files is touched.
 """
-import os, re, json, html, datetime
+import os, re, json, hashlib, html, datetime
 from xml.sax.saxutils import escape as xml_escape
 import safeio          # crash-safe atomic writes
 import jurisdictions   # per-jurisdiction court labels and citation suffixes
@@ -37,6 +37,30 @@ STATIC_PAGES = [os.path.join(REPO, p) for p in
                 ("index.html", "resume.html", "colophon.html", "subscribe.html", "404.html")]
 
 _YEAR_RE = re.compile(r'(&copy;|\u00a9)\s*\d{4}')
+
+# Asset ?v= tokens are content hashes: the first 10 hex chars of sha256, the
+# same scheme scripts/check_site.py enforces in CI. Restamping on every page
+# write keeps a rendered page from carrying tokens older than the assets it
+# loads -- the shell outside the markers is never otherwise touched, so an
+# asset edit made alongside a hand upload would leave the generated pages a
+# year stale under immutable caching until someone remembered --fix. The two
+# implementations are deliberately independent (this one stamps, check_site
+# verifies), so a bug here cannot blind the check there.
+_ASSETS = ("base.css", "app.js", "opinions.js", "subscribe.js")
+
+def _asset_token(name):
+    with open(os.path.join(REPO, name), "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()[:10]
+
+def _stamp_tokens(doc):
+    for a in _ASSETS:
+        path = os.path.join(REPO, a)
+        if not os.path.exists(path):
+            continue        # never let a missing optional asset break a render
+        tok = _asset_token(a)
+        doc = re.sub(r'((?:href|src)="/%s)(\?v=[^"]*)?(")' % re.escape(a),
+                     lambda m, t=tok: m.group(1) + "?v=" + t + m.group(3), doc)
+    return doc
 
 def _stamp_year(doc):
     """Rewrite any footer copyright year to the current year. A no-op when the
@@ -263,8 +287,10 @@ def _inject(path, marker, block):
         # is missing or malformed (a stray manual edit), fail loud rather than
         # silently writing the page back with stale cards.
         raise RuntimeError("render: %s:start/%s:end marker pair not found in %s" % (marker, marker, path))
-    # Keep the footer copyright year current so it does not rot to a stale year.
-    doc = _stamp_year(doc)
+    # Keep the footer copyright year current so it does not rot to a stale year,
+    # and the asset ?v= tokens current so a regenerated page never pins visitors
+    # to year-old immutable CSS/JS (see _stamp_tokens above).
+    doc = _stamp_tokens(_stamp_year(doc))
     safeio.atomic_write_text(path, doc)
 
 def render(entries=None):
@@ -322,7 +348,7 @@ def render(entries=None):
     for p in STATIC_PAGES:
         if os.path.exists(p):
             doc = open(p, encoding="utf-8").read()
-            stamped = _stamp_year(doc)
+            stamped = _stamp_tokens(_stamp_year(doc))
             if stamped != doc:
                 safeio.atomic_write_text(p, stamped)
 
