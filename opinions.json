@@ -639,5 +639,40 @@
     "why": "The decision clarifies that a municipal ante litem notice satisfies the specific-amount requirement of OCGA § 36-33-5(e) even when the demand exceeds the automatic sovereign-immunity waiver under OCGA § 36-92-2.",
     "precedential": "published",
     "first_seen": "2026-06-09"
+  },
+  {
+    "cluster_id": 10872980,
+    "name": "Ya Mon Expeditions, LLC v. YATCO, LLC",
+    "court": "ca11",
+    "division": null,
+    "date": "2026-06-10",
+    "dockets": [
+      "25-10140"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10872980/ya-mon-expeditions-llc-v-yatco-llc/",
+    "synopsis": "In an interlocutory appeal from the denial of a motion to compel arbitration under the FAA, an MLS company sought to compel nonsignatory yacht-seller plaintiffs to arbitrate antitrust claims based on a subscription agreement their brokers allegedly accepted. The court held that under Florida law, which governs the threshold question of whether an arbitration agreement exists, the party seeking to compel arbitration bears the burden of proving an enforceable agreement, and the movant relied on speculation and assumption rather than evidence that the brokers actually listed the plaintiffs' yachts on its website or accepted the relevant version of the agreement. The court rejected the movant's argument that the nonsignatory plaintiffs opposing arbitration bore the burden of disproving its evidence.",
+    "why": "It clarifies that the FAA presumption favoring arbitration does not apply to the threshold question of whether an agreement to arbitrate exists, and that state law places the burden of proving an enforceable arbitration agreement on the party seeking to compel it.",
+    "precedential": "unpublished",
+    "first_seen": "2026-06-10",
+    "additional_holdings": [
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "The court held that the nonsignatory plaintiffs could not be bound to arbitrate under an agency-ratification theory. Applying the Florida Supreme Court's full-knowledge requirement, the court held that a principal ratifies an agent's pre-agency acceptance of a contract only on a showing that the principal had full knowledge of the agreement and its terms, and constructive knowledge does not suffice. Because the movant submitted no evidence that the plaintiffs knew of the agreement or its terms, and the brokers' knowledge could not be imputed because it was acquired before any agency relationship formed, ratification did not apply.",
+        "why": "It establishes that under controlling Florida Supreme Court precedent a nonsignatory principal cannot ratify an agent's pre-agency acceptance of an arbitration agreement absent full actual knowledge of the agreement and its terms."
+      },
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "The court held that equitable estoppel did not bind the nonsignatory plaintiffs to arbitrate. A signatory may enforce an arbitration clause against a nonsignatory under equitable estoppel only if the nonsignatory relies on the agreement to assert its claims and the dispute falls within the clause. Because the plaintiffs' federal antitrust claims arose from statutory duties unrelated to the subscription agreement and did not require reference to or construction of that agreement, the plaintiffs were not claiming the benefits of the contract while avoiding its burdens.",
+        "why": "It clarifies that equitable estoppel cannot compel a nonsignatory to arbitrate where the asserted claims rest on independent statutory duties and do not depend on the contract containing the arbitration clause."
+      }
+    ]
   }
 ]
