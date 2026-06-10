@@ -69,6 +69,8 @@ class ConfigError(RuntimeError):
 JSON_PATH  = os.path.join(REPO, "opinions.json")
 STATE_PATH = os.path.join(REPO, "opinions_state.json")
 LOG_PATH   = os.path.join(REPO, "opinions_pipeline_log.jsonl")  # append-only per-run health log (observability)
+REJECT_PATH = os.path.join(REPO, "opinions_rejections.jsonl")  # append-only log of candidates the screen or triage dropped, for periodic recall review
+REJECT_CAP  = int(os.environ.get("OPINIONS_REJECT_CAP", "5000"))  # keep only the most recent N rejection records so the committed log stays bounded
 PR_PATH    = os.path.join(REPO, "scripts", "pr_body.md")
 
 KEY          = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -929,6 +931,38 @@ def _log_run(rec):
             print("  . run summary write skipped: %s" % e)
 
 
+def _log_rejections(records):
+    """Append this run's screen and triage rejections to REJECT_PATH, one JSON line each, so the
+    cases the funnel threw out can be reviewed for false negatives. Kept to the most recent
+    REJECT_CAP lines so the committed log stays bounded, the same discipline seen_clusters uses.
+    Best-effort: a logging failure must never fail the run. When running under Actions, also list
+    them on the run page."""
+    if not records:
+        return
+    try:
+        old = []
+        if os.path.exists(REJECT_PATH):
+            with open(REJECT_PATH, "r", encoding="utf-8") as f:
+                old = [ln for ln in f.read().splitlines() if ln.strip()]
+        new = old + [json.dumps(r, separators=(",", ":"), ensure_ascii=False) for r in records]
+        with open(REJECT_PATH, "w", encoding="utf-8") as f:
+            f.write("\n".join(new[-REJECT_CAP:]) + "\n")
+    except Exception as e:
+        print("  . rejection-log write skipped: %s" % e)
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        try:
+            with open(summary, "a", encoding="utf-8") as f:
+                f.write("\n### Screened out this run (%d)\n\n" % len(records))
+                for r in records[:40]:
+                    f.write("- [%s] %s (%s): %s\n" % (r.get("stage", ""), r.get("name") or "(unnamed)",
+                                                       r.get("court") or "", r.get("reason") or ""))
+                if len(records) > 40:
+                    f.write("- ... and %d more (see opinions_rejections.jsonl)\n" % (len(records) - 40))
+        except Exception as e:
+            print("  . rejection summary write skipped: %s" % e)
+
+
 def main():
     if not KEY:
         print("ERROR: ANTHROPIC_API_KEY is not set."); sys.exit(1)
@@ -1001,6 +1035,8 @@ def main():
           % (since, len(cand), SCREEN_MODEL or "off", TRIAGE_MODEL or "off", MODEL))
 
     added, flagged, skipped = [], [], []
+    rejections = []                            # screen/triage drops this run, logged to REJECT_PATH for recall review
+    run_ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     crosschecks = {}   # cluster_id -> {"verdict", "reason"} from the fidelity guard; surfaced in the PR, not written to opinions.json
     completeness = {}  # cluster_id -> {"verdict", "reason"} from the completeness guard; surfaced in the PR, not written to opinions.json
     treat_flags, audit_notes = [], []          # adverse treatment of existing cards (forward escalation)
@@ -1041,6 +1077,9 @@ def main():
                               % (name[:60]))
                     else:
                         skipped.append((name, "screen: %s" % (s.get("reason") or "not a fit")))
+                        rejections.append({"ts": run_ts, "stage": "screen", "cluster_id": cid, "name": name,
+                                           "court": COURT_MAP.get(court_id) or court_id, "docket": docket,
+                                           "date": date_filed, "url": url, "reason": (s.get("reason") or "").strip()})
                         consec = 0; evaluated.add(cid); continue
                 time.sleep(0.4)
             # Full text, fetched once and reused by tiers 2 and 3.
@@ -1109,6 +1148,9 @@ def main():
                         audit_notes.append((card.get("name", ""), name, (a.get("card_review_note") or "").strip()))
                 if not t.get("relevant") or (t.get("significance") or "").lower() == "low":
                     skipped.append((name, "triage: %s" % (t.get("reason") or "not relevant")))
+                    rejections.append({"ts": run_ts, "stage": "triage", "cluster_id": cid, "name": name,
+                                       "court": COURT_MAP.get(court_id) or court_id, "docket": docket,
+                                       "date": date_filed, "url": url, "reason": (t.get("reason") or "").strip()})
                     consec = 0; evaluated.add(cid); continue
                 note = t.get("note") or ""
                 time.sleep(0.4)
@@ -1251,6 +1293,7 @@ def main():
 
     # Per-run health record (every non-dry run, no-op or not), so the funnel's activity
     # and how much each tier discards are visible without reading raw logs.
+    _log_rejections(rejections)
     _log_run({
         "ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "screened": n_screen, "triaged": n_triage, "summarized": n_opus, "audited": n_audit,
