@@ -1,5 +1,4 @@
 User-agent: *
-Disallow: /TESTBED/
 Disallow: /api/
 Allow: /
 

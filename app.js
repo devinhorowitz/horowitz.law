@@ -1,7 +1,8 @@
 // =============================================================
 // horowitz.law — app.js
-// Single shared script for both index.html and resume.html.
-// Feature-detects: only the bits relevant to the current page run.
+// Single shared script for every page (index, resume, colophon,
+// opinions, archive, subscribe, 404). Feature-detects: only the bits
+// relevant to the current page run.
 // =============================================================
 
 (function () {
@@ -309,8 +310,9 @@
   // -----------------------------------------------------------
   // Keyboard shortcuts — invisible by design, for the keyboard and
   // the curious. 't' toggles the theme (reusing the toggle's own
-  // flicker + click + persistence); 'g' then h/r/c navigates to
-  // home / resume / colophon, vim/gmail style; '?' prints the list
+  // flicker + click + persistence); 'g' then h/r/c/o/a/s navigates to
+  // home / resume / colophon / opinions / archive / subscribe,
+  // vim/gmail style; '?' prints the list
   // to the console, matching the greeting above. Ignored while a
   // field is focused or a browser modifier is held, so native
   // shortcuts (Cmd-T and friends) are never hijacked.
@@ -327,7 +329,7 @@
       var k = e.key;
 
       if (goArmed) {
-        var dest = { h: '/', r: '/resume', c: '/colophon' }[String(k).toLowerCase()];
+        var dest = { h: '/', r: '/resume', c: '/colophon', o: '/opinions', a: '/archive', s: '/subscribe' }[String(k).toLowerCase()];
         disarm();
         if (dest) { e.preventDefault(); window.location.href = dest; }
         return;
@@ -343,7 +345,7 @@
         try {
           console.log('%ckeyboard', 'color:#ff9e5e;font-family:ui-monospace,monospace;font-weight:600;');
           console.log(
-            '%ct        toggle theme\ng h      home\ng r      resume\ng c      colophon\n?        this list',
+            '%ct        toggle theme\ng h      home\ng r      resume\ng c      colophon\ng o      opinions\ng a      archive\ng s      subscribe\n?        this list',
             'color:#807a72;font-family:ui-monospace,monospace;line-height:1.6;'
           );
         } catch (e2) { /* noop */ }

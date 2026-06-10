@@ -34,9 +34,9 @@
 <link rel="preload" href="/fonts/jetbrains-mono-600.subset.woff2" as="font" type="font/woff2" crossorigin>
 
 <!-- Shared foundation: @font-face, color-scheme, text-wrap -->
-<!-- pre-paint theme: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js; CSP hash-pinned) -->
-<script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
-<link rel="stylesheet" href="/base.css?v=2026-05-31">
+<!-- pre-paint theme + .js marker: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js), and tag <html> with .js so JS-gated styling fails open when scripts are blocked; CSP hash-pinned -->
+<script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}document.documentElement.className+=' js';})();</script>
+<link rel="stylesheet" href="/base.css?v=96c1e44c20">
 
 <style>
   :root {
@@ -250,6 +250,16 @@
     outline-offset: 3px;
     border-radius: 2px;
   }
+  /* Screen-reader-only heading: the terminal conceit carries the visual
+     hierarchy, but the page still needs a real h1 for assistive tech. */
+  .sr-h {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 </style>
 </head>
 <body>
@@ -261,6 +271,7 @@
   </div>
 
   <main>
+    <h1 class="sr-h">404: page not found</h1>
     <div class="terminal">
       <div class="line prompt">cat <span class="path" id="requestedPath">/</span></div>
       <div class="line err"><span class="err-prefix">cat:</span> <span class="path" id="requestedPath2">/</span>: No such file or directory</div>
@@ -273,6 +284,7 @@
         <a href="/#honors">honors/</a>
         <a href="/#admissions">admissions/</a>
         <a href="/#contact">contact/</a>
+        <a href="/opinions">opinions/</a>
         <a href="/resume">resume</a>
       </div>
       <div class="line prompt">cd /<span class="blink" aria-hidden="true"></span></div>
@@ -285,7 +297,7 @@
 
 </div>
 
-<script src="/app.js?v=2026-05-31" defer></script>
+<script src="/app.js?v=967dadb77a" defer></script>
 
 </body>
 </html>

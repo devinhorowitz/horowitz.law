@@ -98,12 +98,24 @@
   }
 
   if (searchBox) {
+    // Debounce: apply() walks every card and year block, so re-filtering on every
+    // keystroke would jank on mobile once the archive holds a few hundred cards.
+    // 80ms is below perception for typing but coalesces a burst into one pass.
+    var applyTimer = null;
+    function scheduleApply() {
+      if (applyTimer) clearTimeout(applyTimer);
+      applyTimer = setTimeout(function () { applyTimer = null; apply(); }, 80);
+    }
     searchBox.addEventListener('input', function () {
       query = searchBox.value.trim().toLowerCase();
-      apply();
+      scheduleApply();
     });
     searchBox.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') { searchBox.value = ''; query = ''; apply(); }
+      if (e.key === 'Escape') {
+        searchBox.value = ''; query = '';
+        if (applyTimer) { clearTimeout(applyTimer); applyTimer = null; }
+        apply();   // clearing should feel instant
+      }
     });
     try {
       var q0 = new URLSearchParams(location.search).get('q');

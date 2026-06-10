@@ -46,9 +46,17 @@
 <meta name="twitter:image" content="https://horowitz.law/og-card.jpg">
 <link rel="alternate" type="application/rss+xml" title="horowitz.law — Georgia Appellate Watch" href="/opinions.xml">
 
-<!-- pre-paint theme: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js) -->
-<script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
-<link rel="stylesheet" href="/base.css?v=2026-05-31">
+<!-- pre-paint theme + .js marker: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js), and tag <html> with .js so JS-gated styling fails open when scripts are blocked; CSP hash-pinned -->
+<script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}document.documentElement.className+=' js';})();</script>
+<!-- Fonts: preloaded so the weights this page uses (400/500/600, and 700 via
+     <strong>) fetch in parallel rather than chaining behind base.css, whose
+     @font-face is their only other discovery path. crossorigin is required for
+     fonts even when same-origin. -->
+<link rel="preload" href="/fonts/jetbrains-mono-400.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-500.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-600.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-700.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/base.css?v=96c1e44c20">
 
 <style>
   :root {
@@ -157,6 +165,8 @@
       <button type="submit" id="subBtn">Subscribe</button>
     </form>
 
+    <noscript><p class="status err">JavaScript is required to subscribe here. Prefer no scripts? The same updates are on the <a href="/opinions.xml" style="color:inherit;">RSS feed</a>.</p></noscript>
+
     <p class="status" id="status" role="status" aria-live="polite"></p>
 
     <p class="fineprint">Weekly, and only in weeks with new decisions. Unsubscribe anytime from the footer of any email. Your address is used only to send this digest.</p>
@@ -169,7 +179,7 @@
 
 </div>
 
-<script src="/app.js?v=2026-05-31" defer></script>
-  <script src="/subscribe.js?v=2026-06-07b" defer></script>
+<script src="/app.js?v=967dadb77a" defer></script>
+  <script src="/subscribe.js?v=e15ed2854b" defer></script>
 </body>
 </html>

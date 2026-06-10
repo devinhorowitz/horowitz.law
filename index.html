@@ -24,6 +24,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=2026-06-05">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
+<link rel="alternate" type="application/rss+xml" title="horowitz.law — Georgia Appellate Watch" href="/opinions.xml">
 
 <!-- canonical -->
 <link rel="canonical" href="https://horowitz.law/">
@@ -133,9 +134,9 @@
 <link rel="preload" href="/fonts/jetbrains-mono-700.subset.woff2" as="font" type="font/woff2" crossorigin>
 
 <!-- Shared foundation: @font-face, color-scheme, text-wrap -->
-<!-- pre-paint theme: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js; CSP hash-pinned) -->
-<script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
-<link rel="stylesheet" href="/base.css?v=2026-05-31">
+<!-- pre-paint theme + .js marker: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js), and tag <html> with .js so JS-gated styling fails open when scripts are blocked; CSP hash-pinned -->
+<script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}document.documentElement.className+=' js';})();</script>
+<link rel="stylesheet" href="/base.css?v=96c1e44c20">
 
 <style>
   :root {
@@ -375,22 +376,40 @@
   /* sections */
   section {
     margin-bottom: 60px;
+  }
+
+  /* JS-gated fade-in, failing OPEN. The hide applies only under .js, which the
+     hash-pinned inline <head> script adds; if a blocker (NoScript, a strict
+     content filter) stops scripts, the class never lands and the sections render
+     visible. The old @media (scripting: none) fallback could not catch that
+     case: an extension-blocked script still reports scripting as enabled.
+     The keyframes are a second net: if app.js alone fails to load, sections
+     reveal themselves after 2.2s instead of staying hidden forever. */
+  .js section {
     opacity: 0;
     transform: translateY(18px);
     transition: opacity 0.6s ease, transform 0.6s ease;
+    animation: section-reveal 0.6s ease 2.2s forwards;
   }
 
-  section.visible {
+  .js section.visible {
     opacity: 1;
     transform: translateY(0);
+    animation: none;
   }
 
-  /* No-JS fallback: the fade-in above is applied by app.js (IntersectionObserver
-     adds .visible), so without scripting the sections would never be revealed.
-     Show them outright when scripting is unavailable, so content is never gated
-     on JavaScript. */
-  @media (scripting: none) {
-    section { opacity: 1; transform: none; }
+  @keyframes section-reveal {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Reduced motion: no fade choreography at all; content is simply there. */
+  @media (prefers-reduced-motion: reduce) {
+    .js section {
+      opacity: 1;
+      transform: none;
+      transition: none;
+      animation: none;
+    }
   }
 
   .section-header {
@@ -1009,7 +1028,7 @@
       <div class="repo-note">served over a CDN</div>
     </div>
   </div>
-  <script src="/app.js?v=2026-05-31" defer></script>
+  <script src="/app.js?v=967dadb77a" defer></script>
 
   <!-- Speculation Rules: prerender the resume on hover intent so the
        landing→resume navigation is instant. Progressive enhancement;
