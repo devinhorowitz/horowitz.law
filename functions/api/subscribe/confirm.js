@@ -1,5 +1,13 @@
 // functions/api/subscribe/confirm.js
-// GET /api/subscribe/confirm?e=<email>&t=<ts>&s=<hmac>
+// GET  /api/subscribe/confirm?e=<email>&t=<ts>&s=<hmac>   -> verify the link, show a Confirm button
+// POST /api/subscribe/confirm                              -> perform the subscription
+//
+// Two steps on purpose. Mail-security link scanners (Outlook SafeLinks and friends)
+// follow GET links in inbound mail; a GET that subscribed on sight let a scanner
+// confirm an address whose owner never clicked. The GET now only verifies the signed
+// link and renders a button; the state change happens on the POST the button submits
+// (a plain form, so no JavaScript is required). Links from earlier emails still work;
+// they just show the button instead of confirming instantly.
 //
 // Verifies the signed link from the confirmation email, then creates the contact in
 // Resend's global contacts: subscribed (unsubscribed: false), opted into the Topic,
@@ -38,6 +46,13 @@ function timingSafeEqual(a, b) {
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
+}
+
+// HTML-escape the one piece of user input these pages reflect (the email address).
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
 }
 
 function resendHeaders(env) {
@@ -104,7 +119,10 @@ function page(title, bodyHtml) {
     `p{margin:0 0 12px;font-size:15px;}` +
     `.muted{color:#6a6560;font-size:13.5px;}` +
     `a{color:#a4471a;text-decoration:none;border-bottom:1px dotted currentColor;}` +
-    `@media (prefers-color-scheme: dark){a{color:#ff9e5e;}.muted{color:#807a72;}}` +
+    `button{display:inline-block;background:#a4471a;color:#f5ede0;border:0;border-radius:8px;` +
+    `padding:13px 24px;font:600 14px ui-monospace,Menlo,Consolas,monospace;cursor:pointer;}` +
+    `@media (prefers-color-scheme: dark){a{color:#ff9e5e;}.muted{color:#807a72;}` +
+    `button{background:#ff9e5e;color:#0d0e10;}}` +
     `</style></head><body><div class="card">${bodyHtml}</div></body></html>`
   );
 }
@@ -118,8 +136,50 @@ function html(title, bodyHtml, status = 200) {
       "Cache-Control": "no-store",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
+      // Functions responses bypass the static _headers file, so set a page CSP here.
+      // These pages run no scripts; the only inline material is the style block above
+      // and the confirm form, which must be able to POST back to this origin.
+      "Content-Security-Policy":
+        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; " +
+        "base-uri 'none'; frame-ancestors 'none'",
+      "X-Frame-Options": "DENY",
     },
   });
+}
+
+// Shared validation for GET and POST: config, shape, signature, expiry.
+// Returns { email } on success, or { error: Response } to return as-is.
+async function validateLink(env, email, ts, sig) {
+  if (!env.RESEND_API_KEY || !env.SUBSCRIBE_SECRET) {
+    return { error: html(
+      "Not configured",
+      `<h1>Not configured</h1><p class="muted">Subscription confirmation is not set up yet.</p>`,
+      500
+    ) };
+  }
+  if (!email || !ts || !sig || email.length > 254 || !/^[0-9a-f]{64}$/.test(sig)) {
+    return { error: html(
+      "Invalid link",
+      `<h1>Invalid link</h1><p class="muted">This confirmation link is missing or malformed. <a href="/subscribe">Try subscribing again</a>.</p>`,
+      400
+    ) };
+  }
+  const expected = await hmacHex(env.SUBSCRIBE_SECRET, `${email}.${ts}`);
+  if (!timingSafeEqual(expected, sig)) {
+    return { error: html(
+      "Invalid link",
+      `<h1>Invalid link</h1><p class="muted">This confirmation link could not be verified. <a href="/subscribe">Try subscribing again</a>.</p>`,
+      400
+    ) };
+  }
+  if (!/^\d+$/.test(ts) || Date.now() - Number(ts) > CONFIRM_TTL_MS) {
+    return { error: html(
+      "Link expired",
+      `<h1>Link expired</h1><p class="muted">This confirmation link has expired. <a href="/subscribe">Subscribe again</a> to get a fresh one.</p>`,
+      410
+    ) };
+  }
+  return { email };
 }
 
 export async function onRequestGet(context) {
@@ -129,36 +189,43 @@ export async function onRequestGet(context) {
   const ts = url.searchParams.get("t") || "";
   const sig = url.searchParams.get("s") || "";
 
-  if (!env.RESEND_API_KEY || !env.SUBSCRIBE_SECRET) {
-    return html(
-      "Not configured",
-      `<h1>Not configured</h1><p class="muted">Subscription confirmation is not set up yet.</p>`,
-      500
-    );
-  }
-  if (!email || !ts || !sig || email.length > 254 || !/^[0-9a-f]{64}$/.test(sig)) {
-    return html(
-      "Invalid link",
-      `<h1>Invalid link</h1><p class="muted">This confirmation link is missing or malformed. <a href="/subscribe">Try subscribing again</a>.</p>`,
-      400
-    );
-  }
+  const v = await validateLink(env, email, ts, sig);
+  if (v.error) return v.error;
 
-  const expected = await hmacHex(env.SUBSCRIBE_SECRET, `${email}.${ts}`);
-  if (!timingSafeEqual(expected, sig)) {
+  // Valid link: render the confirm step. No state changes on GET, so a link
+  // scanner that prefetches this URL subscribes nobody.
+  return html(
+    "Confirm subscription",
+    `<h1>One click to finish.</h1>` +
+      `<p>Confirm the Georgia Appellate Watch weekly digest for <strong>${escapeHtml(email)}</strong>.</p>` +
+      `<form method="post" action="/api/subscribe/confirm">` +
+      `<input type="hidden" name="e" value="${escapeHtml(email)}">` +
+      `<input type="hidden" name="t" value="${escapeHtml(ts)}">` +
+      `<input type="hidden" name="s" value="${escapeHtml(sig)}">` +
+      `<p style="margin:18px 0 10px;"><button type="submit">Confirm subscription</button></p>` +
+      `</form>` +
+      `<p class="muted">Not you, or changed your mind? Just close this page; nothing is saved.</p>`
+  );
+}
+
+export async function onRequestPost(context) {
+  const { request, env } = context;
+  let form;
+  try {
+    form = await request.formData();
+  } catch {
     return html(
-      "Invalid link",
-      `<h1>Invalid link</h1><p class="muted">This confirmation link could not be verified. <a href="/subscribe">Try subscribing again</a>.</p>`,
+      "Invalid request",
+      `<h1>Invalid request</h1><p class="muted">Use the button on the confirmation page. <a href="/subscribe">Try subscribing again</a>.</p>`,
       400
     );
   }
-  if (!/^\d+$/.test(ts) || Date.now() - Number(ts) > CONFIRM_TTL_MS) {
-    return html(
-      "Link expired",
-      `<h1>Link expired</h1><p class="muted">This confirmation link has expired. <a href="/subscribe">Subscribe again</a> to get a fresh one.</p>`,
-      410
-    );
-  }
+  const email = String(form.get("e") || "").trim().toLowerCase();
+  const ts = String(form.get("t") || "");
+  const sig = String(form.get("s") || "");
+
+  const v = await validateLink(env, email, ts, sig);
+  if (v.error) return v.error;
 
   try {
     await subscribeConfirmed(env, email);
