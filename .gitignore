@@ -1,7 +1,8 @@
+
 # Python bytecode
 __pycache__/
 *.py[cod]
-
+ 
 # Pipeline run artifacts: written at runtime by scripts/update.py and
 # scripts/backfill.py as the pull-request body, never committed.
 # (CI also gates commits with an explicit add-paths list.)
@@ -11,10 +12,14 @@ scripts/backfill_pr_body.md
 scripts/treatment_pr_body.md
 scripts/queue_cases_pr_body.md
 scripts/assess_precedential_pr_body.md
-
+ 
 # OS and editor cruft
 .DS_Store
 Thumbs.db
 *~
 .vscode/
 .idea/
+ 
+# Digest dry-run preview, written locally by scripts/digest.py; never committed.
+digest_preview.html
+ 
