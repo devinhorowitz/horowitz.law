@@ -1,5 +1,5 @@
 {
-  "last_filed": "2026-06-09",
+  "last_filed": "2026-06-10",
   "seen_clusters": [
     2812616,
     3209755,
@@ -109,8 +109,17 @@
     10872591,
     10872602,
     10872653,
-    10872654
+    10872654,
+    10872957,
+    10872980,
+    10872981,
+    10872982,
+    10872997,
+    10873026,
+    10873033,
+    10873034,
+    10873086
   ],
-  "updated": "2026-06-09T22:00:16Z",
+  "updated": "2026-06-10T16:12:29Z",
   "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
