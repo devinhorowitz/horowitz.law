@@ -189,3 +189,22 @@ footer a:hover {
   text-decoration: line-through;
   text-decoration-thickness: 1px;
 }
+
+/* ---- Arrival cue for deep-linked opinion cards. Mirrors the landing
+   page's section:target wash: following /opinions#op-XXXXXXX (or an
+   archive anchor) briefly washes the card so you can see where you
+   landed. Lives here rather than in the page styles so the pipeline-
+   generated opinions/archive pages pick it up without a template
+   change, same as the .op-treatment styles above. Self-cancels under
+   reduced motion. ---- */
+@keyframes opinionArrive {
+  from { background-color: rgba(255, 158, 94, 0.10); }
+  to   { background-color: transparent; }
+}
+.opinion:target {
+  animation: opinionArrive 2.2s ease-out;
+  scroll-margin-top: 24px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .opinion:target { animation: none !important; }
+}

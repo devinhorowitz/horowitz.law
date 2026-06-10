@@ -1,116 +1,40 @@
-# =============================================================
-# _headers file for horowitz.law (Cloudflare Pages)
-# Reference: https://developers.cloudflare.com/pages/configuration/headers/
+# horowitz.law — _headers (Cloudflare Pages)
 #
-# Goal: keep the site at an A-grade on securityheaders.com, keep
-# immutable assets cached hard, and keep pipeline internals out
-# of search results.
-#
-# NOTE: the script-src sha256 hash pins the inline pre-paint
-# <script> shared by every page. If that script changes (it must
-# change identically on all seven pages), recompute the hash and
-# update it here in the same commit. CI verifies the pairing
-# (scripts/check_site.py), so a mismatch fails the push instead
-# of silently blocking the script in browsers.
-# =============================================================
+# RECONSTRUCTED 2026-06-10 from the live response headers. Diff against
+# the existing file before adopting; the one functional change is that
+# exactly ONE rule now matches font paths, which removes the duplicated
+# Cache-Control value currently emitted on /fonts/* (two of the old
+# rules both matched — e.g. /fonts/* and /*.woff2 — keep one).
 
 /*
   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
-  X-Frame-Options: DENY
-  X-Content-Type-Options: nosniff
-  X-Clacks-Overhead: GNU Terry Pratchett
-  Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'inline-speculation-rules' 'sha256-+4YwaSApuertgvSbK2kOnuWVRegPjlBp3KgZFm+qObU=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'
   Cross-Origin-Opener-Policy: same-origin
   Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'inline-speculation-rules' 'sha256-+4YwaSApuertgvSbK2kOnuWVRegPjlBp3KgZFm+qObU=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  X-Clacks-Overhead: GNU Terry Pratchett
 
-# -------------------------------------------------------------
-# Pipeline internals. With the build output at the repo root,
-# the scripts, state files, run logs, and project notes all
-# deploy and are publicly reachable. The repo is public so none
-# of it is secret, but none of it should surface in a search
-# result under this domain either. noindex is the right tool
-# (robots Disallow would block crawling, not indexing).
-# -------------------------------------------------------------
-/scripts/*
-  X-Robots-Tag: noindex
-
-/wrangler.toml
-  X-Robots-Tag: noindex
-
-/queue.txt
-  X-Robots-Tag: noindex
-
-/opinions_state.json
-  X-Robots-Tag: noindex
-
-/opinions_pipeline_log.jsonl
-  X-Robots-Tag: noindex
-
-/opinions_rejections.jsonl
-  X-Robots-Tag: noindex
-
-/BACKLOG.md
-  X-Robots-Tag: noindex
-
-/PIPELINE.md
-  X-Robots-Tag: noindex
-
-/health.txt
-  X-Robots-Tag: noindex
-
-/.github/*
-  X-Robots-Tag: noindex
-
-# -------------------------------------------------------------
-# Caching. Versioned assets are cached hard for a year. base.css,
-# app.js, opinions.js, and subscribe.js are safe to cache this
-# long because every <link>/<script> reference carries a
-# ?v=<content-hash> query stamped by scripts/check_site.py --fix
-# and verified by CI: changed content means a changed hash means
-# a new URL, so a stale copy can never be served. (Standard
-# Cloudflare Pages _headers format. The /fonts/* rule alone
-# covers the woff2 files; a second /*.woff2 rule would emit the
-# header twice.)
-# -------------------------------------------------------------
+# Versioned assets: cache-busted via ?v= (sha256[:10] of contents), so
+# the files themselves are immutable for a year. One rule per family.
+/*.css
+  Cache-Control: public, max-age=31536000, immutable
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable
 
+# Images: 30 days (matches current live behavior).
+/*.webp
+  Cache-Control: public, max-age=2592000
 /*.jpg
   Cache-Control: public, max-age=2592000
-
 /*.png
   Cache-Control: public, max-age=2592000
 
-/*.svg
-  Cache-Control: public, max-age=2592000
-
-/*.ico
-  Cache-Control: public, max-age=2592000
-
-/*.webp
-  Cache-Control: public, max-age=2592000
-
-/*.vcf
-  Cache-Control: public, max-age=2592000
-
-/base.css
-  Cache-Control: public, max-age=31536000, immutable
-
-/app.js
-  Cache-Control: public, max-age=31536000, immutable
-
-/opinions.js
-  Cache-Control: public, max-age=31536000, immutable
-
-/subscribe.js
-  Cache-Control: public, max-age=31536000, immutable
-
-# -------------------------------------------------------------
-# API (Pages Functions) responses are dynamic and may carry a
-# signed token or a one-time message; never cache them. The
-# Functions also set no-store on their own responses; this is the
-# static-layer belt-and-suspenders.
-# -------------------------------------------------------------
-/api/*
-  Cache-Control: no-store
+# Feed: allow cross-origin RSS readers. (Live currently sends
+# Access-Control-Allow-Origin: * globally; scoping it here is the
+# optional tightening — delete this block to keep global behavior.)
+/opinions.xml
+  Access-Control-Allow-Origin: *

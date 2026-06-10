@@ -1,8 +1,7 @@
 // =============================================================
 // horowitz.law — app.js
-// Single shared script for every page (index, resume, colophon,
-// opinions, archive, subscribe, 404). Feature-detects: only the bits
-// relevant to the current page run.
+// Single shared script for both index.html and resume.html.
+// Feature-detects: only the bits relevant to the current page run.
 // =============================================================
 
 (function () {
@@ -310,9 +309,8 @@
   // -----------------------------------------------------------
   // Keyboard shortcuts — invisible by design, for the keyboard and
   // the curious. 't' toggles the theme (reusing the toggle's own
-  // flicker + click + persistence); 'g' then h/r/c/o/a/s navigates to
-  // home / resume / colophon / opinions / archive / subscribe,
-  // vim/gmail style; '?' prints the list
+  // flicker + click + persistence); 'g' then h/r/c/o/a/s navigates (home,
+  // resume, colophon, opinions, archive, subscribe), vim/gmail style; '?' prints the list
   // to the console, matching the greeting above. Ignored while a
   // field is focused or a browser modifier is held, so native
   // shortcuts (Cmd-T and friends) are never hijacked.

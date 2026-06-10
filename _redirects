@@ -1,0 +1,11 @@
+# horowitz.law — _redirects (Cloudflare Pages)
+
+# Canonicalize the *.pages.dev origin onto the apex domain, preserving
+# deep links. Closes the duplicate-content origin; rel=canonical was
+# already mitigating, this makes it airtight.
+https://horowitz-law.pages.dev/* https://horowitz.law/:splat 301
+
+# Optional short alias for the contact vCard. Not required by the new
+# QR code (it encodes the canonical /devin-horowitz.vcf), but useful if
+# a smaller V3-Q symbol is ever wanted — see INTEGRATION.md.
+# /dh.vcf /devin-horowitz.vcf 301
