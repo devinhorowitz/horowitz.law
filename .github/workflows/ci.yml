@@ -59,7 +59,7 @@ jobs:
       - name: Compile and import every script
         run: |
           python -m py_compile scripts/*.py
-          cd scripts && python -c "import cl_rate, safeio, jurisdictions, render, treatment_core, update, treatment, backfill, digest, queue_cases, assess_precedential, courts, golden_check, check_site; print('all imports resolve')"
+          cd scripts && python -c "import cl_rate, safeio, jurisdictions, render, treatment_core, update, treatment, backfill, digest, queue_cases, assess_precedential, courts, golden_check, check_site, alert; print('all imports resolve')"
 
       - name: Validate workflow YAML
         run: python -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml')]; print('workflow YAML parses')"
@@ -87,4 +87,4 @@ jobs:
           # -N (intent-to-add) makes never-committed generated files visible to
           # the diff, so a forgotten o/ upload fails here instead of 404ing live.
           git add -N o
-          git diff --exit-code -- opinions.html archive.html opinions.xml sitemap.xml index.html resume.html colophon.html subscribe.html 404.html changes.html stats.html changes.xml o
+          git diff --exit-code -- opinions.html archive.html opinions.xml sitemap.xml index.html resume.html colophon.html subscribe.html 404.html changes.html stats.html digests.html changes.xml o

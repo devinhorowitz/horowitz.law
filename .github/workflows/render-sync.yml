@@ -85,6 +85,7 @@ jobs:
             404.html
             changes.html
             stats.html
+            digests.html
             changes.xml
             o
 

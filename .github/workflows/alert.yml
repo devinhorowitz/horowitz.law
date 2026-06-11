@@ -1,0 +1,89 @@
+name: Georgia Appellate Watch instant alert
+
+# An off-cadence email for a decision worth knowing the day it lands. Two ways in:
+#   1. Put [instant-alert] anywhere in an opinions PR's body before merging it.
+#      When that PR merges, this fires and announces exactly the cards the merge
+#      added to opinions.json (HEAD vs HEAD~1) -- nothing typed twice, nothing
+#      announced that did not merge.
+#   2. Run it by hand from the Actions tab with explicit cluster ids.
+# The send rides scripts/alert.py on the digest's Resend plumbing: same segment,
+# the main Topic and its per-recipient unsubscribe, the same duplicate-proof
+# date+id broadcast name, the same CAN-SPAM postal gate. Use sparingly, by design:
+# the digest is the cadence; this is the exception that proves it.
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      ids:
+        description: 'Comma-separated cluster_ids to announce (e.g. 10872456)'
+        required: true
+      dry_run:
+        description: 'Render a preview without sending (true/false)'
+        required: false
+        default: 'false'
+      draft:
+        description: 'Create the broadcast but do not send it (true/false)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  issues: write          # the failure-alert step opens or comments on a tracking issue
+
+env:
+  PYTHONUNBUFFERED: '1'
+
+concurrency:
+  group: gaw-alert
+  cancel-in-progress: false
+
+jobs:
+  alert:
+    # Fire only for a merged PR whose body carries the flag, or a manual run.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       contains(github.event.pull_request.body, '[instant-alert]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          # The merge commit and its first parent: alert.py diffs
+          # opinions.json across them to learn which cards were added.
+          ref: ${{ github.event_name == 'pull_request' && 'main' || github.ref }}
+          fetch-depth: 2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Send the instant alert
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_SEGMENT_ID: ${{ vars.RESEND_SEGMENT_ID }}
+          RESEND_TOPIC_ID: ${{ vars.RESEND_TOPIC_ID }}
+          DIGEST_FROM: ${{ vars.DIGEST_FROM }}
+          DIGEST_POSTAL: ${{ vars.DIGEST_POSTAL }}
+          DIGEST_DISCLAIMER: ${{ vars.DIGEST_DISCLAIMER }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          ALERT_IDS: ${{ github.event.inputs.ids || '' }}
+          DIGEST_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          DIGEST_DRAFT: ${{ github.event.inputs.draft || 'false' }}
+        run: python scripts/alert.py
+
+      - name: Report a failed run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="An instant-alert run failed. ${run_url}"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Instant-alert run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Instant-alert run failures" --body "$body"
+          fi
