@@ -65,7 +65,11 @@
     var shown = 0;
     cards.forEach(function (c) {
       var okSystem = systemFilter === 'all' || c.getAttribute('data-system') === systemFilter;
-      var okJuris = jurisdictionFilter === 'all' || c.getAttribute('data-jurisdiction') === jurisdictionFilter;
+      // data-jurisdiction may carry a comma-list once federal cards are stamped
+      // for every covered state they bind; membership here, so a single value
+      // behaves exactly as it always has.
+      var okJuris = jurisdictionFilter === 'all' ||
+        (',' + (c.getAttribute('data-jurisdiction') || '') + ',').indexOf(',' + jurisdictionFilter + ',') > -1;
       var areas = (c.getAttribute('data-areas') || '').split(',');
       var okArea = areaFilter === 'all' || areas.indexOf(areaFilter) > -1;
       var okText = true;

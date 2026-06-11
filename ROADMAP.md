@@ -103,6 +103,14 @@ spend; Resend free tier holds.
   the explicit prerequisite for ever exercising PIPELINE.md’s “dropping the
   gate” path.
 
+- **Erie refinement for the federal overlay (optional, pennies).** The
+  jurisdiction dropdown's "florida · federal" / "alabama · federal" views are
+  court-level bindingness, so an Eleventh Circuit diversity case applying
+  *Georgia* substantive law shows there too. A one-word triage field
+  ("substantive law applied: federal / ga / fl / al") would let render narrow
+  overlay membership per card; the honest "· federal" label carries the load
+  until then.
+
 ## Phase 5 — Florida *(last, and here is the math that says so)*
 
 The registry was built for this (`jurisdictions.py`: one entry per state), and
@@ -120,6 +128,39 @@ prompts, “validated against a second-state test.” Sequence inside the phase:
    filter (the selector already exists and is pre-wired) plus per-state feeds,
    versus separate /fl pages. Recommendation: unified page, namespaced feeds.
 1. **Schedule offsets** so GA and FL runs never share a rate window.
+1. **Subscription model — design locked now, wired then.** The form half
+   already ships dormant: /subscribe carries a registry-gated "which states"
+   checkbox group that appears automatically when jurisdictions.py grows past
+   one state, and subscribe.js already collects and posts `juris` (empty today,
+   meaning all). The Phase 5 commit that adds Florida to the registry is the
+   same commit that must wire the rest, to these decisions:
+   - **Topics:** one per state ("fl") and per state-area ("fl:premises"), in a
+     composite-key `RESEND_TOPIC_MAP` that supersedes `RESEND_AREA_TOPICS`;
+     bare area keys stay honored as Georgia-implicit during migration, so
+     existing subscriptions never need touching.
+   - **Confirm-link HMAC v2:** sign `email.ts.a:<areasCsv>.j:<jurisCsv>` with
+     both slots always present once v2 ships (prefixes make empty slots
+     unambiguous); accept the two legacy shapes for the link TTL's 7 days,
+     then drop them.
+   - **digest.py:** filter every selection by `e.jurisdiction`; per-state main
+     broadcasts plus per-state-area broadcasts, same duplicate-proof naming
+     with the state in the bracket ("… [fl:premises]").
+   - **alert.py:** unchanged — an instant alert goes to the main Topic
+     regardless of state, because "worth knowing today" is the whole point.
+1. **Federal bindingness is derived, never stored** (shipped with the
+   multistate prep). `jurisdictions.court_binds()` maps each federal court to
+   every registered jurisdiction it binds by judicial hierarchy (ca11 ->
+   ga/fl/al; scotus -> "*", meaning all, present and future), and render stamps
+   `data-jurisdiction` from it — so an Eleventh Circuit card appears under
+   every state's filter with no per-card data, no backfills, and no staleness
+   when the registry grows. State-court cards carry their own stamp, which the
+   pipeline may make a list once a second state is covered in full. Per-state
+   digest selection tests membership, never equality.
+1. **Overlay -> full upgrade.** Florida ships by flipping its registry entry's
+   `mode` to "full" and filling its `courts` list: the dropdown label drops
+   " · federal", the subscribe checkboxes appear (the gate counts fully-covered
+   states only), and the per-state Topics wire up per the locked design above.
+   Nothing else moves.
 
 ## Carried items (outside the repo)
 
