@@ -93,17 +93,25 @@ spend; Resend free tier holds.
 
 ## Phase 4 — taxonomy and trust *(one-time pennies)*
 
-- **SB 68 / tort-reform tracker tag** + **first-impression badge.** Tag forward
+- *(shipped 2026-06-11; run the tagfill workflow to backfill)* - **SB 68 / tort-reform tracker tag** + **first-impression badge.** Tag forward
   at triage ($0 ongoing); backfill the ~32 archive cards from their existing
   synopses with Haiku (cents) or by hand in an evening.
-- **`editor_note` field**: a human-analysis layer rendered visually distinct
+- *(shipped 2026-06-11; hand-edit opinions.json, the nightly render carries it live)* - **`editor_note` field**: a human-analysis layer rendered visually distinct
   from the AI synopsis — the credibility complement to the AI label.
-- **Golden-set hardening** (BACKLOG #1 and #2: negative controls, thin-area
+- *(shipped 2026-06-11; three negative controls cached, two thin-area anchors await one build-mode run)* - **Golden-set hardening** (BACKLOG #1 and #2: negative controls, thin-area
   anchors). One-time build fetches for the controls; check-mode pennies. This is
   the explicit prerequisite for ever exercising PIPELINE.md’s “dropping the
   gate” path.
 
-- **Erie refinement for the federal overlay (optional, pennies).** The
+- *(shipped 2026-06-11)* **Golden-set self-nomination, never self-adoption.**
+  When a freshly carded opinion covers an area the golden set anchors thinly
+  (fewer than OPINIONS_GOLDEN_THIN positives, default 2), the run's PR carries
+  a paste-ready golden entry. The set's labels must stay independent of the
+  system under test, so the pipeline only nominates: adoption is the editor's
+  paste + merge, the same ratification the original seed went through, and the
+  set is append-mostly (entries replay frozen text, so they stay valid forever;
+  swapping old anchors out is how a benchmark drifts to match the system).
+- *(shipped 2026-06-11; law_applied narrows the overlay, the tagfill backfills it)* - **Erie refinement for the federal overlay (optional, pennies).** The
   jurisdiction dropdown's "florida · federal" / "alabama · federal" views are
   court-level bindingness, so an Eleventh Circuit diversity case applying
   *Georgia* substantive law shows there too. A one-word triage field

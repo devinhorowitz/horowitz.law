@@ -1,60 +1,82 @@
-# Multistate v3 — federal overlay · 2026-06-11
-**(supersedes both earlier multistate bundles — upload this one)**
+# Phase 4 — taxonomy and trust · 2026-06-11
 
-Your argument, implemented: the feed already holds decisions that bind
-Florida and Alabama by judicial hierarchy, so the jurisdiction dropdown now
-says so — live on upload, at zero added cost, with the screening untouched.
+The first phase that touches your API bill, and "touches" is generous: the
+one-time backfill of all 32 cards runs Haiku over their own short digests —
+roughly a cent, total. Ongoing cost is a few extra output tokens per future
+card, riding the summarizer call that already happens. Nothing reader-facing
+costs anyone anything, ever.
 
-## Your four claims, answered in code
+## What shipped
 
-1. **"We're already finding Florida cases"** — yes, as *Georgia authority*:
-   the Eleventh Circuit binds GA/FL/AL federal courts alike. The dropdown now
-   exposes that bindingness: it offers `georgia`, `florida · federal`, and
-   `alabama · federal`, and every ca11 card is stamped
-   `data-jurisdiction="ga,fl,al"`.
-2. **Alabama screening** — already safe, no change needed: the funnel screens
-   for Georgia *relevance*, never for state of origin. An Alabama-origin
-   Eleventh Circuit case that matters to Georgia practice has always passed.
-3. **SCOTUS from anywhere** — handled by derivation, forever:
-   `jurisdictions.court_binds()` maps each federal court to the jurisdictions
-   it binds (`ca11 -> ga/fl/al`, `scotus -> "*"` = every registered state,
-   present and future). Bindingness is computed at render time, never stored
-   on cards — so no backfills, and a fourth state registered years from now
-   retroactively inherits every SCOTUS card with zero data changes. (No
-   SCOTUS cards in the record yet; the rule is wired and waiting.)
-4. **Free** — confirmed: intake, prompts, and API usage are untouched.
+**1. Badges: first impression + tort reform.** The Tier-3 summarizer now
+returns `first_impression` (true only when the opinion itself says so) and
+`tort_reform` (true only when a holding turns on SB 68, SB 69, SB 426, or
+HB 961 — defined by statute in the prompt, not vibes). Both render as
+accent-colored chips beside the area tags, on the feed, the archive, and every
+permalink, and both are q-searchable for free since the filter reads card text.
+Stored only when true, so the JSON stays lean.
 
-## The one caveat for your ruling (Erie)
+**2. `editor_note` — the human layer.** A new card field rendered as a
+visually distinct block (accent rule, "editor's note —" label) under the AI
+synopsis. It is human-only by construction: the pipeline, the backfill, and
+every script refuse to write it. To use it: edit opinions.json in the GitHub
+web editor, add `"editor_note": "..."` to a card, commit — the nightly render
+bot carries it onto the page, or any open PR's render does.
 
-Court-level bindingness slightly overclaims on diversity cases: an Eleventh
-Circuit decision applying *Georgia substantive law* will appear under
-`florida · federal` too. The label itself carries the honesty at the point of
-choice, and the synopsis self-identifies the law applied. If you ever want it
-tighter, ROADMAP Phase 4 now logs a one-word triage field ("substantive law
-applied") that would let render narrow overlay membership per card — pennies.
-Until then the label does the work.
+**3. Erie refinement, live.** The summarizer also returns `law_applied` for
+federal cards (federal / ga / fl / al), and render uses it three ways:
+`"federal"` or absent → full court-level bindingness (`ga,fl,al`);
+a state code → narrowed to the primary jurisdiction plus that state. Demoed:
+GoAuto stamped `law_applied: ga` rendered `data-jurisdiction="ga"` while Aspen
+at `federal` kept all three. The "· federal" dropdown label keeps carrying the
+honesty for untagged cards.
 
-## Why the subscribe form stays dormant
+**4. Tag backfill, PR-gated.** `scripts/tagfill.py` + the `tagfill` workflow:
+Haiku reads each card's own digest (per the roadmap: synopses, not opinions)
+and answers the three questions conservatively — what the digest doesn't show
+is false, and it only ever ADDS, never removes a hand-set field. Dry-run
+prints the per-card plan and writes nothing; apply re-renders and opens a PR
+so you review all 32 decisions as one diff before anything goes live.
 
-Filters show what exists; subscriptions promise curation. The screen curates
-for Georgia relevance only, so a "Florida" mailing list today would promise a
-stream we don't curate. The form's gate counts *fully-covered* states: the
-moment Florida's registry entry flips `mode` to "full" with real courts
-(Phase 5), the checkboxes appear and the topic wiring follows the locked
-design. Overlay states get the dropdown now, the inbox later.
+**5. Golden-set hardening (BACKLOG #1 and #2).** The set grew 9 → 14:
+- **Three negative controls**, picked from the live court feeds and cached via
+  the quota-free PDF path: *John Clark v. State* (criminal), *In re Estate of
+  Kevin L. George* (probate), and *Parmer v. Niven* — a divorce-contempt
+  appeal dismissed for lack of jurisdiction, out of scope twice over. A check
+  run that KEEPS any of these is now a loud regression toward an unfiltered
+  feed.
+- **Two thin-area anchors** for the rarest areas: *GoAuto* (badfaith) and
+  *Giles v. Greenhouse Apartments* (negsec). Their cached text needs one
+  `golden-check` run in **build** mode (anonymous REST is auth-walled now —
+  the workflow has your CourtListener token).
 
-## Verified
+This was the stated prerequisite for ever exercising PIPELINE.md's
+"dropping the gate" path; the gate itself stays exactly where it is.
 
-Dropdown renders 3 options on opinions + archive; ca11 cards stamped
-`ga,fl,al`; state cards `ga`; subscribe form dormant with the new comment;
-`?juris=fl` is a working shareable filter (membership test shipped in v2);
-full CI replication green; render idempotency clean.
+**6. Golden-set self-nomination (your idea, the safe half).** When a future
+run cards an opinion in an area the golden set covers thinly, the PR body now
+carries a paste-ready golden entry: nomination is automatic, adoption stays
+your paste + merge. Three gates keep it honest: it never proposes a card the
+run itself flagged or the cross-check disputed, never proposes a duplicate,
+and the set never adopts or swaps anything on its own — entries replay frozen
+text, so old anchors stay valid forever and removal is how benchmarks drift.
+Quiet today (every area now has two anchors); it will light up exactly when
+needed — a thin new area, or the Florida era.
+
+## Your three buttons, in order
+
+1. Upload this set, CI goes green.
+2. Actions → **golden-check** → run with mode **build** (fills the two
+   anchors), then once with **check** (watch three DROPs and nine keeps).
+3. Actions → **tagfill** → run once with apply **off** (read the per-card
+   plan in the log), then with apply **on**, and review the PR it opens.
 
 ## Upload set (same paths)
 
-ROADMAP.md · opinions.js · subscribe.html · subscribe.js ·
-scripts/jurisdictions.py · scripts/render.py · opinions.html · archive.html
+scripts/update.py · scripts/render.py · scripts/tagfill.py ·
+scripts/golden_set.json · .github/workflows/ci.yml ·
+.github/workflows/tagfill.yml · ROADMAP.md · opinions.html · archive.html
 
-**Optional:** o/9391147.html, o/10872097.html, o/10872980.html (the three
-Eleventh Circuit permalinks pick up the new stamp). Skip them if you like —
-the nightly render-sync bot will commit them on its own.
+(The 32 `o/` permalinks pick up the new stylesheet on the nightly render-sync
+PR — no need to upload them; badges only appear there after the tagfill PR
+merges anyway.)
