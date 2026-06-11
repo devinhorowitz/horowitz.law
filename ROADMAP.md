@@ -95,7 +95,11 @@ spend; Resend free tier holds.
 
 - *(shipped 2026-06-11; run the tagfill workflow to backfill)* - **SB 68 / tort-reform tracker tag** + **first-impression badge.** Tag forward
   at triage ($0 ongoing); backfill the ~32 archive cards from their existing
-  synopses with Haiku (cents) or by hand in an evening.
+  synopses with Haiku (cents) or by hand in an evening. Badge semantics
+  ruled 2026-06-11 (option c): the badge marks a decision that APPLIES a reform
+  act, or one a reform act SUPERSEDED or was enacted in direct response to --
+  Quynn wears it (HB 961 answered it); Martin does not (generic pre-amendment
+  section 51-12-33 application); routine pre-reform applications stay untagged.
 - *(shipped 2026-06-11; hand-edit opinions.json, the nightly render carries it live)* - **`editor_note` field**: a human-analysis layer rendered visually distinct
   from the AI synopsis — the credibility complement to the AI label.
 - *(shipped 2026-06-11; three negative controls cached, two thin-area anchors await one build-mode run)* - **Golden-set hardening** (BACKLOG #1 and #2: negative controls, thin-area

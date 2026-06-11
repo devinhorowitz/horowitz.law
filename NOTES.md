@@ -1,27 +1,24 @@
-# Golden-set fix · 2026-06-11
+# Tort-reform badge: tracker semantics (option c) · 2026-06-11
 
-The check run proved the guard works: 9/9 positives held, 3/3 negative
-controls died at the screen with textbook reasons, and the 429 mid-run was
-retried automatically. The two failures were my first-day anchor picks, chosen
-mechanically instead of by the confidence rule the nominator enforces:
+Your ruling, encoded in both prompt definitions so doctrine and pipeline can
+never disagree: the badge marks a decision that **applies** a reform act
+(SB 68, SB 69, SB 426, HB 961 — including era/applicability holdings), or one
+a reform act **superseded or was enacted in direct response to**. A passing
+mention, or a routine application of the pre-reform framework, is not the
+storyline. tagfill keeps its digest-only evidence rule on top of this.
 
-- **GoAuto** (badfaith): unpublished, and triage's drop reason is substantively
-  defensible — an insurer suing its own claims adjuster over a duty to advise;
-  bad faith is backdrop, not holding. Removed. Badfaith coverage is now 1, so
-  the nominator is armed for it: the next confident badfaith keeper will be
-  proposed paste-ready in its own PR.
-- **Giles** (negsec): a routine pre-SB 68 affirmance whose own card notes the
-  framework is superseded going forward; "low significance" on a frozen replay
-  is a fair call. Removed, and replaced with **Venetian Hills Apartments v.
-  Hughes** — published, substantive foreseeability holding denying the
-  landlord judgment. An unambiguous keeper.
+Consequences on the record: **Quynn keeps the badge** (HB 961 answered it) —
+no edit needed. **Martin loses it** — your one-line edit below. And a future
+tagfill re-run now converges with the doctrine instead of re-adding Martin:
+the definition itself excludes generic pre-amendment § 51-12-33 applications.
 
-Doctrine note (now in ROADMAP): an entry that fails its very first check never
-validated as ground truth — fixing it on arrival is label correction, not the
-benchmark drift the append-mostly rule forbids.
+## Your two touches
 
-## Two clicks
-
-1. Upload `scripts/golden_set.json` (and `ROADMAP.md`).
-2. Actions → golden-check → **build** (fills Venetian Hills' text), then
-   **check**. Expected: 13 cases, 13 ok — ten keeps, three drops.
+1. Upload these three files: `scripts/update.py` · `scripts/tagfill.py` ·
+   `ROADMAP.md`.
+2. In the web editor, open `opinions.json`, find `"cluster_id": 5749712`
+   (Martin v. Six Flags), delete the line `"tort_reform": true,` — then
+   Actions → render-sync → merge its PR so the badge leaves the page.
+   While you're in there: the five pending first-impression vouches from the
+   audit — Phillips, Toyo Tire, Quynn, Miller, Aspen — strip any you can't
+   stand behind in the same edit. Richardson is digest-evidenced; it stays.
