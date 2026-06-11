@@ -111,6 +111,10 @@ spend; Resend free tier holds.
   paste + merge, the same ratification the original seed went through, and the
   set is append-mostly (entries replay frozen text, so they stay valid forever;
   swapping old anchors out is how a benchmark drifts to match the system).
+  One exception, learned 2026-06-11: an entry that fails its very FIRST check
+  never validated as ground truth, so fixing it on arrival is label correction,
+  not drift. Anchors must be unambiguous keepers (published, substantive,
+  confident), or the guard cries wolf.
 - *(shipped 2026-06-11; law_applied narrows the overlay, the tagfill backfills it)* - **Erie refinement for the federal overlay (optional, pennies).** The
   jurisdiction dropdown's "florida · federal" / "alabama · federal" views are
   court-level bindingness, so an Eleventh Circuit diversity case applying
