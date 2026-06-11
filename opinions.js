@@ -1,8 +1,9 @@
 // =============================================================
 // horowitz.law - opinions.js
 // Page logic for Georgia Appellate Watch: the federal/state court
-// filter, the jurisdiction selector, the practice-area filter, and
-// the full-text search box. The feed is a rolling two-year window
+// filter, the jurisdiction selector, the practice-area filter, the
+// full-text search box (all four mirrored into the URL so a filtered
+// view is a shareable link), and the copy-citation buttons. The feed is a rolling two-year window
 // arranged newest-first, so there is no "new"-recency signal here.
 // Theme toggle, keyboard shortcuts, and shared behavior live in
 // app.js. The DOM is read with textContent only (never innerHTML),
@@ -33,6 +34,25 @@
   var systemFilter = 'all';
   var jurisdictionFilter = jSelect ? jSelect.value : 'all';
   var areaFilter = 'all';
+  var jurisDefault = jurisdictionFilter;   // the page's own default; only a departure goes in the URL
+  var rawQuery = '';                       // original-case search text, for a readable ?q=
+
+  // Mirror the live filter state into the URL (replaceState: filtering is one
+  // view, not a history trail). Defaults are omitted so an unfiltered page has
+  // a bare URL; params this script does not own are preserved; the #op- anchor
+  // survives. A filtered view of the feed is thereby a sendable link.
+  function syncURL() {
+    try {
+      var p = new URLSearchParams(location.search);
+      ['q', 'court', 'area', 'juris'].forEach(function (k) { p.delete(k); });
+      if (rawQuery) p.set('q', rawQuery);
+      if (systemFilter !== 'all') p.set('court', systemFilter);
+      if (areaFilter !== 'all') p.set('area', areaFilter);
+      if (jurisdictionFilter !== jurisDefault) p.set('juris', jurisdictionFilter);
+      var qs = p.toString();
+      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+    } catch (e) {}
+  }
 
   function setActive(selector, active) {
     document.querySelectorAll(selector).forEach(function (x) {
@@ -72,6 +92,7 @@
     var empty = document.getElementById('empty');
     if (empty) empty.hidden = shown > 0;
     if (searchCount) searchCount.textContent = query ? (shown + ' of ' + cards.length) : '';
+    syncURL();
   }
 
   document.querySelectorAll('[data-system-filter]').forEach(function (ch) {
@@ -97,6 +118,29 @@
     });
   }
 
+  // --- restore filter state from the URL (the read half of syncURL). Values
+  // are matched against the controls that actually exist, so an unknown or
+  // stale param is ignored rather than wedging the page. ---
+  try {
+    var p0 = new URLSearchParams(location.search);
+    var token = /^[\w-]+$/;
+    var c0 = p0.get('court');
+    if (c0 && token.test(c0)) {
+      var cBtn = document.querySelector('[data-system-filter="' + c0 + '"]');
+      if (cBtn) { systemFilter = c0; setActive('[data-system-filter]', cBtn); }
+    }
+    var a0 = p0.get('area');
+    if (a0 && token.test(a0)) {
+      var aBtn = document.querySelector('[data-area-filter="' + a0 + '"]');
+      if (aBtn) { areaFilter = a0; setActive('[data-area-filter]', aBtn); }
+    }
+    var j0 = p0.get('juris');
+    if (j0 && token.test(j0)) {
+      jurisdictionFilter = j0;
+      if (jSelect) jSelect.value = j0;
+    }
+  } catch (e) {}
+
   if (searchBox) {
     // Debounce: apply() walks every card and year block, so re-filtering on every
     // keystroke would jank on mobile once the archive holds a few hundred cards.
@@ -107,20 +151,41 @@
       applyTimer = setTimeout(function () { applyTimer = null; apply(); }, 80);
     }
     searchBox.addEventListener('input', function () {
-      query = searchBox.value.trim().toLowerCase();
+      rawQuery = searchBox.value.trim();
+      query = rawQuery.toLowerCase();
       scheduleApply();
     });
     searchBox.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
-        searchBox.value = ''; query = '';
+        searchBox.value = ''; query = ''; rawQuery = '';
         if (applyTimer) { clearTimeout(applyTimer); applyTimer = null; }
         apply();   // clearing should feel instant
       }
     });
     try {
       var q0 = new URLSearchParams(location.search).get('q');
-      if (q0) { searchBox.value = q0; query = q0.trim().toLowerCase(); }
+      if (q0) { searchBox.value = q0; rawQuery = q0.trim(); query = rawQuery.toLowerCase(); }
     } catch (e) {}
+  }
+
+  // --- copy-citation buttons. The markup is server-rendered on every card;
+  // the buttons stay hidden until the async Clipboard API is confirmed here
+  // (base.css gates them behind html.can-copy), so a no-JS or legacy reader
+  // never sees a dead control. textContent only, per the CSP. ---
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    document.documentElement.classList.add('can-copy');
+    document.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest && e.target.closest('.op-copycite');
+      if (!btn) return;
+      navigator.clipboard.writeText(btn.getAttribute('data-cite') || '').then(function () {
+        btn.textContent = '[ copied ]';
+        btn.classList.add('copied');
+        setTimeout(function () { btn.textContent = '[ copy cite ]'; btn.classList.remove('copied'); }, 1400);
+      }, function () {
+        btn.textContent = '[ copy failed ]';
+        setTimeout(function () { btn.textContent = '[ copy cite ]'; }, 1400);
+      });
+    });
   }
 
   apply();

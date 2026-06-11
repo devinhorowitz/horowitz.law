@@ -208,3 +208,50 @@ footer a:hover {
 @media (prefers-reduced-motion: reduce) {
   .opinion:target { animation: none !important; }
 }
+
+/* ---- Copy-citation button on opinion cards. Server-rendered on every card;
+   revealed only when opinions.js confirms the async Clipboard API exists (it
+   adds .can-copy to <html>), so a no-JS or legacy reader never meets a dead
+   control. The copied text is the Bluebook slip-opinion form; the button's
+   title carries the house rule: confirm on Shepard's before filing. ---- */
+.op-copycite { display: none; }
+html.can-copy .op-copycite {
+  display: inline-block;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+html.can-copy .op-copycite:hover,
+html.can-copy .op-copycite.copied { color: var(--accent); border-color: var(--accent); }
+
+/* ---- Print: a filtered view of /opinions or /archive prints as a clean
+   digest. Filter chrome, navigation, and interactive controls drop out;
+   [hidden] cards are already excluded by the browser, so whatever the screen
+   shows is what lands in the binder. The prototype banner and the per-card
+   AI disclaimer are deliberately KEPT: the honesty travels to paper. Palette
+   mirrors the resume's ink-safe print block; !important because the pages'
+   own screen variables load after this sheet. ---- */
+@media print {
+  :root,
+  :root[data-theme="light"],
+  :root[data-theme="dark"] {
+    --bg: #ffffff !important;
+    --fg: #000000 !important;
+    --fg-muted: #444444 !important;
+    --accent: #8a4014 !important;
+    --border: #999999 !important;
+    --grain-opacity: 0 !important;
+    --scanline-opacity: 0 !important;
+  }
+  body::before, body::after { display: none !important; }
+  .topbar, .filters, .year-nav, .empty, footer, .skip-link, .op-copycite { display: none !important; }
+  .opinion { break-inside: avoid; page-break-inside: avoid; }
+  .op-source a { border-bottom: none; }
+  .op-source a::after { content: " <" attr(href) ">"; font-size: 10px; color: var(--fg-muted); }
+}
