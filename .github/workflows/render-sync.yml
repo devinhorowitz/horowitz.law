@@ -83,6 +83,10 @@ jobs:
             colophon.html
             subscribe.html
             404.html
+            changes.html
+            stats.html
+            changes.xml
+            o
 
       # Surfaces a broken run instead of letting it fail silently: comments on the one
       # open tracking issue, or opens it the first time, so repeated failures collect
