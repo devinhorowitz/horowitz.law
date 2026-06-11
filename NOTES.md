@@ -1,24 +1,23 @@
-# Tort-reform badge: tracker semantics (option c) · 2026-06-11
+# opinions.json fix · 2026-06-11
 
-Your ruling, encoded in both prompt definitions so doctrine and pipeline can
-never disagree: the badge marks a decision that **applies** a reform act
-(SB 68, SB 69, SB 426, HB 961 — including era/applicability holdings), or one
-a reform act **superseded or was enacted in direct response to**. A passing
-mention, or a routine application of the pre-reform framework, is not the
-storyline. tagfill keeps its digest-only evidence rule on top of this.
+The hand edit removed the LAST property of Martin's object, leaving a trailing
+comma before the closing brace — illegal JSON. Symptom: render-sync (and every
+scheduled job that loads opinions.json, including the 4-hourly pipeline)
+crashed; Issue #18 was filed automatically. The live site never wavered: it
+serves committed HTML.
 
-Consequences on the record: **Quynn keeps the badge** (HB 961 answered it) —
-no edit needed. **Martin loses it** — your one-line edit below. And a future
-tagfill re-run now converges with the doctrine instead of re-adding Martin:
-the definition itself excludes generic pre-amendment § 51-12-33 applications.
+This set is the same edit done validly, plus the two pages it changes, so no
+render-sync run is needed:
 
-## Your two touches
+- **opinions.json** — Martin's `tort_reform` removed properly; everything else
+  byte-equivalent. Quynn keeps both its tags per your ruling.
+- **archive.html** and **o/5749712.html** — Martin's badge off the page.
 
-1. Upload these three files: `scripts/update.py` · `scripts/tagfill.py` ·
-   `ROADMAP.md`.
-2. In the web editor, open `opinions.json`, find `"cluster_id": 5749712`
-   (Martin v. Six Flags), delete the line `"tort_reform": true,` — then
-   Actions → render-sync → merge its PR so the badge leaves the page.
-   While you're in there: the five pending first-impression vouches from the
-   audit — Phillips, Toyo Tire, Quynn, Miller, Aspen — strip any you can't
-   stand behind in the same edit. Richardson is digest-evidenced; it stays.
+Upload all three (the o/ file via the pencil on the existing o/5749712.html,
+or skip it and let the nightly bot catch it — but archive.html should go up
+with the JSON so CI's idempotency holds). Then close Issue #18.
+
+**The habit that prevents this:** when hand-editing opinions.json in the web
+editor, choose "Create a new branch and start a pull request" instead of
+committing straight to main. CI runs on the PR and is your JSON linter — a
+trailing comma fails the smoke check before it can touch the pipeline.
