@@ -71,16 +71,45 @@ function rfetch(env, method, path, body) {
   return fetch(RESEND + path, init);
 }
 
+// Practice-area choices ride the confirm link as a sanitized CSV (covered by the
+// HMAC). Re-sanitize on receipt anyway: shape, token charset, count.
+function parseAreas(csv) {
+  if (typeof csv !== "string" || !csv || csv.length > 140) return [];
+  const parts = csv.split(",").filter((a) => /^[a-z]{2,12}$/.test(a) && a !== "all");
+  return [...new Set(parts)].sort().slice(0, 10);
+}
+
+// RESEND_AREA_TOPICS maps area code -> Resend Topic id, e.g.
+//   {"coverage":"top_...","premises":"top_..."}
+// Set it as a Cloudflare Pages environment variable. Absent, malformed, or
+// missing a code: those choices fall back to the main Topic below, so a
+// subscriber always lands on something rather than silently on nothing.
+function areaTopicMap(env) {
+  try {
+    const m = JSON.parse(env.RESEND_AREA_TOPICS || "{}");
+    return m && typeof m === "object" && !Array.isArray(m) ? m : {};
+  } catch {
+    return {};
+  }
+}
+
 // Create the global contact subscribed, opted into the Topic, and in the Segment.
 // New contact: a single POST applies segment + topic inline. Existing contact: the
 // POST returns non-2xx (or upserts), so we follow with idempotent updates.
-async function subscribeConfirmed(env, email) {
+async function subscribeConfirmed(env, email, areas) {
   const seg = env.RESEND_SEGMENT_ID;
   const top = env.RESEND_TOPIC_ID;
 
+  // The topic set this confirmation opts into: the chosen areas' topics where
+  // mapped, the main topic when nothing was chosen or nothing mapped. A choice
+  // can narrow what arrives but never strand a confirmed subscriber.
+  const map = areaTopicMap(env);
+  const areaTopics = (areas || []).map((a) => map[a]).filter(Boolean);
+  const topicIds = areaTopics.length ? [...new Set(areaTopics)] : (top ? [top] : []);
+
   const createBody = { email, unsubscribed: false };
   if (seg) createBody.segments = [{ id: seg }];
-  if (top) createBody.topics = [{ id: top, subscription: "opt_in" }];
+  if (topicIds.length) createBody.topics = topicIds.map((id) => ({ id, subscription: "opt_in" }));
 
   const created = await rfetch(env, "POST", "/contacts", createBody);
   if (created.ok) return; // new contact: segment + topic already applied inline
@@ -93,9 +122,10 @@ async function subscribeConfirmed(env, email) {
     throw new Error(`confirm: create ${created.status}, patch ${patched.status}`);
   }
 
-  if (top) {
+  if (topicIds.length) {
     // Raw endpoint takes a bare array body.
-    const t = await rfetch(env, "PATCH", `${path}/topics`, [{ id: top, subscription: "opt_in" }]);
+    const t = await rfetch(env, "PATCH", `${path}/topics`,
+      topicIds.map((id) => ({ id, subscription: "opt_in" })));
     if (!t.ok) throw new Error(`confirm: topics ${t.status}`);
   }
 
@@ -149,7 +179,7 @@ function html(title, bodyHtml, status = 200) {
 
 // Shared validation for GET and POST: config, shape, signature, expiry.
 // Returns { email } on success, or { error: Response } to return as-is.
-async function validateLink(env, email, ts, sig) {
+async function validateLink(env, email, ts, sig, areasCsv) {
   if (!env.RESEND_API_KEY || !env.SUBSCRIBE_SECRET) {
     return { error: html(
       "Not configured",
@@ -164,7 +194,10 @@ async function validateLink(env, email, ts, sig) {
       400
     ) };
   }
-  const expected = await hmacHex(env.SUBSCRIBE_SECRET, `${email}.${ts}`);
+  // Pre-areas links signed `email.ts`; current links with choices sign
+  // `email.ts.areas`. Verify whichever shape this link carries.
+  const msg = areasCsv ? `${email}.${ts}.${areasCsv}` : `${email}.${ts}`;
+  const expected = await hmacHex(env.SUBSCRIBE_SECRET, msg);
   if (!timingSafeEqual(expected, sig)) {
     return { error: html(
       "Invalid link",
@@ -188,8 +221,10 @@ export async function onRequestGet(context) {
   const email = (url.searchParams.get("e") || "").trim().toLowerCase();
   const ts = url.searchParams.get("t") || "";
   const sig = url.searchParams.get("s") || "";
+  const areas = parseAreas(url.searchParams.get("a") || "");
+  const areasCsv = areas.join(",");
 
-  const v = await validateLink(env, email, ts, sig);
+  const v = await validateLink(env, email, ts, sig, areasCsv);
   if (v.error) return v.error;
 
   // Valid link: render the confirm step. No state changes on GET, so a link
@@ -198,9 +233,13 @@ export async function onRequestGet(context) {
     "Confirm subscription",
     `<h1>One click to finish.</h1>` +
       `<p>Confirm the Georgia Appellate Watch weekly digest for <strong>${escapeHtml(email)}</strong>.</p>` +
+      (areasCsv
+        ? `<p class="muted">Areas chosen: ${escapeHtml(areas.join(", "))}.</p>`
+        : "") +
       `<form method="post" action="/api/subscribe/confirm">` +
       `<input type="hidden" name="e" value="${escapeHtml(email)}">` +
       `<input type="hidden" name="t" value="${escapeHtml(ts)}">` +
+      `<input type="hidden" name="a" value="${escapeHtml(areasCsv)}">` +
       `<input type="hidden" name="s" value="${escapeHtml(sig)}">` +
       `<p style="margin:18px 0 10px;"><button type="submit">Confirm subscription</button></p>` +
       `</form>` +
@@ -223,12 +262,14 @@ export async function onRequestPost(context) {
   const email = String(form.get("e") || "").trim().toLowerCase();
   const ts = String(form.get("t") || "");
   const sig = String(form.get("s") || "");
+  const areas = parseAreas(String(form.get("a") || ""));
+  const areasCsv = areas.join(",");
 
-  const v = await validateLink(env, email, ts, sig);
+  const v = await validateLink(env, email, ts, sig, areasCsv);
   if (v.error) return v.error;
 
   try {
-    await subscribeConfirmed(env, email);
+    await subscribeConfirmed(env, email, areas);
   } catch (e) {
     return html(
       "Something went wrong",

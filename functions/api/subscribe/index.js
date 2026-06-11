@@ -181,6 +181,19 @@ export async function onRequestPost(context) {
   const honeypot = body && typeof body.company === "string" ? body.company : "";
   const token = body && typeof body.turnstileToken === "string" ? body.turnstileToken : "";
 
+  // Optional practice-area choices. Sanitized to short lowercase tokens, deduped,
+  // sorted, capped: the canonical CSV is covered by the HMAC below, so the confirm
+  // step receives exactly what was requested here or nothing. Unknown codes are
+  // harmless -- confirm.js maps them through RESEND_AREA_TOPICS and skips the rest --
+  // so this list never needs to chase the taxonomy. Empty means the full digest.
+  const areas = Array.isArray(body && body.areas)
+    ? [...new Set(
+        body.areas
+          .filter((a) => typeof a === "string" && /^[a-z]{2,12}$/.test(a) && a !== "all")
+      )].sort().slice(0, 10)
+    : [];
+  const areasCsv = areas.join(",");
+
   // Bot trap: the hidden field should always be empty. If filled, look successful but do
   // nothing, and spend no verification or email call on it.
   if (honeypot) {
@@ -202,9 +215,13 @@ export async function onRequestPost(context) {
 
   try {
     const ts = Date.now();
-    const sig = await hmacHex(env.SUBSCRIBE_SECRET, `${email}.${ts}`);
+    // Back-compat HMAC: the area list joins the signed message only when present,
+    // so links from emails sent before this field existed still verify.
+    const msg = areasCsv ? `${email}.${ts}.${areasCsv}` : `${email}.${ts}`;
+    const sig = await hmacHex(env.SUBSCRIBE_SECRET, msg);
     const site = (env.SITE_URL || "https://horowitz.law").replace(/\/+$/, "");
-    const link = `${site}/api/subscribe/confirm?e=${encodeURIComponent(email)}&t=${ts}&s=${sig}`;
+    const aPart = areasCsv ? `&a=${encodeURIComponent(areasCsv)}` : "";
+    const link = `${site}/api/subscribe/confirm?e=${encodeURIComponent(email)}&t=${ts}${aPart}&s=${sig}`;
 
     await sendConfirmEmail(env, email, link);
     return json({
