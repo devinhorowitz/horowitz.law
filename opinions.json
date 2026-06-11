@@ -318,7 +318,8 @@
     "synopsis": "In a medical malpractice action, the Supreme Court of Georgia clarified that a defendant's duty to preserve evidence is triggered not only by actual or express notice of a claim from the plaintiff but whenever litigation is reasonably foreseeable to the party in control of the evidence, and that constructive notice may be shown by circumstances including the type and extent of injury, the clarity of fault, potential financial exposure, the frequency of litigation in similar circumstances, and the defendant's own conduct such as internal investigations and notification of counsel and insurers. The Court reversed the spoliation portion of the Court of Appeals judgment because the lower courts rested on the legally incorrect premise that actual notice from the plaintiff was required, and disapproved several Court of Appeals decisions to the extent they endorsed that analysis. The Court separately affirmed that the trial judge's ex parte communication with the deadlocked jury, conducted outside the presence of the parties and counsel and never disclosed before the verdict, violated the civil parties' right to be present and, under the unique circumstances including the inability to reconstruct the note, constituted harmful error requiring a new trial.",
     "why": "The decision reframes the trigger for a defendant's evidence-preservation duty around a reasonable-foreseeability standard with enumerated factors, disapproving prior precedent that required actual notice, and confirms that substantive ex parte judge-jury communications in civil trials can require a new trial.",
     "first_seen": "2015-06-29",
-    "precedential": "published"
+    "precedential": "published",
+    "first_impression": true
   },
   {
     "cluster_id": 3209755,
@@ -339,7 +340,8 @@
     "synopsis": "In a continuing nuisance and trespass action by homeowners against a nearby manufacturing facility, the Supreme Court of Georgia held that a plaintiff who both occupies and owns the affected property may recover separately for past discomfort and annoyance and for the diminution in the property's market value, treating these as two distinct injuries rather than a double recovery, and it expressly overruled Stanfield v. Waste Management of Georgia. The Court also held that alleged deficiencies in an expert appraiser's methodology go to the admissibility of his testimony under OCGA sections 24-7-702 and 24-7-703, an issue committed to the trial court's gatekeeping discretion in the first instance, and not to whether his opinion suffices to defeat summary judgment on causation. Because the defendant had not moved to exclude the expert testimony in the trial court, the appellate courts could consider that testimony in assessing whether causation survived summary judgment. The Court affirmed the denial of summary judgment.",
     "why": "The decision clarifies that past discomfort and annoyance damages and diminution in property value are separately recoverable in continuing nuisance cases and establishes that unchallenged expert testimony with methodological weaknesses may still be considered on summary judgment unless a Daubert exclusion motion is made to the trial court.",
     "first_seen": "2016-06-06",
-    "precedential": "published"
+    "precedential": "published",
+    "first_impression": true
   },
   {
     "cluster_id": 3219794,
@@ -380,7 +382,8 @@
     "synopsis": "The Supreme Court of Georgia held that a premises owner can be liable under OCGA section 51-3-1 for a criminal attack that begins on its premises but is completed off-premises, when the injuries are a foreseeable proximate result of the owner's breach of its duty to keep the premises safe, expressly adopting the principle from Wilks v. Piggly Wiggly Southern. The court clarified that the bus stop where the attack concluded was not part of the park's 'approaches,' because the owner had not exercised the control and dominion required to extend its duty to that public way. On apportionment, the court held that an apportionment error under OCGA section 51-12-33 ordinarily requires a retrial limited to the apportionment of fault among tortfeasors, not a full retrial, because the allocation of relative fault is a step distinct from the determinations of liability and total damages. The court affirmed liability, reversed the Court of Appeals' order of a full retrial, and remanded for retrial limited to apportionment.",
     "why": "The decision establishes that off-premises injuries can support landowner liability where the attack originates on the premises and is foreseeable, clarifies the 'approaches' and control-and-dominion analysis, and holds that apportionment error generally requires retrial only on apportionment rather than a full retrial.",
     "first_seen": "2017-06-05",
-    "precedential": "published"
+    "precedential": "published",
+    "tort_reform": true
   },
   {
     "cluster_id": 10366850,
@@ -421,7 +424,9 @@
     "synopsis": "In a wrongful death action arising from a truck striking and killing a pedestrian, the trial court granted partial summary judgment to the employer on the estate's claims for negligent entrustment, hiring, training, and supervision because the employer had admitted respondeat superior liability and no punitive damages claim survived. The Supreme Court of Georgia held that the apportionment statute, OCGA section 51-12-33, abrogated the decisional law 'Respondeat Superior Rule,' which had entitled an employer that conceded vicarious liability to summary judgment on direct-negligence claims absent a valid punitive damages claim. The Court reasoned that direct-negligence claims allege the employer's own fault, which the jury must consider under the statute, and that such fault is divisible from the employee's fault. The Court reversed and overruled contrary Court of Appeals decisions.",
     "why": "The decision establishes that an employer's admission of respondeat superior no longer bars a plaintiff's negligent entrustment, hiring, training, supervision, and retention claims, so those direct-negligence claims may proceed to the jury alongside vicarious liability under OCGA section 51-12-33.",
     "first_seen": "2020-11-02",
-    "precedential": "published"
+    "precedential": "published",
+    "first_impression": true,
+    "tort_reform": true
   },
   {
     "cluster_id": 10367651,
@@ -461,7 +466,8 @@
     "synopsis": "In a wrongful death action arising from a collision between a tractor-trailer and a car, the Supreme Court of Georgia held that the pre-2013 investigating officer rule, under which a law enforcement officer was treated as presumptively qualified as an expert on the cause of a collision, did not survive adoption of the current Evidence Code. Because OCGA section 24-7-702 contains no carve-out for law enforcement officers, a trial court must perform the same three-prong Daubert gatekeeping inquiry, qualification, reliability, and helpfulness, for expert opinion testimony from an investigating officer as for any other expert. The court found that the disputed accident-reconstruction opinions, including that the deceased driver was distracted, constituted expert rather than lay testimony, and that the trial court abused its discretion by assessing only qualification and not reliability or helpfulness. The court vacated the Court of Appeals' opinion, directed it to vacate the trial court's order, and remanded, and expressly disapproved Court of Appeals decisions applying the investigating officer rule to expert testimony in civil cases.",
     "why": "The decision establishes that investigating officers who offer accident-reconstruction or causation opinions in civil cases are subject to the full Daubert reliability and helpfulness analysis, eliminating the prior presumption of expert qualification.",
     "first_seen": "2023-08-21",
-    "precedential": "published"
+    "precedential": "published",
+    "first_impression": true
   },
   {
     "cluster_id": 4323507,
@@ -481,7 +487,8 @@
     "synopsis": "In an auto-collision case where the jury verdict came in below 75 percent of the defendant's rejected settlement offer, the trial court denied the defendant's motion for attorney fees under OCGA section 9-11-68 by finding the offer was not made in good faith based on the offer's relationship to claimed medical expenses and the defendant's stipulation to liability. The Court of Appeals held for the first time that an evidentiary hearing is required before a trial court may rule on a fee request under OCGA section 9-11-68, that a timely objection asserting bad faith triggers the hearing requirement, and that the burden rests on the offeree to prove the absence of good faith. Adopting Florida's framework, the court held that good faith cannot be assessed on objective factors alone but must consider the offeror's subjective reasonable belief, and it vacated the judgment and remanded for a hearing.",
     "why": "This decision establishes that an offeror's good faith under Georgia's offer-of-settlement statute is measured by the offeror's subjective reasonable belief rather than objective factors alone, places the burden on the offeree to show absence of good faith, and requires an evidentiary hearing triggered by a timely bad-faith objection.",
     "first_seen": "2016-11-15",
-    "precedential": "published"
+    "precedential": "published",
+    "first_impression": true
   },
   {
     "cluster_id": 4372487,
@@ -598,7 +605,9 @@
     ],
     "treatment_auto_note": "Possibly abrogated by a later in-scope decision (Montgomery v. Caribe Transport II, LLC). Confirm on Shepard's.",
     "treatment_date": "2026-06-10",
-    "treatment": "caution"
+    "treatment": "caution",
+    "first_impression": true,
+    "law_applied": "federal"
   },
   {
     "cluster_id": 10872097,
@@ -618,7 +627,8 @@
     "synopsis": "An insurer sued the third-party claims adjuster it hired, alleging the adjuster negligently failed to advise it about the risk of excess bad-faith liability after the insurer let a checks-in-hand policy-limits deadline pass and later settled for about $220,000 above the policy limits. Applying Florida bad-faith law, the Eleventh Circuit affirmed summary judgment for the adjuster, holding that a claims adjuster has no duty to advise an insurer about its own legal risk of excess bad-faith exposure because such advice constitutes legal advice, and that the insurer's own decision to demand signed releases and not deliver the checks by the deadline, not the adjuster's conduct, proximately caused the excess settlement. The court noted the insurer knew of the checks-in-hand requirement eleven days before the deadline and could have delivered the checks.",
     "why": "The decision clarifies that a third-party claims adjuster owes no duty to advise an insurer about its own extracontractual bad-faith exposure and that an insurer's independent settlement and payment decisions, not the adjuster's handling, control causation in a negligence claim against the adjuster.",
     "precedential": "unpublished",
-    "first_seen": "2026-06-08"
+    "first_seen": "2026-06-08",
+    "law_applied": "fl"
   },
   {
     "cluster_id": 10872456,
@@ -673,6 +683,7 @@
         "synopsis": "The court held that equitable estoppel did not bind the nonsignatory plaintiffs to arbitrate. A signatory may enforce an arbitration clause against a nonsignatory under equitable estoppel only if the nonsignatory relies on the agreement to assert its claims and the dispute falls within the clause. Because the plaintiffs' federal antitrust claims arose from statutory duties unrelated to the subscription agreement and did not require reference to or construction of that agreement, the plaintiffs were not claiming the benefits of the contract while avoiding its burdens.",
         "why": "It clarifies that equitable estoppel cannot compel a nonsignatory to arbitrate where the asserted claims rest on independent statutory duties and do not depend on the contract containing the arbitration clause."
       }
-    ]
+    ],
+    "law_applied": "fl"
   }
 ]
