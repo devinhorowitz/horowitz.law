@@ -46,6 +46,14 @@
     // the field keep working.
     var areas = areaBoxes.filter(function (b) { return b.checked; })
                          .map(function (b) { return b.value; });
+    // State choices, when the multistate group exists (it appears automatically
+    // once the jurisdiction registry holds a second state -- see render.py).
+    // All states checked, or none rendered, means everything: send [] for both,
+    // so today's single-state form posts exactly what it always has.
+    var jurisBoxes = Array.prototype.slice.call(form.querySelectorAll('input[name="juris"]'));
+    var jurisChecked = jurisBoxes.filter(function (b) { return b.checked; })
+                                 .map(function (b) { return b.value; });
+    var juris = (jurisBoxes.length && jurisChecked.length < jurisBoxes.length) ? jurisChecked : [];
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       setStatus('Please enter a valid email address.', 'err');
       return;
@@ -65,7 +73,7 @@
     fetch('/api/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email, company: company, turnstileToken: token, areas: areas })
+      body: JSON.stringify({ email: email, company: company, turnstileToken: token, areas: areas, juris: juris })
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (res) {
