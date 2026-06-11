@@ -6,8 +6,55 @@
     <atom:link href="https://horowitz.law/opinions.xml" rel="self" type="application/rss+xml" />
     <description>AI-assisted synopses of new Georgia appellate, Eleventh Circuit, and U.S. Supreme Court opinions, filtered for civil litigation and insurance practice. Each synopsis is AI-drafted; the linked opinion is the authority. A curated core, not a complete docket. This feed covers the most recent two years; older opinions are archived by year at https://horowitz.law/archive.</description>
     <language>en-us</language>
-    <lastBuildDate>Wed, 10 Jun 2026 12:00:00 -0400</lastBuildDate>
+    <lastBuildDate>Thu, 11 Jun 2026 12:00:00 -0400</lastBuildDate>
     <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>
+    <item>
+      <title>Allied Property &amp; Casualty Insurance Company v. Bloodworth Wholesale Drugs Inc. (11th Cir.)</title>
+      <link>https://www.courtlistener.com/opinion/10873765/allied-property-casualty-insurance-company-v-bloodworth-wholesale-drugs/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10873765/allied-property-casualty-insurance-company-v-bloodworth-wholesale-drugs/</guid>
+      <pubDate>Thu, 11 Jun 2026 12:00:00 -0400</pubDate>
+      <category>U.S. Court of Appeals for the Eleventh Circuit</category>
+      <category>coverage</category>
+      <description><![CDATA[Two pharmacies sued for their alleged role in the opioid epidemic sought defense and indemnity under liability and druggist liability policies covering damages 'because of bodily injury.' The insurers contended that the underlying government and healthcare suits seek economic losses not tied to identifiable injured persons and are therefore not covered, and the district courts granted summary judgment for the insurers. The Eleventh Circuit found no clear controlling Georgia or Florida precedent on whether such opioid lawsuits seek damages 'because of bodily injury,' distinguishing Georgia decisions like Cesnik, Lunceford, Presidential Hotel, and O'Dell as not dispositive. It certified to the Supreme Court of Georgia and the Supreme Court of Florida the question whether the policies require the insurers to defend and indemnify the insureds in the underlying opioid litigation. Why it matters: The certification flags an unresolved, high-value coverage question of whether CGL and druggist liability policies covering 'damages because of bodily injury' reach opioid-epidemic suits seeking economic losses, leaving Georgia coverage law on the point to be settled by the Supreme Court of Georgia. Unpublished; not binding precedent. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10873765/allied-property-casualty-insurance-company-v-bloodworth-wholesale-drugs/]]></description>
+    </item>
+    <item>
+      <title>Allied Property &amp; Casualty Insurance Co. v. Bloodworth Wholesale Drugs, Inc. (consolidated with Publix Super Markets, Inc. v. Ace Property and Casualty Insurance Co.) (11th Cir.)</title>
+      <link>https://www.courtlistener.com/opinion/10873764/publix-super-markets-inc-v-ace-property-and-casualty-insurance-company/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10873764/publix-super-markets-inc-v-ace-property-and-casualty-insurance-company/</guid>
+      <pubDate>Thu, 11 Jun 2026 12:00:00 -0400</pubDate>
+      <category>U.S. Court of Appeals for the Eleventh Circuit</category>
+      <category>coverage</category>
+      <description><![CDATA[Pharmacies facing underlying opioid epidemic lawsuits brought by governments and healthcare providers sought defense and indemnity under liability policies covering damages 'because of bodily injury.' The district courts adopted the insurers' interpretation that the policies do not cover claims seeking compensation for economic losses traceable to the opioid epidemic, and granted summary judgment to the insurers. The Eleventh Circuit found no clear controlling Georgia or Florida precedent on whether such policies require insurers to defend or indemnify pharmacies in these suits, and certified the question to the Supreme Court of Georgia and the Supreme Court of Florida. The court distinguished existing Georgia authority, including Pacific Employers v. Cesnik, Lunceford, Presidential Hotel, and O'Dell, as not dispositive. Why it matters: The decision frames as an open question of Georgia insurance law, and certifies to the Supreme Court of Georgia, whether liability policies covering damages 'because of bodily injury' obligate insurers to defend and indemnify pharmacies in government and healthcare-provider opioid suits seeking economic-cost reimbursement. Unpublished; not binding precedent. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10873764/publix-super-markets-inc-v-ace-property-and-casualty-insurance-company/]]></description>
+    </item>
+    <item>
+      <title>Waddle Trucking of Mississippi, Inc. v. Johnson (Ga. Ct. App.)</title>
+      <link>https://www.courtlistener.com/opinion/10873711/waddle-trucking-of-mississippi-inc-v-aileen-johnson/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10873711/waddle-trucking-of-mississippi-inc-v-aileen-johnson/</guid>
+      <pubDate>Thu, 11 Jun 2026 12:00:00 -0400</pubDate>
+      <category>Court of Appeals of Georgia</category>
+      <category>procedure</category>
+      <category>auto</category>
+      <description><![CDATA[A trucking defendant in a personal injury action was served in state court, after which a codefendant removed the case to federal court, where the defendant filed an answer that was untimely under Fed.R.Civ.P. 81(c)(2). After remand, the state court entered default judgment against the defendant. The Court of Appeals held that the answer filed in district court, even though untimely there, prevented default in state court because the district court never struck the answer and no default was entered under Fed.R.Civ.P. 55, and because on remand the defendant still had time remaining to answer. Why it matters: The decision clarifies that an answer filed in federal court after removal continues to have effect on remand and prevents entry of default in state court so long as the federal court did not strike it or enter default, even if the federal answer was untimely. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10873711/waddle-trucking-of-mississippi-inc-v-aileen-johnson/]]></description>
+    </item>
+    <item>
+      <title>Keathley v. Buddy Ayers Construction, Inc. (U.S.)</title>
+      <link>https://www.courtlistener.com/opinion/10873663/keathley-v-buddy-ayers-construction-inc/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10873663/keathley-v-buddy-ayers-construction-inc/</guid>
+      <pubDate>Thu, 11 Jun 2026 12:00:00 -0400</pubDate>
+      <category>Supreme Court of the United States</category>
+      <category>procedure</category>
+      <category>auto</category>
+      <description><![CDATA[A debtor in an open Chapter 13 bankruptcy failed to disclose a personal-injury claim arising from a car accident, and the lower courts applied judicial estoppel to bar the tort suit using the Fifth Circuit's two-factor test, asking only whether the debtor knew the underlying facts and had a potential motive to conceal. The Supreme Court, assuming without deciding that judicial estoppel can apply in the bankruptcy context and that inadvertence or mistake can be an exception, held that courts must look to the totality of the circumstances surrounding the omission. The Court found the Fifth Circuit's approach both too rigid, because equity eschews mechanical rules, and too broad, because its motive criterion is almost always satisfied, making it a poor fit for assessing whether an omission was actually inadvertent or mistaken. Why it matters: It establishes that whether a plaintiff-debtor's failure to schedule a personal-injury claim was inadvertent or mistaken for judicial-estoppel purposes turns on the totality of the circumstances rather than a knowledge-plus-motive test, governing how civil litigants raise and defend against judicial estoppel when a tort claim was omitted from bankruptcy schedules. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10873663/keathley-v-buddy-ayers-construction-inc/]]></description>
+    </item>
+    <item>
+      <title>Hodge v. Molson Coors Beverage Company USA, LLC (11th Cir.)</title>
+      <link>https://www.courtlistener.com/opinion/10873661/willy-hodge-v-molson-coors-beverage-company-usa-llc/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10873661/willy-hodge-v-molson-coors-beverage-company-usa-llc/</guid>
+      <pubDate>Thu, 11 Jun 2026 12:00:00 -0400</pubDate>
+      <category>U.S. Court of Appeals for the Eleventh Circuit</category>
+      <category>auto</category>
+      <description><![CDATA[A family injured by a semitruck sued a freight broker and a shipper, alleging negligent hiring of the carrier. The district court held that the FAAAA preempted the negligent-selection claim against the broker. Following the Supreme Court's decision in Montgomery v. Caribe Transport II, which abrogated the Eleventh Circuit's prior holding in Aspen American Insurance Co. v. Landstar Ranger, the court vacated and remanded, noting the district court had relied on now-abrogated caselaw. Why it matters: It applies the Supreme Court's recent holding that the FAAAA does not preempt negligent-selection-of-carrier claims against brokers, abrogating prior Eleventh Circuit precedent that had foreclosed such claims. Also: The court affirmed dismissal of the negligent-hiring claim against the shipper, applying Maryland law, which requires that the defendant's failure to undertake reasonable inquiry resulted in the contractor's hiring and that the hiring proximately caused the plaintiff's injury. The shipper hired Schneider, who hired Coyote, who hired the carrier, leaving the shipper three steps removed from hiring the operator. Because plaintiffs neither identified authority extending the theory that far nor alleged that the selection of Schneider was negligent, the claim failed, and influence over the hiring process was held not equivalent to actually hiring the carrier. Why it matters: It clarifies that negligent-hiring liability under Maryland law does not extend to a party several contractual layers removed from the entity that hired the operator absent an allegation tying the harm to the directly hired contractor. Unpublished; not binding precedent. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10873661/willy-hodge-v-molson-coors-beverage-company-usa-llc/]]></description>
+    </item>
     <item>
       <title>Ya Mon Expeditions, LLC v. YATCO, LLC (11th Cir.)</title>
       <link>https://www.courtlistener.com/opinion/10872980/ya-mon-expeditions-llc-v-yatco-llc/</link>
