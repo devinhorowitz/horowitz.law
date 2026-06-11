@@ -42,7 +42,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 PAGES = ["index.html", "resume.html", "colophon.html", "opinions.html",
          "archive.html", "subscribe.html", "404.html",
-         "changes.html", "stats.html"]
+         "changes.html", "stats.html", "digests.html"]
 ASSETS = ["base.css", "app.js", "opinions.js", "subscribe.js"]
 HEADERS_PATH = os.path.join(REPO, "_headers")
 TOKEN_LEN = 10  # hex chars of sha256 in the ?v= token; plenty against collision here

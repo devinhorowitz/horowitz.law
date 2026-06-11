@@ -33,6 +33,8 @@ CHANGES_PATH = os.path.join(REPO, "changes.html")
 STATS_PATH = os.path.join(REPO, "stats.html")
 CHANGES_XML_PATH = os.path.join(REPO, "changes.xml")
 PERMA_DIR = os.path.join(REPO, "o")
+DIGESTS_PATH = os.path.join(REPO, "digests.html")
+SUBSCRIBE_PATH = os.path.join(REPO, "subscribe.html")
 # Pages outside the marker-injection set whose footer year would otherwise rot on
 # Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
 # place, writing only when the year actually changed, so it is a no-op all year;
@@ -386,6 +388,69 @@ def stats_block(entries):
              sec("precedential status", _bar_rows([(k, v) for k, v in prec.items() if v]))]
     return "\n\n".join(parts)
 
+# ============================ digest archive ================================
+
+def _week_monday(iso):
+    d = datetime.date.fromisoformat(iso[:10])
+    return (d - datetime.timedelta(days=d.weekday())).isoformat()
+
+def digests_block(entries):
+    """The /digests page: every week's digest contents, reconstructed from the
+    record. A card belongs to the week of its first_seen (when the pipeline
+    added it), matching how digest.py selects; a flag belongs to the week of its
+    treatment_date. Pure projection of opinions.json -- deterministic, so the
+    page reaches back before the email existed and never needs a sent-mail log."""
+    weeks = {}
+    for e in entries:
+        seen = (e.get("first_seen") or e.get("date") or "")[:10]
+        if not _valid_date(seen):
+            continue
+        weeks.setdefault(_week_monday(seen), {"new": [], "flags": []})["new"].append(e)
+    for e in _flagged(entries):
+        td = (e.get("treatment_date") or "")[:10]
+        if _valid_date(td):
+            weeks.setdefault(_week_monday(td), {"new": [], "flags": []})["flags"].append(e)
+    out = []
+    for wk in sorted(weeks, reverse=True):
+        w = weeks[wk]
+        w["new"].sort(key=lambda e: (e.get("first_seen") or e["date"], int(e.get("cluster_id", 0))), reverse=True)
+        d = datetime.date.fromisoformat(wk)
+        label = f"week of {_MO[d.month - 1]} {d.day}, {d.year}"
+        n_new, n_fl = len(w["new"]), len(w["flags"])
+        counts = []
+        if n_new: counts.append(f'{n_new} decision{"s" if n_new != 1 else ""} added')
+        if n_fl:  counts.append(f'{n_fl} flag{"s" if n_fl != 1 else ""} raised')
+        items = []
+        for e in w["new"]:
+            tags = " ".join(f'<span class="tag">{_esc(AREA_LABELS[c])}</span>' for c in all_areas(e))
+            items.append(
+                f'        <div class="week-item"><a href="/o/{e["cluster_id"]}">{_esc(e["name"])}</a>'
+                f' <span class="week-meta">\u00b7 {_esc(COURT_LABELS[e["court"]])} \u00b7 decided {_esc(_date_label(e["date"]))}</span>'
+                f'<div class="op-tags">{tags}</div></div>')
+        for e in w["flags"]:
+            items.append(
+                f'        <div class="week-flag">{_TREAT_LABEL.get(e["treatment"], "Flagged")}: '
+                f'<a href="/o/{e["cluster_id"]}">{_esc(e["name"])}</a> \u2014 see <a href="/changes">the ledger</a>.</div>')
+        out.append(
+            f'      <section class="week" id="w{wk}">\n'
+            f'        <div class="week-head"><span class="week-date">{label}</span>'
+            f'<span class="week-count">{_esc(" \u00b7 ".join(counts))}</span></div>\n'
+            + "\n".join(items) + "\n"
+            f'      </section>')
+    return "\n\n".join(out)
+
+# ========================= subscribe area choices ===========================
+
+def area_choices():
+    """The per-area checkboxes on /subscribe, generated from AREA_LABELS so the
+    form can never drift from the taxonomy. 'all' is the full weekly digest and
+    the default; each area maps to a Resend Topic at confirm time (see
+    functions/api/subscribe/confirm.js and RESEND_AREA_TOPICS)."""
+    out = ['      <label class="area"><input type="checkbox" name="area" value="all" checked> everything <span class="area-hint">\u2014 the full weekly digest</span></label>']
+    for code, label in AREA_LABELS.items():
+        out.append(f'      <label class="area"><input type="checkbox" name="area" value="{code}"> {_esc(label)}</label>')
+    return "\n".join(out)
+
 # ============================== permalinks ==================================
 
 # Chrome styles for the standalone permalink pages, read once per render from
@@ -663,6 +728,10 @@ def render(entries=None):
     changes_rss(entries)
     if os.path.exists(STATS_PATH):
         _inject(STATS_PATH, "stats", stats_block(entries))
+    if os.path.exists(DIGESTS_PATH):
+        _inject(DIGESTS_PATH, "digests", digests_block(entries))
+    if os.path.exists(SUBSCRIBE_PATH) and "areachoices:start" in open(SUBSCRIBE_PATH, encoding="utf-8").read():
+        _inject(SUBSCRIBE_PATH, "areachoices", area_choices())
     _write_permalinks(entries)
 
     # Footer year on the non-generated pages: stamped in place (no markers involved),
@@ -698,6 +767,9 @@ def _update_sitemap(recent, entries):
     if entries:                             # entries likewise sorted desc
         new = set_lastmod(new, "https://horowitz.law/archive", entries[0]["date"])
         new = set_lastmod(new, "https://horowitz.law/stats", entries[0]["date"])
+        newest_seen = max(((e.get("first_seen") or e.get("date") or "")[:10] for e in entries), default="")
+        if newest_seen:
+            new = set_lastmod(new, "https://horowitz.law/digests", newest_seen)
     flagged = _flagged(entries)
     if flagged:
         new = set_lastmod(new, "https://horowitz.law/changes", flagged[0].get("treatment_date") or flagged[0]["date"])

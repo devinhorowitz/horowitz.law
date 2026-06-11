@@ -57,6 +57,21 @@ DISCLAIMER = os.environ.get("DIGEST_DISCLAIMER") or ""        # optional not-leg
 PREHEADER  = os.environ.get("DIGEST_PREHEADER") or "New Georgia appellate decisions in civil litigation and insurance practice."
 PREVIEW    = os.environ.get("DIGEST_PREVIEW") or os.path.join(REPO, "digest_preview.html")
 
+# Per-area sends. RESEND_AREA_TOPICS maps area code -> Resend Topic id, e.g.
+#   {"coverage":"top_...","premises":"top_..."}
+# (same value as the Cloudflare Pages variable confirm.js reads). Unset or
+# empty: no per-area broadcasts, and behavior is identical to before this
+# feature existed. An area with no mapped topic, or no content in the window,
+# is skipped. Each area send is its own broadcast, scoped to that area's Topic,
+# so its unsubscribe link leaves only that area.
+def _area_topics():
+    try:
+        m = json.loads(os.environ.get("RESEND_AREA_TOPICS") or "{}")
+        return m if isinstance(m, dict) else {}
+    except Exception:
+        return {}
+AREA_TOPICS = _area_topics()
+
 # Resend fills this per recipient at send time; when a Topic is set, unsubscribing is scoped
 # to that Topic. It must appear in the body, so the broadcast has a working unsubscribe link.
 UNSUB_TAG = "{{{RESEND_UNSUBSCRIBE_URL}}}"
@@ -94,6 +109,12 @@ def select(entries, days):
     new = [e for e in entries if (e.get("first_seen") or e.get("date") or "") >= since]
     new.sort(key=lambda e: (e.get("first_seen") or e.get("date") or "", e.get("date") or ""), reverse=True)
     return new, since
+
+
+def in_area(e, area):
+    """Card membership for a per-area digest, counting additional holdings, via
+    the same all_areas the site's filters use."""
+    return area in render.all_areas(e)
 
 
 def select_corrections(entries, days):
@@ -322,7 +343,7 @@ def send_existing_broadcast(bid):
     raise RuntimeError(last or "broadcast send failed")
 
 
-def send_broadcast(subject, html_body, text_body, name):
+def send_broadcast(subject, html_body, text_body, name, topic_id=None):
     """Create the day's broadcast and (unless DRAFT) send it, duplicate-proof.
 
     Create and send are deliberately separate calls: the create is guarded by the
@@ -347,8 +368,9 @@ def send_broadcast(subject, html_body, text_body, name):
             "name": name,
             "send": False,
         }
-        if TOPIC_ID:
-            body["topic_id"] = TOPIC_ID
+        top = topic_id or TOPIC_ID
+        if top:
+            body["topic_id"] = top
         last = None
         for attempt in range(4):
             try:
@@ -419,6 +441,13 @@ def main():
             print("  + new: %s [%s]" % (e["name"], ",".join(e.get("areas", []))))
         for e in corrections:
             print("  ~ flagged: %s [%s]" % (e["name"], e.get("treatment")))
+        if AREA_TOPICS:
+            for area, topic in sorted(AREA_TOPICS.items()):
+                a_new = [e for e in new if in_area(e, area)]
+                a_cor = [e for e in corrections if in_area(e, area)]
+                if a_new or a_cor:
+                    print("  > area digest %r -> topic %s: %d new, %d flagged"
+                          % (area, topic or "(unmapped)", len(a_new), len(a_cor)))
         return
     if not SEGMENT_ID:
         print("RESEND_API_KEY is set but RESEND_SEGMENT_ID is empty; nothing to send."); return
@@ -451,6 +480,35 @@ def main():
         print("created DRAFT broadcast id=%s (not sent). Review and send it in the Resend dashboard." % bid)
     else:
         print("created and sent broadcast id=%s to segment %s (topic %s)." % (bid, SEGMENT_ID, TOPIC_ID or "none"))
+
+    # Per-area digests: one broadcast per area with content in the window,
+    # scoped to that area's Topic so only its subscribers receive it and its
+    # unsubscribe leaves only that area. The main broadcast above is untouched;
+    # a contact opted into both gets both, by their own choice.
+    if AREA_TOPICS:
+        sent_areas = 0
+        for area, topic in sorted(AREA_TOPICS.items()):
+            if not topic:
+                continue
+            a_new = [e for e in new if in_area(e, area)]
+            a_cor = [e for e in corrections if in_area(e, area)]
+            if not a_new and not a_cor:
+                continue
+            label = render.AREA_LABELS.get(area, area)
+            a_subject = "Georgia Appellate Watch \u00b7 %s: %s" % (
+                label, subject_line(a_new, a_cor).split(": ", 1)[1])
+            a_html, a_text = build_html(a_new, a_cor), build_text(a_new, a_cor)
+            a_name = "Georgia Appellate Watch digest %s [%s]" % (datetime.date.today().isoformat(), area)
+            try:
+                a_res = send_broadcast(a_subject, a_html, a_text, a_name, topic_id=topic) or {}
+                sent_areas += 1
+                print("  + area %r: broadcast id=%s (topic %s, %d new, %d flagged)%s"
+                      % (area, a_res.get("id", "?"), topic, len(a_new), len(a_cor),
+                         " [draft]" if DRAFT else ""))
+            except Exception as ex:
+                print("  ! area %r FAILED: %s" % (area, ex))
+        if not sent_areas:
+            print("  . per-area topics configured, but no area had content this window.")
 
 
 if __name__ == "__main__":
