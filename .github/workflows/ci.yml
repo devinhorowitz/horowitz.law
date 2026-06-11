@@ -19,6 +19,8 @@ on:
       - 'robots.txt'
       - 'sitemap.xml'
       - 'opinions.json'
+      - 'changes.xml'
+      - 'o/**'
       - 'functions/**'
   pull_request:
     paths:
@@ -82,4 +84,4 @@ jobs:
       - name: Render idempotency
         run: |
           python scripts/render.py
-          git diff --exit-code -- opinions.html archive.html opinions.xml sitemap.xml index.html resume.html colophon.html subscribe.html 404.html
+          git diff --exit-code -- opinions.html archive.html opinions.xml sitemap.xml index.html resume.html colophon.html subscribe.html 404.html changes.html stats.html changes.xml o
