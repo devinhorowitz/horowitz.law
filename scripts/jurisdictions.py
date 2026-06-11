@@ -90,6 +90,35 @@ COURT_SYSTEM = {c["key"]: c["system"] for c in _courts}  # internal key -> "stat
 TITLE_SUFFIX = {c["key"]: c["suffix"] for c in _courts}  # internal key -> citation suffix
 VALID_KEYS = tuple(c["key"] for c in _courts)           # internal keys (fallback validation)
 JURISDICTION = ACTIVE                                    # active jurisdiction key, e.g. "ga"
+# Federal-overlay jurisdictions: states this watch does not yet cover at the
+# state-court level, but whose FEDERAL courts are bound by decisions already in
+# the feed (the Eleventh Circuit sits over Georgia, Florida, and Alabama; the
+# Supreme Court over everything). They appear in the site's jurisdiction filter
+# with a "\u00b7 federal" label and never on the subscribe form: filters show
+# what exists, subscriptions promise curation, and the screen curates for
+# Georgia relevance only until a state is covered in full (mode: "full").
+JURISDICTIONS["fl"] = {"label": "Florida", "mode": "overlay", "courts": {}}
+JURISDICTIONS["al"] = {"label": "Alabama", "mode": "overlay", "courts": {}}
+
+def jurisdiction_mode(key):
+    return JURISDICTIONS.get(key, {}).get("mode", "full")
+
+# Which registered jurisdictions a federal court's published decisions bind, by
+# pure judicial hierarchy. "*" means every registered jurisdiction, present and
+# future, so a new state in the registry inherits the SCOTUS overlay with no
+# data change anywhere. Derived at render time -- never stored on cards -- so
+# bindingness can never go stale.
+FEDERAL_BINDS = {"ca11": ("ga", "fl", "al"), "scotus": "*"}
+
+def court_binds(court):
+    """The registered jurisdiction keys a decision from this court binds, or
+    None for a state court (whose card carries its own jurisdiction)."""
+    b = FEDERAL_BINDS.get(court)
+    if b is None:
+        return None
+    keys = list(JURISDICTIONS)
+    return keys if b == "*" else [k for k in b if k in JURISDICTIONS]
+
 ALL_JURISDICTIONS = [(k, v["label"]) for k, v in JURISDICTIONS.items()]  # (key, label) per registered jurisdiction, for the page's jurisdiction selector
 DOCKET_RE = re.compile(_cfg["docket_re"])
 CITE_RE = re.compile(_cfg["cite_re"], re.I)

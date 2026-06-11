@@ -197,7 +197,10 @@ def _jurisdiction_options():
     out = []
     for key, label in jurisdictions.ALL_JURISDICTIONS:
         sel = " selected" if key == jurisdictions.JURISDICTION else ""
-        out.append('          <option value="%s"%s>%s</option>' % (key, sel, _esc(label.lower())))
+        # Overlay jurisdictions are honest at the point of choice: the option
+        # itself says the view is federal decisions only.
+        suffix = " \u00b7 federal" if jurisdictions.jurisdiction_mode(key) == "overlay" else ""
+        out.append('          <option value="%s"%s>%s%s</option>' % (key, sel, _esc(label.lower()), suffix))
     return "\n".join(out)
 
 
@@ -217,7 +220,24 @@ def card_html(e, permalink_link=True):
     # (a federal opinion can be relevant to more than one state, so it cannot be
     # derived from the court alone).
     system = COURT_SYSTEM.get(e["court"], "")
-    juris = e.get("jurisdiction") or jurisdictions.JURISDICTION
+    # jurisdiction may be a single key or, for a federal card relevant to more
+    # than one covered state, a list of keys (the multistate plan: an Eleventh
+    # Circuit card stamped ["ga","fl"] appears under both states' filters and
+    # digests). Either shape renders as a comma list in the attribute; the page
+    # filter tests membership, so single values behave exactly as before.
+    # Federal courts: bindingness is derived from the court by judicial
+    # hierarchy (see jurisdictions.court_binds) -- an Eleventh Circuit card is
+    # authority in ga, fl, and al alike; a SCOTUS card in every registered
+    # jurisdiction, forever, including ones registered later. State courts:
+    # the card's own stamp (which the pipeline may make a list once a second
+    # state is covered in full).
+    binds = jurisdictions.court_binds(e["court"])
+    if binds:
+        juris = ",".join(binds)
+    else:
+        juris = e.get("jurisdiction") or jurisdictions.JURISDICTION
+        if isinstance(juris, (list, tuple)):
+            juris = ",".join(juris)
     areas_all = all_areas(e)
     div_part = f", {_esc(e['division'])}" if e.get("division") else ""
     tags = "".join(f'<span class="tag">{_esc(AREA_LABELS[c])}</span>' for c in areas_all)
@@ -440,6 +460,26 @@ def digests_block(entries):
     return "\n\n".join(out)
 
 # ========================= subscribe area choices ===========================
+
+def jurisdiction_choices():
+    """The which-states checkboxes on /subscribe -- DORMANT until the registry
+    holds a second jurisdiction, then they appear on the next render with every
+    covered state checked. Gated on the registry on purpose: the same Phase 5
+    commit that adds Florida to jurisdictions.py is the one that must also teach
+    the subscribe wire and the digest about states (see ROADMAP.md Phase 5), so
+    the form can never offer a choice the backend does not yet honor."""
+    full = [(k, l) for k, l in jurisdictions.ALL_JURISDICTIONS
+            if jurisdictions.jurisdiction_mode(k) == "full"]
+    if len(full) < 2:
+        return ("      <!-- subscriptions are per fully-covered state; federal-overlay\n"
+                "           jurisdictions join here automatically when their state courts do -->")
+    out = ['      <fieldset class="areas" id="jurisChoices">',
+           '        <legend>which states</legend>']
+    for key, label in full:
+        out.append(f'        <label class="area"><input type="checkbox" name="juris" value="{key}" checked> {_esc(label.lower())}</label>')
+    out.append('      </fieldset>')
+    return "\n".join(out)
+
 
 def area_choices():
     """The per-area checkboxes on /subscribe, generated from AREA_LABELS so the
@@ -730,8 +770,12 @@ def render(entries=None):
         _inject(STATS_PATH, "stats", stats_block(entries))
     if os.path.exists(DIGESTS_PATH):
         _inject(DIGESTS_PATH, "digests", digests_block(entries))
-    if os.path.exists(SUBSCRIBE_PATH) and "areachoices:start" in open(SUBSCRIBE_PATH, encoding="utf-8").read():
-        _inject(SUBSCRIBE_PATH, "areachoices", area_choices())
+    if os.path.exists(SUBSCRIBE_PATH):
+        sub_doc = open(SUBSCRIBE_PATH, encoding="utf-8").read()
+        if "areachoices:start" in sub_doc:
+            _inject(SUBSCRIBE_PATH, "areachoices", area_choices())
+        if "jurischoices:start" in sub_doc:
+            _inject(SUBSCRIBE_PATH, "jurischoices", jurisdiction_choices())
     _write_permalinks(entries)
 
     # Footer year on the non-generated pages: stamped in place (no markers involved),
