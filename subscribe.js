@@ -20,10 +20,32 @@
     }
   }
 
+  // 'everything' and the per-area boxes are mutually exclusive as a set:
+  // ticking an area unticks everything, ticking everything clears the areas.
+  // Plain checkboxes otherwise, so the form still posts sensibly without this.
+  var allBox = form.querySelector('input[name="area"][value="all"]');
+  var areaBoxes = Array.prototype.slice.call(form.querySelectorAll('input[name="area"]:not([value="all"])'));
+  if (allBox) {
+    allBox.addEventListener('change', function () {
+      if (allBox.checked) areaBoxes.forEach(function (b) { b.checked = false; });
+    });
+    areaBoxes.forEach(function (b) {
+      b.addEventListener('change', function () {
+        if (b.checked) allBox.checked = false;
+        if (!areaBoxes.some(function (x) { return x.checked; })) allBox.checked = true;
+      });
+    });
+  }
+
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var email = document.getElementById('email').value.trim();
     var company = document.getElementById('company').value; // honeypot
+    // Chosen practice areas. Empty (or 'everything') means the full weekly
+    // digest -- the server treats both identically, so legacy posts without
+    // the field keep working.
+    var areas = areaBoxes.filter(function (b) { return b.checked; })
+                         .map(function (b) { return b.value; });
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       setStatus('Please enter a valid email address.', 'err');
       return;
@@ -43,7 +65,7 @@
     fetch('/api/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email, company: company, turnstileToken: token })
+      body: JSON.stringify({ email: email, company: company, turnstileToken: token, areas: areas })
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (res) {

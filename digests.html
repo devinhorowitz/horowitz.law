@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digests · Week by Week · horowitz.law</title>
+<meta name="description" content="The Georgia Appellate Watch weekly digest, week by week: every decision added and every flag raised, reconstructed from the record.">
+<meta name="theme-color" content="#0d0e10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5ede0" media="(prefers-color-scheme: light)">
+
+<link rel="canonical" href="https://horowitz.law/digests">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://horowitz.law/digests">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Digests · Week by Week · horowitz.law">
+<meta property="og:description" content="The Georgia Appellate Watch weekly digest, week by week: every decision added and every flag raised, reconstructed from the record.">
+<meta property="og:image" content="https://horowitz.law/og-card.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:site_name" content="horowitz.law">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Digests · Week by Week · horowitz.law">
+<meta name="twitter:description" content="The Georgia Appellate Watch weekly digest, week by week: every decision added and every flag raised, reconstructed from the record.">
+<meta name="twitter:image" content="https://horowitz.law/og-card.jpg">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+
+<link rel="preload" href="/fonts/jetbrains-mono-400.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-500.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-600.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-700.subset.woff2" as="font" type="font/woff2" crossorigin>
+
+<!-- pre-paint theme + .js marker: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js), and tag <html> with .js so JS-gated styling fails open when scripts are blocked; CSP hash-pinned -->
+<script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}document.documentElement.className+=' js';})();</script>
+<link rel="stylesheet" href="/base.css?v=b81ef98c82">
+
+<style>
+  :root {
+    --bg: #0d0e10;
+    --fg: #e8e3d8;
+    --fg-muted: #807a72;
+    --accent: #ff9e5e;
+    --border: #25262a;
+    --grain-opacity: 0.04;
+    --scanline-opacity: 0.018;
+  }
+
+  [data-theme="light"] {
+    --bg: #f5ede0;
+    --fg: #1a1a1a;
+    --fg-muted: #6a6560;
+    --accent: #a4471a;
+    --border: #d4cab8;
+    --grain-opacity: 0.025;
+    --scanline-opacity: 0;
+  }
+
+  /* First-visit: honor an OS light preference on initial paint, before any
+     explicit choice exists. The :not([data-theme="dark"]) guard ensures an
+     explicit dark toggle still wins on a light-mode OS. Keep vars in sync
+     with the [data-theme="light"] block above. */
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f5ede0;
+      --fg: #1a1a1a;
+      --fg-muted: #6a6560;
+      --accent: #a4471a;
+      --border: #d4cab8;
+      --grain-opacity: 0.025;
+      --scanline-opacity: 0;
+    }
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--fg);
+    background: var(--bg);
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+    overflow-wrap: break-word;
+  }
+
+  .container {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+    position: relative;
+    z-index: 3;
+  }
+
+  /* topbar */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 72px;
+    font-size: 13px;
+  }
+
+  .topbar-prompt {
+    color: var(--fg-muted);
+    letter-spacing: 0.05em;
+  }
+
+  .topbar-prompt a {
+    color: var(--fg-muted);
+    text-decoration: none;
+    border-bottom: 1px dotted transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .topbar-prompt a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .theme-toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--fg-muted);
+    font: inherit;
+    font-size: 11px;
+    text-transform: lowercase;
+    letter-spacing: 0.05em;
+    padding: 5px 11px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.2s;
+  }
+
+  /* page title */
+  h1.page-title {
+    font-size: clamp(28px, 4.5vw, 38px);
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    margin-bottom: 12px;
+  }
+
+  .subtitle {
+    color: var(--accent);
+    font-size: 13px;
+    margin-bottom: 48px;
+    letter-spacing: 0.03em;
+  }
+
+  /* sections */
+  section { margin-bottom: 44px; }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 22px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--fg-muted);
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+
+  .section-header::before {
+    content: '>';
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  section p {
+    margin-bottom: 16px;
+    color: var(--fg);
+  }
+
+  section p:last-child {
+    margin-bottom: 0;
+  }
+
+  .terminal-line {
+    margin: 16px 0;
+    color: var(--fg-muted);
+    font-size: 13px;
+  }
+  .terminal-line::before {
+    content: '$ ';
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .terminal-line a {
+    color: var(--fg);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--fg-muted);
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .terminal-line a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  em {
+    font-style: italic;
+    color: var(--fg-muted);
+  }
+
+  /* footer */
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--fg-muted);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  footer a {
+    color: var(--fg-muted);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--fg-muted);
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  /* theme transition flicker — matches main site */
+  @keyframes themeFlicker {
+    0%   { opacity: 1; }
+    18%  { opacity: 0.78; }
+    34%  { opacity: 0.95; }
+    50%  { opacity: 0.68; }
+    68%  { opacity: 0.92; }
+    85%  { opacity: 0.96; }
+    100% { opacity: 1; }
+  }
+
+  html.theme-flickering .container > *:not(.topbar) {
+    animation: themeFlicker var(--flicker-duration, 550ms) ease-out forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html.theme-flickering .container > *:not(.topbar) {
+      animation: none !important;
+    }
+    body::after { display: none !important; }
+  }
+
+  /* skip-to-content link (keyboard accessibility) */
+  .skip-link {
+    position: absolute;
+    inset-inline-start: -9999px;
+    top: 0;
+    background: var(--accent);
+    color: var(--bg);
+    padding: 8px 16px;
+    font-size: 12px;
+    text-decoration: none;
+    z-index: 100;
+  }
+  .skip-link:focus {
+    inset-inline-start: 16px;
+    top: 16px;
+  }
+
+  /* focus indicators for keyboard navigation */
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  @media (max-width: 600px) {
+    .container { padding: 36px 22px 80px; }
+    .topbar { margin-bottom: 50px; }
+    footer { flex-direction: column; align-items: flex-start; }
+  }
+  .intro { color: var(--fg-muted); font-size: 13px; margin-bottom: 18px; max-width: 64ch; }
+  .intro strong { color: var(--fg); font-weight: 600; }
+  .intro a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--fg-muted); transition: color 0.2s, border-color 0.2s; }
+  .intro a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .week { border: 1px solid var(--border); padding: 18px 20px; margin-bottom: 18px; }
+  .week-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .week-date { font-weight: 600; font-size: 14px; }
+  .week-count { color: var(--fg-muted); font-size: 12px; }
+  .week-item { margin: 9px 0; font-size: 13px; line-height: 1.65; }
+  .week-item a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--fg-muted); transition: color 0.2s, border-color 0.2s; font-weight: 600; }
+  .week-item a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  .week-meta { color: var(--fg-muted); font-size: 12px; }
+  .week-flag { color: var(--fg-muted); font-size: 12.5px; margin: 9px 0; padding-left: 14px; border-left: 2px solid var(--accent); }
+  .week-flag a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--fg-muted); }
+  .week-flag a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  @media print { .week { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<div class="container">
+
+  <div class="topbar">
+    <span class="topbar-prompt"><a href="/">~ horowitz.law</a>/digests</span>
+    <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false" aria-label="Toggle light or dark theme">[ light ]</button>
+  </div>
+
+  <main id="main-content">
+
+    <h1 class="page-title">Digests</h1>
+    <div class="subtitle">// the weekly email, week by week</div>
+
+    <p class="intro">What each week&rsquo;s <a href="/subscribe">digest</a> covered: the decisions added that week and any earlier cards flagged for adverse treatment. Reconstructed from the record itself &mdash; the same data that builds the cards builds this page &mdash; so it reaches back before the email existed, and the launch-week backfill is the big one.</p>
+    <p class="intro" style="font-size:13px; margin-top:-6px;">The digest sends only in weeks with something to say. <a href="/subscribe">Subscribe</a>, or follow the <a href="/opinions.xml">RSS feed</a> and the <a href="/changes.xml">corrections feed</a> instead.</p>
+
+    <!-- digests:start (generated by scripts/render.py from opinions.json; do not edit by hand) -->
+      <section class="week" id="w2026-06-08">
+        <div class="week-head"><span class="week-date">week of Jun 8, 2026</span><span class="week-count">3 decisions added · 1 flag raised</span></div>
+        <div class="week-item"><a href="/o/10872980">Ya Mon Expeditions, LLC v. YATCO, LLC</a> <span class="week-meta">· U.S. Court of Appeals for the Eleventh Circuit · decided Jun 10, 2026</span><div class="op-tags"><span class="tag">procedure</span></div></div>
+        <div class="week-item"><a href="/o/10872456">Vu v. City of Atlanta</a> <span class="week-meta">· Court of Appeals of Georgia · decided Jun 9, 2026</span><div class="op-tags"><span class="tag">auto</span> <span class="tag">procedure</span></div></div>
+        <div class="week-item"><a href="/o/10872097">GoAuto Insurance Company v. 2B Claims Services Inc.</a> <span class="week-meta">· U.S. Court of Appeals for the Eleventh Circuit · decided Jun 8, 2026</span><div class="op-tags"><span class="tag">bad faith</span> <span class="tag">auto</span></div></div>
+        <div class="week-flag">Possible negative treatment: <a href="/o/9391147">Aspen American Insurance Company v. Landstar Ranger, Inc.</a> — see <a href="/changes">the ledger</a>.</div>
+      </section>
+
+      <section class="week" id="w2026-05-18">
+        <div class="week-head"><span class="week-date">week of May 18, 2026</span><span class="week-count">2 decisions added</span></div>
+        <div class="week-item"><a href="/o/10862301">State Farm Mut. Auto. Ins. Co. &amp; GEICO Indemnity Co. v. Barnor-Cooper</a> <span class="week-meta">· Court of Appeals of Georgia · decided May 20, 2026</span><div class="op-tags"><span class="tag">coverage</span> <span class="tag">auto</span></div></div>
+        <div class="week-item"><a href="/o/10862062">Johnson v. Everett</a> <span class="week-meta">· Court of Appeals of Georgia · decided May 20, 2026</span><div class="op-tags"><span class="tag">procedure</span> <span class="tag">expert</span></div></div>
+      </section>
+
+      <section class="week" id="w2026-03-23">
+        <div class="week-head"><span class="week-date">week of Mar 23, 2026</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/10815924">Loveless v. GSH Investments, LLC</a> <span class="week-meta">· Court of Appeals of Georgia · decided Mar 26, 2026</span><div class="op-tags"><span class="tag">premises</span></div></div>
+      </section>
+
+      <section class="week" id="w2026-03-16">
+        <div class="week-head"><span class="week-date">week of Mar 16, 2026</span><span class="week-count">2 decisions added</span></div>
+        <div class="week-item"><a href="/o/10809283">Cannon v. Safeco Insurance Co. of Illinois</a> <span class="week-meta">· Court of Appeals of Georgia · decided Mar 16, 2026</span><div class="op-tags"><span class="tag">coverage</span> <span class="tag">bad faith</span> <span class="tag">auto</span></div></div>
+        <div class="week-item"><a href="/o/10809157">Sullivan v. Trustgard Insurance Co.</a> <span class="week-meta">· Court of Appeals of Georgia · decided Mar 16, 2026</span><div class="op-tags"><span class="tag">coverage</span> <span class="tag">auto</span></div></div>
+      </section>
+
+      <section class="week" id="w2026-02-09">
+        <div class="week-head"><span class="week-date">week of Feb 9, 2026</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/10786768">Radheshvar, LLC v. Perez Larios</a> <span class="week-meta">· Court of Appeals of Georgia · decided Feb 10, 2026</span><div class="op-tags"><span class="tag">premises</span></div></div>
+      </section>
+
+      <section class="week" id="w2026-02-02">
+        <div class="week-head"><span class="week-date">week of Feb 2, 2026</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/10785227">Giles v. Greenhouse Apartments, LLC</a> <span class="week-meta">· Court of Appeals of Georgia · decided Feb 6, 2026</span><div class="op-tags"><span class="tag">negligent security</span> <span class="tag">premises</span></div></div>
+      </section>
+
+      <section class="week" id="w2026-01-26">
+        <div class="week-head"><span class="week-date">week of Jan 26, 2026</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/10779964">Mejia v. SK Battery America, Inc.</a> <span class="week-meta">· Court of Appeals of Georgia · decided Jan 27, 2026</span><div class="op-tags"><span class="tag">premises</span></div></div>
+      </section>
+
+      <section class="week" id="w2025-10-27">
+        <div class="week-head"><span class="week-date">week of Oct 27, 2025</span><span class="week-count">2 decisions added</span></div>
+        <div class="week-item"><a href="/o/10715536">Venetian Hills Apartments, LLC v. Hughes</a> <span class="week-meta">· Court of Appeals of Georgia · decided Oct 31, 2025</span><div class="op-tags"><span class="tag">premises</span> <span class="tag">negligent security</span></div></div>
+        <div class="week-item"><a href="/o/10713919">Williams v. Reddick</a> <span class="week-meta">· Court of Appeals of Georgia · decided Oct 29, 2025</span><div class="op-tags"><span class="tag">auto</span> <span class="tag">coverage</span></div></div>
+      </section>
+
+      <section class="week" id="w2025-10-13">
+        <div class="week-head"><span class="week-date">week of Oct 13, 2025</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/10704224">SMG Construction Services, LLC v. Cook</a> <span class="week-meta">· Supreme Court of Georgia · decided Oct 15, 2025</span><div class="op-tags"><span class="tag">premises</span></div></div>
+      </section>
+
+      <section class="week" id="w2025-09-08">
+        <div class="week-head"><span class="week-date">week of Sep 8, 2025</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/10669247">Ferriero v. Progressive Premier Insurance Co.</a> <span class="week-meta">· Court of Appeals of Georgia · decided Sep 10, 2025</span><div class="op-tags"><span class="tag">procedure</span> <span class="tag">coverage</span> <span class="tag">auto</span></div></div>
+      </section>
+
+      <section class="week" id="w2025-06-30">
+        <div class="week-head"><span class="week-date">week of Jun 30, 2025</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/10620084">John Doe v. Jones</a> <span class="week-meta">· Court of Appeals of Georgia · decided Jun 30, 2025</span><div class="op-tags"><span class="tag">auto</span> <span class="tag">damages</span></div></div>
+      </section>
+
+      <section class="week" id="w2025-06-23">
+        <div class="week-head"><span class="week-date">week of Jun 23, 2025</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/10680420">Walmart Stores East, LP v. Leverette</a> <span class="week-meta">· Supreme Court of Georgia · decided Jun 24, 2025</span><div class="op-tags"><span class="tag">damages</span> <span class="tag">premises</span></div></div>
+      </section>
+
+      <section class="week" id="w2025-06-16">
+        <div class="week-head"><span class="week-date">week of Jun 16, 2025</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/10614235">Patterson v. United Services Automobile Association</a> <span class="week-meta">· Court of Appeals of Georgia · decided Jun 20, 2025</span><div class="op-tags"><span class="tag">coverage</span> <span class="tag">auto</span></div></div>
+      </section>
+
+      <section class="week" id="w2023-08-21">
+        <div class="week-head"><span class="week-date">week of Aug 21, 2023</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/10680052">Miller v. Golden Peanut Company, LLC</a> <span class="week-meta">· Supreme Court of Georgia · decided Aug 21, 2023</span><div class="op-tags"><span class="tag">expert</span> <span class="tag">auto</span></div></div>
+      </section>
+
+      <section class="week" id="w2023-04-10">
+        <div class="week-head"><span class="week-date">week of Apr 10, 2023</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/9391147">Aspen American Insurance Company v. Landstar Ranger, Inc.</a> <span class="week-meta">· U.S. Court of Appeals for the Eleventh Circuit · decided Apr 13, 2023</span><div class="op-tags"><span class="tag">procedure</span></div></div>
+      </section>
+
+      <section class="week" id="w2021-12-13">
+        <div class="week-head"><span class="week-date">week of Dec 13, 2021</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/10367651">Adventure Motorsports Reinsurance, Ltd. v. Interstate National Dealer Services, Inc.</a> <span class="week-meta">· Supreme Court of Georgia · decided Dec 14, 2021</span><div class="op-tags"><span class="tag">procedure</span></div></div>
+      </section>
+
+      <section class="week" id="w2020-11-02">
+        <div class="week-head"><span class="week-date">week of Nov 2, 2020</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/10367320">Quynn v. Hulsey</a> <span class="week-meta">· Supreme Court of Georgia · decided Nov 2, 2020</span><div class="op-tags"><span class="tag">auto</span> <span class="tag">damages</span> <span class="tag">procedure</span></div></div>
+      </section>
+
+      <section class="week" id="w2018-10-29">
+        <div class="week-head"><span class="week-date">week of Oct 29, 2018</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/4549173">The Coastal Bank v. Rawlins</a> <span class="week-meta">· Court of Appeals of Georgia · decided Oct 29, 2018</span><div class="op-tags"><span class="tag">procedure</span> <span class="tag">damages</span></div></div>
+      </section>
+
+      <section class="week" id="w2018-05-28">
+        <div class="week-head"><span class="week-date">week of May 28, 2018</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/4503667">Stephens v. Castano-Castano</a> <span class="week-meta">· Court of Appeals of Georgia · decided May 29, 2018</span><div class="op-tags"><span class="tag">auto</span> <span class="tag">damages</span> <span class="tag">expert</span> <span class="tag">procedure</span></div></div>
+      </section>
+
+      <section class="week" id="w2018-03-12">
+        <div class="week-head"><span class="week-date">week of Mar 12, 2018</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/10366850">Cooper Tire &amp; Rubber Company v. Koch</a> <span class="week-meta">· Supreme Court of Georgia · decided Mar 15, 2018</span><div class="op-tags"><span class="tag">procedure</span> <span class="tag">damages</span></div></div>
+      </section>
+
+      <section class="week" id="w2017-06-19">
+        <div class="week-head"><span class="week-date">week of Jun 19, 2017</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/4406052">Hospital Authority of Valdosta/Lowndes County v. Fender</a> <span class="week-meta">· Court of Appeals of Georgia · decided Jun 23, 2017</span><div class="op-tags"><span class="tag">damages</span> <span class="tag">expert</span> <span class="tag">procedure</span></div></div>
+      </section>
+
+      <section class="week" id="w2017-06-05">
+        <div class="week-head"><span class="week-date">week of Jun 5, 2017</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/5749712">Martin v. Six Flags Over Georgia II, L.P.</a> <span class="week-meta">· Supreme Court of Georgia · decided Jun 5, 2017</span><div class="op-tags"><span class="tag">premises</span> <span class="tag">negligent security</span> <span class="tag">damages</span></div></div>
+      </section>
+
+      <section class="week" id="w2017-02-27">
+        <div class="week-head"><span class="week-date">week of Feb 27, 2017</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/4372487">Harris v. Mahone</a> <span class="week-meta">· Court of Appeals of Georgia · decided Mar 1, 2017</span><div class="op-tags"><span class="tag">procedure</span> <span class="tag">auto</span> <span class="tag">damages</span></div></div>
+      </section>
+
+      <section class="week" id="w2016-11-14">
+        <div class="week-head"><span class="week-date">week of Nov 14, 2016</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/4323507">Richardson v. Locklyn</a> <span class="week-meta">· Court of Appeals of Georgia · decided Nov 15, 2016</span><div class="op-tags"><span class="tag">procedure</span> <span class="tag">damages</span></div></div>
+      </section>
+
+      <section class="week" id="w2016-07-04">
+        <div class="week-head"><span class="week-date">week of Jul 4, 2016</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/3219794">Scapa Dryer Fabrics, Inc. v. Knight</a> <span class="week-meta">· Supreme Court of Georgia · decided Jul 5, 2016</span><div class="op-tags"><span class="tag">expert</span> <span class="tag">damages</span></div></div>
+      </section>
+
+      <section class="week" id="w2016-06-06">
+        <div class="week-head"><span class="week-date">week of Jun 6, 2016</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/3209755">Toyo Tire North America Manufacturing, Inc. v. Davis</a> <span class="week-meta">· Supreme Court of Georgia · decided Jun 6, 2016</span><div class="op-tags"><span class="tag">damages</span> <span class="tag">expert</span> <span class="tag">procedure</span></div></div>
+      </section>
+
+      <section class="week" id="w2015-06-29">
+        <div class="week-head"><span class="week-date">week of Jun 29, 2015</span><span class="week-count">1 decision added</span></div>
+        <div class="week-item"><a href="/o/2812616">Phillips v. Harmon</a> <span class="week-meta">· Supreme Court of Georgia · decided Jun 29, 2015</span><div class="op-tags"><span class="tag">procedure</span> <span class="tag">damages</span></div></div>
+      </section>
+    <!-- digests:end -->
+
+  </main>
+
+  <footer>
+    <span>© 2026 · Hand-coded by Devin R. Horowitz</span>
+    <span><a href="/subscribe">subscribe</a> &nbsp;·&nbsp; <a href="/opinions">← back to the watch</a></span>
+  </footer>
+
+</div>
+
+<script src="/app.js?v=42eb28acec" defer></script>
+
+</body>
+</html>
