@@ -244,10 +244,25 @@ SYSTEM = (
     "33.2 (less than full concurrence in the division); 'unknown' only if the text gives no indication. "
     "Decide from the opinion's own designation; the publication-status metadata above is a hint, not "
     "controlling.\n"
+    "  - first_impression: true ONLY when the opinion itself states that it resolves a question "
+    "of first impression, or expressly states that no controlling precedent of the issuing court "
+    "or of Georgia decides the question. Never infer it from novelty alone. Default false.\n"
+    "  - tort_reform: true ONLY when a holding construes or applies Georgia's recent tort-reform "
+    "legislation: the 2025 SB 68 omnibus (for example O.C.G.A. sections 51-3-50 through 51-3-57 "
+    "on negligent security, section 9-10-184 on anchoring, section 51-12-1.1 on medical damages, "
+    "or its seatbelt, dismissal-timing, or bifurcation provisions), the 2025 SB 69 "
+    "litigation-funding act, the 2024 SB 426 motor-carrier direct-action restriction, or the "
+    "2022 HB 961 amendment to O.C.G.A. section 51-12-33. A passing mention is not enough; a "
+    "holding must turn on it.\n"
+    "  - law_applied: for a federal opinion only (ca11 or scotus), the body of substantive law "
+    "the first holding turns on: 'federal' for a federal-question holding, or 'ga', 'fl', or "
+    "'al' when the holding applies that state's substantive law, for example under Erie in "
+    "diversity. null for Georgia state-court opinions.\n"
     "  - confidence: 'high', 'medium', or 'low'.\n\n"
     "Output ONLY a JSON object, no markdown and no commentary, with these keys: relevant, "
     "court, division, dockets, disposition, areas, name, synopsis, why, additional_holdings, "
-    "significance, confidence, precedential. If relevant is false, the remaining fields may be empty."
+    "significance, confidence, precedential, first_impression, tort_reform, law_applied. "
+    "If relevant is false, the remaining fields may be empty."
 )
 
 
@@ -870,6 +885,48 @@ _NAME_STOP = {
 }
 
 
+GOLDEN_PATH = os.path.join(REPO, "scripts", "golden_set.json")
+GOLDEN_THIN = int(os.environ.get("OPINIONS_GOLDEN_THIN", "2"))  # an area with fewer positive anchors than this is "thin"
+
+
+def golden_nominations(added, crosschecks, flagged_names):
+    """Phase 4 golden-set NOMINATION -- never self-adoption. When a freshly carded
+    opinion covers a practice area the golden set anchors thinly, propose it in the
+    PR body as a paste-ready entry. The set's labels must stay independent of the
+    system under test, so the pipeline only nominates; adoption is the editor's merge
+    plus a paste, the same human ratification the original seed went through. Only
+    clean cards qualify: anything the run itself flagged, or the cross-check disputed,
+    would anchor the benchmark on a card whose own verdict is in doubt."""
+    try:
+        gset = json.load(open(GOLDEN_PATH, encoding="utf-8"))
+    except Exception:
+        return []
+    gids = {c.get("cluster_id") for c in gset}
+    cover = {}
+    for c in gset:
+        if c.get("expect_relevant", True):
+            for ar in (c.get("expect_areas") or []):
+                cover[ar] = cover.get(ar, 0) + 1
+    out = []
+    for e in added:
+        if e["cluster_id"] in gids or e["name"] in flagged_names:
+            continue
+        cc = crosschecks.get(e["cluster_id"]) or {}
+        if cc.get("verdict") == "flag":
+            continue
+        thin = sorted({ar for ar in render.all_areas(e) if cover.get(ar, 0) < GOLDEN_THIN})
+        if not thin:
+            continue
+        out.append((thin, {
+            "cluster_id": e["cluster_id"], "name": e["name"],
+            "docket": (e.get("dockets") or [""])[0],
+            "expect_relevant": True, "expect_areas": thin,
+            "note": "thin-area anchor (%s): nominated by the %s run; adopted by editor paste + merge"
+                    % (", ".join(thin), datetime.date.today().isoformat()),
+            "text": ""}))
+    return out
+
+
 def party_tokens(name):
     """Distinctive party tokens from a case caption, lowercased and split on
     non-alphanumerics (so a hyphenated surname yields two tokens); drops digits,
@@ -1222,6 +1279,17 @@ def main():
                  "disposition": disp, "areas": areas, "url": url, "synopsis": synopsis, "why": why,
                  "precedential": (v.get("precedential") or "unknown"),
                  "first_seen": datetime.date.today().isoformat()}
+        # Phase 4 taxonomy. Badges are stored only when true (lean JSON, and render
+        # keys on truthiness); the Erie field only for a federal court with a
+        # recognized value. editor_note is human-only: the pipeline never writes it.
+        if v.get("first_impression") is True:
+            entry["first_impression"] = True
+        if v.get("tort_reform") is True:
+            entry["tort_reform"] = True
+        _la = v.get("law_applied")
+        _la = _la.strip().lower() if isinstance(_la, str) else ""
+        if entry["court"] in ("ca11", "scotus") and _la in ({"federal"} | set(jurisdictions.JURISDICTIONS)):
+            entry["law_applied"] = _la
         if additional_holdings:
             entry["additional_holdings"] = additional_holdings
 
@@ -1280,6 +1348,13 @@ def main():
         for cardnm, newnm, rev in audit_notes:
             if rev:
                 lines.append("- audit -- the **%s** card may need an edit in light of %s: %s" % (cardnm, newnm, rev))
+    noms = golden_nominations(added, crosschecks, {n for n, _ in flagged})
+    if noms:
+        lines += ["", "Golden-set nominations (the set never adopts on its own; to adopt one, paste the "
+                      "object into scripts/golden_set.json, merge, and run golden-check in build mode):"]
+        for thin, cand in noms:
+            lines.append("- **%s** would anchor thin area(s): %s" % (cand["name"], ", ".join(thin)))
+            lines.append("```json\n%s\n```" % json.dumps(cand, ensure_ascii=False, indent=2))
     if skipped:
         lines += ["", "Screened or dropped this run (not added):"]
         lines += ["- %s: %s" % (n, why) for n, why in skipped]

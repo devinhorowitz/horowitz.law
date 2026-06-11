@@ -233,7 +233,16 @@ def card_html(e, permalink_link=True):
     # state is covered in full).
     binds = jurisdictions.court_binds(e["court"])
     if binds:
-        juris = ",".join(binds)
+        # Erie refinement (Phase 4): when the pipeline has recorded which body of
+        # substantive law a federal holding turns on, narrow the overlay to the
+        # jurisdictions the card is actually salient to -- the primary (whose
+        # screen kept it) plus the state whose law it applies. "federal" or an
+        # absent field keeps full court-level bindingness.
+        la = (e.get("law_applied") or "").strip().lower()
+        if la and la != "federal" and la in jurisdictions.JURISDICTIONS:
+            juris = ",".join(dict.fromkeys([jurisdictions.JURISDICTION, la]))
+        else:
+            juris = ",".join(binds)
     else:
         juris = e.get("jurisdiction") or jurisdictions.JURISDICTION
         if isinstance(juris, (list, tuple)):
@@ -241,6 +250,17 @@ def card_html(e, permalink_link=True):
     areas_all = all_areas(e)
     div_part = f", {_esc(e['division'])}" if e.get("division") else ""
     tags = "".join(f'<span class="tag">{_esc(AREA_LABELS[c])}</span>' for c in areas_all)
+    # Phase 4 badges, rendered in the same chip row but visually distinct. Both
+    # are searchable for free: the q filter reads card textContent.
+    if e.get("first_impression"):
+        tags += '<span class="tag tag-badge">first impression</span>'
+    if e.get("tort_reform"):
+        tags += '<span class="tag tag-badge">tort reform</span>'
+    # editor's note: the human-analysis layer, never model-written, rendered
+    # visually distinct from the AI synopsis (Phase 4).
+    note = (e.get("editor_note") or "").strip()
+    note_html = (f'        <p class="op-editornote"><span class="op-editorlabel">editor\'s note</span> {_esc(note)}</p>\n'
+                 if note else "")
     meta = (f'<span class="court">{_esc(COURT_LABELS[e["court"]])}</span>{div_part} \u00b7 decided '
             f'{_esc(_date_label(e["date"]))} \u00b7 {_esc(_no_label(e["dockets"]))} \u00b7 {_esc(e["disposition"])}'
             + prec_meta)
@@ -270,7 +290,7 @@ def card_html(e, permalink_link=True):
         f'        <div class="op-head"><span class="op-name">{_esc(e["name"])}</span></div>\n'
         f'        <div class="op-meta">{meta}</div>\n'
         f'        <div class="op-tags">{tags}</div>\n'
-        f'{body}'
+        f'{body}{note_html}'
         f'        <div class="op-foot">\n'
         f'          <span class="op-source"><a href="{_attr(e["url"])}" target="_blank" rel="noopener noreferrer">Read the opinion on CourtListener \u2192</a></span>\n'
         f'          <button type="button" class="op-copycite" data-cite="{_attr(_slip_cite(e))}" title="Copy slip-opinion citation \u00b7 confirm on Shepard\u2019s before filing">[ copy cite ]</button>\n'
