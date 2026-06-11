@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>horowitz.law: Treatment Corrections</title>
+    <link>https://horowitz.law/changes</link>
+    <atom:link href="https://horowitz.law/changes.xml" rel="self" type="application/rss+xml" />
+    <description>Adverse-treatment flags on published Georgia Appellate Watch cases. The sweep may only raise a flag to caution; negative and superseded are human determinations made on Shepard’s. The flagged card and the linked opinion are the authority.</description>
+    <language>en-us</language>
+    <lastBuildDate>Wed, 10 Jun 2026 12:00:00 -0400</lastBuildDate>
+    <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>
+    <item>
+      <title>Possible negative treatment: Aspen American Insurance Company v. Landstar Ranger, Inc.</title>
+      <link>https://horowitz.law/o/9391147</link>
+      <guid isPermaLink="false">change-9391147-2026-06-10</guid>
+      <pubDate>Wed, 10 Jun 2026 12:00:00 -0400</pubDate>
+      <category>caution</category>
+      <description><![CDATA[Possibly abrogated by a later in-scope decision (Montgomery v. Caribe Transport II, LLC). Confirm on Shepard's. Cited by: Montgomery v. Caribe Transport II, LLC. Verify on Shepard’s before relying. Card: https://horowitz.law/o/9391147]]></description>
+    </item>
+  </channel>
+</rss>

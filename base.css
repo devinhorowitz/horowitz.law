@@ -230,6 +230,21 @@ html.can-copy .op-copycite {
 html.can-copy .op-copycite:hover,
 html.can-copy .op-copycite.copied { color: var(--accent); border-color: var(--accent); }
 
+/* ---- Permalink affordance beside the copy button: a plain link, no JS
+   needed, so it is always visible. Each covered decision has a standalone
+   page at /o/<id> with its own OG card and Article JSON-LD. ---- */
+.op-permalink {
+  display: inline-block;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  text-decoration: none;
+  transition: border-color 0.2s, color 0.2s;
+}
+.op-permalink:hover { color: var(--accent); border-color: var(--accent); }
+
 /* ---- Print: a filtered view of /opinions or /archive prints as a clean
    digest. Filter chrome, navigation, and interactive controls drop out;
    [hidden] cards are already excluded by the browser, so whatever the screen
@@ -250,7 +265,7 @@ html.can-copy .op-copycite.copied { color: var(--accent); border-color: var(--ac
     --scanline-opacity: 0 !important;
   }
   body::before, body::after { display: none !important; }
-  .topbar, .filters, .year-nav, .empty, footer, .skip-link, .op-copycite { display: none !important; }
+  .topbar, .filters, .year-nav, .empty, footer, .skip-link, .op-copycite, .op-permalink { display: none !important; }
   .opinion { break-inside: avoid; page-break-inside: avoid; }
   .op-source a { border-bottom: none; }
   .op-source a::after { content: " <" attr(href) ">"; font-size: 10px; color: var(--fg-muted); }
