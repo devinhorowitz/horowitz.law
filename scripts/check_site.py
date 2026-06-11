@@ -31,6 +31,7 @@ nonzero exit, so one push surfaces the full list.
 import base64
 import hashlib
 import os
+import glob
 import re
 import sys
 
@@ -40,7 +41,8 @@ import safeio  # crash-safe atomic writes for --fix
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 PAGES = ["index.html", "resume.html", "colophon.html", "opinions.html",
-         "archive.html", "subscribe.html", "404.html"]
+         "archive.html", "subscribe.html", "404.html",
+         "changes.html", "stats.html"]
 ASSETS = ["base.css", "app.js", "opinions.js", "subscribe.js"]
 HEADERS_PATH = os.path.join(REPO, "_headers")
 TOKEN_LEN = 10  # hex chars of sha256 in the ?v= token; plenty against collision here
@@ -48,6 +50,12 @@ TOKEN_LEN = 10  # hex chars of sha256 in the ?v= token; plenty against collision
 _INLINE_RE = re.compile(r"<script>(.*?)</script>", re.S)
 _CSP_HASH_RE = re.compile(r"'sha256-([A-Za-z0-9+/=]+)'")
 
+
+def _all_pages():
+    """The hand-maintained pages plus every generated permalink, so the CSP and
+    token guards cover the /o/ pages too."""
+    import glob as _g
+    return PAGES + sorted(_g.glob(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "o", "*.html")))
 
 def _read(path):
     return open(os.path.join(REPO, path), encoding="utf-8").read()
@@ -72,7 +80,7 @@ def check_csp(errors):
                      if ln.strip().startswith("Content-Security-Policy:")), "")
     declared = set(_CSP_HASH_RE.findall(csp_line))
     page_hashes = set()
-    for p in PAGES:
+    for p in _all_pages():
         h, n = inline_hash(_read(p))
         if h is None:
             errors.append("%s: expected exactly one inline <script> block, found %d" % (p, n))
@@ -100,7 +108,7 @@ def check_tokens(errors, fix=False):
     expected = {a: asset_token(a) for a in ASSETS}
     ref_re = {a: re.compile(r'((?:href|src)="/%s)(\?v=([^"]*))?(")' % re.escape(a))
               for a in ASSETS}
-    for p in PAGES:
+    for p in _all_pages():
         doc = _read(p)
         new = doc
         for a in ASSETS:
@@ -131,7 +139,7 @@ def check_scripts_dir(errors):
 
 def check_xml(errors):
     import xml.etree.ElementTree as ET
-    for f in ("opinions.xml", "sitemap.xml"):
+    for f in ("opinions.xml", "sitemap.xml", "changes.xml"):
         path = os.path.join(REPO, f)
         if not os.path.exists(path):
             errors.append("%s: missing" % f)

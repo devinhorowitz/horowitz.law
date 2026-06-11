@@ -29,6 +29,10 @@ WINDOW_YEARS = 2
 ARCHIVE_URL  = "https://horowitz.law/archive"
 
 SITEMAP_PATH = os.path.join(REPO, "sitemap.xml")
+CHANGES_PATH = os.path.join(REPO, "changes.html")
+STATS_PATH = os.path.join(REPO, "stats.html")
+CHANGES_XML_PATH = os.path.join(REPO, "changes.xml")
+PERMA_DIR = os.path.join(REPO, "o")
 # Pages outside the marker-injection set whose footer year would otherwise rot on
 # Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
 # place, writing only when the year actually changed, so it is a no-op all year;
@@ -195,7 +199,7 @@ def _jurisdiction_options():
     return "\n".join(out)
 
 
-def card_html(e):
+def card_html(e, permalink_link=True):
     treat = e.get("treatment") or "ok"
     attr = f' data-treatment="{treat}"' if treat != "ok" else ""
     prec = (e.get("precedential") or "").strip().lower()
@@ -248,10 +252,301 @@ def card_html(e):
         f'        <div class="op-foot">\n'
         f'          <span class="op-source"><a href="{_attr(e["url"])}" target="_blank" rel="noopener noreferrer">Read the opinion on CourtListener \u2192</a></span>\n'
         f'          <button type="button" class="op-copycite" data-cite="{_attr(_slip_cite(e))}" title="Copy slip-opinion citation \u00b7 confirm on Shepard\u2019s before filing">[ copy cite ]</button>\n'
+        + (f'          <a class="op-permalink" href="/o/{e["cluster_id"]}" title="Permanent page for this decision">[ permalink ]</a>\n' if permalink_link else '') +
         f'          <span class="op-disclaimer">AI-drafted summary \u00b7 verify against the opinion</span>\n'
         f'        </div>\n'
         f'      </article>'
     )
+
+
+
+# ============================== changes ledger ==============================
+
+def _flagged(entries):
+    """Cards currently carrying an adverse-treatment flag, newest flag first.
+    Current state, not an event history: a cleared flag drops off, matching the
+    doctrine that a cleared card stands again."""
+    f = [e for e in entries if (e.get("treatment") or "ok") != "ok"]
+    return sorted(f, key=lambda e: (e.get("treatment_date") or e["date"], int(e.get("cluster_id", 0))), reverse=True)
+
+def changes_block(entries):
+    """The /changes ledger rows, injected between the changes markers."""
+    flagged = _flagged(entries)
+    if not flagged:
+        return ('      <p class="change-empty">No active flags. Every published card '
+                'currently stands untreated \u2014 the sweep ran and found nothing to raise.</p>')
+    rows = []
+    for e in flagged:
+        t = e["treatment"]
+        note = (e.get("treatment_note") or e.get("treatment_auto_note") or "").strip()
+        by = [b.get("name") for b in (e.get("treated_by") or []) if b.get("name")]
+        cited = (" Cited by: " + "; ".join(_esc(n) for n in by[:3]) + ".") if by else ""
+        rows.append(
+            f'      <article class="change" id="ch-{e["cluster_id"]}">\n'
+            f'        <div class="change-date">{_esc(e.get("treatment_date") or e["date"])}</div>\n'
+            f'        <div class="change-main">\n'
+            f'          <span class="change-label change-{t}">{_TREAT_LABEL.get(t, "Flagged")}</span>\n'
+            f'          <div class="change-case"><a href="/o/{e["cluster_id"]}">{_esc(e["name"])}</a></div>\n'
+            f'          <div class="change-meta">{_esc(COURT_LABELS[e["court"]])} \u00b7 decided {_esc(_date_label(e["date"]))} \u00b7 {_esc(_no_label(e["dockets"]))}</div>\n'
+            f'          <p class="change-note">{_esc(note)}{cited}{_TREAT_TAIL.get(t, "")}</p>\n'
+            f'        </div>\n'
+            f'      </article>')
+    return "\n\n".join(rows)
+
+def changes_rss(entries):
+    """changes.xml: one item per active flag, so a correction reaches a feed
+    reader the day it is raised. Mirrors the main feed's conventions (noon
+    Eastern pubDate, CDATA description, split-escape for a literal ]]>)."""
+    flagged = _flagged(entries)
+    newest = (flagged[0].get("treatment_date") if flagged else None) or (entries[0]["date"] if entries else datetime.date.today().isoformat())
+    out = ['<?xml version="1.0" encoding="UTF-8"?>',
+           '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
+           '  <channel>',
+           '    <title>horowitz.law: Treatment Corrections</title>',
+           '    <link>https://horowitz.law/changes</link>',
+           '    <atom:link href="https://horowitz.law/changes.xml" rel="self" type="application/rss+xml" />',
+           '    <description>Adverse-treatment flags on published Georgia Appellate Watch cases. '
+           'The sweep may only raise a flag to caution; negative and superseded are human determinations '
+           'made on Shepard\u2019s. The flagged card and the linked opinion are the authority.</description>',
+           '    <language>en-us</language>',
+           f'    <lastBuildDate>{_rfc822(newest)}</lastBuildDate>',
+           '    <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>']
+    for e in flagged:
+        t = e["treatment"]
+        note = (e.get("treatment_note") or e.get("treatment_auto_note") or "").strip()
+        by = [b.get("name") for b in (e.get("treated_by") or []) if b.get("name")]
+        cited = (" Cited by: " + "; ".join(by[:3]) + ".") if by else ""
+        desc = f'{note}{cited}{_TREAT_TAIL.get(t, "")} Card: https://horowitz.law/o/{e["cluster_id"]}'
+        desc = desc.replace("]]>", "]]]]><![CDATA[>")
+        out += ["    <item>",
+                f"      <title>{xml_escape(_TREAT_LABEL.get(t, 'Flagged') + ': ' + e['name'])}</title>",
+                f"      <link>https://horowitz.law/o/{e['cluster_id']}</link>",
+                f'      <guid isPermaLink="false">change-{e["cluster_id"]}-{e.get("treatment_date") or e["date"]}</guid>',
+                f"      <pubDate>{_rfc822(e.get('treatment_date') or e['date'])}</pubDate>",
+                f"      <category>{xml_escape(t)}</category>",
+                f"      <description><![CDATA[{desc}]]></description>",
+                "    </item>"]
+    out += ['  </channel>', '</rss>', '']
+    safeio.atomic_write_text(CHANGES_XML_PATH, "\n".join(out))
+
+# ================================ stats =====================================
+
+def _bar_rows(pairs):
+    """pairs: [(label, n)] -> bar rows scaled to the max."""
+    mx = max((n for _, n in pairs), default=1) or 1
+    rows = []
+    for label, n in pairs:
+        pct = max(round(n * 100 / mx), 1) if n else 0
+        rows.append(f'      <div class="stat-row"><span class="stat-label">{_esc(str(label))}</span>'
+                    f'<span class="stat-track"><span class="stat-bar" style="width:{pct}%"></span></span>'
+                    f'<span class="stat-n">{n}</span></div>')
+    return "\n".join(rows)
+
+def _disposition_bucket(d):
+    s = (d or "").lower()
+    if "in part" in s: return "mixed"
+    if "affirm" in s: return "affirmed"
+    if "revers" in s: return "reversed"
+    if "vacat" in s: return "vacated"
+    if "dismiss" in s: return "dismissed"
+    return "other"
+
+def stats_block(entries):
+    """The /stats sections, injected between the stats markers. Deterministic
+    from opinions.json, so re-renders are byte-stable and CI stays green."""
+    flagged = _flagged(entries)
+    years = {}
+    for e in entries: years[e["date"][:4]] = years.get(e["date"][:4], 0) + 1
+    courts = [(COURT_LABELS[k], sum(1 for e in entries if e["court"] == k))
+              for k in COURT_LABELS if any(e["court"] == k for e in entries)]
+    areas = {}
+    for e in entries:
+        for a in all_areas(e): areas[a] = areas.get(a, 0) + 1
+    area_rows = sorted(((AREA_LABELS[a], n) for a, n in areas.items()), key=lambda x: (-x[1], x[0]))
+    disp = {}
+    for e in entries:
+        b = _disposition_bucket(e.get("disposition")); disp[b] = disp.get(b, 0) + 1
+    disp_rows = sorted(disp.items(), key=lambda x: (-x[1], x[0]))
+    prec = {"published": 0, "unpublished": 0, "physical precedent": 0}
+    for e in entries:
+        p = (e.get("precedential") or "").strip().lower()
+        prec[p if p in prec else "published"] += 1
+    span = f'{entries[-1]["date"]} \u2192 {entries[0]["date"]}' if entries else "\u2014"
+
+    def sec(title, body):
+        return (f'    <section>\n      <h2 class="section-header">{title}</h2>\n{body}\n    </section>')
+
+    head = (f'      <p class="stat-line"><strong>{len(entries)}</strong> decisions covered \u00b7 '
+            f'<strong>{span}</strong> \u00b7 <strong>{len(flagged)}</strong> under an active flag</p>')
+    parts = [sec("coverage", head),
+             sec("by year", _bar_rows(sorted(years.items()))),
+             sec("by court", _bar_rows(courts)),
+             sec("by practice area", _bar_rows(area_rows)),
+             sec("by disposition", _bar_rows(disp_rows)),
+             sec("precedential status", _bar_rows([(k, v) for k, v in prec.items() if v]))]
+    return "\n\n".join(parts)
+
+# ============================== permalinks ==================================
+
+# Chrome styles for the standalone permalink pages, read once per render from
+# the committed changes.html shell so every generated page matches the house
+# chrome without a second hand-maintained copy. Fails loud if the block moves.
+_PERMA_CORE_CACHE = None
+def _perma_core():
+    global _PERMA_CORE_CACHE
+    if _PERMA_CORE_CACHE is None:
+        doc = open(CHANGES_PATH, encoding="utf-8").read()
+        m = re.search(r"(  :root \{.*?@media \(max-width: 600px\) \{\n.*?\n  \})", doc, re.S)
+        if not m:
+            raise RuntimeError("render: chrome style block not found in changes.html")
+        _PERMA_CORE_CACHE = m.group(1)
+    return _PERMA_CORE_CACHE
+
+def _inline_script():
+    """The CSP hash-pinned pre-paint script, read verbatim from the live feed
+    page so a generated permalink can never carry a stale copy. Fails loud if
+    the script shape ever changes (check_site is the second net)."""
+    doc = open(HTML_PATH, encoding="utf-8").read()
+    m = re.search(r"<script>\(function\(\)\{.*?\}\)\(\);</script>", doc, re.S)
+    if not m:
+        raise RuntimeError("render: pre-paint inline script not found in %s" % HTML_PATH)
+    return m.group(0)
+
+def _card_styles():
+    """The opinion-card CSS, read verbatim from the live feed page's stylesheet
+    so a permalink card renders pixel-identical and cannot drift."""
+    doc = open(HTML_PATH, encoding="utf-8").read()
+    m = re.search(r"\n(  \.opinion \{.*?)\n\n  \.empty", doc, re.S)
+    if not m:
+        raise RuntimeError("render: card style block not found in %s" % HTML_PATH)
+    return m.group(1)
+
+def permalink_html(e):
+    name = _esc(e["name"])
+    desc = (e["synopsis"][:157] + "\u2026") if len(e["synopsis"]) > 158 else e["synopsis"]
+    modified = e.get("treatment_date") or (e.get("first_seen") or "")[:10] or e["date"]
+    ld = json.dumps({
+        "@context": "https://schema.org", "@type": "Article",
+        "headline": e["name"],
+        "datePublished": e["date"], "dateModified": modified,
+        "url": f'https://horowitz.law/o/{e["cluster_id"]}',
+        "mainEntityOfPage": f'https://horowitz.law/o/{e["cluster_id"]}',
+        "isAccessibleForFree": True,
+        "author": {"@type": "Organization", "name": "Georgia Appellate Watch \u00b7 horowitz.law"},
+        "publisher": {"@type": "Person", "name": "Devin R. Horowitz", "url": "https://horowitz.law/"},
+        "description": desc + " AI-drafted synopsis; the linked opinion is the authority."}, ensure_ascii=False)
+    flagged_line = ""
+    if (e.get("treatment") or "ok") != "ok":
+        flagged_line = ('    <p class="perma-note">This card carries an adverse-treatment flag \u2014 '
+                        'see <a href="/changes">the changes ledger</a>.</p>\n\n')
+    return (
+"<!DOCTYPE html>\n"
+'<html lang="en">\n'
+"<head>\n"
+'<meta charset="UTF-8">\n'
+'<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+f"<title>{name} \u00b7 horowitz.law</title>\n"
+f'<meta name="description" content="{_attr(desc)}">\n'
+'<meta name="theme-color" content="#0d0e10" media="(prefers-color-scheme: dark)">\n'
+'<meta name="theme-color" content="#f5ede0" media="(prefers-color-scheme: light)">\n'
+"\n"
+f'<link rel="canonical" href="https://horowitz.law/o/{e["cluster_id"]}">\n'
+"\n"
+'<meta property="og:type" content="article">\n'
+f'<meta property="og:url" content="https://horowitz.law/o/{e["cluster_id"]}">\n'
+'<meta property="og:locale" content="en_US">\n'
+f'<meta property="og:title" content="{_attr(e["name"])}">\n'
+f'<meta property="og:description" content="{_attr(desc)}">\n'
+'<meta property="og:image" content="https://horowitz.law/og-card.jpg">\n'
+'<meta property="og:site_name" content="horowitz.law">\n'
+f'<meta property="article:published_time" content="{e["date"]}">\n'
+"\n"
+'<meta name="twitter:card" content="summary">\n'
+f'<meta name="twitter:title" content="{_attr(e["name"])}">\n'
+f'<meta name="twitter:description" content="{_attr(desc)}">\n'
+'<link rel="icon" type="image/svg+xml" href="/favicon.svg">\n'
+'<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">\n'
+'<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">\n'
+"\n"
+'<link rel="preload" href="/fonts/jetbrains-mono-400.subset.woff2" as="font" type="font/woff2" crossorigin>\n'
+'<link rel="preload" href="/fonts/jetbrains-mono-600.subset.woff2" as="font" type="font/woff2" crossorigin>\n'
+'<link rel="preload" href="/fonts/jetbrains-mono-700.subset.woff2" as="font" type="font/woff2" crossorigin>\n'
+"\n"
+f'<script type="application/ld+json">{ld}</script>\n'
+"\n"
+"<!-- pre-paint theme + .js marker (CSP hash-pinned; spliced verbatim from the feed page at render time) -->\n"
+f"{_inline_script()}\n"
+'<link rel="stylesheet" href="/base.css">\n'
+"\n"
+"<style>\n"
+f"{_perma_core()}\n"
+"\n"
+f"{_card_styles()}\n"
+"\n"
+"  .perma-note { color: var(--fg-muted); font-size: 13px; margin: 18px 0 0; }\n"
+"  .perma-note a, .perma-nav a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--fg-muted); transition: color 0.2s, border-color 0.2s; }\n"
+"  .perma-note a:hover, .perma-nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }\n"
+"  .perma-nav { margin-top: 28px; color: var(--fg-muted); font-size: 13px; }\n"
+"  .perma-nav span { display: block; margin: 6px 0; }\n"
+"  .perma-nav span::before { content: '$ '; color: var(--accent); font-weight: 600; }\n"
+"  h1.page-title { font-size: clamp(22px, 3.6vw, 30px); }\n"
+"</style>\n"
+"</head>\n"
+"<body>\n"
+'<a class="skip-link" href="#main-content">Skip to main content</a>\n'
+'<div class="container">\n'
+"\n"
+'  <div class="topbar">\n'
+f'    <span class="topbar-prompt"><a href="/">~ horowitz.law</a><a href="/opinions">/opinions</a> \u00b7 o/{e["cluster_id"]}</span>\n'
+'    <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false" aria-label="Toggle light or dark theme">[ light ]</button>\n'
+"  </div>\n"
+"\n"
+'  <main id="main-content">\n'
+"\n"
+f'    <h1 class="page-title">{name}</h1>\n'
+f'    <div class="subtitle">// {_esc(COURT_LABELS[e["court"]])} \u00b7 decided {_esc(_date_label(e["date"]))}</div>\n'
+"\n"
+f"{card_html(e, permalink_link=False)}\n"
+"\n"
+f'{flagged_line}    <div class="perma-nav">\n'
+'      <span><a href="/opinions">cd /opinions</a>  <em># the rolling feed</em></span>\n'
+'      <span><a href="/archive">cd /archive</a>  <em># everything, by year</em></span>\n'
+'      <span><a href="/changes">cat /changes</a>  <em># the treatment ledger</em></span>\n'
+"    </div>\n"
+"\n"
+"  </main>\n"
+"\n"
+"  <footer>\n"
+"    <span>\u00a9 2026 \u00b7 Hand-coded by Devin R. Horowitz</span>\n"
+'    <span><a href="/opinions">\u2190 back to the watch</a></span>\n'
+"  </footer>\n"
+"\n"
+"</div>\n"
+"\n"
+'<script src="/app.js" defer></script>\n'
+"\n"
+"</body>\n"
+"</html>\n")
+
+def _write_permalinks(entries):
+    """One standalone page per covered decision at /o/<cluster_id>: its own OG
+    card, Article JSON-LD, and the same opinion-card markup the feed uses (the
+    chrome, card styles, and CSP script are spliced from committed pages, so
+    nothing can drift). Strays from removed entries are deleted."""
+    os.makedirs(PERMA_DIR, exist_ok=True)
+    want = set()
+    for e in entries:
+        fn = f'{e["cluster_id"]}.html'
+        want.add(fn)
+        doc = _stamp_tokens(_stamp_year(permalink_html(e)))
+        path = os.path.join(PERMA_DIR, fn)
+        cur = open(path, encoding="utf-8").read() if os.path.exists(path) else None
+        if cur != doc:
+            safeio.atomic_write_text(path, doc)
+    for fn in os.listdir(PERMA_DIR):
+        if fn.endswith(".html") and fn not in want:
+            os.remove(os.path.join(PERMA_DIR, fn))
+    return len(want)
 
 def rss_item(e):
     cats = [COURT_LABELS[e["court"]]] + [AREA_LABELS[c] for c in all_areas(e)]
@@ -361,6 +656,15 @@ def render(entries=None):
     out += ['  </channel>', '</rss>', '']
     safeio.atomic_write_text(XML_PATH, "\n".join(out))
 
+    # The treatment ledger, its feed, the stats page, and the permalinks: all
+    # deterministic projections of the same opinions.json the cards come from.
+    if os.path.exists(CHANGES_PATH):
+        _inject(CHANGES_PATH, "changes", changes_block(entries))
+    changes_rss(entries)
+    if os.path.exists(STATS_PATH):
+        _inject(STATS_PATH, "stats", stats_block(entries))
+    _write_permalinks(entries)
+
     # Footer year on the non-generated pages: stamped in place (no markers involved),
     # written only when the year actually changed, so this is inert all year and the
     # Jan 1 rollover rides the next render-sync or content PR.
@@ -393,9 +697,22 @@ def _update_sitemap(recent, entries):
         new = set_lastmod(new, "https://horowitz.law/opinions", recent[0]["date"])
     if entries:                             # entries likewise sorted desc
         new = set_lastmod(new, "https://horowitz.law/archive", entries[0]["date"])
+        new = set_lastmod(new, "https://horowitz.law/stats", entries[0]["date"])
+    flagged = _flagged(entries)
+    if flagged:
+        new = set_lastmod(new, "https://horowitz.law/changes", flagged[0].get("treatment_date") or flagged[0]["date"])
+    # Permalink entries live between sitemap markers and regenerate wholesale.
+    urls = []
+    for e in entries:
+        lastmod = e.get("treatment_date") or (e.get("first_seen") or "")[:10] or e["date"]
+        urls.append("  <url>\n    <loc>https://horowitz.law/o/%s</loc>\n    <lastmod>%s</lastmod>\n"
+                    "    <changefreq>yearly</changefreq>\n    <priority>0.3</priority>\n  </url>" % (e["cluster_id"], lastmod))
+    pat = re.compile(r"(<!-- permalinks:start.*?-->).*?(<!-- permalinks:end -->)", re.S)
+    if pat.search(new):
+        new = pat.sub(lambda m: m.group(1) + "\n" + "\n".join(urls) + "\n" + m.group(2), new, count=1)
     if new != doc:
         safeio.atomic_write_text(SITEMAP_PATH, new)
 
 if __name__ == "__main__":
     r, t = render()
-    print(f"rendered {r} recent of {t} total -> opinions.html, archive.html, opinions.xml")
+    print(f"rendered {r} recent of {t} total -> pages, feeds, stats, ledger, permalinks")
