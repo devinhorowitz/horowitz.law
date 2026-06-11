@@ -86,6 +86,24 @@ def _date_label(iso):
 def _no_label(dockets):
     return ("Nos. " + " & ".join(dockets)) if len(dockets) > 1 else ("No. " + dockets[0])
 
+# Bluebook month forms for the slip-opinion citation (May, June, and July are
+# never abbreviated; Sept. takes four letters).
+_BB_MO = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "June", "July",
+          "Aug.", "Sept.", "Oct.", "Nov.", "Dec."]
+
+def _slip_cite(e):
+    """The copy-button citation: case name, docket number(s), and a single
+    court-plus-date parenthetical -- the Bluebook slip-opinion form. No reporter
+    cite is ever included (the funnel deliberately strips them), so this is the
+    working form until one exists; the button's title reminds the user to
+    confirm on Shepard's before filing, per the house rule. The court inside
+    the parenthetical reuses the registry's TITLE_SUFFIX so a second
+    jurisdiction needs no edit here."""
+    d = datetime.date.fromisoformat(e["date"])
+    court = TITLE_SUFFIX.get(e["court"], "").strip().strip("()")
+    when = "%s %d, %d" % (_BB_MO[d.month - 1], d.day, d.year)
+    return "%s, %s (%s %s)" % (e["name"], _no_label(e["dockets"]), court, when)
+
 def _eastern_offset(d):
     """US Eastern UTC offset for a date: EDT (-0400) from the 2nd Sunday of March to
     the 1st Sunday of November, EST (-0500) otherwise. (Date-level; the 2 a.m.
@@ -229,6 +247,7 @@ def card_html(e):
         f'{body}'
         f'        <div class="op-foot">\n'
         f'          <span class="op-source"><a href="{_attr(e["url"])}" target="_blank" rel="noopener noreferrer">Read the opinion on CourtListener \u2192</a></span>\n'
+        f'          <button type="button" class="op-copycite" data-cite="{_attr(_slip_cite(e))}" title="Copy slip-opinion citation \u00b7 confirm on Shepard\u2019s before filing">[ copy cite ]</button>\n'
         f'          <span class="op-disclaimer">AI-drafted summary \u00b7 verify against the opinion</span>\n'
         f'        </div>\n'
         f'      </article>'
