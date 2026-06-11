@@ -1,0 +1,74 @@
+name: tagfill
+
+# Phase 4 tag backfill: fills first_impression / tort_reform / law_applied on
+# existing cards from their own digests (Haiku, cents), re-renders, and opens a
+# PR for review. Manual only; nothing lands on main without a human merge. A
+# dry run prints the per-card plan in the job log and writes nothing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "write opinions.json, re-render, and open a PR (off = dry run, log only)"
+        type: boolean
+        default: false
+      ids:
+        description: "optional comma-separated cluster ids to limit the pass"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: tagfill
+  cancel-in-progress: false
+
+jobs:
+  tagfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Tag backfill (conservative, add-only)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          APPLY: ${{ inputs.apply && '1' || '' }}
+          IDS: ${{ inputs.ids }}
+        run: python3 scripts/tagfill.py
+
+      - name: Re-render
+        if: ${{ inputs.apply }}
+        run: python3 scripts/render.py
+
+      - name: Open a pull request with the tagged cards
+        if: ${{ inputs.apply }}
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          branch: tagfill
+          delete-branch: true
+          commit-message: "Tag backfill: first impression, tort reform, law applied"
+          title: "Tag backfill: first impression / tort reform / law applied"
+          body: |
+            Phase 4 backfill from each card's own digest (Haiku; conservative and
+            add-only, so an existing field is never removed and editor_note is never
+            touched). The per-card decisions are in the run log; the diff below is
+            the entire effect.
+          add-paths: |
+            opinions.json
+            opinions.html
+            archive.html
+            opinions.xml
+            sitemap.xml
+            index.html
+            resume.html
+            colophon.html
+            subscribe.html
+            404.html
+            changes.html
+            stats.html
+            digests.html
+            changes.xml
+            o
