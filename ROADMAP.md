@@ -184,3 +184,24 @@ Two zone-level Cloudflare dashboard items remain from the header audit: the
 doubled `Cache-Control` on /fonts/* and the global
 `Access-Control-Allow-Origin: *` — both come from a Transform/Cache rule or
 Worker, not from `_headers`.
+
+## The phone app (decided + shipped 2026-06-11)
+
+The site is now an installable PWA: `manifest.webmanifest` + `sw.js` + the
+app meta on every page. On an iPhone: Share → Add to Home Screen → a
+standalone "GA Watch" app that opens on /opinions, launches instantly, and
+reads offline from the last-fetched copy (courthouse basements included).
+Pages are network-first so signal always means fresh; `?v=`-stamped assets
+and fonts are cache-first because the tokens make them immutable; feeds and
+/api are never intercepted. Bump the CACHE constant in sw.js when the
+strategy changes.
+
+Open, cheap, later: **Web Push for the installed app** — iOS supports push
+for home-screen PWAs; it needs a VAPID keypair, a subscription endpoint
+(Pages Function + KV), and a tiny sender step on the alert workflow. The
+instant-alert email tier covers notifications until then.
+
+Declined, deliberately: a **native App Store app**. $99/year, a second
+codebase, review latency on every tweak, and Apple's minimum-functionality
+rule frowns on site wrappers — every cost this roadmap exists to avoid, for
+no capability the PWA lacks except App Store presence.
