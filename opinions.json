@@ -613,11 +613,12 @@
       }
     ],
     "treatment_auto_note": "Possibly abrogated by a later in-scope decision (Montgomery v. Caribe Transport II, LLC; Willy Hodge v. Molson Coors Beverage Company USA, LLC). Confirm on Shepard's.",
-    "treatment_date": "2026-06-11",
-    "treatment": "caution",
+    "treatment_date": "2026-06-12",
+    "treatment": "negative",
     "first_impression": true,
     "law_applied": "federal",
-    "editor_note": "June 11, 2026: The Supreme Court answered. Montgomery v. Caribe Transport II abrogated this decision's FAAAA-preemption holding, and the Eleventh Circuit is already vacating judgments that relied on it (see the Hodge remand). Treatment upgrade to follow on Shepard's confirmation."
+    "editor_note": "June 11, 2026: The Supreme Court answered. Montgomery v. Caribe Transport II abrogated this decision's FAAAA-preemption holding, and the Eleventh Circuit is already vacating judgments that relied on it (see the Hodge remand). Treatment upgrade to follow on Shepard's confirmation.",
+    "treatment_note": "Overruled in part by Montgomery v. Caribe Transport II, LLC, 146 S. Ct. 1199 (2026); Shepard's confirmed June 12, 2026. The safety-exception holding is gone — negligent-hiring claims against brokers survive under 49 U.S.C. § 14501(c)(2)(A). Montgomery assumed without deciding the § 14501(c)(1) preemption-scope point Aspen also decided, and Aspen arose from cargo theft rather than personal injury."
   },
   {
     "cluster_id": 10872097,
