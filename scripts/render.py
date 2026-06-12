@@ -284,15 +284,30 @@ def card_html(e, permalink_link=True):
     else:
         body = (f'        <p class="op-synopsis">{_esc(e["synopsis"])}</p>\n'
                 f'        <p class="op-why"><strong>Why it matters:</strong> {_esc(e["why"])}</p>\n')
+    # Phase 5 official-link enrichment. When a card carries official_url (today,
+    # a Supreme Court of Georgia opinion resolved from gasupreme.us), the case
+    # name links to the court's own opinion PDF -- the authoritative source -- and
+    # the CourtListener link in the foot is relabeled to the full record it is
+    # (citations, treatment, and docket data the court's own listing omits). A
+    # card without official_url is unchanged: plain name, CourtListener as the
+    # read-the-opinion link. Identity still keys on the CourtListener cluster_id.
+    official = (e.get("official_url") or "").strip()
+    if official:
+        name_html = (f'<a href="{_attr(official)}" target="_blank" rel="noopener noreferrer" '
+                     f'title="Official opinion \u00b7 Supreme Court of Georgia">{_esc(e["name"])}</a>')
+        source_label = "Full record on CourtListener \u2192"
+    else:
+        name_html = _esc(e["name"])
+        source_label = "Read the opinion on CourtListener \u2192"
     return (
         f'      <article id="op-{e["cluster_id"]}" class="opinion" data-court="{e["court"]}" data-system="{system}" data-jurisdiction="{juris}" data-areas="{",".join(areas_all)}" data-date="{e["date"]}"{attr}{prec_attr}>\n'
         f'{banner}'
-        f'        <div class="op-head"><span class="op-name">{_esc(e["name"])}</span></div>\n'
+        f'        <div class="op-head"><span class="op-name">{name_html}</span></div>\n'
         f'        <div class="op-meta">{meta}</div>\n'
         f'        <div class="op-tags">{tags}</div>\n'
         f'{body}{note_html}'
         f'        <div class="op-foot">\n'
-        f'          <span class="op-source"><a href="{_attr(e["url"])}" target="_blank" rel="noopener noreferrer">Read the opinion on CourtListener \u2192</a></span>\n'
+        f'          <span class="op-source"><a href="{_attr(e["url"])}" target="_blank" rel="noopener noreferrer">{source_label}</a></span>\n'
         f'          <button type="button" class="op-copycite" data-cite="{_attr(_slip_cite(e))}" title="Copy slip-opinion citation \u00b7 confirm on Shepard\u2019s before filing">[ copy cite ]</button>\n'
         + (f'          <a class="op-permalink" href="/o/{e["cluster_id"]}" title="Permanent page for this decision">[ permalink ]</a>\n' if permalink_link else '') +
         f'          <span class="op-disclaimer">AI-drafted summary \u00b7 verify against the opinion</span>\n'

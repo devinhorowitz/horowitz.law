@@ -58,6 +58,7 @@ import render          # single source of truth renderer
 import treatment_core  # shared treatment-flag model (the forward escalation writes it)
 import safeio          # crash-safe atomic writes
 import jurisdictions   # per-jurisdiction court config (court map, labels, patterns)
+import official_ga     # resolves a scotga card's official gasupreme.us opinion PDF (fail-open)
 
 
 class ConfigError(RuntimeError):
@@ -1291,6 +1292,20 @@ def main():
             entry["law_applied"] = _la
         if additional_holdings:
             entry["additional_holdings"] = additional_holdings
+        # Official-link enrichment (Phase 5): for a Supreme Court of Georgia card,
+        # resolve the court's own opinion PDF from gasupreme.us so the rendered
+        # title links to the official source, CourtListener kept as the full record
+        # below. Stored only when resolved, matching the lean-JSON pattern above.
+        # Fail-open: any miss or error leaves the field absent and the card renders
+        # exactly as before. (A backfill pass, scripts/official_ga.py, fills any
+        # card the funnel missed, e.g. when the year page lags CourtListener.)
+        if entry["court"] == "scotga":
+            try:
+                _ou = official_ga.official_url_for(entry)
+                if _ou:
+                    entry["official_url"] = _ou
+            except Exception as _oe:
+                _dbg("official_url lookup failed (%s)" % _oe)
 
         reasons = []
         if (v.get("confidence") or "").lower() == "low":
