@@ -9,7 +9,7 @@ https://raw.githubusercontent.com/devinhorowitz/horowitz.law/main/HANDOFF.md
 then <task>." The sandbox network allowlist already includes
 raw.githubusercontent.com.
 
-## State at handoff (verified 2026-06-12, main 20db712)
+## State at handoff (verified 2026-06-12; GA Supreme official links now live on main)
 
 37 cards including the first Supreme Court entry (Montgomery v. Caribe
 Transport II, cluster 10858760). Aspen (9391147) carries treatment
@@ -18,12 +18,20 @@ records Montgomery and Hodge. The PWA is fully live (manifest, sw.js,
 registration, app meta on every page) and the "[ install the app ]" row is
 serving on /opinions. CI is green and the tree is render-idempotent.
 
+GA Supreme Court official links are live: a scotga card's name links to the
+court's own opinion PDF (resolved from gasupreme.us by scripts/official_ga.py),
+with CourtListener kept below as the full record. 7 of 10 scotga cards carry
+official_url; Phillips, Toyo, and Scapa are pre-2017 with no PDF on the current
+site. Martin's empty docket was fixed to S16G0743 and S16G0750 in the process.
+The Eleventh Circuit and SCOTUS official-link extension is the next planned
+build, see the federal-courts section below.
+
 Assistant session ritual: re-sync the working copy from a fresh codeload
-tarball of main, replicate CI locally (py_compile, the 16 imports, node
---check on app.js, opinions.js, subscribe.js, and sw.js, workflow YAML
-parses, check_site.py, render idempotency via a temp commit and a
-double-render diff) before any delivery, and verify against the live site
-with curls afterward.
+tarball of main, replicate CI locally (py_compile, the 17 imports
+(official_ga added this round), node --check on app.js, opinions.js,
+subscribe.js, and sw.js, workflow YAML parses, check_site.py, render
+idempotency via a temp commit and a double-render diff) before any delivery,
+and verify against the live site with curls afterward.
 
 ## Operating doctrine (hard-won, do not relearn)
 
@@ -107,7 +115,69 @@ when the cluster appears, closing the late-ingestion hole, backlog item 6) is
 viable for the Supreme Court only given the Court of Appeals WAF, and is not yet
 built.
 
-## Open projects
+## Federal courts official links (Eleventh Circuit and SCOTUS), and their own feeds (next)
+
+Found 2026-06-12. Both federal courts can get the linked-name treatment the GA
+Supreme cards now have, sourced from CourtListener, no new host needed.
+
+CourtListener already carries each court's own PDF URL in opinion.download_url.
+Verified on all four federal cards we hold:
+
+- ca11 Aspen (cluster 9391147, opinion 9386623):
+  http://media.ca11.uscourts.gov/opinions/pub/files/202210740.pdf
+- ca11 Ya Mon (cluster 10872980, opinion 11340448):
+  http://media.ca11.uscourts.gov/opinions/unpub/files/202510140.pdf
+- scotus Montgomery (cluster 10858760, opinion 11326162):
+  https://www.supremecourt.gov/opinions/25pdf/24-1238_1b7d.pdf
+- scotus Keathley (cluster 10873663, opinion 11341134):
+  https://www.supremecourt.gov/opinions/25pdf/25-6_d1o2.pdf
+
+All are the courts' official files. ca11 URLs arrive as http (normalize to
+https, fall back to the http CL gives if a file 404s on https) and carry pub vs
+unpub in the path, the filename being "20" + docket without the dash (22-10740
+-> 202210740). The SCOTUS slip-opinion URLs are already https and end in
+<docket>_<hash>.pdf under /opinions/25pdf/ (the 25 is the term, OT2025), where
+the 4-char hash is not derivable from the docket, so the URL must be read from
+CL, not reconstructed. Reaching either host is not required for this: the URL is
+stored and rendered for the reader's browser, not fetched server-side.
+
+The render already linkifies any card carrying official_url, court-agnostic
+(card_html in render.py), so this is a data plus forward-population change, no
+render change:
+
+- One resolver that reads a cluster's sub_opinion download_url from
+  CourtListener and returns it https-normalized, used for any federal court.
+  Either a sibling to scripts/official_ga.py or, cleaner, generalize official_ga
+  into a per-court dispatch: scotga keeps the gasupreme.us scrape, ca11 and
+  scotus read CL's download_url.
+- Backfill the 7 federal cards: ca11 9391147, 10872097, 10872980, 10873765,
+  10873661; scotus 10858760, 10873663. Forward-populate ca11 and scotus in
+  update.py's assembly with the same fail-open shape as the scotga hook. Add the
+  module to the CI import list (now 17).
+
+Each court also publishes its own opinions, the source for the early-alert
+poller (backlog item 6 below), which catches opinions before CL ingests:
+
+- Eleventh Circuit published-opinions RSS:
+  https://media.ca11.uscourts.gov/opinions/rss/pubopnsfeed.php
+- SCOTUS slip opinions: https://www.supremecourt.gov/opinions/slipopinion/25
+  (the trailing 25 is the term). Note this differs from the orders page
+  https://www.supremecourt.gov/orders/ordersofthecourt/25, which lists cert
+  decisions and procedural orders, not argued-case opinions; our scotus cards
+  are slip opinions. SCOTUS is the strongest early-alert case: the hole this
+  closes is exactly the Montgomery slip-opinion late-ingestion noted in item 6.
+
+Both feed hosts (media.ca11.uscourts.gov and www.supremecourt.gov) were blocked
+in this session ("Host not in allowlist," though both are nominally listed), so
+neither feed could be read directly. A fresh session with the hosts reachable
+can probe each: item or list structure, the PDF URL pattern, docket and
+case-name extraction, and a sample through update.pdf_text plus the _pdf_ok
+gate. The poller needs them reachable both in a build session and in the Actions
+runner; the official-link build does not.
+
+Open call for the new session: ship the federal official-link extension now via
+CourtListener (no host needed, all 7 cards), or get the hosts reachable first
+and do the official links and the feed-based pollers together.
 
 1. Professional-image set, one render bundle on request: a
    professional-responsibility footer line (not legal advice, no
@@ -178,8 +248,10 @@ treated_by styling on Aspen, not a second card.)
 CourtListener can publish a cluster weeks after its dateFiled, SCOTUS slip
 opinions especially; the since-window then skips them unseen (Montgomery
 left zero trace in state or rejections). Remedy exists (backfill seed);
-the durable fix is the Georgia-direct early-alert poller above, plus
-detection for feed items whose dateFiled sits well behind the window.
+the durable fix is the early-alert poller (the Georgia Supreme site, the
+Eleventh Circuit RSS feed, and the SCOTUS slip-opinions page, see the
+federal-courts section above), plus detection for feed items whose dateFiled
+sits well behind the window.
 
 ### 7. backfill.py predates Phase 4
 
