@@ -68,7 +68,7 @@ jobs:
         run: |
           node --check app.js
           node --check opinions.js
-          node --check subscribe.js
+          node --check subscribe.js && node --check sw.js
           node --check functions/api/subscribe/index.js
           node --check functions/api/subscribe/confirm.js
           node --check functions/_middleware.js
