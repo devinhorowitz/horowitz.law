@@ -7,7 +7,11 @@ lived only in working sessions.
 
 ## Open items
 
-### 1. Negative controls in the golden set
+### 1. Negative controls in the golden set — SHIPPED 2026-06-11
+
+Done as specified: three real controls live in `scripts/golden_set.json` with
+cached text, and `check` mode asserts they are dropped. First run: 13 ok,
+0 regressions. Original spec retained below.
 
 `scripts/golden_set.json` contains only keepers, cases that should pass the funnel.
 Nothing guards the other direction: a screen prompt that drifts more permissive would
@@ -22,7 +26,12 @@ let noise in without the golden `check` mode noticing.
 - Keep the existing posture: the guard never auto-loosens a filter. Controls catch
   over-permissiveness; they do not license relaxing the screen.
 
-### 2. Thin practice-area anchors
+### 2. Thin practice-area anchors — SHIPPED 2026-06-11, with a lesson
+
+Negsec gained Venetian Hills. Badfaith deliberately stays at one anchor: the
+only candidate failed first check, and ROADMAP doctrine now requires anchors
+be unambiguous keepers — the update.py nominator proposes one when a clean
+badfaith card arrives. Original spec below.
 
 Negligent security and bad faith have one golden anchor each, so a regression that dropped
 one of those areas on that single case would be the only signal. Add one or two more
@@ -81,7 +90,27 @@ digest issue, turning the log into something glanceable.
 - **Manual uploads are the main fragility.** Pages and scripts are uploaded by hand through the
   GitHub web UI, and an upload occasionally does not land, leaving a stale file. After any change,
   confirm it on `main`, and that the rendered pages stay in lockstep with `opinions.json`, before
-  trusting it. A git push workflow would remove this whole class of error.
+  trusting it. A git push workflow would remove this whole class of error. Interim discipline adopted
+  2026-06-11: hand edits and multi-file sets go up via branch-and-PR, so CI
+  lints before main moves.
 - **The rigor exceeds the volume, deliberately.** The feed is small, and the guard layers,
   scheduler, and golden sets are more machinery than a few dozen cards strictly need. The feed
   is public and under one name, so reliability is valued over minimalism here.
+### 7. Duplicate-cluster guard in the funnel (added 2026-06-11)
+
+CourtListener issued two clusters for one consolidated Eleventh Circuit
+appeal (Allied/Bloodworth, 10873764 + 10873765) and the funnel carded both —
+the dedup that exists keys on cluster id, which is exactly the thing that
+differs. Add a guard at the queue/update stage: same court + same dateFiled +
+identical docket list (or identical party-token set) ⇒ treat as one case and
+keep the consolidated-titled cluster. The 2026-06-11 pair is the test fixture.
+
+### 8. Late-ingestion recall (added 2026-06-11)
+
+CourtListener can publish a cluster weeks after its dateFiled — SCOTUS slip
+opinions especially. The funnel’s since-window (state date − 2 days) then
+skips them unseen: Montgomery v. Caribe Transport II (filed 5-14, surfaced
+in the feed ~6-11) left zero trace in state or rejections. Remedy exists
+(backfill seed); the improvement is detection: flag feed items whose
+dateFiled is well behind the window and route them to a seed list instead of
+silently skipping.

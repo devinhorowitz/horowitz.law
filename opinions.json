@@ -616,7 +616,8 @@
     "treatment_date": "2026-06-11",
     "treatment": "caution",
     "first_impression": true,
-    "law_applied": "federal"
+    "law_applied": "federal",
+    "editor_note": "June 11, 2026: The Supreme Court answered. Montgomery v. Caribe Transport II abrogated this decision's FAAAA-preemption holding, and the Eleventh Circuit is already vacating judgments that relied on it (see the Hodge remand). Treatment upgrade to follow on Shepard's confirmation."
   },
   {
     "cluster_id": 10872097,
@@ -712,28 +713,6 @@
     "url": "https://www.courtlistener.com/opinion/10873765/allied-property-casualty-insurance-company-v-bloodworth-wholesale-drugs/",
     "synopsis": "Two pharmacies sued for their alleged role in the opioid epidemic sought defense and indemnity under liability and druggist liability policies covering damages 'because of bodily injury.' The insurers contended that the underlying government and healthcare suits seek economic losses not tied to identifiable injured persons and are therefore not covered, and the district courts granted summary judgment for the insurers. The Eleventh Circuit found no clear controlling Georgia or Florida precedent on whether such opioid lawsuits seek damages 'because of bodily injury,' distinguishing Georgia decisions like Cesnik, Lunceford, Presidential Hotel, and O'Dell as not dispositive. It certified to the Supreme Court of Georgia and the Supreme Court of Florida the question whether the policies require the insurers to defend and indemnify the insureds in the underlying opioid litigation.",
     "why": "The certification flags an unresolved, high-value coverage question of whether CGL and druggist liability policies covering 'damages because of bodily injury' reach opioid-epidemic suits seeking economic losses, leaving Georgia coverage law on the point to be settled by the Supreme Court of Georgia.",
-    "precedential": "unpublished",
-    "first_seen": "2026-06-11",
-    "first_impression": true,
-    "law_applied": "ga"
-  },
-  {
-    "cluster_id": 10873764,
-    "name": "Allied Property & Casualty Insurance Co. v. Bloodworth Wholesale Drugs, Inc. (consolidated with Publix Super Markets, Inc. v. Ace Property and Casualty Insurance Co.)",
-    "court": "ca11",
-    "division": null,
-    "date": "2026-06-11",
-    "dockets": [
-      "24-11398",
-      "25-11185"
-    ],
-    "disposition": "question certified",
-    "areas": [
-      "coverage"
-    ],
-    "url": "https://www.courtlistener.com/opinion/10873764/publix-super-markets-inc-v-ace-property-and-casualty-insurance-company/",
-    "synopsis": "Pharmacies facing underlying opioid epidemic lawsuits brought by governments and healthcare providers sought defense and indemnity under liability policies covering damages 'because of bodily injury.' The district courts adopted the insurers' interpretation that the policies do not cover claims seeking compensation for economic losses traceable to the opioid epidemic, and granted summary judgment to the insurers. The Eleventh Circuit found no clear controlling Georgia or Florida precedent on whether such policies require insurers to defend or indemnify pharmacies in these suits, and certified the question to the Supreme Court of Georgia and the Supreme Court of Florida. The court distinguished existing Georgia authority, including Pacific Employers v. Cesnik, Lunceford, Presidential Hotel, and O'Dell, as not dispositive.",
-    "why": "The decision frames as an open question of Georgia insurance law, and certifies to the Supreme Court of Georgia, whether liability policies covering damages 'because of bodily injury' obligate insurers to defend and indemnify pharmacies in government and healthcare-provider opioid suits seeking economic-cost reimbursement.",
     "precedential": "unpublished",
     "first_seen": "2026-06-11",
     "first_impression": true,
