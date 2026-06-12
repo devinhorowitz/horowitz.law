@@ -112,6 +112,11 @@ jobs:
             archive.html
             sitemap.xml
             opinions_rejections.jsonl
+            changes.html
+            changes.xml
+            stats.html
+            digests.html
+            o
 
       # No-op run: the funnel carded nothing, so there is no review PR. It still records this
       # run's health stats, and marks the clusters it screened as seen so the next run does not
