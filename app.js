@@ -360,3 +360,31 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js");
   });
 }
+
+// The install affordance on the Watch: one link that triggers the native
+// install prompt where the platform offers one (Chromium), reveals the
+// two-tap instructions where it does not (iPhone), and stays hidden once
+// the app is already installed.
+(function () {
+  var row = document.getElementById("installRow");
+  if (!row) return;
+  var standalone = window.matchMedia("(display-mode: standalone)").matches ||
+                   window.navigator.standalone === true;
+  if (standalone) return;
+  var go = document.getElementById("installGo");
+  var how = document.getElementById("installHow");
+  var deferred = null;
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault();
+    deferred = e;
+    row.hidden = false;
+  });
+  var ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+            (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (ios) row.hidden = false;
+  go.addEventListener("click", function (e) {
+    e.preventDefault();
+    if (deferred) { deferred.prompt(); deferred = null; row.hidden = true; return; }
+    how.hidden = !how.hidden;
+  });
+})();
