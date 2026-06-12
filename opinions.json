@@ -787,5 +787,24 @@
         "why": "It clarifies that negligent-hiring liability under Maryland law does not extend to a party several contractual layers removed from the entity that hired the operator absent an allegation tying the harm to the directly hired contractor."
       }
     ]
+  },
+  {
+    "cluster_id": 10858760,
+    "name": "Montgomery v. Caribe Transport II, LLC",
+    "court": "scotus",
+    "division": null,
+    "date": "2026-05-14",
+    "dockets": [
+      "24-1238"
+    ],
+    "disposition": "reversed and remanded",
+    "areas": [
+      "auto"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10858760/montgomery-v-caribe-transport-ii-llc/",
+    "synopsis": "An injured motorist sued a transportation broker for negligent hiring, alleging that the broker selected a motor carrier with a subpar federal safety rating that was reasonably likely to cause crashes. The Court held that even assuming the FAAAA's preemption provision in 49 U.S.C. section 14501(c)(1) would otherwise reach the negligent-hiring claim, the safety exception in section 14501(c)(2)(A) saves it because such a claim is one regulating safety 'with respect to motor vehicles.' Construing 'with respect to' to mean 'concerns' or 'regards,' the Court reasoned that requiring a broker to exercise ordinary care in selecting a carrier concerns the trucks that will transport the goods.",
+    "why": "The decision resolves a circuit split and establishes that state-law negligent-hiring claims against freight brokers who select unsafe motor carriers are not preempted by the FAAAA, abrogating the contrary Eleventh Circuit rule that had governed in Georgia.",
+    "precedential": "published",
+    "first_seen": "2026-05-14"
   }
 ]
