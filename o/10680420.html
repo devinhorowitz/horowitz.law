@@ -292,6 +292,8 @@
   .opinion { border: 1px solid var(--border); border-left: 2px solid var(--border); padding: 20px 22px; margin-bottom: 18px; transition: border-color .2s; }
   .op-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
   .op-name { font-size: 16px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; }
+  .op-name a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--fg-muted); transition: color .2s, border-color .2s; }
+  @media (hover: hover) { .op-name a:hover { color: var(--accent); border-bottom-color: var(--accent); } }
   .op-meta { font-size: 12px; color: var(--fg-muted); margin: 9px 0 12px; letter-spacing: 0.02em; }
   .op-meta .court { color: var(--fg); }
   .op-noprec { color: var(--accent); font-weight: 600; }
@@ -335,13 +337,13 @@
     <div class="subtitle">// Supreme Court of Georgia · decided Jun 24, 2025</div>
 
       <article id="op-10680420" class="opinion" data-court="scotga" data-system="state" data-jurisdiction="ga" data-areas="damages,premises" data-date="2025-06-24">
-        <div class="op-head"><span class="op-name">Walmart Stores East, LP v. Leverette</span></div>
+        <div class="op-head"><span class="op-name"><a href="https://www.gasupreme.us/wp-content/uploads/2025/06/s24g1104.pdf" target="_blank" rel="noopener noreferrer" title="Official opinion · Supreme Court of Georgia">Walmart Stores East, LP v. Leverette</a></span></div>
         <div class="op-meta"><span class="court">Supreme Court of Georgia</span> · decided Jun 24, 2025 · No. S24G1104 · vacated and remanded</div>
         <div class="op-tags"><span class="tag">damages</span><span class="tag">premises</span></div>
         <p class="op-synopsis">The Supreme Court of Georgia vacated a $1 million "nominal damages" award in a premises injury case in which a shopper was struck by a heavy box. The Court held that nominal damages under Georgia law remain only a trivial sum, as at common law, and overruled the Court of Appeals precedent treating nominal damages as having no maximum. Because a million dollars is not a trivial sum, the judgment was vacated, with the remedy and invited-error questions left for the courts below.</p>
         <p class="op-why"><strong>Why it matters:</strong> Nominal damages under Georgia law remain only a trivial sum, and the Court overruled precedent that had treated them as having no ceiling, so a seven-figure 'nominal' award cannot stand.</p>
         <div class="op-foot">
-          <span class="op-source"><a href="https://www.courtlistener.com/opinion/10680420/walmart-stores-east-lp-v-leverette/" target="_blank" rel="noopener noreferrer">Read the opinion on CourtListener →</a></span>
+          <span class="op-source"><a href="https://www.courtlistener.com/opinion/10680420/walmart-stores-east-lp-v-leverette/" target="_blank" rel="noopener noreferrer">Full record on CourtListener →</a></span>
           <button type="button" class="op-copycite" data-cite="Walmart Stores East, LP v. Leverette, No. S24G1104 (Ga. June 24, 2025)" title="Copy slip-opinion citation · confirm on Shepard’s before filing">[ copy cite ]</button>
           <span class="op-disclaimer">AI-drafted summary · verify against the opinion</span>
         </div>
