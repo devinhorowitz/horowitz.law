@@ -233,6 +233,10 @@
     .topbar { margin-bottom: 36px; }
     footer { flex-direction: column; align-items: flex-start; }
   }
+
+  .install { margin-top: .6rem; font-size: .85em; }
+  .install span { opacity: .75; }
+  @media (display-mode: standalone) { #installRow { display: none; } }
 </style>
 </head>
 <body>
@@ -256,6 +260,7 @@
     <div class="subtitle">// recent Georgia and federal appellate opinions</div>
 
     <p class="intro">Recent decisions from the Georgia appellate courts, the U.S. Court of Appeals for the Eleventh Circuit, and the U.S. Supreme Court, filtered for relevance to civil litigation and insurance practice. Each entry is an <strong>AI-drafted synopsis</strong> of the actual opinion, written to orient quickly. The linked opinion is the authority, so verify before relying. This is a curated core rather than a complete docket, and the federal courts in particular are filtered hard for the few decisions that bear on Georgia civil litigation and insurance practice.</p>
+      <p class="install" id="installRow" hidden><a href="#" id="installGo">[ install the app ]</a><span id="installHow" hidden> &mdash; on iPhone: open in Safari, tap Share, then Add to Home Screen. It works offline once installed.</span></p>
     <p class="intro" style="font-size:13px; color:var(--fg-muted); margin-top:-8px;">This feed shows opinions from the last two years; older opinions are in the <a href="/archive">archive, organized by year</a>.</p>
     <p class="intro" style="font-size:13px; color:var(--fg-muted); margin-top:-8px;">When a published case is later treated adversely, the card is flagged and the flag is logged in the <a href="/changes">changes ledger</a> (<a href="/changes.xml">RSS</a>). Coverage <a href="/stats">stats</a>, too.</p>
     <p class="intro" style="font-size:13px; color:var(--fg-muted); margin-top:-8px;">Prefer email? A weekly digest links you to each new case as it is added. <a href="/subscribe">Subscribe</a>.</p>
@@ -668,7 +673,7 @@
   </div>
 
 </div>
-<script src="/app.js?v=991d44b08f" defer></script>
+<script src="/app.js?v=6916360c68" defer></script>
 <script src="/opinions.js?v=4e965965a3" defer></script>
 </body>
 </html>
