@@ -1,35 +1,31 @@
-# Completion upload: everything PRs #22/#23 didn't carry · 2026-06-11
-(read me, don't upload me — and the repo gained an UPLOAD-NOTES.md from #22;
-add it to the litter-delete list, making seven)
+# Final mile, new strategy: upload SOURCES only, the bot renders · 2026-06-11
 
-Nothing here is new work: byte-identical remainder of the v2 bundle, filtered
-by comparison against main so nothing already-landed repeats. Until this
-merges, the live feed still shows the Bloodworth duplicate, Aspen's note is
-invisible, the four new cards' permalinks 404, and CI is red on 13 files.
-One merge fixes all of it.
+What happened: a drift-detecting bot (bot/opinions-render) re-rendered the
+pages itself after your data PRs, your completion upload landed onto its PR
+branch, and the merge kept the bot's versions of most pages. Net: ALL CARD
+CONTENT IS NOW CORRECT AND LIVE (dupe gone, four new permalinks up, Aspen's
+note rendered) — only the app layer is half-installed and CI is red on a
+token mismatch. From now on, derived pages never ride an upload again; the
+render bot owns them.
 
-## Step 0: one tiny web edit (replaces dragging a dot-folder)
-Open .github/workflows/ci.yml in the GitHub editor on your new branch and
-find the line containing:
-    node --check subscribe.js
-Append to that same line:
-     && node --check sw.js
-(That registers the new worker in CI's syntax checks; it was the only file
-living under .github in this bundle, so now nothing dot-prefixed to drag.)
+## Step 1 — upload these 9 source files (one small drag, same paths)
+app.js (the service-worker registration — the missing heartbeat)
+scripts/render.py (permalink heads get the app tags)
+index, resume, colophon, subscribe, 404, archive, digests (.html — the seven
+shells whose heads never landed; opinions/changes/stats already carry theirs)
+Branch-and-PR. CI on this PR may still show the token complaint — merge
+anyway; step 2 cures it.
 
-## Upload technique (why 54 files stayed behind last time)
-On the new branch's upload screen, DRAG THE FOLDERS THEMSELVES from this
-bundle — o, scripts, .github — plus all loose files, in one drag. Folder
-drags preserve paths; per-file picking is what dropped the rest. You've done
-the o-folder drag before (the 32-permalink upload).
+## Step 2 — let the bot finish
+Actions → render-sync → Run workflow (the same mechanism that produced
+PR #24; it also self-runs daily at 05:37 UTC as a drift net). It re-stamps every token, regenerates all
+36 permalinks with app heads, and opens a PR. Merge it. CI goes green; the
+app goes fully live.
 
-## After it merges
-1. Hard-refresh on desktop once; then iPhone Safari → /opinions → Share →
-   Add to Home Screen → "GA Watch". Airplane-mode test.
-2. Montgomery is STILL not carded (my earlier "you ran it" was wrong — the
-   json hit was Aspen's treated_by pointer). Actions → backfill →
-   dry_run ✓ + seed `10858760:scotus` → review the log → re-run unchecked
-   → review the PR → merge.
-3. Then Shepard's → flip Aspen "treatment" to "negative" (branch-and-PR).
-4. Litter delete, now seven: COMMIT_NOTES.md, INTEGRATION.md, NOTES.md,
-   PHASE1/2/3_NOTES.md, UPLOAD-NOTES.md.
+## Step 3 — the standing queue, unchanged
+- Montgomery backfill: dry_run ✓ + seed `10858760:scotus` → review → live run → PR → merge.
+- Shepard's → Aspen "treatment" → "negative".
+- Phone: Safari → /opinions → Share → Add to Home Screen → airplane test.
+- Litter (7): COMMIT_NOTES, INTEGRATION, NOTES, PHASE1/2/3_NOTES, UPLOAD-NOTES (.md).
+- Branches to delete: bot/opinions-render, bot/opinions-update,
+  bot/opinions-treatment, tagfill, devinhorowitz-patch-1/-2/-3.

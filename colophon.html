@@ -39,6 +39,10 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="GA Watch">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="/manifest.json">
 
 <!-- Shared foundation: @font-face, color-scheme, text-wrap -->
@@ -335,6 +339,7 @@
       <h2 class="section-header">under the hood</h2>
       <p>The opinions feed is not hand-typed. Every four hours a pipeline wakes on GitHub Actions, checks CourtListener for new Georgia appellate decisions, and runs them through three models, cheapest first: one glances at case names and openings and discards the categorically unrelated, one reads the survivors in full against a narrow relevance bar, and one drafts the card — and may still decline. Nothing publishes without a human merge.</p>
       <p>A second process is paid to distrust the first. Each Saturday a reverse sweep walks every published card's citation graph looking for later decisions that treat it adversely. It is a tripwire, not a citator: the machine may only ever raise a flag to caution. Declaring a case bad law remains human work, done on Shepard's, by hand.</p>
+      <p>The site is also installable: a web-app manifest and a seventy-line service worker make it a home-screen app on a phone — Share, then Add to Home Screen — with offline reading of the last-fetched cards. Pages load network-first so signal always means fresh; hash-stamped assets cache-first, because the tokens make them immutable; the feeds and the subscribe API are never intercepted.</p>
       <p>A golden set of known cases re-runs against the live prompts daily, so a quiet model change cannot silently move the editorial line. A rate governor paces every CourtListener call inside the free tier's rolling windows. The CI refuses any page whose cards have drifted from the data. The whole machine is public — the pipeline doc, the prompts, the state files, even the rejections.</p>
       <div class="terminal-line">cat <a href="/PIPELINE.md">/PIPELINE.md</a></div>
       <div class="terminal-line">curl <a href="/opinions.xml">horowitz.law/opinions.xml</a> <em># the feed</em></div>
@@ -371,7 +376,7 @@
 
 </div>
 
-<script src="/app.js?v=42eb28acec" defer></script>
+<script src="/app.js?v=991d44b08f" defer></script>
 
 </body>
 </html>

@@ -351,3 +351,12 @@
     });
   })();
 })();
+
+// The installable layer: register the service worker that makes the site a
+// home-screen app with offline reading. Registration is the only line the
+// pages need; the strategy lives in /sw.js.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("/sw.js");
+  });
+}
