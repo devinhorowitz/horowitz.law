@@ -50,37 +50,62 @@ with curls afterward.
   /home/claude, copy once, and use a fresh directory name on any retry.
 - ** It runs at temperature 1 (see below), so area tags vary run to run. The summarize guard absorbs this with retries (`OPINIONS_GOLDEN_RETRIES`, default 3). If a genuinely flaky area still misses every attempt now and then, raise that value rather than editing the golden expectations to match a single noisy run. - **Temperature gotcha: do not set a global temperature 0.** `claude-opus-4-8`, the summarizer, rejects any temperature other than 1 with an HTTP 400, which the error handler can mislabel as a retired-model problem. A global temperature 0 once broke every summarize call, the funnel included. There is intentionally no global temperature override. If you want determinism on a tier, set it for that model only and confirm the model accepts the value first.
 
-## Next session, first action: probe Georgia
+## Georgia courts' own publishing: probe done, official links shipped
 
-The goal is direct use of the Georgia courts' own opinion publishing.
-Requires the network allowlist to carry all four exact hostnames:
-gaappeals.gov, www.gaappeals.gov, gasupreme.us, www.gasupreme.us. Egress
-rules bind at container boot, so they take effect in a fresh session.
+Probe outcome (allowlist carries gaappeals.gov, www.gaappeals.gov,
+gasupreme.us, www.gasupreme.us):
 
-Probe spec:
-1. gaappeals.gov docket endpoint
-   (/wp-content/themes/benjamin/docket/docketdate/results_all.php with
-   OPstartDate and OPendDate): disambiguate the date format (try 6-12-2026
-   against 12-6-2026 on a date with known releases), extract the row
-   structure (case name, docket like A26A0145, PDF link), and assess PDF
-   URL stability. The theme path is a brittleness flag; it dies on their
-   next redesign.
-2. gasupreme.us/2026-opinions/: listing structure, PDF naming (s26a####
-   style), date grouping.
-3. Pull one sample PDF from each and run scripts/update.pdf_text plus the
-   _pdf_ok quality gate.
-4. Ground-truth join: match the Waddle Trucking card's docket (confirm it
-   from opinions.json, cluster 10873711) against the court's own listing
-   for its release date.
+- Supreme Court (www.gasupreme.us): clean, no WAF, HTTP 200. Year-index page
+  per year at /<year>-opinions/, structured `<h3>Month</h3>`,
+  `<p><strong>Date</strong></p>`, `<ul><li><a href="PDF">DOCKET. NAME</a></li>`.
+  PDF URL is /wp-content/uploads/<year>/<month>/<docket-lowercased>.pdf, a
+  WordPress media path stable across the site's redesigns. Filename is the
+  lowercased docket, verified across a release. pdf_text plus _pdf_ok pass on a
+  sample (s26a0017.pdf, about 20,800 chars). Apex gasupreme.us 503s, use www.
+  Year pages exist back to 2017; /2015- and /2016-opinions/ 404 and the older
+  PDFs are not on the current uploads tree, so pre-2017 cards get no official
+  link.
+- Court of Appeals (gaappeals.gov): blocked. The live docket data endpoint is
+  /wp-content/themes/benjamin/docket/results_all.php (the recorded path's extra
+  docketdate/ segment was stale), behind a persistent AWS WAF JS challenge
+  (window.gokuProps), HTTP 405 on GET and POST, all date formats and retries.
+  The human /docket-search/ form page loads, but the data endpoint a headless
+  funnel needs does not. Not usable, and the date-format question (6-12 vs 12-6)
+  stays undetermined as a result. CourtListener remains the source for the
+  Court of Appeals.
 
-Locked design, whatever the probe finds at the edges: CourtListener's
-cluster_id remains the identity spine (permalinks, treatment, golden,
-dedup), so the Georgia sites supplement rather than replace. Two
-mechanisms: (a) an official_url enrichment field on Georgia cards, official
-link primary and CourtListener as backup in the rendered card, and (b) an
-early-alert poller that notices court-posted opinions absent from the CL
-feed and routes them to the seed list when the cluster appears, which
-closes the late-ingestion hole (backlog item 6 below).
+Shipped this session: official_url enrichment, Supreme Court of Georgia only. A
+scotga card's case name links to the court's own opinion PDF, and the
+CourtListener link below is relabeled "Full record on CourtListener" (CL carries
+citations, treatment, and docket data the court's own listing omits, so it
+stays). A card without official_url is unchanged: plain name, CourtListener as
+the read link. Identity still keys on the CourtListener cluster_id.
+
+- Mechanism: scripts/official_ga.py. official_url_for(card) fetches the
+  /<year>-opinions/ page for the card's decision year and matches a docket to a
+  PDF basename, fail-open (any miss or error returns None). Reused two ways: a
+  backfill CLI (`python scripts/official_ga.py [--apply]`) that filled the
+  existing cards, and a forward hook in update.py that populates new scotga cards
+  at assembly time (also fail-open; if the year page lags CL, a later backfill
+  fills it).
+- Coverage now: 7 of 10 scotga cards carry official_url (SMG, Walmart, Miller,
+  Adventure Motorsports, Quynn, Cooper Tire, Martin). Phillips, Toyo, and Scapa
+  are pre-2017 with no PDF on the current site, so they keep CourtListener-only
+  rendering.
+- Ground-truth join re-anchored from the Waddle Trucking card (ctapp, behind the
+  WAF) to the current civil Supreme Court opinion S26A0807, Sockwell Corners v.
+  Newton County, which official_ga resolves cleanly.
+- Data fix in passing: the Martin v. Six Flags card (cluster 5749712) had an
+  empty docket; set to S16G0743 and S16G0750 (the consolidated cross-appeals,
+  confirmed against the court's 2017 listing), which also let the docket-based
+  resolver find its PDF. Worth a sanity-check on review.
+
+Still locked, still pending: the cluster_id stays the identity spine, so the
+Georgia sites supplement rather than replace. The early-alert poller (notice
+court-posted opinions absent from the CL feed and route them to the seed list
+when the cluster appears, closing the late-ingestion hole, backlog item 6) is
+viable for the Supreme Court only given the Court of Appeals WAF, and is not yet
+built.
 
 ## Open projects
 

@@ -194,6 +194,8 @@
   .opinion { border: 1px solid var(--border); border-left: 2px solid var(--border); padding: 20px 22px; margin-bottom: 18px; transition: border-color .2s; }
   .op-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
   .op-name { font-size: 16px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; }
+  .op-name a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--fg-muted); transition: color .2s, border-color .2s; }
+  @media (hover: hover) { .op-name a:hover { color: var(--accent); border-bottom-color: var(--accent); } }
   .op-meta { font-size: 12px; color: var(--fg-muted); margin: 9px 0 12px; letter-spacing: 0.02em; }
   .op-meta .court { color: var(--fg); }
   .op-noprec { color: var(--accent); font-weight: 600; }
