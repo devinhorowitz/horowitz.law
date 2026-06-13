@@ -383,11 +383,49 @@ def _norm_https(u):
     return u if u.lower().startswith("https://") else ""
 
 
+def _norm_docket(d):
+    """Trim and drop a leading 'No. ' so the same docket compares equal across
+    clusters regardless of how CourtListener formatted the docketNumber."""
+    d = (d or "").strip()
+    if d[:4].lower() == "no. ":
+        d = d[4:].strip()
+    return d
+
+
+def _ident_keys(card):
+    """Case-identity keys for cross-cluster dedup. CourtListener files one opinion
+    under more than one cluster (an older ingestion and a newer one sharing the
+    docket and filing date), so the cluster_id is not a reliable case identity.
+    Key on (court, docket) for each docket on the card; fall back to (court, name,
+    date) only when the card carries no usable docket. Same court is required, so
+    a docket number reused at a different court never collides."""
+    court = (card.get("court") or "").strip()
+    keys = set()
+    for d in (card.get("dockets") or []):
+        nd = _norm_docket(d)
+        if nd:
+            keys.add(("d", court, nd))
+    if not keys:
+        nm = (card.get("name") or "").strip().lower()
+        dt = (card.get("date") or "").strip()
+        if nm and dt:
+            keys.add(("nd", court, nm, dt))
+    return keys
+
+
+def _holding_count(card):
+    """Primary holding plus any structured additional holdings. Used to keep the
+    richer of two clusters when the funnel structured a secondary holding for only
+    one of them, so dedup never silently drops a holding."""
+    return 1 + len(card.get("additional_holdings") or [])
+
+
 def render_sweep_report(after, before, courts, rows, new_cards,
                         n_screen, n_triage, n_opus, aborted, abort_reason):
     by = lambda s: [r for r in rows if r.get("status") == s]
     screen_drop, triage_drop = by("screen-drop"), by("triage-drop")
     summ_drop, errors, skips = by("summ-drop"), by("error"), by("skip-exists")
+    dups = by("skip-dup")
     seen = len([r for r in rows if r.get("status") != "skip-exists"])
 
     L = ["## Georgia Appellate Watch: backfill sweep", ""]
@@ -404,6 +442,8 @@ def render_sweep_report(after, before, courts, rows, new_cards,
     L.append("- summarize: %d run, %d dropped" % (n_opus, len(summ_drop)))
     L.append("- no opinion text / fetch error: %d" % len(errors))
     L.append("- already in archive: %d" % len(skips))
+    if dups:
+        L.append("- duplicate cluster, same case under a second cluster id (deduplicated): %d" % len(dups))
     L.append("")
     L.append("**Cards added: %d.**" % len(new_cards))
 
@@ -499,12 +539,19 @@ def run_sweep():
 
     entries = json.load(open(update.JSON_PATH, encoding="utf-8")) if os.path.exists(update.JSON_PATH) else []
     have = {int(e["cluster_id"]) for e in entries if e.get("cluster_id")}
+    # Cross-cluster dedup over what is already carded: (court, docket) keys, name+date
+    # fallback, so a case already in opinions.json under one cluster is not re-carded
+    # when the sweep finds it under a different cluster id.
+    seen_existing = set()
+    for _e in entries:
+        seen_existing |= _ident_keys(_e)
     print("sweep: window %s..%s | courts %s | archive has %d card(s) | screen=%s triage=%s summarize=%s"
           % (after, before, ",".join(courts), len(have),
              update.SCREEN_MODEL or "off", update.TRIAGE_MODEL or "off", update.MODEL))
 
     run_start = time.time()
     rows, new_cards = [], []
+    run_index = {}   # cross-cluster dedup within this run: ident-key -> index into new_cards
     n_screen = n_triage = n_opus = 0
     aborted, abort_reason, consec = False, "", 0
 
@@ -641,6 +688,41 @@ def run_sweep():
             if (v.get("confidence") or "").lower() == "low":
                 problems.append("low confidence")
 
+            # --- Cross-cluster dedup -------------------------------------------------
+            # CourtListener files one opinion under more than one cluster (an older
+            # ingestion and a newer one sharing the docket and filing date), and the
+            # windowed published search returns both. The cid check above only catches
+            # the SAME cluster, so the same case under a second cluster cards twice
+            # (seen on the SCOTUS sweep: Waetzig and Royal Canin each carded twice). Key
+            # on (court, docket), name+date fallback. A case already in the archive is
+            # skipped; two clusters of one case found in THIS run collapse to the one
+            # with more holdings, so a secondary holding the funnel structured for only
+            # one of the two is never dropped.
+            keys = _ident_keys(entry)
+            if keys & seen_existing:
+                rows.append({"cid": cid, "name": entry["name"], "status": "skip-dup",
+                             "detail": "same case already in the archive under another cluster"})
+                print("  = %s: already carded under another cluster; skipped" % entry["name"])
+                continue
+            dup_idx = next((run_index[k] for k in keys if k in run_index), None)
+            if dup_idx is not None:
+                prior = new_cards[dup_idx]
+                if _holding_count(entry) > _holding_count(prior):
+                    new_cards[dup_idx] = entry
+                    have.add(cid)
+                    for k in keys:
+                        run_index[k] = dup_idx
+                    print("  ~ %s: duplicate cluster, kept the richer copy (%d holdings vs %d, dropped cluster %s)"
+                          % (entry["name"], _holding_count(entry), _holding_count(prior), prior.get("cluster_id")))
+                else:
+                    print("  = %s: duplicate cluster, kept the earlier copy (cluster %s)"
+                          % (entry["name"], prior.get("cluster_id")))
+                rows.append({"cid": cid, "name": entry["name"], "status": "skip-dup",
+                             "detail": "duplicate of another cluster discovered this run"})
+                continue
+
+            for k in keys:
+                run_index[k] = len(new_cards)
             new_cards.append(entry); have.add(cid)
             rows.append({"cid": cid, "name": entry["name"], "date": date_filed, "court": entry["court"],
                          "disp": entry["disposition"], "areas": areas,
