@@ -670,6 +670,13 @@ RETRY_STATUS = {429, 500, 502, 503, 529}
 def anthropic_json(body, label="call"):
     """POST to the Messages API. Retries 429 and 5xx with backoff, and on a final
     failure raises with the API's own error body so the cause names itself."""
+    # Cache the static system prompt so repeated calls in one 5-minute window bill
+    # it at the cache-read rate. Behavior-neutral: the model sees identical content.
+    # Systems under the cache minimum are ignored at no cost, so today only the
+    # summarize SYSTEM actually caches.
+    if isinstance(body.get("system"), str):
+        body["system"] = [{"type": "text", "text": body["system"],
+                           "cache_control": {"type": "ephemeral"}}]
     model = body.get("model", "?")
     last = None
     for attempt in range(5):
