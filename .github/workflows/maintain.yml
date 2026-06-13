@@ -1,19 +1,22 @@
 name: opinions-maintenance
 
-# Budget-gated maintenance for the opinions funnel. Daily, off-peak, and self-gating.
-# It always runs the CourtListener-free golden regression check, and, only when the
-# funnel has left comfortable CourtListener headroom, re-validates a small rotating
-# slice of already-published cards. It commits nothing; findings go to the run summary
-# and a tracking issue. Scheduled at 13:37 UTC, offset from the funnel's :17 ticks and
-# clear of the Thursday 21:00 to 23:59 PT CourtListener maintenance window.
+# Budget-gated maintenance for the opinions funnel, with the repo keepalive and the
+# court-registry check folded in: this one daily job replaces the former keepalive.yml
+# and validate-courts.yml. Daily, off-peak, self-gating. It runs the CourtListener-free
+# golden regression check and, only with comfortable CourtListener headroom, re-validates
+# a small rotating slice of published cards (maintain.py writes nothing; findings go to a
+# tracking issue). The keepalive marker commit runs first and unconditionally, so the
+# repo stays active and GitHub does not auto-disable the scheduled workflows after 60
+# days, even on a day maintenance surfaces a finding. Scheduled at 13:37 UTC, offset from
+# the funnel's :17 ticks and clear of the Thursday 21:00 to 23:59 PT CourtListener window.
 on:
   schedule:
     - cron: '37 13 * * *'
   workflow_dispatch:
 
 permissions:
-  contents: read          # reads the repo and the pipeline log; commits nothing
-  issues: write           # opens or updates the maintenance findings issue
+  contents: write         # the keepalive marker commit; maintain.py itself still writes nothing
+  issues: write           # maintenance findings issue + the court-registry drift flag
 
 concurrency:
   group: opinions-maintenance
@@ -22,12 +25,82 @@ concurrency:
 jobs:
   maintain:
     runs-on: ubuntu-latest
-    timeout-minutes: 30     # watchdog: the golden check + a small slice is minutes of work; fail fast
+    timeout-minutes: 30     # watchdog: the golden check + a small slice + the court check is minutes of work
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      # Keepalive (folded from keepalive.yml): a daily marker commit keeps the repository
+      # active so GitHub does not auto-disable the scheduled workflows after 60 days.
+      # First and unconditional, so it happens even if a later step surfaces a finding;
+      # [skip ci] and a path CI does not watch, so it never spins CI.
+      - name: Keepalive marker
+        run: |
+          mkdir -p .github
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/keepalive.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/keepalive.txt
+          git commit -m "chore: keepalive [skip ci]" || { echo "nothing to commit"; exit 0; }
+          git push
+
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: '3.12'
+
+      # Court-registry check (folded from validate-courts.yml): confirm every court id in
+      # jurisdictions.py still resolves at CourtListener. Capture the exit code without
+      # failing the job (0 clean, 3 drift, anything else operational), so maintenance below
+      # still runs; drift and operational errors surface as issues in the steps that follow.
+      - name: Validate court registry
+        id: courts
+        env:
+          COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+        run: |
+          set +e
+          ( cd scripts && python courts.py --validate )
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Court registry drift flag
+        if: ${{ steps.courts.outputs.code == '3' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Court registry drift detected"
+          existing=$(gh issue list --state open --search "$title in:title" --json number,title \
+            --jq "[.[] | select(.title==\"$title\")] | .[0].number" 2>/dev/null || true)
+          if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+            gh issue comment "$existing" --body-file scripts/court_drift.md
+          else
+            gh issue create --title "$title" --body-file scripts/court_drift.md
+          fi
+
+      - name: Court registry clean
+        if: ${{ steps.courts.outputs.code == '0' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Court registry drift detected"
+          for n in $(gh issue list --state open --search "$title in:title" --json number,title \
+            --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
+            gh issue comment "$n" --body "Resolved: the court-registry validation now passes."
+            gh issue close "$n"
+          done
+
+      - name: Court registry validation error
+        if: ${{ steps.courts.outputs.code != '0' && steps.courts.outputs.code != '3' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="Court-registry validation hit an operational error (exit ${{ steps.courts.outputs.code }}), not drift. ${run_url}"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Opinions maintenance findings' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body "$body"
+          fi
 
       - name: Run maintenance
         env:
