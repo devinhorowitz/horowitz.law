@@ -466,8 +466,34 @@ def run_sweep():
 
     after = os.environ.get("BACKFILL_FROM", "2024-06-12").strip()
     before = os.environ.get("BACKFILL_TO", "2025-05-31").strip()
+    # Validate the window: a mistyped or reversed date otherwise sweeps nothing silently,
+    # since CourtListener just returns an empty result for a bad range. Fail loud instead.
+    for _lbl, _v in (("BACKFILL_FROM", after), ("BACKFILL_TO", before)):
+        try:
+            time.strptime(_v, "%Y-%m-%d")
+        except ValueError:
+            print("ERROR: %s must be a real date as YYYY-MM-DD; got %r." % (_lbl, _v)); sys.exit(1)
+    if after > before:
+        print("ERROR: window is reversed: BACKFILL_FROM (%s) is after BACKFILL_TO (%s)." % (after, before)); sys.exit(1)
+    _today = time.strftime("%Y-%m-%d")
+    if before > _today:
+        print("ERROR: BACKFILL_TO (%s) is in the future; nothing is filed past today (%s)." % (before, _today)); sys.exit(1)
     courts_env = os.environ.get("BACKFILL_COURTS", "").strip()
-    courts = [c.strip() for c in courts_env.split(",") if c.strip()] or list(update.COURTS)
+    # CourtListener's court filter is case sensitive (court=GA returns nothing, court=ga
+    # returns the docket), so normalize to lowercase and validate against the known ids.
+    # A stray capital or typo would otherwise silently yield an empty sweep. Blank = all.
+    requested = [c.strip().lower() for c in courts_env.split(",") if c.strip()]
+    if requested:
+        unknown = [c for c in requested if c not in update.COURTS]
+        if unknown:
+            print("  ! ignoring unknown court id(s): %s (valid: %s)"
+                  % (", ".join(unknown), ", ".join(update.COURTS)))
+        courts = [c for c in requested if c in update.COURTS]
+        if not courts:
+            print("ERROR: no valid court ids in BACKFILL_COURTS=%r; valid ids are %s."
+                  % (courts_env, ", ".join(update.COURTS))); sys.exit(1)
+    else:
+        courts = list(update.COURTS)
     budget = int(os.environ.get("BACKFILL_BUDGET_SEC", "3000"))
     breaker = int(os.environ.get("BACKFILL_BREAKER", "4"))
 
