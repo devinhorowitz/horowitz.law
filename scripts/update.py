@@ -524,6 +524,59 @@ def official_download_url(r, deadline=None):
         return ""
 
 
+_enrich = {}  # CL court id -> {cluster_id: {"status", "download_url"}}; one search per court per run
+
+
+def enrich_map(court, since, deadline=None):
+    """One CourtListener search call per court, returning
+    {cluster_id: {"status", "download_url"}} for opinions filed since the window.
+    A single search result already carries each opinion's publication status and
+    its download_url (the court's own PDF), so per-card lookups read from this bulk
+    result instead of fetching each cluster and each opinion one at a time. Cached
+    per process, so a court is searched at most once a run. Goes through cl_get, so
+    it shares the REST budget and pacing. Empty on any failure (a ConfigError still
+    propagates), so callers fall back to the per-card fetch and lose no fidelity."""
+    if court in _enrich:
+        return _enrich[court]
+    m = {}
+    try:
+        url = ("https://www.courtlistener.com/api/rest/v4/search/?"
+               + urllib.parse.urlencode({"type": "o", "court": court, "filed_after": since,
+                                         "order_by": "dateFiled desc", "page_size": "50"}))
+        pages = 0
+        while url and pages < 4:
+            data = cl_get(url, deadline)
+            for res in data.get("results", []):
+                cid = res.get("cluster_id")
+                if not cid:
+                    continue
+                du = ""
+                for o in (res.get("opinions") or []):
+                    du = (o.get("download_url") or "").strip()
+                    if du:
+                        break
+                if du.lower().startswith("http://"):
+                    du = "https://" + du[len("http://"):]
+                m[int(cid)] = {"status": (res.get("status") or "").strip(),
+                               "download_url": du if du.lower().startswith("https://") else ""}
+            url = data.get("next")
+            pages += 1
+        _dbg("search enrich: %s -> %d opinions" % (court, len(m)))
+    except ConfigError:
+        raise
+    except Exception as e:
+        _dbg("search enrich failed for %s (%s)" % (court, e))
+        m = {}
+    _enrich[court] = m
+    return m
+
+
+def enriched(r, since, deadline=None):
+    """Bulk-search fields for one candidate (see enrich_map): {"status",
+    "download_url"} or {} if the candidate is not in the search window."""
+    return enrich_map(r.get("court_id") or "", since, deadline).get(cluster_id_of(r) or -1, {})
+
+
 def opinion_text(oid, deadline=None):
     o = cl_get("/api/rest/v4/opinions/%s/" % oid, deadline)
     for f in ("plain_text", "html_with_citations", "html", "xml_harvard", "html_lawbox", "html_columbia"):
@@ -1251,7 +1304,12 @@ def main():
                 time.sleep(0.4)
             # Tier 3: high-effort public summary
             n_opus += 1
-            cl_status = cluster_precedential_status(r, deadline=run_start + BUDGET_SEC)
+            # Publication status and (for federal cards, below) the official PDF
+            # URL both come from one bulk search call per court rather than a
+            # per-card cluster and opinion fetch. Fall back to the per-card fetch
+            # for anything the search window did not return, so fidelity is intact.
+            cl_status = enriched(r, since, deadline=run_start + BUDGET_SEC).get("status") \
+                or cluster_precedential_status(r, deadline=run_start + BUDGET_SEC)
             v = summarize(court_id, name, docket, date_filed, text, note, cl_status=cl_status)
             consec = 0
             evaluated.add(cid)
@@ -1335,7 +1393,8 @@ def main():
                 _dbg("official_url lookup failed (%s)" % _oe)
         elif entry["court"] in ("ca11", "scotus"):
             try:
-                _ou = official_download_url(r, deadline=run_start + BUDGET_SEC)
+                _ou = enriched(r, since, deadline=run_start + BUDGET_SEC).get("download_url") \
+                    or official_download_url(r, deadline=run_start + BUDGET_SEC)
                 if _ou:
                     entry["official_url"] = _ou
             except ConfigError:
