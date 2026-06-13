@@ -330,12 +330,11 @@ def run():
             print("  x %s: no card (%s)" % (name, "; ".join(problems) or "missing fields"))
             continue
 
-        card = {"cluster_id": cid, "name": (v.get("name") or name).strip(), "court": court,
-                "division": (v.get("division") or None), "date": date_filed,
-                "dockets": dockets or [""], "disposition": disp, "areas": areas, "url": url,
-                "synopsis": synopsis, "why": why,
-                "precedential": (v.get("precedential") or "unknown"),
-                "first_seen": date_filed}  # filing date, so the digest does not treat it as new
+        # Phase-4 parity (HANDOFF item 7): build the card through update.assemble_entry
+        # so seeded cards carry the same taxonomy as the daily feed (first_impression,
+        # tort_reform, law_applied, additional_holdings). first_seen is the filing date,
+        # so the digest never treats a backfilled card as new this week.
+        card = update.assemble_entry(v, cid, name, court, areas, docket, date_filed, url, date_filed)
         new_cards.append(card)
         row["status"] = "card"
         rows.append(row)

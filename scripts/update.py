@@ -1105,6 +1105,57 @@ def _log_rejections(records):
             print("  . rejection summary write skipped: %s" % e)
 
 
+def assemble_entry(v, cluster_id, name, court, areas, docket, date_filed, url, first_seen):
+    """Build the opinions.json card dict from a summarize() result (v) plus the
+    candidate's metadata. Shared by the daily pipeline (main) and the backfill
+    (scripts/backfill.py) so both produce identically shaped cards.
+
+    Pure: no network and no official_url enrichment -- the official-link source
+    differs by pipeline, so the caller sets entry["official_url"] itself. The caller
+    has already resolved and gated `areas` and `court` and (for the live feed)
+    confirmed v is relevant; this only shapes the stored record. Phase-4 badges and
+    the Erie field are stored only when set, matching the lean-JSON pattern the
+    renderer keys on. `first_seen` is supplied by the caller (today for the daily
+    run; the filing date for a backfilled card, so the digest never treats it as new)."""
+    dockets = [str(d).strip() for d in (v.get("dockets") or []) if str(d).strip()] or ([docket] if docket else [""])
+    disp = (v.get("disposition") or "").strip().lower()
+    synopsis = (v.get("synopsis") or "").strip()
+    why = (v.get("why") or "").strip()
+
+    # Additional distinct holdings (rare). Each is validated like the primary
+    # and dropped if malformed; stored only when present, so a single-holding
+    # card's shape is unchanged.
+    additional_holdings = []
+    for h in (v.get("additional_holdings") or []):
+        if not isinstance(h, dict):
+            continue
+        h_areas = [a for a in (h.get("areas") or []) if a in VALID_AREAS]
+        h_syn = (h.get("synopsis") or "").strip()
+        h_why = (h.get("why") or "").strip()
+        if h_areas and h_syn and h_why:
+            additional_holdings.append({"areas": h_areas, "synopsis": h_syn, "why": h_why})
+
+    entry = {"cluster_id": cluster_id, "name": (v.get("name") or name).strip(), "court": court,
+             "division": (v.get("division") or None), "date": date_filed, "dockets": dockets,
+             "disposition": disp, "areas": areas, "url": url, "synopsis": synopsis, "why": why,
+             "precedential": (v.get("precedential") or "unknown"),
+             "first_seen": first_seen}
+    # Phase 4 taxonomy. Badges are stored only when true (lean JSON, and render
+    # keys on truthiness); the Erie field only for a federal court with a
+    # recognized value. editor_note is human-only: the pipeline never writes it.
+    if v.get("first_impression") is True:
+        entry["first_impression"] = True
+    if v.get("tort_reform") is True:
+        entry["tort_reform"] = True
+    _la = v.get("law_applied")
+    _la = _la.strip().lower() if isinstance(_la, str) else ""
+    if entry["court"] in ("ca11", "scotus") and _la in ({"federal"} | set(jurisdictions.JURISDICTIONS)):
+        entry["law_applied"] = _la
+    if additional_holdings:
+        entry["additional_holdings"] = additional_holdings
+    return entry
+
+
 def main():
     if not KEY:
         print("ERROR: ANTHROPIC_API_KEY is not set."); sys.exit(1)
@@ -1344,42 +1395,15 @@ def main():
         court = COURT_MAP.get(court_id) or (v.get("court") if v.get("court") in VALID_KEYS else None)
         if not court:
             skipped.append((name, "unrecognized court id %s" % court_id)); continue
-        dockets = [str(d).strip() for d in (v.get("dockets") or []) if str(d).strip()] or ([docket] if docket else [""])
-        disp = (v.get("disposition") or "").strip().lower()
-        synopsis = (v.get("synopsis") or "").strip()
-        why = (v.get("why") or "").strip()
-
-        # Additional distinct holdings (rare). Each is validated like the primary
-        # and dropped if malformed; stored only when present, so a single-holding
-        # card's shape is unchanged.
-        additional_holdings = []
-        for h in (v.get("additional_holdings") or []):
-            if not isinstance(h, dict):
-                continue
-            h_areas = [a for a in (h.get("areas") or []) if a in VALID_AREAS]
-            h_syn = (h.get("synopsis") or "").strip()
-            h_why = (h.get("why") or "").strip()
-            if h_areas and h_syn and h_why:
-                additional_holdings.append({"areas": h_areas, "synopsis": h_syn, "why": h_why})
-
-        entry = {"cluster_id": cid, "name": (v.get("name") or name).strip(), "court": court,
-                 "division": (v.get("division") or None), "date": date_filed, "dockets": dockets,
-                 "disposition": disp, "areas": areas, "url": url, "synopsis": synopsis, "why": why,
-                 "precedential": (v.get("precedential") or "unknown"),
-                 "first_seen": datetime.date.today().isoformat()}
-        # Phase 4 taxonomy. Badges are stored only when true (lean JSON, and render
-        # keys on truthiness); the Erie field only for a federal court with a
-        # recognized value. editor_note is human-only: the pipeline never writes it.
-        if v.get("first_impression") is True:
-            entry["first_impression"] = True
-        if v.get("tort_reform") is True:
-            entry["tort_reform"] = True
-        _la = v.get("law_applied")
-        _la = _la.strip().lower() if isinstance(_la, str) else ""
-        if entry["court"] in ("ca11", "scotus") and _la in ({"federal"} | set(jurisdictions.JURISDICTIONS)):
-            entry["law_applied"] = _la
-        if additional_holdings:
-            entry["additional_holdings"] = additional_holdings
+        # Card assembly is shared with the backfill (scripts/backfill.py) through
+        # assemble_entry, so seeded cards carry the same Phase-4 taxonomy as the live
+        # feed. first_seen is today for the daily run; the backfill passes the filing
+        # date instead. synopsis/why/disp/additional_holdings are re-bound from the
+        # entry for the review and print logic below.
+        entry = assemble_entry(v, cid, name, court, areas, docket, date_filed, url,
+                               datetime.date.today().isoformat())
+        synopsis = entry["synopsis"]; why = entry["why"]; disp = entry["disposition"]
+        additional_holdings = entry.get("additional_holdings", [])
         # Official-link enrichment (Phase 5): the rendered title links to the
         # court's own opinion PDF, with CourtListener kept as the full record
         # below. Two sources by court. Georgia Supreme Court: resolve the PDF from
