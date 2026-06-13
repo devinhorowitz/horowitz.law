@@ -3,6 +3,13 @@ name: Georgia Appellate Watch backfill
 # Manual only. Run from the Actions tab. Leave dry_run checked the first time to
 # preview the recall report and the drafted cards in the run log without writing
 # anything or opening a PR; uncheck it to write the cards and open the PR.
+#
+# Two modes. Default: the pre-vetted QPWB skill seed (a recall test; screen/triage are
+# recorded but not gating). Check "sweep" to instead discover a date-windowed PUBLISHED
+# search per court and run the full gating funnel (screen/triage/summarize), filling the
+# rolling window. Set date_from/date_to/courts to chunk it: the small courts (ga, ca11,
+# scotus) fit one run each; chunk gactapp by quarter. One reusable PR branch
+# (bot/opinions-backfill): review and merge each chunk before dispatching the next.
 on:
   workflow_dispatch:
     inputs:
@@ -12,6 +19,22 @@ on:
         default: true
       seed:
         description: 'Seed override: comma-separated cluster:court_id pairs (court_id in ga, gactapp, ca11, scotus). Blank = built-in skill seed.'
+        type: string
+        default: ''
+      sweep:
+        description: 'Sweep mode: discover a date-windowed PUBLISHED search per court and run the gating funnel (screen/triage/summarize). Unchecked = pre-vetted skill seed.'
+        type: boolean
+        default: false
+      date_from:
+        description: 'Sweep only: window start (filing date, inclusive), YYYY-MM-DD.'
+        type: string
+        default: '2024-06-12'
+      date_to:
+        description: 'Sweep only: window end (filing date, inclusive), YYYY-MM-DD.'
+        type: string
+        default: '2025-05-31'
+      courts:
+        description: 'Sweep only: comma-separated court ids (blank = ga,gactapp,ca11,scotus). Chunk gactapp by quarter to stay within one run.'
         type: string
         default: ''
 
@@ -54,6 +77,11 @@ jobs:
           CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
           OPINIONS_SEED: ${{ inputs.seed }}
+          # Sweep mode (BACKFILL_SWEEP=1) and its window; ignored by the skill-seed path.
+          BACKFILL_SWEEP: ${{ inputs.sweep && '1' || '' }}
+          BACKFILL_FROM: ${{ inputs.date_from }}
+          BACKFILL_TO: ${{ inputs.date_to }}
+          BACKFILL_COURTS: ${{ inputs.courts }}
           # Same three-tier funnel as the daily pipeline; same repo Variables.
           OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}
           OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-4-6' }}
@@ -67,8 +95,8 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           branch: bot/opinions-backfill
-          title: 'Georgia Appellate Watch: backfill (skill seed)'
-          commit-message: 'opinions: backfill seed of known skill-cases'
+          title: "${{ inputs.sweep && 'Georgia Appellate Watch: backfill (windowed sweep)' || 'Georgia Appellate Watch: backfill (skill seed)' }}"
+          commit-message: "${{ inputs.sweep && 'opinions: windowed backfill sweep' || 'opinions: backfill seed of known skill-cases' }}"
           body-path: scripts/backfill_pr_body.md
           labels: opinions, automated, backfill
           delete-branch: true
