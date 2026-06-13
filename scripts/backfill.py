@@ -47,6 +47,12 @@ PR_PATH = os.path.join(update.REPO, "scripts", "backfill_pr_body.md")
 # of sleeping on it. Normal short retries for transient 5xx still happen.
 CL_DEADLINE_SEC = int(os.environ.get("OPINIONS_CL_DEADLINE_SEC", "30"))
 
+# Sweep mode (the 12-month windowed backfill): set BACKFILL_SWEEP=1 to discover via a
+# date-windowed published search per court and run the SAME gating funnel as the daily
+# pipeline (screen -> triage -> summarize), instead of the pre-vetted skill seed below.
+# Window and courts come from BACKFILL_FROM / BACKFILL_TO / BACKFILL_COURTS.
+SWEEP = os.environ.get("BACKFILL_SWEEP", "") in ("1", "true", "True", "yes")
+
 # The post-2014, four-court decisions harvested from the QPWB skills, resolved to
 # CourtListener clusters. (cluster_id, court_id). Comments name the case and the
 # skill it came out of; court_id is re-derived from the docket at run time.
@@ -369,5 +375,276 @@ def run():
           % (len(new_cards), len(merged), n))
 
 
+def _norm_https(u):
+    """Normalize an opinion-PDF URL to https; empty string if it is not http(s)."""
+    u = (u or "").strip()
+    if u.lower().startswith("http://"):
+        u = "https://" + u[len("http://"):]
+    return u if u.lower().startswith("https://") else ""
+
+
+def render_sweep_report(after, before, courts, rows, new_cards,
+                        n_screen, n_triage, n_opus, aborted, abort_reason):
+    by = lambda s: [r for r in rows if r.get("status") == s]
+    screen_drop, triage_drop = by("screen-drop"), by("triage-drop")
+    summ_drop, errors, skips = by("summ-drop"), by("error"), by("skip-exists")
+    seen = len([r for r in rows if r.get("status") != "skip-exists"])
+
+    L = ["## Georgia Appellate Watch: backfill sweep", ""]
+    L.append("Window %s to %s; courts: %s." % (after, before, ", ".join(courts)))
+    L.append("")
+    if aborted:
+        L.append("> Stopped early: %s. Re-dispatch the same window to resume; clusters already "
+                 "carded are skipped, so a re-run only re-screens the drops." % (abort_reason or "budget reached"))
+        L.append("")
+    L.append("Discovered %d new published candidate(s) (clusters already in the archive excluded). "
+             "Gating funnel, identical to the daily pipeline:" % seen)
+    L.append("- screen: %d run, %d dropped" % (n_screen, len(screen_drop)))
+    L.append("- triage: %d run, %d dropped" % (n_triage, len(triage_drop)))
+    L.append("- summarize: %d run, %d dropped" % (n_opus, len(summ_drop)))
+    L.append("- no opinion text / fetch error: %d" % len(errors))
+    L.append("- already in archive: %d" % len(skips))
+    L.append("")
+    L.append("**Cards added: %d.**" % len(new_cards))
+
+    cardrows = [r for r in rows if r.get("status") == "card"]
+    if cardrows:
+        L.append("")
+        L.append("| case | date | court | disposition | areas | review |")
+        L.append("|---|---|---|---|---|---|")
+        for r in cardrows:
+            L.append("| %s | %s | %s | %s | %s | %s |" % (
+                r.get("name", ""), r.get("date", ""), r.get("court") or "?",
+                r.get("disp") or "(none)", ",".join(r.get("areas", [])) or "-",
+                "; ".join(r.get("problems", [])) or ""))
+
+    # Screen/triage drops are the recall surface for a backfill: list a capped sample
+    # so a known-relevant case the funnel wrongly dropped is visible on review.
+    drops = screen_drop + triage_drop
+    if drops:
+        CAP = 50
+        L.append("")
+        L.append("<details><summary>Dropped at screen/triage: %d (spot-check for recall)</summary>" % len(drops))
+        L.append("")
+        for r in drops[:CAP]:
+            L.append("- [%s] %s (%s): %s" % (r.get("status"), r.get("name", ""),
+                                             r.get("date", ""), (r.get("reason", "") or "")[:140]))
+        if len(drops) > CAP:
+            L.append("- ...and %d more." % (len(drops) - CAP))
+        L.append("")
+        L.append("</details>")
+    if errors:
+        L.append("")
+        L.append("**Fetch errors (no card; transient ones retry on re-dispatch):**")
+        for r in errors:
+            L.append("- %s: %s" % (r.get("name", ""), r.get("detail", "")))
+    return "\n".join(L) + "\n"
+
+
+def run_sweep():
+    """The 12-month windowed backfill. Discovers PUBLISHED opinions per court via a
+    date-windowed CourtListener search (update.search_window), then runs each through
+    the SAME gating funnel as the daily pipeline (screen -> triage -> summarize) and
+    writes a card for each survivor. This is the gating counterpart to run() above: run()
+    treats a pre-vetted skill seed as a recall test and does not gate, whereas a windowed
+    sweep is unvetted, so screen and triage gate exactly as they do in update.main().
+    Cards are assembled through update.assemble_entry (Phase-4 parity) and stamped with
+    the filing date, so the digest never treats a backfilled card as new this week.
+
+    Resumable by chunking, not by a state file: the run is bounded by a wall-clock budget
+    and aborts cleanly on the CourtListener budget or a 429; clusters already in
+    opinions.json are skipped, so re-dispatching the same (or an adjacent) window resumes
+    without re-carding. Drive it a window at a time via the workflow inputs."""
+    if not update.KEY:
+        print("ERROR: ANTHROPIC_API_KEY is not set."); sys.exit(1)
+    if not update.CL_TOKEN:
+        print("  ! warning: COURTLISTENER_TOKEN not set; the windowed search may be rate-limited or denied.")
+
+    # Guarantee the PR-body file exists on every exit path, like run() and the daily pipeline.
+    os.makedirs(os.path.dirname(PR_PATH), exist_ok=True)
+    open(PR_PATH, "w", encoding="utf-8").write("No backfill this run.\n")
+
+    after = os.environ.get("BACKFILL_FROM", "2024-06-12").strip()
+    before = os.environ.get("BACKFILL_TO", "2025-05-31").strip()
+    courts_env = os.environ.get("BACKFILL_COURTS", "").strip()
+    courts = [c.strip() for c in courts_env.split(",") if c.strip()] or list(update.COURTS)
+    budget = int(os.environ.get("BACKFILL_BUDGET_SEC", "3000"))
+    breaker = int(os.environ.get("BACKFILL_BREAKER", "4"))
+
+    entries = json.load(open(update.JSON_PATH, encoding="utf-8")) if os.path.exists(update.JSON_PATH) else []
+    have = {int(e["cluster_id"]) for e in entries if e.get("cluster_id")}
+    print("sweep: window %s..%s | courts %s | archive has %d card(s) | screen=%s triage=%s summarize=%s"
+          % (after, before, ",".join(courts), len(have),
+             update.SCREEN_MODEL or "off", update.TRIAGE_MODEL or "off", update.MODEL))
+
+    run_start = time.time()
+    rows, new_cards = [], []
+    n_screen = n_triage = n_opus = 0
+    aborted, abort_reason, consec = False, "", 0
+
+    for court in courts:
+        if aborted:
+            break
+        # Discovery: one windowed search per court (cursor-paginated, ~20/page). The
+        # only REST cost is the search pages; the PDF text below is free. Bounded by
+        # the wall-clock budget so a long court cannot starve the rest of the run.
+        try:
+            cands = update.search_window(court, after, before, deadline=run_start + budget)
+        except cl_rate.RateBudgetExceeded:
+            note = cl_rate.PACER.defer_note()
+            abort_reason = "CourtListener throttled during %s discovery%s" % (court, (" -- " + note) if note else "")
+            print("\nABORT: %s. Re-dispatch after the budget resets." % abort_reason)
+            aborted = True; break
+        except Exception as e:
+            if getattr(e, "code", None) == 429:
+                note = cl_rate.PACER.defer_note()
+                abort_reason = "CourtListener 429 during %s discovery%s" % (court, (" -- " + note) if note else "")
+                print("\nABORT: %s." % abort_reason); aborted = True; break
+            print("  ! search failed for %s: %s" % (court, e))
+            rows.append({"cid": 0, "name": "(%s search)" % court, "status": "error", "detail": str(e)[:160]})
+            continue
+        print("  %s: %d candidate(s) in window" % (court, len(cands)))
+
+        for r in cands:
+            if time.time() - run_start > budget:
+                abort_reason = "wall-clock budget reached (%ds)" % budget
+                print("\n  ! %s; finalizing with %d card(s) collected" % (abort_reason, len(new_cards)))
+                aborted = True; break
+
+            cid = r["cluster_id"]
+            name = r["caseName"]; docket = r["docketNumber"]; date_filed = r["dateFiled"]
+            court_id = r["court_id"]; url = "https://www.courtlistener.com" + r["absolute_url"]
+            if cid in have:
+                rows.append({"cid": cid, "name": name, "status": "skip-exists"}); continue
+
+            # Text: PDF enclosure first (free, no REST quota); REST fallback only when the
+            # PDF is unusable, gated by the shared budget, with the same _pdf_ok check on
+            # both so junk text can never silently reach triage (the recall-hole fix).
+            tdl = run_start + budget
+            text = update.pdf_text(r.get("pdf_url"), deadline=tdl)
+            if not update._pdf_ok(text):
+                text = ""
+                if cl_rate.remaining() > 0:
+                    try:
+                        rest = update.opinion_text_full(r, deadline=tdl)
+                        if update._pdf_ok(rest):
+                            text = rest
+                    except cl_rate.RateBudgetExceeded:
+                        note = cl_rate.PACER.defer_note()
+                        abort_reason = "CourtListener throttled during text fetch%s" % ((" -- " + note) if note else "")
+                        print("\nABORT: %s. Re-dispatch after the budget resets." % abort_reason)
+                        aborted = True; break
+            if not text:
+                rows.append({"cid": cid, "name": name, "status": "error", "detail": "no opinion text"})
+                continue
+
+            try:
+                # Tier 1 -- screen (GATE)
+                if update.SCREEN_MODEL:
+                    n_screen += 1
+                    s = update.screen(name, docket, r.get("snippet") or "")
+                    if not s.get("pass"):
+                        rows.append({"cid": cid, "name": name, "date": date_filed, "court_id": court_id,
+                                     "status": "screen-drop", "reason": s.get("reason", "")})
+                        consec = 0; continue
+                    time.sleep(0.4)
+                # Tier 2 -- triage (GATE)
+                note = ""
+                if update.TRIAGE_MODEL:
+                    n_triage += 1
+                    t = update.triage(name, docket, text)
+                    if not t.get("relevant") or (t.get("significance") or "").lower() == "low":
+                        rows.append({"cid": cid, "name": name, "date": date_filed, "court_id": court_id,
+                                     "status": "triage-drop", "reason": t.get("reason", ""),
+                                     "triage_sig": (t.get("significance") or "")})
+                        consec = 0; continue
+                    note = t.get("note") or ""
+                    time.sleep(0.4)
+                # Tier 3 -- summarize (gated on relevance / significance / area / court below)
+                n_opus += 1
+                v = update.summarize(court_id, name, docket, date_filed, text, note,
+                                     cl_status=r.get("precedential_status", ""))
+                consec = 0
+            except update.ConfigError as e:
+                abort_reason = "configuration error: %s" % e
+                print("  ! %s (nothing committed)" % abort_reason); aborted = True; break
+            except Exception as e:
+                print("  ! error on cluster %s (%s): %s" % (cid, name, e))
+                rows.append({"cid": cid, "name": name, "status": "error", "detail": str(e)[:160]})
+                consec += 1
+                if consec >= breaker:
+                    abort_reason = "%d consecutive failures (API likely throttled)" % consec
+                    print("  ! %s; stopping early" % abort_reason); aborted = True; break
+                continue
+
+            # Summarizer gates, matching update.main().
+            reason = ""
+            if not v.get("relevant"):
+                reason = "summarizer: not relevant"
+            elif (v.get("significance") or "").lower() == "low":
+                reason = "summarizer: low significance"
+            areas = [a for a in (v.get("areas") or []) if a in update.VALID_AREAS]
+            court = update.COURT_MAP.get(court_id) or (v.get("court") if v.get("court") in update.VALID_KEYS else None)
+            if not reason and not areas:
+                reason = "no recognized practice area"
+            if not reason and not court:
+                reason = "unrecognized court id %s" % court_id
+            if reason:
+                rows.append({"cid": cid, "name": (v.get("name") or name), "date": date_filed,
+                             "court_id": court_id, "status": "summ-drop", "reason": reason})
+                continue
+
+            entry = update.assemble_entry(v, cid, name, court, areas, docket, date_filed, url, date_filed)
+            # Official-link enrichment, free: the search result already carried the court's
+            # own PDF download_url, so no extra REST. Set it for the federal courts (the
+            # daily pipeline's ca11/scotus source); scotga's official link comes from a
+            # different source and is left to the daily path, fail-open.
+            if entry["court"] in ("ca11", "scotus"):
+                ou = _norm_https(r.get("download_url"))
+                if ou:
+                    entry["official_url"] = ou
+
+            problems = []
+            if update.CITE_RE.search(entry["synopsis"]) or update.CITE_RE.search(entry["why"]):
+                problems.append("reporter-style citation in summary")
+            if not entry["disposition"]:
+                problems.append("no disposition")
+            if (v.get("confidence") or "").lower() == "low":
+                problems.append("low confidence")
+
+            new_cards.append(entry); have.add(cid)
+            rows.append({"cid": cid, "name": entry["name"], "date": date_filed, "court": entry["court"],
+                         "disp": entry["disposition"], "areas": areas,
+                         "sig": (v.get("significance") or ""), "status": "card", "problems": problems})
+            print("  + %s [%s] %s areas=%s sig=%s%s"
+                  % (entry["name"], date_filed, entry["disposition"] or "(none)", ",".join(areas),
+                     v.get("significance"), ("  REVIEW: " + "; ".join(problems)) if problems else ""))
+
+    report = render_sweep_report(after, before, courts, rows, new_cards,
+                                 n_screen, n_triage, n_opus, aborted, abort_reason)
+    print("\n" + report)
+    print("CourtListener REST calls: %d" % cl_rate.PACER.calls)
+
+    if DRY_RUN:
+        print("DRY_RUN: nothing written. %d card(s) would be added.\n" % len(new_cards))
+        print(json.dumps(new_cards, indent=2, ensure_ascii=False))
+        return
+
+    if not new_cards:
+        _write_pr_body(report)
+        print("No new cards; nothing written.")
+        return
+
+    merged = entries + new_cards
+    safeio.atomic_write_json(update.JSON_PATH, merged)
+    n, _total = render.render(merged)
+    _write_pr_body(report)
+    print("wrote %d new card(s); opinions.json now %d; rendered %d into opinions.html and opinions.xml."
+          % (len(new_cards), len(merged), n))
+
+
 if __name__ == "__main__":
-    run()
+    if SWEEP:
+        run_sweep()
+    else:
+        run()
