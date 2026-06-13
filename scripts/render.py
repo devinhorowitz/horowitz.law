@@ -294,7 +294,7 @@ def card_html(e, permalink_link=True):
     official = (e.get("official_url") or "").strip()
     if official:
         name_html = (f'<a href="{_attr(official)}" target="_blank" rel="noopener noreferrer" '
-                     f'title="Official opinion \u00b7 Supreme Court of Georgia">{_esc(e["name"])}</a>')
+                     f'title="Official opinion \u00b7 {_attr(COURT_LABELS[e["court"]])}">{_esc(e["name"])}</a>')
         source_label = "Full record on CourtListener \u2192"
     else:
         name_html = _esc(e["name"])

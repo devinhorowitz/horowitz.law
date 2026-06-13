@@ -501,6 +501,29 @@ def cluster_precedential_status(r, deadline=None):
         return ""
 
 
+def official_download_url(r, deadline=None):
+    """The court's own opinion-PDF URL for a federal cluster: CourtListener's
+    download_url for the lead sub-opinion (media.ca11.uscourts.gov for the
+    Eleventh Circuit, www.supremecourt.gov for SCOTUS), normalized to https. Read
+    through cl_get so it shares the per-run CourtListener budget and pacing rather
+    than fetching the court site directly, which a server-side run cannot always
+    reach. Empty string on any miss so it never blocks a run; a ConfigError (auth,
+    credit, or model) still propagates, like cluster_precedential_status."""
+    try:
+        oids = opinion_ids_of(r, deadline)
+        if not oids:
+            return ""
+        o = cl_get("/api/rest/v4/opinions/%s/" % oids[0], deadline)
+        u = (o.get("download_url") or "").strip()
+        if u.lower().startswith("http://"):
+            u = "https://" + u[len("http://"):]
+        return u if u.lower().startswith("https://") else ""
+    except ConfigError:
+        raise
+    except Exception:
+        return ""
+
+
 def opinion_text(oid, deadline=None):
     o = cl_get("/api/rest/v4/opinions/%s/" % oid, deadline)
     for f in ("plain_text", "html_with_citations", "html", "xml_harvard", "html_lawbox", "html_columbia"):
@@ -1292,18 +1315,31 @@ def main():
             entry["law_applied"] = _la
         if additional_holdings:
             entry["additional_holdings"] = additional_holdings
-        # Official-link enrichment (Phase 5): for a Supreme Court of Georgia card,
-        # resolve the court's own opinion PDF from gasupreme.us so the rendered
-        # title links to the official source, CourtListener kept as the full record
-        # below. Stored only when resolved, matching the lean-JSON pattern above.
-        # Fail-open: any miss or error leaves the field absent and the card renders
-        # exactly as before. (A backfill pass, scripts/official_ga.py, fills any
-        # card the funnel missed, e.g. when the year page lags CourtListener.)
+        # Official-link enrichment (Phase 5): the rendered title links to the
+        # court's own opinion PDF, with CourtListener kept as the full record
+        # below. Two sources by court. Georgia Supreme Court: resolve the PDF from
+        # gasupreme.us (scripts/official_ga.py). Eleventh Circuit and SCOTUS: the
+        # court's own PDF URL is already on CourtListener as the opinion's
+        # download_url (media.ca11.uscourts.gov, www.supremecourt.gov), so read it
+        # through the same budgeted cl_get rather than fetching the court site,
+        # which a server-side run cannot always reach. Stored only when resolved,
+        # matching the lean-JSON pattern above. Fail-open: any miss leaves the
+        # field absent and the card renders exactly as before; a ConfigError from
+        # cl_get still propagates.
         if entry["court"] == "scotga":
             try:
                 _ou = official_ga.official_url_for(entry)
                 if _ou:
                     entry["official_url"] = _ou
+            except Exception as _oe:
+                _dbg("official_url lookup failed (%s)" % _oe)
+        elif entry["court"] in ("ca11", "scotus"):
+            try:
+                _ou = official_download_url(r, deadline=run_start + BUDGET_SEC)
+                if _ou:
+                    entry["official_url"] = _ou
+            except ConfigError:
+                raise
             except Exception as _oe:
                 _dbg("official_url lookup failed (%s)" % _oe)
 
