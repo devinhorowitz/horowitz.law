@@ -351,63 +351,6 @@ def search_court(court, since, deadline=None):
     return out
 
 
-# CourtListener stores opinion PDFs as static files here; fetching one costs no REST
-# quota and needs no token, the same Phase-2 path the daily pipeline reads PDFs from.
-STORAGE = "https://storage.courtlistener.com/"
-
-
-def search_window(court, after, before, deadline=None, max_pages=400):
-    """Discover published opinions for one court in the [after, before] filing-date
-    window via the CourtListener v4 search API. Unlike feed_court, which reaches only
-    the recent feed, this reaches back arbitrarily, so it is the backfill's discovery
-    path. Returns candidate dicts in the same shape feed_court yields (cluster_id,
-    caseName, court_id, absolute_url, dateFiled, docketNumber, snippet, pdf_url) plus
-    download_url (the court's own opinion PDF, for official_url) and precedential_status.
-
-    Each search result already carries the lead opinion's local_path (a free
-    storage.courtlistener.com PDF), its download_url, and an opening-text snippet, so a
-    swept candidate needs no per-cluster cluster/opinion/docket lookup: the only REST
-    cost is the search pages (v4 returns ~20 per cursor page). Goes through cl_get, so
-    it shares the per-run budget and pacing and defers cleanly on a 429. max_pages caps
-    a runaway; a one-year single-court window is well under it."""
-    params = {"type": "o", "court": court, "filed_after": after, "filed_before": before,
-              "stat_Published": "on", "order_by": "dateFiled desc", "page_size": "20"}
-    url = "https://www.courtlistener.com/api/rest/v4/search/?" + urllib.parse.urlencode(params)
-    out, pages = [], 0
-    while url and pages < max_pages:
-        if deadline and time.time() > deadline:
-            break
-        data = cl_get(url, deadline)
-        for r in data.get("results", []):
-            cid = r.get("cluster_id")
-            if not cid:
-                continue
-            ops = r.get("opinions") or []
-            op0 = ops[0] if (ops and isinstance(ops[0], dict)) else {}
-            local_path = (op0.get("local_path") or "").strip()
-            download_url = (op0.get("download_url") or "").strip()
-            pdf_url = (STORAGE + local_path) if local_path else (
-                download_url if download_url.lower().startswith("http") else "")
-            snippet = re.sub(r"\s+", " ", (op0.get("snippet") or "")).strip()
-            out.append({
-                "cluster_id": int(cid),
-                "caseName": (r.get("caseName") or r.get("caseNameFull") or "").strip(),
-                "court_id": (r.get("court_id") or court),
-                "absolute_url": r.get("absolute_url") or ("/opinion/%d/" % int(cid)),
-                "dateFiled": (r.get("dateFiled") or "")[:10],
-                "docketNumber": (r.get("docketNumber") or "").strip(),
-                "snippet": snippet[:1500],
-                "pdf_url": pdf_url,
-                "download_url": download_url,
-                "precedential_status": (r.get("status") or "").strip(),
-                "opinions": [{"id": o["id"]} for o in ops if isinstance(o, dict) and o.get("id")],
-            })
-        url = data.get("next")
-        pages += 1
-        time.sleep(1)
-    return out
-
-
 def cluster_id_of(r):
     if r.get("cluster_id"):
         return int(r["cluster_id"])
