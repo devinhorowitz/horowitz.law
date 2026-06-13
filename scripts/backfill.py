@@ -517,29 +517,10 @@ def run_sweep():
             if cid in have:
                 rows.append({"cid": cid, "name": name, "status": "skip-exists"}); continue
 
-            # Text: PDF enclosure first (free, no REST quota); REST fallback only when the
-            # PDF is unusable, gated by the shared budget, with the same _pdf_ok check on
-            # both so junk text can never silently reach triage (the recall-hole fix).
-            tdl = run_start + budget
-            text = update.pdf_text(r.get("pdf_url"), deadline=tdl)
-            if not update._pdf_ok(text):
-                text = ""
-                if cl_rate.remaining() > 0:
-                    try:
-                        rest = update.opinion_text_full(r, deadline=tdl)
-                        if update._pdf_ok(rest):
-                            text = rest
-                    except cl_rate.RateBudgetExceeded:
-                        note = cl_rate.PACER.defer_note()
-                        abort_reason = "CourtListener throttled during text fetch%s" % ((" -- " + note) if note else "")
-                        print("\nABORT: %s. Re-dispatch after the budget resets." % abort_reason)
-                        aborted = True; break
-            if not text:
-                rows.append({"cid": cid, "name": name, "status": "error", "detail": "no opinion text"})
-                continue
-
             try:
-                # Tier 1 -- screen (GATE)
+                # Tier 1 -- screen (GATE). Uses the search snippet (free), so candidates
+                # are screened BEFORE the opinion is fetched, the same order as the daily
+                # pipeline: the ~90% the screen drops never trigger a download.
                 if update.SCREEN_MODEL:
                     n_screen += 1
                     s = update.screen(name, docket, r.get("snippet") or "")
@@ -548,7 +529,24 @@ def run_sweep():
                                      "status": "screen-drop", "reason": s.get("reason", "")})
                         consec = 0; continue
                     time.sleep(0.4)
-                # Tier 2 -- triage (GATE)
+
+                # Full opinion text, fetched only for screen survivors: PDF enclosure first
+                # (free CourtListener storage), REST fallback only if the PDF is unusable,
+                # gated by the shared budget, with the same _pdf_ok check on both so junk
+                # text can never silently reach triage (the recall-hole fix).
+                tdl = run_start + budget
+                text = update.pdf_text(r.get("pdf_url"), deadline=tdl)
+                if not update._pdf_ok(text):
+                    text = ""
+                    if cl_rate.remaining() > 0:
+                        rest = update.opinion_text_full(r, deadline=tdl)
+                        if update._pdf_ok(rest):
+                            text = rest
+                if not text:
+                    rows.append({"cid": cid, "name": name, "status": "error", "detail": "no opinion text"})
+                    consec = 0; continue
+
+                # Tier 2 -- triage (GATE). Reads the full opinion text.
                 note = ""
                 if update.TRIAGE_MODEL:
                     n_triage += 1
@@ -565,6 +563,11 @@ def run_sweep():
                 v = update.summarize(court_id, name, docket, date_filed, text, note,
                                      cl_status=r.get("precedential_status", ""))
                 consec = 0
+            except cl_rate.RateBudgetExceeded:
+                note = cl_rate.PACER.defer_note()
+                abort_reason = "CourtListener throttled during %s text fetch%s" % (court, (" -- " + note) if note else "")
+                print("\nABORT: %s. Re-dispatch after the budget resets." % abort_reason)
+                aborted = True; break
             except update.ConfigError as e:
                 abort_reason = "configuration error: %s" % e
                 print("  ! %s (nothing committed)" % abort_reason); aborted = True; break
