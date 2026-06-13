@@ -61,6 +61,13 @@ jobs:
           python -m py_compile scripts/*.py
           cd scripts && python -c "import cl_rate, safeio, jurisdictions, render, treatment_core, update, treatment, backfill, digest, queue_cases, assess_precedential, courts, golden_check, check_site, alert, tagfill, official_ga; print('all imports resolve')"
 
+      # Imports resolving is not enough: a script can import fine yet call a sibling
+      # function that was dropped or renamed (a stale upload that reverts
+      # update.search_window is the case that motivated this). This asserts every
+      # first-party module.attr reference in the scripts resolves against the module.
+      - name: Cross-module references resolve
+        run: python scripts/check_refs.py
+
       - name: Validate workflow YAML
         run: python -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml')]; print('workflow YAML parses')"
 
