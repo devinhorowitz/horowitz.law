@@ -626,7 +626,8 @@
     "first_impression": true,
     "law_applied": "federal",
     "editor_note": "June 11, 2026: The Supreme Court answered. Montgomery v. Caribe Transport II abrogated this decision's FAAAA-preemption holding, and the Eleventh Circuit is already vacating judgments that relied on it (see the Hodge remand). Treatment upgrade to follow on Shepard's confirmation.",
-    "treatment_note": "Overruled in part by Montgomery v. Caribe Transport II, LLC, 146 S. Ct. 1199 (2026); Shepard's confirmed June 12, 2026. The safety-exception holding is gone — negligent-hiring claims against brokers survive under 49 U.S.C. § 14501(c)(2)(A). Montgomery assumed without deciding the § 14501(c)(1) preemption-scope point Aspen also decided, and Aspen arose from cargo theft rather than personal injury."
+    "treatment_note": "Overruled in part by Montgomery v. Caribe Transport II, LLC, 146 S. Ct. 1199 (2026); Shepard's confirmed June 12, 2026. The safety-exception holding is gone — negligent-hiring claims against brokers survive under 49 U.S.C. § 14501(c)(2)(A). Montgomery assumed without deciding the § 14501(c)(1) preemption-scope point Aspen also decided, and Aspen arose from cargo theft rather than personal injury.",
+    "official_url": "https://media.ca11.uscourts.gov/opinions/pub/files/202210740.pdf"
   },
   {
     "cluster_id": 10872097,
@@ -647,7 +648,8 @@
     "why": "The decision clarifies that a third-party claims adjuster owes no duty to advise an insurer about its own extracontractual bad-faith exposure and that an insurer's independent settlement and payment decisions, not the adjuster's handling, control causation in a negligence claim against the adjuster.",
     "precedential": "unpublished",
     "first_seen": "2026-06-08",
-    "law_applied": "fl"
+    "law_applied": "fl",
+    "official_url": "https://media.ca11.uscourts.gov/opinions/unpub/files/202413643.pdf"
   },
   {
     "cluster_id": 10872456,
@@ -703,7 +705,8 @@
         "why": "It clarifies that equitable estoppel cannot compel a nonsignatory to arbitrate where the asserted claims rest on independent statutory duties and do not depend on the contract containing the arbitration clause."
       }
     ],
-    "law_applied": "fl"
+    "law_applied": "fl",
+    "official_url": "https://media.ca11.uscourts.gov/opinions/unpub/files/202510140.pdf"
   },
   {
     "cluster_id": 10873765,
@@ -725,7 +728,8 @@
     "precedential": "unpublished",
     "first_seen": "2026-06-11",
     "first_impression": true,
-    "law_applied": "ga"
+    "law_applied": "ga",
+    "official_url": "https://media.ca11.uscourts.gov/opinions/unpub/files/202411398.pdf"
   },
   {
     "cluster_id": 10873711,
@@ -766,7 +770,8 @@
     "why": "It establishes that whether a plaintiff-debtor's failure to schedule a personal-injury claim was inadvertent or mistaken for judicial-estoppel purposes turns on the totality of the circumstances rather than a knowledge-plus-motive test, governing how civil litigants raise and defend against judicial estoppel when a tort claim was omitted from bankruptcy schedules.",
     "precedential": "published",
     "first_seen": "2026-06-11",
-    "law_applied": "federal"
+    "law_applied": "federal",
+    "official_url": "https://www.supremecourt.gov/opinions/25pdf/25-6_d1o2.pdf"
   },
   {
     "cluster_id": 10873661,
@@ -795,7 +800,8 @@
         "synopsis": "The court affirmed dismissal of the negligent-hiring claim against the shipper, applying Maryland law, which requires that the defendant's failure to undertake reasonable inquiry resulted in the contractor's hiring and that the hiring proximately caused the plaintiff's injury. The shipper hired Schneider, who hired Coyote, who hired the carrier, leaving the shipper three steps removed from hiring the operator. Because plaintiffs neither identified authority extending the theory that far nor alleged that the selection of Schneider was negligent, the claim failed, and influence over the hiring process was held not equivalent to actually hiring the carrier.",
         "why": "It clarifies that negligent-hiring liability under Maryland law does not extend to a party several contractual layers removed from the entity that hired the operator absent an allegation tying the harm to the directly hired contractor."
       }
-    ]
+    ],
+    "official_url": "https://media.ca11.uscourts.gov/opinions/unpub/files/202512983.pdf"
   },
   {
     "cluster_id": 10858760,
@@ -814,6 +820,7 @@
     "synopsis": "An injured motorist sued a transportation broker for negligent hiring, alleging that the broker selected a motor carrier with a subpar federal safety rating that was reasonably likely to cause crashes. The Court held that even assuming the FAAAA's preemption provision in 49 U.S.C. section 14501(c)(1) would otherwise reach the negligent-hiring claim, the safety exception in section 14501(c)(2)(A) saves it because such a claim is one regulating safety 'with respect to motor vehicles.' Construing 'with respect to' to mean 'concerns' or 'regards,' the Court reasoned that requiring a broker to exercise ordinary care in selecting a carrier concerns the trucks that will transport the goods.",
     "why": "The decision resolves a circuit split and establishes that state-law negligent-hiring claims against freight brokers who select unsafe motor carriers are not preempted by the FAAAA, abrogating the contrary Eleventh Circuit rule that had governed in Georgia.",
     "precedential": "published",
-    "first_seen": "2026-05-14"
+    "first_seen": "2026-05-14",
+    "official_url": "https://www.supremecourt.gov/opinions/25pdf/24-1238_1b7d.pdf"
   }
 ]
