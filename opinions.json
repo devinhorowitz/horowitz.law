@@ -1032,5 +1032,47 @@
         "why": "The decision fixes the moment a defendant's repose-based due process rights vest at the expiration of the repose period rather than at the time of the alleged conduct, defining when legislative or emergency tolling may constitutionally reach a repose statute."
       }
     ]
+  },
+  {
+    "cluster_id": 10339957,
+    "name": "Waetzig v. Halliburton Energy Services, Inc.",
+    "court": "scotus",
+    "division": null,
+    "date": "2025-02-26",
+    "dockets": [
+      "23-971"
+    ],
+    "disposition": "reversed and remanded",
+    "areas": [
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10339957/waetzig-v-halliburton-energy-services-inc/",
+    "synopsis": "A plaintiff voluntarily dismissed his federal lawsuit without prejudice under Rule 41(a) and submitted his claims to arbitration, then sought to reopen the dismissed case under Rule 60(b) after losing at arbitration. The Supreme Court unanimously held that a Rule 41(a) voluntary dismissal without prejudice qualifies as a \"final proceeding\" under Rule 60(b), so a district court may use Rule 60(b) to reopen such a case. The Court rejected importing the appellate-jurisdiction concept of finality from 28 U.S.C. section 1291 into Rule 60(b), and read \"judgment, order, or proceeding\" as ascending in generality so that \"proceeding\" reaches all steps in an action. The Court expressly declined to decide whether the district court had jurisdiction over the motion to vacate the arbitration award, leaving that and the propriety of relief for remand.",
+    "why": "It clarifies that a Rule 41(a) voluntary dismissal without prejudice is reachable under Rule 60(b), establishing the mechanism by which a litigant may ask a federal court to reopen a case that was voluntarily dismissed.",
+    "precedential": "published",
+    "first_seen": "2025-02-26",
+    "law_applied": "federal",
+    "official_url": "https://www.supremecourt.gov/opinions/24pdf/23-971_l6gn.pdf"
+  },
+  {
+    "cluster_id": 10776876,
+    "name": "Royal Canin U.S.A., Inc. v. Wullschleger",
+    "court": "scotus",
+    "division": null,
+    "date": "2025-01-15",
+    "dockets": [
+      "23-677"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10776876/royal-canin-u-s-a-v-wullschleger/",
+    "synopsis": "Plaintiff sued in state court asserting both federal and state-law claims, and defendant removed based on the federal claim, with the state claims proceeding under supplemental jurisdiction. After removal, plaintiff amended the complaint to delete every federal-law claim and sought remand. A unanimous Court held that when a post-removal amendment excises the federal-law claims that enabled removal, leaving only state-law claims, the federal court loses supplemental jurisdiction under 28 U.S.C. section 1367 and must remand to state court, because section 1367 draws no distinction between original and removed cases and jurisdiction follows the amended, now operative, pleading. The Court treated the contrary statement in the Rockwell footnote as non-binding dictum that does not withstand analysis.",
+    "why": "It establishes that a plaintiff who originally pleads federal claims alongside state-law claims can defeat federal jurisdiction after removal by amending to drop all federal claims, requiring remand to state court, which directly bears on removal and remand strategy whenever federal and state tort claims are pleaded together.",
+    "precedential": "published",
+    "first_seen": "2025-01-15",
+    "law_applied": "federal",
+    "official_url": "https://www.supremecourt.gov/opinions/24pdf/604us1r05_db8e.pdf"
   }
 ]
