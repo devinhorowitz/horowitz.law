@@ -132,6 +132,35 @@ jobs:
           git commit -m "opinions: record run stats; mark screened cases seen [skip ci]"
           git push origin HEAD:main
 
+      # Writes a tiny status.json (last-scanned time, whether a review batch is pending,
+      # when content last landed on main) straight to main -- the same no-review lane the
+      # no-op commit above uses. The opinions page reads it client-side for its freshness
+      # indicator. Pure metadata, so [skip ci] and no PR. Runs on any successful, non-skipped
+      # run (content, state, or none); a guard-skip means no scan happened, so nothing to
+      # refresh. Best-effort: continue-on-error keeps a status hiccup from failing the funnel.
+      - name: Publish scan status
+        if: steps.guard.outputs.skip != 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -f -B bot/scan-status origin/main
+          pending=$(gh pr list --repo "$GITHUB_REPOSITORY" --head bot/opinions-update --state open --json number --jq 'length' 2>/dev/null || echo 0)
+          scanned_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          content_updated_at=$(git log -1 --format=%cI -- opinions.json 2>/dev/null || true)
+          printf '{\n  "scanned_at": "%s",\n  "pending": %s,\n  "content_updated_at": "%s"\n}\n' \
+            "$scanned_at" "${pending:-0}" "$content_updated_at" > status.json
+          git add status.json
+          if git diff --cached --quiet; then
+            echo "status.json unchanged; nothing to commit."
+          else
+            git commit -m "opinions: scan status [skip ci]"
+            git push origin HEAD:main
+          fi
+
       # Surfaces a broken run instead of letting it fail silently. Runs only on failure,
       # finds the one open tracking issue and comments, or opens it the first time, so
       # repeated failures collect on a single issue rather than spamming new ones.
