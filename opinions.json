@@ -1592,5 +1592,24 @@
       }
     ],
     "official_url": "https://media.ca11.uscourts.gov/opinions/pub/files/202211359.pdf"
+  },
+  {
+    "cluster_id": 10875034,
+    "name": "Crook v. Six Flags Over Georgia II, L.P.",
+    "court": "ctapp",
+    "division": "Third Division",
+    "date": "2026-06-15",
+    "dockets": [
+      "A26A0470"
+    ],
+    "disposition": "reversed and remanded with direction",
+    "areas": [
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10875034/lokin-crook-v-six-flags-over-georgia-ii-lp/",
+    "synopsis": "Plaintiff, the surviving spouse and administrator of an employee who died after falling from a cargo van at a theme park, sued the employer and a co-worker, and the trial court dismissed under OCGA 9-11-12(b)(1) for lack of subject matter jurisdiction based on the exclusive remedy provision of the Workers' Compensation Act. The Court of Appeals held that the Act's exclusivity bar is a statutory affirmative defense, not a question of subject matter jurisdiction, so the employer bears the burden of proving the bar applies and the defense can be waived if not timely raised. The court disapproved Kellogg Co. v. Pinkston, Savannah Hospitality Servs. v. Scriven, and T & R S. Sanitation v. Lowe to the extent they treated the exclusivity bar as jurisdictional. The trial court therefore erred in placing the burden on plaintiff to disprove the bar.",
+    "why": "This decision establishes that the Workers' Compensation Act exclusive remedy provision must be litigated as a waivable affirmative defense, with the burden on the employer, rather than as a non-waivable subject matter jurisdiction bar, which changes how WCA exclusivity is raised and proved in Georgia tort and wrongful death cases.",
+    "precedential": "published",
+    "first_seen": "2026-06-15"
   }
 ]
