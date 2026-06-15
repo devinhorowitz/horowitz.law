@@ -1208,6 +1208,14 @@ def assemble_entry(v, cluster_id, name, court, areas, docket, date_filed, url, f
     _la = _la.strip().lower() if isinstance(_la, str) else ""
     if entry["court"] in ("ca11", "scotus") and _la in ({"federal"} | set(jurisdictions.JURISDICTIONS)):
         entry["law_applied"] = _la
+    # A state court outside the active jurisdiction carries its state so the
+    # renderer files the card under the right jurisdiction filter instead of the
+    # active-jurisdiction fallback (a Supreme Court of Florida card is stamped
+    # "fl"). Active-jurisdiction state cards stay unstamped, so their stored shape
+    # is unchanged; federal cards derive bindingness from the court at render time.
+    _jx = jurisdictions.COURT_JURISDICTION.get(entry["court"])
+    if jurisdictions.COURT_SYSTEM.get(entry["court"]) == "state" and _jx and _jx != jurisdictions.JURISDICTION:
+        entry["jurisdiction"] = _jx
     if additional_holdings:
         entry["additional_holdings"] = additional_holdings
     return entry

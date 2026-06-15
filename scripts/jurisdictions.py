@@ -80,28 +80,65 @@ _cfg = JURISDICTIONS[ACTIVE]
 _courts = _cfg["courts"]
 
 LABEL = _cfg["label"]                                   # e.g. "Georgia"
-COURTS_ALL = [c["cl"] for c in _courts]                 # full CourtListener id set
-# Feed/iteration list; OPINIONS_COURTS narrows it (escape hatch) without touching
-# COURT_MAP, COURTS_ALL, or the labels.
-COURTS = [c.strip() for c in os.environ.get("OPINIONS_COURTS", ",".join(COURTS_ALL)).split(",") if c.strip()]
-COURT_MAP = {c["cl"]: c["key"] for c in _courts}        # CourtListener id -> internal key
-COURT_LABELS = {c["key"]: c["label"] for c in _courts}  # internal key -> human label
-COURT_SYSTEM = {c["key"]: c["system"] for c in _courts}  # internal key -> "state" | "federal"
-TITLE_SUFFIX = {c["key"]: c["suffix"] for c in _courts}  # internal key -> citation suffix
-VALID_KEYS = tuple(c["key"] for c in _courts)           # internal keys (fallback validation)
 JURISDICTION = ACTIVE                                    # active jurisdiction key, e.g. "ga"
-# Federal-overlay jurisdictions: states this watch does not yet cover at the
-# state-court level, but whose FEDERAL courts are bound by decisions already in
-# the feed (the Eleventh Circuit sits over Georgia, Florida, and Alabama; the
-# Supreme Court over everything). They appear in the site's jurisdiction filter
-# with a "\u00b7 federal" label and never on the subscribe form: filters show
-# what exists, subscriptions promise curation, and the screen curates for
-# Georgia relevance only until a state is covered in full (mode: "full").
-JURISDICTIONS["fl"] = {"label": "Florida", "mode": "overlay", "courts": {}}
-JURISDICTIONS["al"] = {"label": "Alabama", "mode": "overlay", "courts": {}}
+# Federal-overlay jurisdictions: states this watch does not cover in full,
+# registered AFTER active_key() so they can be overlaid and (partially) monitored
+# but never selected as the active jurisdiction. A federal court's decisions bind
+# them by judicial hierarchy (the Eleventh Circuit sits over Georgia, Florida, and
+# Alabama; the Supreme Court over everything). They appear in the site's
+# jurisdiction filter with a "\u00b7 federal" label and never on the subscribe
+# form: filters show what exists, subscriptions promise curation, and the screen
+# curates for Georgia relevance only until a state is covered in full (mode: "full").
+#
+# Florida is monitored at the high-court level: the Supreme Court of Florida is in
+# the feed and screened for Georgia relevance like any other court, so most
+# Florida-law decisions are dropped at triage and surface only in the rejection
+# log, while the District Courts of Appeal -- where most Florida appellate law
+# lives, and which CourtListener does not currently ingest -- await a separate
+# source. Its cards carry jurisdiction "fl" (see COURT_JURISDICTION) so they file
+# under the Florida filter, not the active-jurisdiction fallback. Alabama stays
+# overlay-only for now (both its courts are in CourtListener when we turn them on).
+JURISDICTIONS["fl"] = {
+    "label": "Florida", "mode": "overlay", "filter_note": "supreme court",
+    "courts": [
+        {"cl": "fla", "key": "scotfl", "label": "Supreme Court of Florida", "suffix": " (Fla.)", "system": "state"},
+    ],
+}
+JURISDICTIONS["al"] = {"label": "Alabama", "mode": "overlay", "courts": []}
+
+# Court tables, derived from the active jurisdiction's courts plus any courts of
+# other registered jurisdictions monitored at less than full coverage (today just
+# the Supreme Court of Florida). Each monitored extra carries its owning
+# jurisdiction key ("jx") so a state card stamps under the right state rather than
+# the active-jurisdiction fallback. Active courts come first; OPINIONS_COURTS still
+# narrows the feed list (escape hatch) without touching the maps.
+_extra_courts = []
+for _jk, _jcfg in JURISDICTIONS.items():
+    if _jk == ACTIVE:
+        continue
+    for _c in (_jcfg.get("courts") or []):
+        if isinstance(_c, dict):
+            _extra_courts.append({**_c, "jx": _jk})
+_all_courts = list(_courts) + _extra_courts
+
+COURTS_ALL = [c["cl"] for c in _all_courts]                  # full CourtListener id set (monitored)
+COURTS = [c.strip() for c in os.environ.get("OPINIONS_COURTS", ",".join(COURTS_ALL)).split(",") if c.strip()]
+COURT_MAP = {c["cl"]: c["key"] for c in _all_courts}         # CourtListener id -> internal key
+COURT_LABELS = {c["key"]: c["label"] for c in _all_courts}   # internal key -> human label
+COURT_SYSTEM = {c["key"]: c["system"] for c in _all_courts}  # internal key -> "state" | "federal"
+TITLE_SUFFIX = {c["key"]: c["suffix"] for c in _all_courts}  # internal key -> citation suffix
+VALID_KEYS = tuple(c["key"] for c in _all_courts)            # internal keys (fallback validation)
+COURT_JURISDICTION = {c["key"]: c.get("jx", ACTIVE) for c in _all_courts}  # internal key -> owning jurisdiction
 
 def jurisdiction_mode(key):
     return JURISDICTIONS.get(key, {}).get("mode", "full")
+
+def jurisdiction_filter_note(key):
+    """Optional jurisdiction-filter label note: a partially covered state can name
+    its coverage (Florida shows "supreme court", its only screened state court).
+    When absent the renderer falls back to the mode-based default ("\u00b7 federal"
+    for overlays, nothing for a fully covered state)."""
+    return JURISDICTIONS.get(key, {}).get("filter_note")
 
 # Which registered jurisdictions a federal court's published decisions bind, by
 # pure judicial hierarchy. "*" means every registered jurisdiction, present and
