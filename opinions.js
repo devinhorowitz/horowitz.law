@@ -194,3 +194,53 @@
 
   apply();
 })();
+
+/* Pipeline-freshness indicator. Reads /status.json (refreshed by the opinions
+   workflow every run) and fills the masthead status line: amber when a review
+   batch is pending, green when decisions landed in the last 48h, otherwise a
+   quiet "up to date", plus a relative "last scanned" time. Network-only and
+   best-effort, so if status.json is missing or the fetch fails the line stays
+   hidden. textContent only, per the CSP. */
+(function () {
+  var el = document.getElementById('scanStatus');
+  if (!el) return;
+  var label = el.querySelector('.scan-label'),
+      scanned = el.querySelector('.scan-scanned');
+
+  function ago(iso) {
+    var t = Date.parse(iso || '');
+    if (isNaN(t)) return '';
+    var s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 90) return 'just now';
+    if (s < 3600) return Math.round(s / 60) + ' min ago';
+    if (s < 86400) { var h = Math.round(s / 3600); return h + (h === 1 ? ' hour ago' : ' hours ago'); }
+    var d = Math.round(s / 86400);
+    return d + (d === 1 ? ' day ago' : ' days ago');
+  }
+
+  fetch('/status.json', { cache: 'no-store' }).then(function (r) {
+    if (!r.ok) throw new Error('status ' + r.status);
+    return r.json();
+  }).then(function (s) {
+    var pending = Number(s.pending) || 0;
+    var updated = Date.parse(s.content_updated_at || '');
+    var state, text;
+    if (pending > 0) {
+      state = 'is-pending';
+      text = 'New decisions pending review';
+    } else if (!isNaN(updated) && (Date.now() - updated) < 48 * 3600 * 1000) {
+      state = 'is-fresh';
+      text = 'Updated ' + ago(s.content_updated_at);
+    } else {
+      state = 'is-steady';
+      text = 'Up to date';
+    }
+    el.classList.add(state);
+    if (label) label.textContent = text;
+    if (scanned && s.scanned_at) {
+      scanned.textContent = '\u00b7 last scanned ' + ago(s.scanned_at);
+      try { scanned.title = 'Last scanned ' + new Date(Date.parse(s.scanned_at)).toLocaleString(); } catch (e) {}
+    }
+    el.hidden = false;
+  }).catch(function () { /* leave the line hidden */ });
+})();
