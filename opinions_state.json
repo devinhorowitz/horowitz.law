@@ -202,8 +202,17 @@
     10875034,
     10875035,
     10875036,
-    10875037
+    10875037,
+    10875072,
+    10875081,
+    10875086,
+    10875087,
+    10875088,
+    10875089,
+    10875157,
+    10875158,
+    10875159
   ],
-  "updated": "2026-06-15T14:39:55Z",
+  "updated": "2026-06-15T19:58:52Z",
   "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
