@@ -197,9 +197,17 @@ def _jurisdiction_options():
     out = []
     for key, label in jurisdictions.ALL_JURISDICTIONS:
         sel = " selected" if key == jurisdictions.JURISDICTION else ""
-        # Overlay jurisdictions are honest at the point of choice: the option
-        # itself says the view is federal decisions only.
-        suffix = " \u00b7 federal" if jurisdictions.jurisdiction_mode(key) == "overlay" else ""
+        # Options are honest at the point of choice. A jurisdiction may name its
+        # coverage explicitly (Florida: "supreme court", the only state court
+        # screened there); otherwise an overlay says the view is federal-only, and
+        # a fully covered state carries no qualifier.
+        note = jurisdictions.jurisdiction_filter_note(key)
+        if note:
+            suffix = " \u00b7 " + _esc(note)
+        elif jurisdictions.jurisdiction_mode(key) == "overlay":
+            suffix = " \u00b7 federal"
+        else:
+            suffix = ""
         out.append('          <option value="%s"%s>%s%s</option>' % (key, sel, _esc(label.lower()), suffix))
     return "\n".join(out)
 
