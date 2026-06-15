@@ -6,8 +6,17 @@
     <atom:link href="https://horowitz.law/opinions.xml" rel="self" type="application/rss+xml" />
     <description>AI-assisted synopses of new Georgia appellate, Eleventh Circuit, and U.S. Supreme Court opinions, filtered for civil litigation and insurance practice. Each synopsis is AI-drafted; the linked opinion is the authority. A curated core, not a complete docket. This feed covers the most recent two years; older opinions are archived by year at https://horowitz.law/archive.</description>
     <language>en-us</language>
-    <lastBuildDate>Thu, 11 Jun 2026 12:00:00 -0400</lastBuildDate>
+    <lastBuildDate>Mon, 15 Jun 2026 12:00:00 -0400</lastBuildDate>
     <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>
+    <item>
+      <title>Crook v. Six Flags Over Georgia II, L.P. (Ga. Ct. App.)</title>
+      <link>https://www.courtlistener.com/opinion/10875034/lokin-crook-v-six-flags-over-georgia-ii-lp/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10875034/lokin-crook-v-six-flags-over-georgia-ii-lp/</guid>
+      <pubDate>Mon, 15 Jun 2026 12:00:00 -0400</pubDate>
+      <category>Court of Appeals of Georgia</category>
+      <category>procedure</category>
+      <description><![CDATA[Plaintiff, the surviving spouse and administrator of an employee who died after falling from a cargo van at a theme park, sued the employer and a co-worker, and the trial court dismissed under OCGA 9-11-12(b)(1) for lack of subject matter jurisdiction based on the exclusive remedy provision of the Workers' Compensation Act. The Court of Appeals held that the Act's exclusivity bar is a statutory affirmative defense, not a question of subject matter jurisdiction, so the employer bears the burden of proving the bar applies and the defense can be waived if not timely raised. The court disapproved Kellogg Co. v. Pinkston, Savannah Hospitality Servs. v. Scriven, and T & R S. Sanitation v. Lowe to the extent they treated the exclusivity bar as jurisdictional. The trial court therefore erred in placing the burden on plaintiff to disprove the bar. Why it matters: This decision establishes that the Workers' Compensation Act exclusive remedy provision must be litigated as a waivable affirmative defense, with the burden on the employer, rather than as a non-waivable subject matter jurisdiction bar, which changes how WCA exclusivity is raised and proved in Georgia tort and wrongful death cases. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10875034/lokin-crook-v-six-flags-over-georgia-ii-lp/]]></description>
+    </item>
     <item>
       <title>Allied Property &amp; Casualty Insurance Company v. Bloodworth Wholesale Drugs Inc. (11th Cir.)</title>
       <link>https://www.courtlistener.com/opinion/10873765/allied-property-casualty-insurance-company-v-bloodworth-wholesale-drugs/</link>
