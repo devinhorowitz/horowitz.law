@@ -38,3 +38,8 @@
 # optional tightening — delete this block to keep global behavior.)
 /opinions.xml
   Access-Control-Allow-Origin: *
+
+# Freshness status, read by the opinions page on each load. Always revalidate so
+# the indicator reflects the latest run rather than an edge- or browser-cached copy.
+/status.json
+  Cache-Control: no-cache
