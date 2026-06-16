@@ -49,8 +49,9 @@ jobs:
 
       # Court-registry check (folded from validate-courts.yml): confirm every court id in
       # jurisdictions.py still resolves at CourtListener. Capture the exit code without
-      # failing the job (0 clean, 3 drift, anything else operational), so maintenance below
-      # still runs; drift and operational errors surface as issues in the steps that follow.
+      # failing the job (0 clean, 3 drift, 4 a transient throttle/network defer, anything
+      # else a real operational error), so maintenance below still runs; drift and real
+      # errors surface as issues, while a transient defer just logs a notice.
       - name: Validate court registry
         id: courts
         env:
@@ -88,13 +89,20 @@ jobs:
             gh issue close "$n"
           done
 
+      # A CourtListener throttle or a transient network blip deferred the check (exit 4):
+      # no drift was assessed, but this is not an error and self-heals on the next run, so
+      # log a notice and file nothing. The maintenance-findings issue stays for real problems.
+      - name: Court registry validation deferred
+        if: ${{ steps.courts.outputs.code == '4' }}
+        run: echo "::notice title=Court registry::Validation deferred (CourtListener throttle or transient network, exit 4); no drift assessed, will retry next run."
+
       - name: Court registry validation error
-        if: ${{ steps.courts.outputs.code != '0' && steps.courts.outputs.code != '3' }}
+        if: ${{ steps.courts.outputs.code != '0' && steps.courts.outputs.code != '3' && steps.courts.outputs.code != '4' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          body="Court-registry validation hit an operational error (exit ${{ steps.courts.outputs.code }}), not drift. ${run_url}"
+          body="Court-registry validation hit a non-transient error (exit ${{ steps.courts.outputs.code }}), likely an auth or config problem, not drift. ${run_url}"
           num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Opinions maintenance findings' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
           if [ -n "$num" ]; then
             gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
