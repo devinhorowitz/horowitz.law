@@ -9,9 +9,10 @@ the offline source of truth; this only informs edits and flags drift).
 Modes:
   --validate        Check every court id configured in jurisdictions.py still
                     resolves in CourtListener and is in use. Prints a report; on
-                    drift writes court_drift.md and exits 3. Exits 2 on an
-                    operational failure (auth, network, or throttle), 0 if clean.
-                    The monthly validate-courts workflow runs this.
+                    drift writes court_drift.md and exits 3. Exits 0 if clean, 2 on a
+                    non-transient operational failure (auth or config), and 4 when a
+                    CourtListener throttle or network blip defers the check to the next
+                    run. The daily maintenance workflow runs this.
   --search TERM     List CourtListener courts whose id, name, or jurisdiction
                     matches TERM, with the Atom feed URL, so you can find the id
                     of a new court before adding one line to the registry.
@@ -31,8 +32,17 @@ import jurisdictions   # the court registry
 import cl_rate         # RateBudgetExceeded
 
 CL = "https://www.courtlistener.com"
-OK, OPERR, DRIFT = 0, 2, 3
+OK, OPERR, DRIFT, TRANSIENT = 0, 2, 3, 4
 DRIFT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "court_drift.md")
+
+# Wall-clock budget for a full --validate sweep, shared across every court call. The
+# registry can hold more court ids than CourtListener's per-minute burst allows once the
+# margin is applied (5/min * 0.8 = 4), so on the last call the rate pacer must be free to
+# wait out a minute window (drain) rather than defer on a too-short per-call deadline.
+# This rides out per-minute throttles while staying well inside the maintenance job's
+# timeout; a genuinely full hour/day window or a network outage still defers as a
+# transient (exit 4), not a hard error.
+VALIDATE_DEADLINE_S = 300
 
 
 def feed_url(court_id):
@@ -70,12 +80,16 @@ def _retired(court):
 
 def validate():
     rows, drift, seen = [], [], set()
+    # One wall-clock budget for the whole sweep, shared across every court call, so the
+    # rate pacer drains a transient per-minute throttle (the last call waits out a window)
+    # instead of deferring on a too-short per-call deadline. See VALIDATE_DEADLINE_S.
+    deadline = time.time() + VALIDATE_DEADLINE_S
     for jkey, c in monitored_courts():
         cid = c["cl"]
         if cid in seen:
             continue
         seen.add(cid)
-        court = fetch_court(cid, deadline=time.time() + 30)
+        court = fetch_court(cid, deadline=deadline)
         if court is None:
             rows.append((jkey, cid, "MISSING", "not found in CourtListener"))
             drift.append((cid, "not found in CourtListener"))
@@ -164,11 +178,11 @@ def main(argv=None):
         print("  ! CourtListener auth/config error: %s" % e, file=sys.stderr)
         return OPERR
     except cl_rate.RateBudgetExceeded as e:
-        print("  ! CourtListener throttled; try again later: %s" % e, file=sys.stderr)
-        return OPERR
+        print("  ! CourtListener throttled; deferring to the next run: %s" % e, file=sys.stderr)
+        return TRANSIENT
     except (urllib.error.URLError, OSError) as e:
-        print("  ! CourtListener unreachable: %s" % e, file=sys.stderr)
-        return OPERR
+        print("  ! CourtListener unreachable; deferring to the next run: %s" % e, file=sys.stderr)
+        return TRANSIENT
 
 
 if __name__ == "__main__":
