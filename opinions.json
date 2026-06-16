@@ -1611,5 +1611,105 @@
     "why": "This decision establishes that the Workers' Compensation Act exclusive remedy provision must be litigated as a waivable affirmative defense, with the burden on the employer, rather than as a non-waivable subject matter jurisdiction bar, which changes how WCA exclusivity is raised and proved in Georgia tort and wrongful death cases.",
     "precedential": "published",
     "first_seen": "2026-06-15"
+  },
+  {
+    "cluster_id": 10875860,
+    "name": "Lloyd v. City of Atlanta",
+    "court": "ctapp",
+    "division": "Third Division",
+    "date": "2026-06-16",
+    "dockets": [
+      "A26A0625"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "procedure",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10875860/maugan-lloyd-v-city-of-atlanta/",
+    "synopsis": "Plaintiff, injured when his bike tire became lodged in a city storm drain grate, sent an ante litem notice jointly addressed to the City of Atlanta and Fulton County demanding a \"global settlement amount\" of $2,000,000. The Court of Appeals held that this notice failed to comply with OCGA section 36-33-5(e), which requires a specific amount of monetary damages being sought from the municipal corporation, because demanding a single global amount from two entities jointly does not identify the specific amount sought from the city alone and leaves the city to speculate what portion constituted an offer it could accept. The court noted it need not decide whether subsection (e) requires strict or substantial compliance because the notice failed under either standard, and rejected the argument that use of \"and/or\" cured the defect, finding the term was used only to reference the applicable notice statutes.",
+    "why": "The decision clarifies that an ante litem notice presenting a single combined settlement demand against a municipality and another governmental entity, without specifying the amount sought from the municipality alone, fails the specific-amount requirement of OCGA section 36-33-5(e) and bars suit as a condition precedent.",
+    "precedential": "published",
+    "first_seen": "2026-06-16"
+  },
+  {
+    "cluster_id": 10875605,
+    "name": "Cayamcela v. Advocacy Trust, LLC",
+    "court": "scotga",
+    "division": null,
+    "date": "2026-06-16",
+    "dockets": [
+      "S26A0229",
+      "S26A0242"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "expert",
+      "damages",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10875605/cayamcela-v-advocacy-trust-llc-two-cases/",
+    "synopsis": "In a medical malpractice and wrongful death action arising from a patient's death in the ICU after childbirth, the jury returned a $42 million verdict against a doctor and a medical staffing agency. The Supreme Court of Georgia affirmed the trial court's exclusion under OCGA section 24-7-702(b) of a defense expert's testimony about ICU care, holding the court acted within its gatekeeping discretion where the expert repeatedly admitted he had not reviewed the relevant ICU records well enough to opine on that care and that the matter fell outside his specialty. The court rejected the argument that these gaps went only to credibility rather than admissibility.",
+    "why": "The decision confirms that a trial court may exclude expert testimony as unreliable under Rule 702(b) when the expert concedes an insufficient factual basis, and that such deficiencies bear on admissibility, not merely weight.",
+    "precedential": "published",
+    "first_seen": "2026-06-16",
+    "additional_holdings": [
+      {
+        "areas": [
+          "damages"
+        ],
+        "synopsis": "The court held that the noneconomic damages cap of OCGA section 51-13-1(b) could not be constitutionally applied to the jury's verdict. Relying on its companion decision in Clark v. Leigh, issued the same day, the court reaffirmed that stare decisis preserves Nestlehutt and that where any part of a medical malpractice award is for noneconomic damages subject to the right to a jury trial, the cap cannot be applied without violating that right.",
+        "why": "The ruling confirms that the medical malpractice noneconomic damages cap remains unenforceable as applied to jury verdicts that include noneconomic damages, leaving Nestlehutt intact and extending its reasoning to wrongful death awards."
+      },
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "The court held that the defendants affirmatively waived their challenge to a jury instruction stating that defendants bore the burden of proof on whether other medical professionals were the sole proximate cause. By proposing the opposite instruction, then withdrawing all proposed instructions, and stating multiple times that they had no objection to the court's charge, the defendants waived even substantial-error review under OCGA section 5-5-24(c).",
+        "why": "The decision clarifies that affirmative waiver, by withdrawing requested instructions and acquiescing in the charge given, forecloses substantial-error review of an instructional error on appeal."
+      },
+      {
+        "areas": [
+          "procedure",
+          "damages"
+        ],
+        "synopsis": "The court affirmed the roughly $11.8 million attorney fee award under OCGA section 9-11-68, holding the plaintiffs' settlement offer satisfied subsection (a)(7) because it stated plaintiffs would pay their own fees and expenses, which were incurred for the claims rather than part of them. The court further held that OCGA section 9-15-16 and Couch bar use of a contingency fee agreement to prove the reasonableness of fees but do not bar considering the agreement for other purposes, such as proving total fees incurred, and that the trial court properly established reasonableness through other evidence.",
+        "why": "The decision clarifies that a contingency fee agreement may be used to establish total fees incurred even though it cannot prove their reasonableness under OCGA section 9-15-16, and addresses what satisfies the offer requirements of OCGA section 9-11-68(a)(7)."
+      }
+    ],
+    "official_url": "https://www.gasupreme.us/wp-content/uploads/2026/06/s26a0229.pdf"
+  },
+  {
+    "cluster_id": 10875604,
+    "name": "Clark v. Leigh",
+    "court": "scotga",
+    "division": null,
+    "date": "2026-06-16",
+    "dockets": [
+      "S26A0349",
+      "S26X0350"
+    ],
+    "disposition": "vacated and remanded with direction",
+    "areas": [
+      "damages",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10875604/clark-v-leigh-and-vice-versa/",
+    "synopsis": "In a medical malpractice and wrongful death action where a jury awarded $29,250,000 for the full value of the decedent's life, $2,500,000 for pain and suffering, and medical expenses, the trial court applied the OCGA section 51-13-1(b) noneconomic damages cap to reduce the wrongful death award to $350,000. The Supreme Court of Georgia reaffirmed Nestlehutt, holding that the right to trial by jury under the Georgia Constitution does not permit applying the cap to pain and suffering and loss of consortium damages in medical malpractice actions, and declined to overrule it under stare decisis. The court then held that, under ordinary principles of statutory construction and in light of Nestlehutt, the cap statute cannot operate at all on a judgment in a case like this one, where the jury's verdict includes noneconomic damages for a cause of action to which the jury trial right applies, because making it operative would require impermissibly rewriting the statute. The court vacated the order applying the cap and remanded for the trial court to decide the defendants' excessiveness claim as to the wrongful death award.",
+    "why": "The decision reaffirms that the OCGA section 51-13-1(b) medical malpractice noneconomic damages cap is unenforceable as to constitutionally protected jury-determined damages and extends that result, on statutory-construction grounds, to render the cap inoperative on the entire judgment including 'full value of life' wrongful death damages in such cases.",
+    "precedential": "published",
+    "first_seen": "2026-06-16",
+    "tort_reform": true,
+    "additional_holdings": [
+      {
+        "areas": [
+          "procedure",
+          "damages"
+        ],
+        "synopsis": "The plaintiffs argued the defendants waived the right to assert the statutory damages cap by failing to raise it in the pretrial order. The court held the trial court did not abuse its discretion in allowing the defendants to raise the cap for the first time in their post-trial motions, reasoning that the cap statute is not an affirmative defense but a statutory limit on the amount of recoverable damages that is triggered only once a verdict exceeds the threshold.",
+        "why": "It clarifies that a statutory damages cap need not be raised in the pretrial order or at trial and may be asserted for the first time in a timely post-trial motion."
+      }
+    ],
+    "official_url": "https://www.gasupreme.us/wp-content/uploads/2026/06/s26a0349.pdf"
   }
 ]
