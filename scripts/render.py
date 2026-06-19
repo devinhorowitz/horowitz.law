@@ -130,6 +130,11 @@ def _esc(t):  # HTML text content (leave quotes alone)
 def _attr(t):  # HTML attribute value (escape quotes too)
     return html.escape(t or "", quote=True)
 
+def _safe_url(u):  # only http(s) belongs in an href; neutralize javascript:, data:, //host
+    u = (u or "").strip()
+    lo = u.lower()
+    return u if lo.startswith("http://") or lo.startswith("https://") else ""
+
 def _valid_date(iso):
     try:
         datetime.date.fromisoformat((iso or "")[:10]); return True
@@ -301,7 +306,7 @@ def card_html(e, permalink_link=True):
     # read-the-opinion link. Identity still keys on the CourtListener cluster_id.
     official = (e.get("official_url") or "").strip()
     if official:
-        name_html = (f'<a href="{_attr(official)}" target="_blank" rel="noopener noreferrer" '
+        name_html = (f'<a href="{_attr(_safe_url(official))}" target="_blank" rel="noopener noreferrer" '
                      f'title="Official opinion \u00b7 {_attr(COURT_LABELS[e["court"]])}">{_esc(e["name"])}</a>')
         source_label = "Full record on CourtListener \u2192"
     else:
@@ -315,7 +320,7 @@ def card_html(e, permalink_link=True):
         f'        <div class="op-tags">{tags}</div>\n'
         f'{body}{note_html}'
         f'        <div class="op-foot">\n'
-        f'          <span class="op-source"><a href="{_attr(e["url"])}" target="_blank" rel="noopener noreferrer">{source_label}</a></span>\n'
+        f'          <span class="op-source"><a href="{_attr(_safe_url(e["url"]))}" target="_blank" rel="noopener noreferrer">{source_label}</a></span>\n'
         f'          <button type="button" class="op-copycite" data-cite="{_attr(_slip_cite(e))}" title="Copy slip-opinion citation \u00b7 confirm on Shepard\u2019s before filing">[ copy cite ]</button>\n'
         + (f'          <a class="op-permalink" href="/o/{e["cluster_id"]}" title="Permanent page for this decision">[ permalink ]</a>\n' if permalink_link else '') +
         f'          <span class="op-disclaimer">AI-drafted summary \u00b7 verify against the opinion</span>\n'
@@ -583,6 +588,9 @@ def permalink_html(e):
         "author": {"@type": "Organization", "name": "Georgia Appellate Watch \u00b7 horowitz.law"},
         "publisher": {"@type": "Person", "name": "Devin R. Horowitz", "url": "https://horowitz.law/"},
         "description": desc + " AI-drafted synopsis; the linked opinion is the authority."}, ensure_ascii=False)
+    # JSON inside an HTML <script>: escape "<" (and ">") so a "</script>" in a case
+    # name or synopsis cannot break out of the element. Valid JSON; parses identically.
+    ld = ld.replace("<", "\\u003c").replace(">", "\\u003e")
     flagged_line = ""
     if (e.get("treatment") or "ok") != "ok":
         flagged_line = ('    <p class="perma-note">This card carries an adverse-treatment flag \u2014 '
