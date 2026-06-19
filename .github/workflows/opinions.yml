@@ -73,6 +73,7 @@ jobs:
           # Actions > Variables) to change a model without editing this file; the value
           # after || is the fallback default. Update the Variable if a model is retired.
           OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}   # tier 1: excerpt screen
+          OPINIONS_PRETRIAGE_MODEL: ${{ vars.OPINIONS_PRETRIAGE_MODEL || '' }}                       # tier 1.5: Haiku full-read screen; set repo Variable to claude-haiku-4-5-20251001 to enable after the recall check passes
           OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-4-6' }}           # tier 2: full-read gate
           OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-4-8' }}                            # tier 3: public summary
           OPINIONS_MAX: '80'                                 # candidates evaluated per run (headroom for heavy filing days)
