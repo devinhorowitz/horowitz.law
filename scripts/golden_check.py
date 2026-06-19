@@ -72,15 +72,19 @@ def build():
 
 
 def _kept(c):
-    """Run the real screen and triage tiers on a cached case. Returns (kept, detail), where
-    kept mirrors the funnel's own pass conditions: relevant at screen, and relevant and not
-    low-significance at triage."""
+    """Run the real screen, pretriage, and triage tiers on a cached case. Returns (kept, detail),
+    where kept mirrors the funnel's own pass conditions: passes the excerpt screen, passes the
+    full-read pretriage, and is relevant and not low-significance at triage."""
     name = c.get("name", "")
     docket = c.get("docket", "") or ""
     text = c.get("text") or ""
     s = update.screen(name, docket, text[:SNIPPET_CHARS])
     if not s.get("pass"):
         return False, "screen dropped: %s" % (s.get("reason") or "not a fit")
+    if update.PRETRIAGE_MODEL:
+        p = update.pretriage(name, docket, text)
+        if not p.get("pass"):
+            return False, "pretriage dropped: %s" % (p.get("reason") or "not a fit")
     t = update.triage(name, docket, text)
     if not t.get("relevant"):
         return False, "triage dropped: %s" % (t.get("reason") or "not relevant")
@@ -213,6 +217,54 @@ def summarize_check():
     return 1 if regressions else 0
 
 
+def recall():
+    """Focused recall test for the Tier 1.5 pretriage screen: run pretriage alone on each cached
+    case and report whether it would drop a known keeper before the Sonnet triage ever saw it. A
+    pretriage drop of an expect_relevant case is a recall failure. Controls (expect_relevant false)
+    are expected to pass pretriage, which is high-recall and leaves real filtering to triage, so a
+    control that passes is fine and only noted. No CourtListener calls. Exits nonzero if any expected
+    keeper is dropped, so this gates enabling pretriage in production."""
+    if not update.PRETRIAGE_MODEL:
+        print("pretriage is disabled (OPINIONS_PRETRIAGE_MODEL=''); nothing to test")
+        return 0
+    cases = _load()
+    missed, uncached, kept_ok, ctrl = [], [], 0, 0
+    for c in cases:
+        if not c.get("text"):
+            uncached.append(c.get("name", "?"))
+            continue
+        name = c.get("name", "")
+        docket = c.get("docket", "") or ""
+        p = update.pretriage(name, docket, c["text"])
+        passed = bool(p.get("pass"))
+        keeper = bool(c.get("expect_relevant", True))
+        if keeper and not passed:
+            missed.append((name, p.get("reason") or ""))
+            print("  MISS %-55s pretriage dropped a keeper: %s" % (name[:55], p.get("reason") or ""))
+        elif keeper:
+            kept_ok += 1
+            print("  ok   %-55s pretriage passed" % (name[:55]))
+        else:
+            ctrl += 1
+            print("  ctrl %-55s pretriage %s (control)" % (name[:55], "passed" if passed else "dropped"))
+    n_keep = kept_ok + len(missed)
+    print("\npretriage recall: %d of %d expected keepers passed, %d missed; %d control(s), %d uncached"
+          % (kept_ok, n_keep, len(missed), ctrl, len(uncached)))
+    if uncached:
+        print("uncached (run `build` first): %s" % ", ".join(uncached))
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        try:
+            with open(summary, "a", encoding="utf-8") as f:
+                f.write("### Pretriage recall\n\n- %d of %d expected keepers passed, %d missed\n"
+                        % (kept_ok, n_keep, len(missed)))
+                for nm, why in missed:
+                    f.write("- MISS %s: %s\n" % (nm, why))
+        except Exception as e:
+            print("  . summary write skipped: %s" % e)
+    return 1 if missed else 0
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "check"
     if mode == "build":
@@ -222,7 +274,9 @@ def main():
         return check()
     if mode == "summarize":
         return summarize_check()
-    print("usage: golden_check.py [build|check|summarize]")
+    if mode == "recall":
+        return recall()
+    print("usage: golden_check.py [build|check|summarize|recall]")
     return 2
 
 

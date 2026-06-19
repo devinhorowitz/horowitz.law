@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Georgia Appellate Watch updater (three-tier funnel).
+"""Georgia Appellate Watch updater (staged funnel).
 
-Daily pipeline, standard library only. Three model tiers, cheapest first, so the
+Daily pipeline, standard library only. Four model tiers, cheapest first, so the
 expensive model only ever touches confirmed keepers:
 
   Tier 1  SCREEN   (Haiku)  reads the case name and opening excerpt only and drops
@@ -9,6 +9,10 @@ expensive model only ever touches confirmed keepers:
                             probate, tax, bar, election, dispossessory) and one-line
                             application or clerk orders. Permissive: anything civil or
                             ambiguous passes, so nothing relevant is dropped on a glance.
+  Tier 1.5 PRETRIAGE (Haiku) reads the FULL opinion at the same permissive bar and drops
+                            only what the full text now shows cannot belong, so the costly
+                            Sonnet read lands only on plausible keepers. High-recall:
+                            anything in scope or ambiguous still passes through to triage.
   Tier 2  TRIAGE   (Sonnet) reads the FULL opinion and decides, against a narrow bar,
                             whether it genuinely decides or clarifies something relevant,
                             catching holdings that are not visible from the opening.
@@ -28,6 +32,7 @@ Environment:
   OPINIONS_MODEL           Tier 3 summarizer (default claude-opus-4-8)
   OPINIONS_TRIAGE_MODEL    Tier 2 full-read gate (default claude-sonnet-4-6). "" disables it.
   OPINIONS_SCREEN_MODEL    Tier 1 excerpt screen (default claude-haiku-4-5-20251001). "" disables it.
+  OPINIONS_PRETRIAGE_MODEL Tier 1.5 full-read screen (default claude-haiku-4-5-20251001); a cheap full read before triage. "" disables it.
   OPINIONS_CROSSCHECK_MODEL  fidelity check on each drafted card (default = the triage model). "" disables it.
   OPINIONS_COMPLETENESS_MODEL  completeness check on each drafted card (default = the triage model). "" disables it.
   OPINIONS_COURTS          CourtListener court ids (default "ga,gactapp,ca11,scotus")
@@ -80,6 +85,7 @@ MODEL        = os.environ.get("OPINIONS_MODEL", "claude-opus-4-8")
 AUDIT_MODEL  = os.environ.get("OPINIONS_AUDIT_MODEL", MODEL)  # escalated treatment audit; Opus by default
 TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-4-6")
 SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5-20251001")
+PRETRIAGE_MODEL = os.environ.get("OPINIONS_PRETRIAGE_MODEL", "claude-haiku-4-5-20251001")  # tier 1.5: cheap full-read screen before the Sonnet triage; "" disables
 CROSSCHECK_MODEL = os.environ.get("OPINIONS_CROSSCHECK_MODEL", TRIAGE_MODEL)  # fidelity check on each card; a different model than the Opus summarizer so it is not grading its own work; "" disables
 COMPLETENESS_MODEL = os.environ.get("OPINIONS_COMPLETENESS_MODEL", TRIAGE_MODEL)  # completeness check on each card: flags a material holding in a covered area the card omits; a different model than the Opus summarizer; "" disables
 VERSION      = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
@@ -120,6 +126,29 @@ SCREEN_SYSTEM = (
     "PASS everything else, including any general civil case and anything you are not sure "
     "about. A later step reads the full opinion, so when in doubt, PASS. "
     "Output ONLY a JSON object: {\"pass\": true or false, \"reason\": \"a few words\"}."
+)
+
+PRETRIAGE_SYSTEM = (
+    "You are a cheap full-read screener for a curated feed of court decisions for a Georgia "
+    "civil-litigation and insurance audience. The feed covers the Georgia appellate courts, the "
+    "U.S. Court of Appeals for the Eleventh Circuit, and the U.S. Supreme Court. A first pass has "
+    "already discarded the obviously unrelated cases from the caption and opening; you now see the "
+    "FULL opinion, and a stricter reviewer reads everything you pass, so your only job is to drop "
+    "what the full text now makes clearly impossible, not to judge relevance. "
+    "FAIL only if the full opinion is clearly one of these: criminal, habeas or post-conviction "
+    "(28 U.S.C. 2254 or 2255), immigration, prisoner civil rights, Social Security or veterans' "
+    "benefits, family or domestic, juvenile or dependency, probate or wills, tax, workers' "
+    "compensation, attorney discipline or bar admission, election, landlord-tenant or "
+    "dispossessory, bankruptcy with no coverage or tort nexus, patent or other intellectual "
+    "property, or employment discrimination that announces no broad evidentiary or procedural "
+    "rule; or it is a one-line or purely procedural order that decides nothing on the merits. "
+    "PASS everything else, including any case that touches, even secondarily, auto or UM/UIM, "
+    "premises liability, negligent security, insurance coverage or bad faith, trucking or motor "
+    "carriers, apportionment, tort damages or medical causation, wrongful death, products "
+    "liability, dram shop, spoliation, Georgia tort reform, expert or Daubert issues, arbitration, "
+    "or a civil procedure or evidence question; and PASS anything you are not sure about. The next "
+    "reviewer applies the narrow bar, so when in doubt, PASS. "
+    'Output ONLY a JSON object: {"pass": true or false, "reason": "a few words"}.'
 )
 
 TRIAGE_SYSTEM = (
@@ -775,7 +804,7 @@ def anthropic_json(body, label="call"):
                 raise ConfigError(last)
             if e.code == 404 or ("model" in lo and any(s in lo for s in ("not found", "not_found", "does not exist", "deprecated", "retired"))):
                 print("  ! Anthropic MODEL problem (HTTP %s) for %r. It may be retired or misspelled; update the model id "
-                      "(repo Variable OPINIONS_SCREEN_MODEL / OPINIONS_TRIAGE_MODEL / OPINIONS_MODEL / TREATMENT_MODEL)." % (e.code, model))
+                      "(repo Variable OPINIONS_SCREEN_MODEL / OPINIONS_PRETRIAGE_MODEL / OPINIONS_TRIAGE_MODEL / OPINIONS_MODEL / TREATMENT_MODEL)." % (e.code, model))
                 raise ConfigError(last)
             if e.code == 400 and any(s in lo for s in ("credit", "billing", "balance")):
                 print("  ! Anthropic CREDIT/billing problem (HTTP 400): %s. Check the account balance and limits." % (detail[:200].strip() or "see body"))
@@ -855,6 +884,12 @@ def screen(name, docket, snippet):
     user = "Case name: %s\nDocket: %s\nOpening excerpt:\n%s" % (name, docket, (snippet or "")[:1500])
     return anthropic_json({"model": SCREEN_MODEL, "max_tokens": 256, "system": SCREEN_SYSTEM,
                            "messages": [{"role": "user", "content": user}]}, "screen")
+
+
+def pretriage(name, docket, text):
+    user = "Case name: %s\nDocket: %s\n\nFULL OPINION:\n%s" % (name, docket, clip(text))
+    return anthropic_json({"model": PRETRIAGE_MODEL, "max_tokens": 256, "system": PRETRIAGE_SYSTEM,
+                           "messages": [{"role": "user", "content": user}]}, "pretriage")
 
 
 def triage(name, docket, text, feed_index=""):
@@ -1086,10 +1121,12 @@ def _drop_counts(skipped):
     """Break the run's dropped candidates down by the tier that dropped them, read
     from the reason prefix. The screen and triage counts are the recall signal: how
     much each cheap tier discarded before a human ever saw it."""
-    c = {"screen": 0, "triage": 0, "summarizer": 0, "other": 0}
+    c = {"screen": 0, "pretriage": 0, "triage": 0, "summarizer": 0, "other": 0}
     for _name, reason in skipped:
         if reason.startswith("screen:"):
             c["screen"] += 1
+        elif reason.startswith("pretriage:"):
+            c["pretriage"] += 1
         elif reason.startswith("triage:"):
             c["triage"] += 1
         elif reason.startswith("summarizer:"):
@@ -1117,12 +1154,12 @@ def _log_run(rec):
                     "### Funnel run %s\n\n"
                     "- screened %d, triaged %d, summarized %d, audited %d\n"
                     "- carded %d, flagged %d, treatment %d\n"
-                    "- dropped %d (screen %d, triage %d, summarizer %d, other %d)\n"
+                    "- dropped %d (screen %d, pretriage %d, triage %d, summarizer %d, other %d)\n"
                     "- CourtListener calls %d, cross-check flags %d, completeness flags %d\n"
                     % (rec.get("ts", ""), rec.get("screened", 0), rec.get("triaged", 0),
                        rec.get("summarized", 0), rec.get("audited", 0), rec.get("carded", 0),
                        rec.get("flagged", 0), rec.get("treatment", 0), rec.get("dropped", 0),
-                       d.get("screen", 0), d.get("triage", 0), d.get("summarizer", 0), d.get("other", 0),
+                       d.get("screen", 0), d.get("pretriage", 0), d.get("triage", 0), d.get("summarizer", 0), d.get("other", 0),
                        rec.get("cl_calls", 0), rec.get("crosscheck_flags", 0), rec.get("completeness_flags", 0)))
         except Exception as e:
             print("  . run summary write skipped: %s" % e)
@@ -1289,8 +1326,8 @@ def main():
         cand.append(r)
     cand.sort(key=lambda r: (r.get("dateFiled") or "", cluster_id_of(r)), reverse=True)
     cand = cand[:MAX_RUN]
-    print("since %s | candidates: %d | tiers: screen=%s triage=%s summarize=%s"
-          % (since, len(cand), SCREEN_MODEL or "off", TRIAGE_MODEL or "off", MODEL))
+    print("since %s | candidates: %d | tiers: screen=%s pretriage=%s triage=%s summarize=%s"
+          % (since, len(cand), SCREEN_MODEL or "off", PRETRIAGE_MODEL or "off", TRIAGE_MODEL or "off", MODEL))
 
     added, flagged, skipped = [], [], []
     rejections = []                            # screen/triage drops this run, logged to REJECT_PATH for recall review
@@ -1299,6 +1336,7 @@ def main():
     completeness = {}  # cluster_id -> {"verdict", "reason"} from the completeness guard; surfaced in the PR, not written to opinions.json
     treat_flags, audit_notes = [], []          # adverse treatment of existing cards (forward escalation)
     evaluated, n_screen, n_triage, n_opus, n_audit = set(), 0, 0, 0, 0
+    n_pretriage = 0
     treatment_changed = False
     cl_deferred = 0                                # candidates deferred this run on the CourtListener budget
     consec = 0
@@ -1380,6 +1418,25 @@ def main():
             if not text:
                 skipped.append((name, "no opinion text available")); consec = 0; continue
             time.sleep(0.4)
+            # Tier 1.5: cheap full-read screen (Haiku) before the costly Sonnet triage. Drops
+            # opinions whose full text shows they cannot belong, so the Sonnet read only ever
+            # lands on plausible keepers. High-recall: escalate anything in doubt. Same
+            # party-match guard as the excerpt screen, so a repeat appearance of a carded case
+            # still reaches triage and runs the forward treatment escalation.
+            if PRETRIAGE_MODEL:
+                n_pretriage += 1
+                ps = pretriage(name, docket, text)
+                if not ps.get("pass"):
+                    if party_match(name, card_token_sets):
+                        print("  + pretriage override: %s shares parties with a carded case; routing to triage"
+                              % (name[:60]))
+                    else:
+                        skipped.append((name, "pretriage: %s" % (ps.get("reason") or "not a fit")))
+                        rejections.append({"ts": run_ts, "stage": "pretriage", "cluster_id": cid, "name": name,
+                                           "court": COURT_MAP.get(court_id) or court_id, "docket": docket,
+                                           "date": date_filed, "url": url, "reason": (ps.get("reason") or "").strip()})
+                        consec = 0; evaluated.add(cid); continue
+                time.sleep(0.4)
             # Tier 2: full-read relevance gate
             note = ""
             if TRIAGE_MODEL:
@@ -1566,7 +1623,7 @@ def main():
     if not added and not treat_flags:
         lines += ["", "No new relevant opinions this run."]
     pr_body = "\n".join(lines) + "\n"
-    funnel = "screened %d, triaged %d, summarized %d, audited %d" % (n_screen, n_triage, n_opus, n_audit)
+    funnel = "screened %d, pretriaged %d, triaged %d, summarized %d, audited %d" % (n_screen, n_pretriage, n_triage, n_opus, n_audit)
 
     cl_line = "CourtListener REST calls: %d%s" % (
         cl_rate.PACER.calls,
@@ -1591,7 +1648,7 @@ def main():
     _log_rejections(rejections)
     _log_run({
         "ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "screened": n_screen, "triaged": n_triage, "summarized": n_opus, "audited": n_audit,
+        "screened": n_screen, "pretriaged": n_pretriage, "triaged": n_triage, "summarized": n_opus, "audited": n_audit,
         "evaluated": len(evaluated), "carded": len(added), "flagged": len(flagged),
         "treatment": len(treat_flags), "dropped": len(skipped), "drops": _drop_counts(skipped),
         "cl_calls": cl_rate.PACER.calls,
