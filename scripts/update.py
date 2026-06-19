@@ -35,6 +35,7 @@ Environment:
   OPINIONS_PRETRIAGE_MODEL Tier 1.5 full-read screen (default claude-haiku-4-5-20251001); a cheap full read before triage. "" disables it.
   OPINIONS_CROSSCHECK_MODEL  fidelity check on each drafted card (default = the triage model). "" disables it.
   OPINIONS_COMPLETENESS_MODEL  completeness check on each drafted card (default = the triage model). "" disables it.
+  OPINIONS_AUDIT_MODEL     confirms a flagged adverse-treatment event (default = the summarizer model, OPINIONS_MODEL).
   OPINIONS_COURTS          CourtListener court ids (default "ga,gactapp,ca11,scotus")
   OPINIONS_JURISDICTION    active jurisdiction key from jurisdictions.py (default "ga")
   OPINIONS_LOOKBACK        fallback look-back window in days when state is empty (default 21)
@@ -804,7 +805,7 @@ def anthropic_json(body, label="call"):
                 raise ConfigError(last)
             if e.code == 404 or ("model" in lo and any(s in lo for s in ("not found", "not_found", "does not exist", "deprecated", "retired"))):
                 print("  ! Anthropic MODEL problem (HTTP %s) for %r. It may be retired or misspelled; update the model id "
-                      "(repo Variable OPINIONS_SCREEN_MODEL / OPINIONS_PRETRIAGE_MODEL / OPINIONS_TRIAGE_MODEL / OPINIONS_MODEL / TREATMENT_MODEL)." % (e.code, model))
+                      "(repo Variable OPINIONS_SCREEN_MODEL / OPINIONS_PRETRIAGE_MODEL / OPINIONS_TRIAGE_MODEL / OPINIONS_MODEL / OPINIONS_AUDIT_MODEL)." % (e.code, model))
                 raise ConfigError(last)
             if e.code == 400 and any(s in lo for s in ("credit", "billing", "balance")):
                 print("  ! Anthropic CREDIT/billing problem (HTTP 400): %s. Check the account balance and limits." % (detail[:200].strip() or "see body"))
