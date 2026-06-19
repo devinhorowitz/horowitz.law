@@ -76,7 +76,7 @@ jobs:
           OPINIONS_PRETRIAGE_MODEL: ${{ vars.OPINIONS_PRETRIAGE_MODEL || '' }}                       # tier 1.5: Haiku full-read screen; set repo Variable to claude-haiku-4-5-20251001 to enable after the recall check passes
           OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-4-6' }}           # tier 2: full-read gate
           OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-4-8' }}                            # tier 3: public summary
-          OPINIONS_MAX: '80'                                 # candidates evaluated per run (headroom for heavy filing days)
+          OPINIONS_MAX: ${{ vars.OPINIONS_MAX || '80' }}     # candidates per run; override via repo Variable (headroom for heavy filing days)
         run: python scripts/update.py
 
       # Decide whether this run changed site content (which goes through a review PR) or
