@@ -103,6 +103,13 @@ render" step in the workflow, or export them when running locally:
 - `OPINIONS_CROSSCHECK_MODEL`, `OPINIONS_COMPLETENESS_MODEL` (default: the triage model): the
   per-card fidelity and completeness checks. `""` disables either. Confirm model ids in the
   API docs; model names change.
+- `OPINIONS_AUDIT_MODEL` (default: the summarizer model): confirms a flagged adverse-treatment
+  event before a card is marked cautioned. Not disablable.
+
+The three derived checks track a primary model by default: cross-check and completeness follow
+`OPINIONS_TRIAGE_MODEL`, and the audit follows `OPINIONS_MODEL`. So a full model-generation
+upgrade is a handful of Variable edits (screen, pretriage, triage, and summarizer), and the
+derived checks move with them unless you set their own Variables explicitly.
 - `OPINIONS_COURTS` (default `ga,gactapp,ca11,scotus`): CourtListener court ids. `ga` is the
   Supreme Court of Georgia, `gactapp` the Court of Appeals of Georgia, `ca11` the U.S. Court
   of Appeals for the Eleventh Circuit, and `scotus` the U.S. Supreme Court.
