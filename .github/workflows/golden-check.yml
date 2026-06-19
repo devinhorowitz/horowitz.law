@@ -8,13 +8,15 @@ name: golden-check
 #   summarize  re-runs the real Opus summarizer on the cached keepers and asserts the
 #              produced areas still cover each case's expected areas. No CourtListener calls;
 #              spends Opus budget, so run it on a summarizer change. Exits nonzero on a drop.
+#   recall     runs the Tier 1.5 pretriage screen alone on each cached keeper and fails if it
+#              would drop one. No CourtListener calls. Run before enabling pretriage in production.
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "check (screen+triage on cached text), build (fetch+cache text), or summarize (re-run the summarizer and assert area coverage)"
+        description: "check (full funnel on cached text), build (fetch+cache text), summarize (assert area coverage), or recall (pretriage-only keeper check)"
         type: choice
-        options: [check, build, summarize]
+        options: [check, build, summarize, recall]
         default: check
 
 permissions:
@@ -38,9 +40,11 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
-          # Use the same screen and triage models as the daily funnel, so the guard tests
-          # what production actually runs.
+          # Use the same models as the daily funnel, so the guard tests what production runs.
+          # Pretriage defaults to Haiku here even though the daily workflow ships it off, since
+          # the guard's job is to test it before it is enabled in production.
           OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}
+          OPINIONS_PRETRIAGE_MODEL: ${{ vars.OPINIONS_PRETRIAGE_MODEL || 'claude-haiku-4-5-20251001' }}
           OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-4-6' }}
           OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-4-8' }}
         run: python scripts/golden_check.py ${{ inputs.mode }}
