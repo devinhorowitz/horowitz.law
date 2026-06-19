@@ -57,6 +57,9 @@ import os, re, sys, json, time, html, datetime, io
 import cl_rate           # shared CourtListener REST budget (limits, pacing, defer)
 import urllib.request, urllib.parse, urllib.error
 import xml.etree.ElementTree as ET
+import siteconfig        # shared practice-area taxonomy and site config
+
+AREA_CODES_STR = ", ".join(siteconfig.AREA_CODES)  # prompt-injected; single source of truth
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
@@ -192,8 +195,7 @@ TRIAGE_SYSTEM = (
     "it, because a later step confirms. List each as {id (the listed integer id), kind, note (a "
     "few words)}.\n\n"
     "Output ONLY a JSON object with keys: relevant (true or false), significance ('high', "
-    "'medium', or 'low'), areas (a list of codes from: coverage, badfaith, auto, premises, "
-    "negsec, expert, procedure, damages), note (one or two sentences telling the next reviewer "
+    "'medium', or 'low'), areas (a list of codes from: " + AREA_CODES_STR + "), note (one or two sentences telling the next reviewer "
     "exactly what in the opinion is relevant and worth summarizing, especially if it is buried, "
     "and flagging when the opinion decides more than one distinct salient holding), treats (a "
     "list of negatively-treated feed cases as described above, or an empty "
@@ -262,8 +264,7 @@ SYSTEM = (
     "example 'First Division'), otherwise null. Federal opinions have no division.\n"
     "  - dockets: a list of docket numbers as strings.\n"
     "  - disposition: a short lowercase phrase.\n"
-    "  - areas: one or more codes from EXACTLY this set, using only codes that genuinely fit: "
-    "coverage, badfaith, auto, premises, negsec, expert, procedure, damages.\n"
+    "  - areas: one or more codes from EXACTLY this set, using only codes that genuinely fit: " + AREA_CODES_STR + ".\n"
     "  - additional_holdings: an empty list when the opinion decides only one material holding; otherwise a list "
     "of objects, one per salient holding beyond the first, each with 'areas' (codes from the same set), "
     "'synopsis' (2 to 4 sentences), and 'why' (one sentence), all under the same rules as above.\n"

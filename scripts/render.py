@@ -15,6 +15,7 @@ import os, re, json, hashlib, html, datetime
 from xml.sax.saxutils import escape as xml_escape
 import safeio          # crash-safe atomic writes
 import jurisdictions   # per-jurisdiction court labels and citation suffixes
+import siteconfig      # site-wide config: domain, identity, window, area taxonomy
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_PATH    = os.path.join(REPO, "opinions.json")
@@ -22,11 +23,13 @@ HTML_PATH    = os.path.join(REPO, "opinions.html")
 ARCHIVE_PATH = os.path.join(REPO, "archive.html")
 XML_PATH     = os.path.join(REPO, "opinions.xml")
 
-# Rolling public-feed window, by decision date. If you change this, update the
-# "two years" wording in the RSS <description> below and in the opinions.html
-# scope line so the prose stays in sync with the number.
-WINDOW_YEARS = 2
-ARCHIVE_URL  = "https://horowitz.law/archive"
+# Rolling public-feed window and canonical origin, both sourced from siteconfig
+# so a change is one edit there. The RSS description and the feed intros derive
+# their "N years" wording from WINDOW_YEARS via siteconfig.years_word(), so the
+# prose stays in sync with the number automatically.
+WINDOW_YEARS = siteconfig.WINDOW_YEARS
+SITE         = siteconfig.SITE_URL
+ARCHIVE_URL  = siteconfig.ARCHIVE_URL
 
 SITEMAP_PATH = os.path.join(REPO, "sitemap.xml")
 CHANGES_PATH = os.path.join(REPO, "changes.html")
@@ -52,7 +55,12 @@ _YEAR_RE = re.compile(r'(&copy;|\u00a9)\s*\d{4}')
 # year stale under immutable caching until someone remembered --fix. The two
 # implementations are deliberately independent (this one stamps, check_site
 # verifies), so a bug here cannot blind the check there.
-_ASSETS = ("base.css", "app.js", "opinions.js", "subscribe.js")
+# The set is read from the repo root, so a newly added stylesheet or script is
+# cache-busted without editing this file; sw.js is excluded deliberately (it is
+# served no-cache and never ?v=-stamped). Sorted for a stable order -- stamping
+# is per-asset, so order does not affect output.
+_ASSETS = tuple(sorted(f for f in os.listdir(REPO)
+                       if f.endswith((".css", ".js")) and f != "sw.js"))
 
 def _asset_token(name):
     with open(os.path.join(REPO, name), "rb") as f:
@@ -74,11 +82,7 @@ def _stamp_year(doc):
     year = str(datetime.date.today().year)
     return _YEAR_RE.sub(lambda m: m.group(1) + " " + year, doc)
 
-AREA_LABELS = {
-    "coverage": "coverage", "badfaith": "bad faith", "auto": "auto",
-    "premises": "premises", "negsec": "negligent security", "expert": "expert",
-    "procedure": "procedure", "damages": "damages",
-}
+AREA_LABELS = siteconfig.AREA_LABELS
 COURT_LABELS = jurisdictions.COURT_LABELS   # internal key -> human label
 COURT_SYSTEM = jurisdictions.COURT_SYSTEM   # internal key -> "state" | "federal"
 TITLE_SUFFIX = jurisdictions.TITLE_SUFFIX   # internal key -> short citation suffix
@@ -129,6 +133,48 @@ def _esc(t):  # HTML text content (leave quotes alone)
 
 def _attr(t):  # HTML attribute value (escape quotes too)
     return html.escape(t or "", quote=True)
+
+def _stamp_identity(doc):
+    """Fill data-cfg hooks from siteconfig.IDENTITY so the name, role, and contact
+    details come from one config file instead of being hand-edited across pages.
+    The hooks are plain data-* attributes, so they persist and a render fills them
+    again next time: change a value in siteconfig (a promotion, say) and it
+    propagates on the next render. Idempotent -- refilling with the same value is
+    a no-op, which is why a static page stays byte-stable until the config moves.
+      data-cfg-text="KEY"      rewrites the element's inner text
+      data-cfg-content="KEY"   rewrites a meta tag's content="" value
+      data-cfg-jsonld          rewrites distinctive JSON-LD fields in this <script>
+    """
+    I = siteconfig.IDENTITY
+
+    def _text(m):
+        val = I.get(m.group("key"))
+        return (m.group("open") + _esc(val) + m.group("close")) if val is not None else m.group(0)
+    doc = re.sub(r'(?P<open><(?P<tag>\w+)\b[^>]*\bdata-cfg-text="(?P<key>\w+)"[^>]*>)'
+                 r'(?P<inner>.*?)(?P<close></(?P=tag)>)', _text, doc, flags=re.S)
+
+    def _content(m):
+        tag = m.group(0)
+        key = re.search(r'\bdata-cfg-content="(\w+)"', tag).group(1)
+        val = I.get(key)
+        if val is None:
+            return tag
+        return re.sub(r'(\bcontent=")[^"]*(")',
+                      lambda mm: mm.group(1) + _attr(val) + mm.group(2), tag, count=1)
+    doc = re.sub(r'<meta\b[^>]*\bdata-cfg-content="\w+"[^>]*>', _content, doc)
+
+    def _jsonld(m):
+        block = m.group(0)
+        for jkey, ckey in (("jobTitle", "role"), ("email", "email")):
+            val = I.get(ckey)
+            if val is None:
+                continue
+            block = re.sub(r'("%s":\s*")[^"]*(")' % jkey,
+                           lambda mm, v=val: mm.group(1) + v.replace('"', '\\"') + mm.group(2),
+                           block, count=1)
+        return block
+    doc = re.sub(r'<script\b[^>]*\bdata-cfg-jsonld\b[^>]*>.*?</script>', _jsonld, doc, flags=re.S)
+    return doc
 
 def _safe_url(u):  # only http(s) belongs in an href; neutralize javascript:, data:, //host
     u = (u or "").strip()
@@ -373,8 +419,8 @@ def changes_rss(entries):
            '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
            '  <channel>',
            '    <title>horowitz.law: Treatment Corrections</title>',
-           '    <link>https://horowitz.law/changes</link>',
-           '    <atom:link href="https://horowitz.law/changes.xml" rel="self" type="application/rss+xml" />',
+           f'    <link>{SITE}/changes</link>',
+           f'    <atom:link href="{SITE}/changes.xml" rel="self" type="application/rss+xml" />',
            '    <description>Adverse-treatment flags on published Georgia Appellate Watch cases. '
            'The sweep may only raise a flag to caution; negative and superseded are human determinations '
            'made on Shepard\u2019s. The flagged card and the linked opinion are the authority.</description>',
@@ -386,11 +432,11 @@ def changes_rss(entries):
         note = (e.get("treatment_note") or e.get("treatment_auto_note") or "").strip()
         by = [b.get("name") for b in (e.get("treated_by") or []) if b.get("name")]
         cited = (" Cited by: " + "; ".join(by[:3]) + ".") if by else ""
-        desc = f'{note}{cited}{_TREAT_TAIL.get(t, "")} Card: https://horowitz.law/o/{e["cluster_id"]}'
+        desc = f'{note}{cited}{_TREAT_TAIL.get(t, "")} Card: {SITE}/o/{e["cluster_id"]}'
         desc = desc.replace("]]>", "]]]]><![CDATA[>")
         out += ["    <item>",
                 f"      <title>{xml_escape(_TREAT_LABEL.get(t, 'Flagged') + ': ' + e['name'])}</title>",
-                f"      <link>https://horowitz.law/o/{e['cluster_id']}</link>",
+                f"      <link>{SITE}/o/{e['cluster_id']}</link>",
                 f'      <guid isPermaLink="false">change-{e["cluster_id"]}-{e.get("treatment_date") or e["date"]}</guid>',
                 f"      <pubDate>{_rfc822(e.get('treatment_date') or e['date'])}</pubDate>",
                 f"      <category>{xml_escape(t)}</category>",
@@ -582,11 +628,11 @@ def permalink_html(e):
         "@context": "https://schema.org", "@type": "Article",
         "headline": e["name"],
         "datePublished": e["date"], "dateModified": modified,
-        "url": f'https://horowitz.law/o/{e["cluster_id"]}',
-        "mainEntityOfPage": f'https://horowitz.law/o/{e["cluster_id"]}',
+        "url": f'{SITE}/o/{e["cluster_id"]}',
+        "mainEntityOfPage": f'{SITE}/o/{e["cluster_id"]}',
         "isAccessibleForFree": True,
         "author": {"@type": "Organization", "name": "Georgia Appellate Watch \u00b7 horowitz.law"},
-        "publisher": {"@type": "Person", "name": "Devin R. Horowitz", "url": "https://horowitz.law/"},
+        "publisher": {"@type": "Person", "name": siteconfig.PUBLISHER_NAME, "url": siteconfig.AUTHOR_URL},
         "description": desc + " AI-drafted synopsis; the linked opinion is the authority."}, ensure_ascii=False)
     # JSON inside an HTML <script>: escape "<" (and ">") so a "</script>" in a case
     # name or synopsis cannot break out of the element. Valid JSON; parses identically.
@@ -606,14 +652,14 @@ f'<meta name="description" content="{_attr(desc)}">\n'
 '<meta name="theme-color" content="#0d0e10" media="(prefers-color-scheme: dark)">\n'
 '<meta name="theme-color" content="#f5ede0" media="(prefers-color-scheme: light)">\n'
 "\n"
-f'<link rel="canonical" href="https://horowitz.law/o/{e["cluster_id"]}">\n'
+f'<link rel="canonical" href="{SITE}/o/{e["cluster_id"]}">\n'
 "\n"
 '<meta property="og:type" content="article">\n'
-f'<meta property="og:url" content="https://horowitz.law/o/{e["cluster_id"]}">\n'
+f'<meta property="og:url" content="{SITE}/o/{e["cluster_id"]}">\n'
 '<meta property="og:locale" content="en_US">\n'
 f'<meta property="og:title" content="{_attr(e["name"])}">\n'
 f'<meta property="og:description" content="{_attr(desc)}">\n'
-'<meta property="og:image" content="https://horowitz.law/og-card.jpg">\n'
+f'<meta property="og:image" content="{SITE}/og-card.jpg">\n'
 '<meta property="og:site_name" content="horowitz.law">\n'
 f'<meta property="article:published_time" content="{e["date"]}">\n'
 "\n"
@@ -801,13 +847,13 @@ def render(entries=None):
     desc = ("AI-assisted synopses of new Georgia appellate, Eleventh Circuit, and U.S. Supreme Court "
             "opinions, filtered for civil litigation and insurance practice. Each synopsis is AI-drafted; "
             "the linked opinion is the authority. A curated core, not a complete docket. This feed covers "
-            f"the most recent two years; older opinions are archived by year at {ARCHIVE_URL}.")
+            f"the most recent {siteconfig.years_word(WINDOW_YEARS)}; older opinions are archived by year at {ARCHIVE_URL}.")
     out = ['<?xml version="1.0" encoding="UTF-8"?>',
            '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
            '  <channel>',
            '    <title>horowitz.law: Georgia Appellate Watch</title>',
-           '    <link>https://horowitz.law/opinions</link>',
-           '    <atom:link href="https://horowitz.law/opinions.xml" rel="self" type="application/rss+xml" />',
+           f'    <link>{SITE}/opinions</link>',
+           f'    <atom:link href="{SITE}/opinions.xml" rel="self" type="application/rss+xml" />',
            f'    <description>{desc}</description>',
            '    <language>en-us</language>',
            f'    <lastBuildDate>{build}</lastBuildDate>',
@@ -839,7 +885,7 @@ def render(entries=None):
     for p in STATIC_PAGES:
         if os.path.exists(p):
             doc = open(p, encoding="utf-8").read()
-            stamped = _stamp_tokens(_stamp_year(doc))
+            stamped = _stamp_tokens(_stamp_year(_stamp_identity(doc)))
             if stamped != doc:
                 safeio.atomic_write_text(p, stamped)
 
@@ -862,21 +908,21 @@ def _update_sitemap(recent, entries):
 
     new = doc
     if recent:                              # recent arrives sorted desc; [0] is newest
-        new = set_lastmod(new, "https://horowitz.law/opinions", recent[0]["date"])
+        new = set_lastmod(new, f"{SITE}/opinions", recent[0]["date"])
     if entries:                             # entries likewise sorted desc
-        new = set_lastmod(new, "https://horowitz.law/archive", entries[0]["date"])
-        new = set_lastmod(new, "https://horowitz.law/stats", entries[0]["date"])
+        new = set_lastmod(new, f"{SITE}/archive", entries[0]["date"])
+        new = set_lastmod(new, f"{SITE}/stats", entries[0]["date"])
         newest_seen = max(((e.get("first_seen") or e.get("date") or "")[:10] for e in entries), default="")
         if newest_seen:
-            new = set_lastmod(new, "https://horowitz.law/digests", newest_seen)
+            new = set_lastmod(new, f"{SITE}/digests", newest_seen)
     flagged = _flagged(entries)
     if flagged:
-        new = set_lastmod(new, "https://horowitz.law/changes", flagged[0].get("treatment_date") or flagged[0]["date"])
+        new = set_lastmod(new, f"{SITE}/changes", flagged[0].get("treatment_date") or flagged[0]["date"])
     # Permalink entries live between sitemap markers and regenerate wholesale.
     urls = []
     for e in entries:
         lastmod = e.get("treatment_date") or (e.get("first_seen") or "")[:10] or e["date"]
-        urls.append("  <url>\n    <loc>https://horowitz.law/o/%s</loc>\n    <lastmod>%s</lastmod>\n"
+        urls.append("  <url>\n    <loc>" + SITE + "/o/%s</loc>\n    <lastmod>%s</lastmod>\n"
                     "    <changefreq>yearly</changefreq>\n    <priority>0.3</priority>\n  </url>" % (e["cluster_id"], lastmod))
     pat = re.compile(r"(<!-- permalinks:start.*?-->).*?(<!-- permalinks:end -->)", re.S)
     if pat.search(new):
