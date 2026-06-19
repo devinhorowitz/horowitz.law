@@ -12,11 +12,15 @@ posture while the feed matures.
 
 ## The funnel
 
-Candidates pass through three model tiers, cheapest first, so the expensive model only
+Candidates pass through four model tiers, cheapest first, so the expensive model only
 ever touches confirmed keepers:
 
 - Tier 1, screen (Haiku): reads the case name and opening excerpt only and drops the
   obvious non-matches.
+- Tier 1.5, pretriage (Haiku): reads the full opinion at the same permissive bar and drops
+  only what the full text shows cannot belong, so the costly Sonnet read lands only on
+  plausible keepers. High-recall: anything in scope or in doubt passes to triage. Off by
+  default in the workflow; enable via OPINIONS_PRETRIAGE_MODEL once `python scripts/golden_check.py recall` passes.
 - Tier 2, triage (Sonnet): reads the full opinion and decides, against a narrow bar,
   whether it belongs in the feed.
 - Tier 3, summarize (Opus): reads the full opinion plus the triage note and writes the
@@ -95,6 +99,7 @@ render" step in the workflow, or export them when running locally:
 - `OPINIONS_MODEL` (default `claude-opus-4-8`): the Tier 3 summarizer.
 - `OPINIONS_TRIAGE_MODEL` (default `claude-sonnet-4-6`): the Tier 2 full-read gate. `""` disables it.
 - `OPINIONS_SCREEN_MODEL` (default `claude-haiku-4-5-20251001`): the Tier 1 excerpt screen. `""` disables it.
+- `OPINIONS_PRETRIAGE_MODEL` (default `claude-haiku-4-5-20251001` in code, shipped off in the workflow): the Tier 1.5 Haiku full-read screen before the Sonnet triage. Set the repository Variable to enable it once the golden-set recall check passes. `""` disables it.
 - `OPINIONS_CROSSCHECK_MODEL`, `OPINIONS_COMPLETENESS_MODEL` (default: the triage model): the
   per-card fidelity and completeness checks. `""` disables either. Confirm model ids in the
   API docs; model names change.
