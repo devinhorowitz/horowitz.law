@@ -1,0 +1,1549 @@
+{
+  "generated_at": "2026-06-20T16:26:29Z",
+  "skills_root": "/mnt/skills/user",
+  "area_vocab": [
+    "procedure",
+    "damages",
+    "auto",
+    "coverage",
+    "premises",
+    "expert",
+    "negsec",
+    "badfaith"
+  ],
+  "skill_count": 49,
+  "skills": {
+    "qpwb-affirmative-defenses": {
+      "areas": [
+        "premises",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 24-14-22",
+        "O.C.G.A. § 38-3-61",
+        "O.C.G.A. § 51-11-7",
+        "O.C.G.A. § 51-12-1.1",
+        "O.C.G.A. § 51-12-9",
+        "O.C.G.A. § 9-3-24",
+        "O.C.G.A. § 9-3-33",
+        "SB 426",
+        "SB 68"
+      ],
+      "cases": [
+        {
+          "name": "Anderson v. Kaye",
+          "year": "2024",
+          "cite": "371 Ga. App. 626"
+        },
+        {
+          "name": "First Merit Credit Svcs. v. Fairway Aviation",
+          "year": "2021",
+          "cite": "359 Ga. App. 829"
+        },
+        {
+          "name": "Owen v. Mobley Constr. Co.",
+          "year": "1984",
+          "cite": "171 Ga. App. 462"
+        },
+        {
+          "name": "Titshaw v. Geer",
+          "year": "2024",
+          "cite": "320 Ga. 128"
+        },
+        {
+          "name": "Travis Pruitt & Assoc. v. Bowling",
+          "year": "1999",
+          "cite": "238 Ga. App. 225"
+        },
+        {
+          "name": "Wolf Creek Landfill v. Twiggs County",
+          "year": "2016",
+          "cite": "337 Ga. App. 211"
+        }
+      ],
+      "verify_markers": 24
+    },
+    "qpwb-answer": {
+      "areas": [
+        "coverage",
+        "premises",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [],
+      "cases": [],
+      "verify_markers": 7
+    },
+    "qpwb-appellate-response": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [],
+      "cases": [
+        {
+          "name": "Action Concrete v. Portrait Home-Little Suwanee Point",
+          "year": "2007",
+          "cite": "285 Ga. App. 650"
+        },
+        {
+          "name": "Cox Enterprises v. Nix",
+          "year": "2000",
+          "cite": "273 Ga. 152"
+        },
+        {
+          "name": "Crowe v. Scissom",
+          "year": "2022",
+          "cite": "365 Ga. App. 124"
+        },
+        {
+          "name": "Dept. of Transp. v. Mixon",
+          "year": "2021",
+          "cite": "355 Ga. App. 463"
+        },
+        {
+          "name": "Falanga v. Kirschner & Venker",
+          "year": "2009",
+          "cite": "298 Ga. App. 672"
+        },
+        {
+          "name": "Lamb v. Fulton-DeKalb Hosp. Auth.",
+          "year": "2009",
+          "cite": "297 Ga. App. 529"
+        },
+        {
+          "name": "Morrell v. Wellstar Health System",
+          "year": "2006",
+          "cite": "280 Ga. App. 1"
+        },
+        {
+          "name": "Phillips v. Phillips",
+          "year": "2018",
+          "cite": "347 Ga. App. 524"
+        },
+        {
+          "name": "Woods v. Hall",
+          "year": "2012",
+          "cite": "315 Ga. App. 93"
+        }
+      ],
+      "verify_markers": 7
+    },
+    "qpwb-apportionment": {
+      "areas": [
+        "damages",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 51-12-33"
+      ],
+      "cases": [],
+      "verify_markers": 7
+    },
+    "qpwb-arbitration": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 9-9-10",
+        "O.C.G.A. § 9-9-12",
+        "O.C.G.A. § 9-9-13",
+        "O.C.G.A. § 9-9-14"
+      ],
+      "cases": [
+        {
+          "name": "ABCO Builders, Inc. v. Progressive Plumbing, Inc.",
+          "year": "2007",
+          "cite": "282 Ga. 308"
+        },
+        {
+          "name": "Adventure Motorsports Reinsurance, Ltd. v. Interstate National Dealer Services, Inc.",
+          "year": "2021",
+          "cite": "313 Ga. 19"
+        },
+        {
+          "name": "Airtab, Inc. v. Limbach Co.",
+          "year": "2009",
+          "cite": "295 Ga. App. 720"
+        },
+        {
+          "name": "Greene v. Hundley",
+          "year": "1996",
+          "cite": "266 Ga. 592"
+        },
+        {
+          "name": "Hansen & Hansen Enterprises, Inc. v. SCSJ Enterprises, Inc.",
+          "year": "2009",
+          "cite": "299 Ga. App. 469"
+        },
+        {
+          "name": "McGill Homes, Inc. v. Weaver",
+          "year": "2006",
+          "cite": "278 Ga. App. 622"
+        },
+        {
+          "name": "Progressive Data Systems, Inc. v. Jefferson Randolph Corp.",
+          "year": "2002",
+          "cite": "275 Ga. 420"
+        }
+      ],
+      "verify_markers": 16
+    },
+    "qpwb-bad-faith": {
+      "areas": [
+        "auto",
+        "badfaith",
+        "coverage",
+        "damages",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 33-4-6",
+        "O.C.G.A. § 33-4-7"
+      ],
+      "cases": [],
+      "verify_markers": 20
+    },
+    "qpwb-bankruptcy": {
+      "areas": [
+        "auto",
+        "coverage",
+        "damages",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "11 U.S.C. § 350",
+        "11 U.S.C. § 362",
+        "11 U.S.C. § 541",
+        "11 U.S.C. § 554"
+      ],
+      "cases": [],
+      "verify_markers": 28
+    },
+    "qpwb-billing": {
+      "areas": [],
+      "areas_status": "seeded",
+      "statutes": [],
+      "cases": [],
+      "verify_markers": 8
+    },
+    "qpwb-briefs": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [],
+      "cases": [],
+      "verify_markers": 2
+    },
+    "qpwb-carrier-report": {
+      "areas": [
+        "coverage",
+        "damages"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 51-12-33",
+        "O.C.G.A. § 51-12-5.1"
+      ],
+      "cases": [],
+      "verify_markers": 3
+    },
+    "qpwb-complaint": {
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 13-6-11",
+        "O.C.G.A. § 9-11-14",
+        "O.C.G.A. § 9-11-9",
+        "O.C.G.A. § 9-2-61",
+        "O.C.G.A. § 9-4-1"
+      ],
+      "cases": [],
+      "verify_markers": 17
+    },
+    "qpwb-core": {
+      "areas": [
+        "auto",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [],
+      "cases": [],
+      "verify_markers": 1
+    },
+    "qpwb-correspondence": {
+      "areas": [
+        "damages",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [],
+      "cases": [],
+      "verify_markers": 1
+    },
+    "qpwb-coverage": {
+      "areas": [
+        "coverage",
+        "damages",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "Ga. R. Prof. Conduct 1.6",
+        "Ga. R. Prof. Conduct 1.7",
+        "Ga. R. Prof. Conduct 1.8",
+        "Ga. R. Prof. Conduct 5.4"
+      ],
+      "cases": [],
+      "verify_markers": 4
+    },
+    "qpwb-damages": {
+      "areas": [
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 51-12-1.1",
+        "O.C.G.A. § 51-12-5.1",
+        "O.C.G.A. § 51-4-1",
+        "O.C.G.A. § 51-4-2",
+        "O.C.G.A. § 51-4-5",
+        "O.C.G.A. § 9-10-184",
+        "O.C.G.A. § 9-2-41",
+        "O.C.G.A. § 9-3-33",
+        "O.C.G.A. § 9-3-99",
+        "SB 68"
+      ],
+      "cases": [],
+      "verify_markers": 18
+    },
+    "qpwb-depositions": {
+      "areas": [
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [],
+      "cases": [],
+      "verify_markers": 3
+    },
+    "qpwb-discovery": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "45 C.F.R. § 164.512",
+        "Fed. R. Civ. P. 26(b)(1)",
+        "Fed. R. Civ. P. 26(b)(2)",
+        "Fed. R. Civ. P. 26(b)(4)",
+        "Fed. R. Civ. P. 26(b)(5)",
+        "Fed. R. Civ. P. 26(e)",
+        "Fed. R. Civ. P. 33(a)(1)",
+        "Fed. R. Civ. P. 33(a)(2)",
+        "Ga. R. Prof. Conduct 4.4",
+        "Ga. R. Prof. Conduct 6.4",
+        "O.C.G.A. § 24-4-408",
+        "O.C.G.A. § 24-5-501",
+        "O.C.G.A. § 24-6-609",
+        "O.C.G.A. § 33-7-11",
+        "O.C.G.A. § 51-12-1.1",
+        "O.C.G.A. § 51-12-15",
+        "O.C.G.A. § 51-12-5.1",
+        "O.C.G.A. § 9-11-12",
+        "O.C.G.A. § 9-11-26",
+        "O.C.G.A. § 9-11-26.1",
+        "O.C.G.A. § 9-11-33",
+        "O.C.G.A. § 9-11-34",
+        "O.C.G.A. § 9-11-36",
+        "O.C.G.A. § 9-11-37",
+        "O.C.G.A. § 9-11-9.2",
+        "SB 68",
+        "SB 69",
+        "SB 74"
+      ],
+      "cases": [
+        {
+          "name": "Practice Note: When the UM carrier elects under § 33-7-11(d) to\n> defend in the tortfeasor’s name, discovery responses and verifications\n> that identify the carrier by name or role can undermine that election.\n> Hossain v. Nelson",
+          "year": "1984",
+          "cite": "234 Ga. App. 792"
+        }
+      ],
+      "verify_markers": 7
+    },
+    "qpwb-evaluation": {
+      "areas": [
+        "damages",
+        "premises",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [],
+      "cases": [],
+      "verify_markers": 3
+    },
+    "qpwb-expert-challenge": {
+      "areas": [
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "HB 478",
+        "O.C.G.A. § 24-7-702"
+      ],
+      "cases": [],
+      "verify_markers": 7
+    },
+    "qpwb-federal-practice": {
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "28 U.S.C. §§ 1332",
+        "Fed. R. Civ. P. 16",
+        "Fed. R. Civ. P. 55",
+        "Fed. R. Civ. P. 81(c)(2)"
+      ],
+      "cases": [],
+      "verify_markers": 10
+    },
+    "qpwb-filings": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 9-11-7"
+      ],
+      "cases": [],
+      "verify_markers": 10
+    },
+    "qpwb-litigation-intelligence": {
+      "areas": [
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [],
+      "cases": [],
+      "verify_markers": 0
+    },
+    "qpwb-malpractice-affidavit": {
+      "areas": [
+        "expert",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 9-11-9.1"
+      ],
+      "cases": [],
+      "verify_markers": 10
+    },
+    "qpwb-motion-for-spoliation-sanctions": {
+      "areas": [
+        "auto",
+        "badfaith",
+        "damages",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 24-14-22"
+      ],
+      "cases": [],
+      "verify_markers": 0
+    },
+    "qpwb-motion-in-limine": {
+      "areas": [
+        "coverage",
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 24-4-404",
+        "O.C.G.A. § 24-4-407",
+        "O.C.G.A. § 24-4-408",
+        "O.C.G.A. § 24-4-411",
+        "O.C.G.A. § 24-7-702",
+        "O.C.G.A. § 40-8-76.1"
+      ],
+      "cases": [],
+      "verify_markers": 16
+    },
+    "qpwb-motion-sanctions": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 9-15-14"
+      ],
+      "cases": [],
+      "verify_markers": 10
+    },
+    "qpwb-motion-summary-judgment": {
+      "areas": [
+        "expert",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 9-11-36",
+        "O.C.G.A. § 9-11-56"
+      ],
+      "cases": [],
+      "verify_markers": 10
+    },
+    "qpwb-motion-to-compel": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 9-11-37"
+      ],
+      "cases": [],
+      "verify_markers": 5
+    },
+    "qpwb-motion-to-confirm-or-vacate-arbitration-award": {
+      "areas": [
+        "auto",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 9-9-13"
+      ],
+      "cases": [],
+      "verify_markers": 2
+    },
+    "qpwb-motion-to-dismiss": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 9-11-12",
+        "O.C.G.A. § 9-11-15",
+        "O.C.G.A. § 9-11-19",
+        "O.C.G.A. § 9-11-9.1",
+        "O.C.G.A. § 9-2-61"
+      ],
+      "cases": [
+        {
+          "name": "Action Concrete v. Portrait Home-Little Suwanee Point",
+          "year": "2007",
+          "cite": "285 Ga. App. 650"
+        },
+        {
+          "name": "Campbell v. Cirrus Ed.",
+          "year": "2020",
+          "cite": "355 Ga. App. 628"
+        },
+        {
+          "name": "Cox Enterprises v. Nix",
+          "year": "2000",
+          "cite": "273 Ga. 152"
+        },
+        {
+          "name": "Dept. of Transp. v. Mixon",
+          "year": "2021",
+          "cite": "355 Ga. App. 463"
+        },
+        {
+          "name": "Lamb v. Fulton-DeKalb Hosp. Auth.",
+          "year": "2009",
+          "cite": "297 Ga. App. 529"
+        },
+        {
+          "name": "Mark A. Schneider Revocable Trust v. Hardy",
+          "year": "2021",
+          "cite": "362 Ga. App. 149"
+        },
+        {
+          "name": "Morrell v. Wellstar Health System",
+          "year": "2006",
+          "cite": "280 Ga. App. 1"
+        },
+        {
+          "name": "Mullins v. Belcher",
+          "year": "1981",
+          "cite": "159 Ga. App. 520"
+        },
+        {
+          "name": "Petree v. Dep't of Transp.",
+          "year": "2017",
+          "cite": "340 Ga. App. 694"
+        }
+      ],
+      "verify_markers": 19
+    },
+    "qpwb-motion-to-enforce-settlement": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 13-3-1",
+        "O.C.G.A. § 15-19-5"
+      ],
+      "cases": [
+        {
+          "name": "Brumbelow v. Northern Propane Gas Co.",
+          "year": "1983",
+          "cite": "251 Ga. 674"
+        },
+        {
+          "name": "Greenwald v. Kersh",
+          "year": "2005",
+          "cite": "275 Ga. App. 724"
+        },
+        {
+          "name": "H & E Innovation, LLC v. Shinhan Bank Am., Inc.",
+          "year": "2017",
+          "cite": "343 Ga. App. 881"
+        },
+        {
+          "name": "Lamb v. Fulton-DeKalb Hosp. Auth.",
+          "year": "2009",
+          "cite": "297 Ga. App. 529"
+        },
+        {
+          "name": "Stephens v. Castano-Castano",
+          "year": "2018",
+          "cite": "346 Ga. App. 284"
+        },
+        {
+          "name": "Torres v. Elkin",
+          "year": "2012",
+          "cite": "317 Ga. App. 135"
+        }
+      ],
+      "verify_markers": 8
+    },
+    "qpwb-motion-to-exclude-expert": {
+      "areas": [
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "HB 478",
+        "O.C.G.A. § 24-7-702"
+      ],
+      "cases": [
+        {
+          "name": "Daubert v. Merrell Dow Pharmaceuticals, Inc.",
+          "year": "1993",
+          "cite": "509 U.S. 579"
+        },
+        {
+          "name": "General Electric Co. v. Joiner",
+          "year": "1997",
+          "cite": "522 U.S. 136"
+        },
+        {
+          "name": "Kumho Tire Co. v. Carmichael",
+          "year": "1999",
+          "cite": "526 U.S. 137"
+        },
+        {
+          "name": "Scapa Dryer Fabrics, Inc. v. Knight",
+          "year": "2016",
+          "cite": "299 Ga. 286"
+        },
+        {
+          "name": "Toyo Tire North America Mfg., Inc. v. Davis",
+          "year": "2016",
+          "cite": "299 Ga. 155"
+        }
+      ],
+      "verify_markers": 9
+    },
+    "qpwb-negligent-security": {
+      "areas": [
+        "coverage",
+        "damages",
+        "negsec",
+        "premises",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 51-1-56",
+        "O.C.G.A. § 51-12-33",
+        "O.C.G.A. § 51-3-1",
+        "O.C.G.A. § 51-3-50",
+        "SB 68"
+      ],
+      "cases": [],
+      "verify_markers": 3
+    },
+    "qpwb-notices": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "28 U.S.C. § 1446",
+        "O.C.G.A. § 51-12-33",
+        "O.C.G.A. § 9-11-38",
+        "O.C.G.A. § 9-11-41"
+      ],
+      "cases": [],
+      "verify_markers": 6
+    },
+    "qpwb-offer-of-settlement": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 9-11-68"
+      ],
+      "cases": [
+        {
+          "name": "Anderson v. Laureano",
+          "year": "2017",
+          "cite": "342 Ga. App. 888"
+        },
+        {
+          "name": "Cohen v. Alfred & Adele Davis Academy, Inc.",
+          "year": "2011",
+          "cite": "310 Ga. App. 761"
+        },
+        {
+          "name": "Great West Cas. Co. v. Bloomfield",
+          "year": "2011",
+          "cite": "313 Ga. App. 180"
+        },
+        {
+          "name": "Harris v. Mahone",
+          "year": "2017",
+          "cite": "340 Ga. App. 415"
+        },
+        {
+          "name": "Richardson v. Locklyn",
+          "year": "2016",
+          "cite": "339 Ga. App. 457"
+        },
+        {
+          "name": "Smith v. Baptiste",
+          "year": "2010",
+          "cite": "287 Ga. 23"
+        },
+        {
+          "name": "The Coastal Bank v. Rawlins",
+          "year": "2018",
+          "cite": "347 Ga. App. 847"
+        }
+      ],
+      "verify_markers": 18
+    },
+    "qpwb-practice-review": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [],
+      "cases": [],
+      "verify_markers": 2
+    },
+    "qpwb-pre-suit-outreach": {
+      "areas": [
+        "badfaith",
+        "coverage",
+        "damages"
+      ],
+      "areas_status": "seeded",
+      "statutes": [],
+      "cases": [],
+      "verify_markers": 0
+    },
+    "qpwb-premises": {
+      "areas": [
+        "damages",
+        "negsec",
+        "premises",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 51-3-1",
+        "O.C.G.A. § 51-3-50",
+        "SB 68"
+      ],
+      "cases": [],
+      "verify_markers": 5
+    },
+    "qpwb-pretrial-order": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "Ga. R. Prof. Conduct 7.1",
+        "O.C.G.A. § 51-12-33"
+      ],
+      "cases": [],
+      "verify_markers": 4
+    },
+    "qpwb-procedural-offense": {
+      "areas": [
+        "auto",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "Ga. R. Prof. Conduct 6.4",
+        "O.C.G.A. § 40-12-1",
+        "O.C.G.A. § 9-11-4",
+        "O.C.G.A. § 9-11-6",
+        "SB 426",
+        "SB 68"
+      ],
+      "cases": [],
+      "verify_markers": 20
+    },
+    "qpwb-screen": {
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "Ga. R. Prof. Conduct 3.3"
+      ],
+      "cases": [],
+      "verify_markers": 1
+    },
+    "qpwb-settlement": {
+      "areas": [
+        "coverage",
+        "damages",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "HB 620",
+        "O.C.G.A. § 29-3-3",
+        "O.C.G.A. § 33-24-41.1",
+        "O.C.G.A. § 44-14-470"
+      ],
+      "cases": [],
+      "verify_markers": 12
+    },
+    "qpwb-specialized-motions": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 15-6-3",
+        "O.C.G.A. § 5-6-34",
+        "O.C.G.A. § 9-10-166",
+        "O.C.G.A. § 9-10-167",
+        "O.C.G.A. § 9-11-15",
+        "O.C.G.A. § 9-11-26",
+        "O.C.G.A. § 9-11-42",
+        "O.C.G.A. § 9-11-6"
+      ],
+      "cases": [],
+      "verify_markers": 15
+    },
+    "qpwb-spoliation": {
+      "areas": [
+        "auto",
+        "damages",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 24-14-22"
+      ],
+      "cases": [
+        {
+          "name": "AMLI Residential Properties, Inc. v. Georgia Power Co.",
+          "year": "2008",
+          "cite": "293 Ga. App. 358"
+        },
+        {
+          "name": "Baxley v. Hakiel Industries, Inc.",
+          "year": "2007",
+          "cite": "282 Ga. 312"
+        },
+        {
+          "name": "Cotton States Fertilizer Co. v. Childs",
+          "year": "1934",
+          "cite": "179 Ga. 23"
+        },
+        {
+          "name": "Phillips v. Harmon",
+          "year": "2015",
+          "cite": "297 Ga. 386"
+        },
+        {
+          "name": "Silman v. Associates Bellemeade",
+          "year": "2009",
+          "cite": "286 Ga. 27"
+        }
+      ],
+      "verify_markers": 10
+    },
+    "qpwb-tort-reform": {
+      "areas": [
+        "coverage",
+        "damages",
+        "negsec",
+        "premises",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "49 U.S.C. § 14501",
+        "HB 961",
+        "O.C.G.A. § 40-8-76.1",
+        "O.C.G.A. § 51-12-1.1",
+        "O.C.G.A. § 51-12-15",
+        "O.C.G.A. § 51-3-50",
+        "O.C.G.A. § 9-10-184",
+        "O.C.G.A. § 9-11-12",
+        "O.C.G.A. § 9-11-41",
+        "O.C.G.A. § 9-15-16",
+        "SB 426",
+        "SB 68",
+        "SB 69"
+      ],
+      "cases": [],
+      "verify_markers": 17
+    },
+    "qpwb-trucking": {
+      "areas": [
+        "auto",
+        "coverage",
+        "expert"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "49 C.F.R. § 376.12",
+        "49 U.S.C. § 13906",
+        "49 U.S.C. § 14501",
+        "49 U.S.C. § 30106",
+        "O.C.G.A. § 40-1-112",
+        "O.C.G.A. § 51-12-15",
+        "O.C.G.A. § 51-12-33",
+        "SB 426",
+        "SB 68"
+      ],
+      "cases": [],
+      "verify_markers": 31
+    },
+    "qpwb-um": {
+      "areas": [
+        "auto",
+        "coverage",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 33-7-11"
+      ],
+      "cases": [
+        {
+          "name": "Maxwell v. State Farm Mut. Auto. Ins. Co.",
+          "year": "1990",
+          "cite": "196 Ga. App. 545"
+        },
+        {
+          "name": "Moss v. Cincinnati Ins. Co.",
+          "year": "1980",
+          "cite": "154 Ga. App. 165"
+        }
+      ],
+      "verify_markers": 5
+    },
+    "qpwb-vehicle-inspection": {
+      "areas": [
+        "auto",
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [
+        "O.C.G.A. § 24-14-22",
+        "O.C.G.A. § 9-11-37"
+      ],
+      "cases": [],
+      "verify_markers": 5
+    },
+    "qpwb-writing": {
+      "areas": [
+        "procedure"
+      ],
+      "areas_status": "seeded",
+      "statutes": [],
+      "cases": [],
+      "verify_markers": 0
+    }
+  },
+  "by_authority": {
+    "11 U.S.C. § 350": [
+      "qpwb-bankruptcy"
+    ],
+    "11 U.S.C. § 362": [
+      "qpwb-bankruptcy"
+    ],
+    "11 U.S.C. § 541": [
+      "qpwb-bankruptcy"
+    ],
+    "11 U.S.C. § 554": [
+      "qpwb-bankruptcy"
+    ],
+    "28 U.S.C. § 1446": [
+      "qpwb-notices"
+    ],
+    "28 U.S.C. §§ 1332": [
+      "qpwb-federal-practice"
+    ],
+    "45 C.F.R. § 164.512": [
+      "qpwb-discovery"
+    ],
+    "49 C.F.R. § 376.12": [
+      "qpwb-trucking"
+    ],
+    "49 U.S.C. § 13906": [
+      "qpwb-trucking"
+    ],
+    "49 U.S.C. § 14501": [
+      "qpwb-tort-reform",
+      "qpwb-trucking"
+    ],
+    "49 U.S.C. § 30106": [
+      "qpwb-trucking"
+    ],
+    "ABCO Builders, Inc. v. Progressive Plumbing, Inc.": [
+      "qpwb-arbitration"
+    ],
+    "AMLI Residential Properties, Inc. v. Georgia Power Co.": [
+      "qpwb-spoliation"
+    ],
+    "Action Concrete v. Portrait Home-Little Suwanee Point": [
+      "qpwb-appellate-response",
+      "qpwb-motion-to-dismiss"
+    ],
+    "Adventure Motorsports Reinsurance, Ltd. v. Interstate National Dealer Services, Inc.": [
+      "qpwb-arbitration"
+    ],
+    "Airtab, Inc. v. Limbach Co.": [
+      "qpwb-arbitration"
+    ],
+    "Anderson v. Kaye": [
+      "qpwb-affirmative-defenses"
+    ],
+    "Anderson v. Laureano": [
+      "qpwb-offer-of-settlement"
+    ],
+    "Baxley v. Hakiel Industries, Inc.": [
+      "qpwb-spoliation"
+    ],
+    "Brumbelow v. Northern Propane Gas Co.": [
+      "qpwb-motion-to-enforce-settlement"
+    ],
+    "Campbell v. Cirrus Ed.": [
+      "qpwb-motion-to-dismiss"
+    ],
+    "Cohen v. Alfred & Adele Davis Academy, Inc.": [
+      "qpwb-offer-of-settlement"
+    ],
+    "Cotton States Fertilizer Co. v. Childs": [
+      "qpwb-spoliation"
+    ],
+    "Cox Enterprises v. Nix": [
+      "qpwb-appellate-response",
+      "qpwb-motion-to-dismiss"
+    ],
+    "Crowe v. Scissom": [
+      "qpwb-appellate-response"
+    ],
+    "Daubert v. Merrell Dow Pharmaceuticals, Inc.": [
+      "qpwb-motion-to-exclude-expert"
+    ],
+    "Dept. of Transp. v. Mixon": [
+      "qpwb-appellate-response",
+      "qpwb-motion-to-dismiss"
+    ],
+    "Falanga v. Kirschner & Venker": [
+      "qpwb-appellate-response"
+    ],
+    "Fed. R. Civ. P. 16": [
+      "qpwb-federal-practice"
+    ],
+    "Fed. R. Civ. P. 26(b)(1)": [
+      "qpwb-discovery"
+    ],
+    "Fed. R. Civ. P. 26(b)(2)": [
+      "qpwb-discovery"
+    ],
+    "Fed. R. Civ. P. 26(b)(4)": [
+      "qpwb-discovery"
+    ],
+    "Fed. R. Civ. P. 26(b)(5)": [
+      "qpwb-discovery"
+    ],
+    "Fed. R. Civ. P. 26(e)": [
+      "qpwb-discovery"
+    ],
+    "Fed. R. Civ. P. 33(a)(1)": [
+      "qpwb-discovery"
+    ],
+    "Fed. R. Civ. P. 33(a)(2)": [
+      "qpwb-discovery"
+    ],
+    "Fed. R. Civ. P. 55": [
+      "qpwb-federal-practice"
+    ],
+    "Fed. R. Civ. P. 81(c)(2)": [
+      "qpwb-federal-practice"
+    ],
+    "First Merit Credit Svcs. v. Fairway Aviation": [
+      "qpwb-affirmative-defenses"
+    ],
+    "Ga. R. Prof. Conduct 1.6": [
+      "qpwb-coverage"
+    ],
+    "Ga. R. Prof. Conduct 1.7": [
+      "qpwb-coverage"
+    ],
+    "Ga. R. Prof. Conduct 1.8": [
+      "qpwb-coverage"
+    ],
+    "Ga. R. Prof. Conduct 3.3": [
+      "qpwb-screen"
+    ],
+    "Ga. R. Prof. Conduct 4.4": [
+      "qpwb-discovery"
+    ],
+    "Ga. R. Prof. Conduct 5.4": [
+      "qpwb-coverage"
+    ],
+    "Ga. R. Prof. Conduct 6.4": [
+      "qpwb-discovery",
+      "qpwb-procedural-offense"
+    ],
+    "Ga. R. Prof. Conduct 7.1": [
+      "qpwb-pretrial-order"
+    ],
+    "General Electric Co. v. Joiner": [
+      "qpwb-motion-to-exclude-expert"
+    ],
+    "Great West Cas. Co. v. Bloomfield": [
+      "qpwb-offer-of-settlement"
+    ],
+    "Greene v. Hundley": [
+      "qpwb-arbitration"
+    ],
+    "Greenwald v. Kersh": [
+      "qpwb-motion-to-enforce-settlement"
+    ],
+    "H & E Innovation, LLC v. Shinhan Bank Am., Inc.": [
+      "qpwb-motion-to-enforce-settlement"
+    ],
+    "HB 478": [
+      "qpwb-expert-challenge",
+      "qpwb-motion-to-exclude-expert"
+    ],
+    "HB 620": [
+      "qpwb-settlement"
+    ],
+    "HB 961": [
+      "qpwb-tort-reform"
+    ],
+    "Hansen & Hansen Enterprises, Inc. v. SCSJ Enterprises, Inc.": [
+      "qpwb-arbitration"
+    ],
+    "Harris v. Mahone": [
+      "qpwb-offer-of-settlement"
+    ],
+    "Kumho Tire Co. v. Carmichael": [
+      "qpwb-motion-to-exclude-expert"
+    ],
+    "Lamb v. Fulton-DeKalb Hosp. Auth.": [
+      "qpwb-appellate-response",
+      "qpwb-motion-to-dismiss",
+      "qpwb-motion-to-enforce-settlement"
+    ],
+    "Mark A. Schneider Revocable Trust v. Hardy": [
+      "qpwb-motion-to-dismiss"
+    ],
+    "Maxwell v. State Farm Mut. Auto. Ins. Co.": [
+      "qpwb-um"
+    ],
+    "McGill Homes, Inc. v. Weaver": [
+      "qpwb-arbitration"
+    ],
+    "Morrell v. Wellstar Health System": [
+      "qpwb-appellate-response",
+      "qpwb-motion-to-dismiss"
+    ],
+    "Moss v. Cincinnati Ins. Co.": [
+      "qpwb-um"
+    ],
+    "Mullins v. Belcher": [
+      "qpwb-motion-to-dismiss"
+    ],
+    "O.C.G.A. § 13-3-1": [
+      "qpwb-motion-to-enforce-settlement"
+    ],
+    "O.C.G.A. § 13-6-11": [
+      "qpwb-complaint"
+    ],
+    "O.C.G.A. § 15-19-5": [
+      "qpwb-motion-to-enforce-settlement"
+    ],
+    "O.C.G.A. § 15-6-3": [
+      "qpwb-specialized-motions"
+    ],
+    "O.C.G.A. § 24-14-22": [
+      "qpwb-affirmative-defenses",
+      "qpwb-motion-for-spoliation-sanctions",
+      "qpwb-spoliation",
+      "qpwb-vehicle-inspection"
+    ],
+    "O.C.G.A. § 24-4-404": [
+      "qpwb-motion-in-limine"
+    ],
+    "O.C.G.A. § 24-4-407": [
+      "qpwb-motion-in-limine"
+    ],
+    "O.C.G.A. § 24-4-408": [
+      "qpwb-discovery",
+      "qpwb-motion-in-limine"
+    ],
+    "O.C.G.A. § 24-4-411": [
+      "qpwb-motion-in-limine"
+    ],
+    "O.C.G.A. § 24-5-501": [
+      "qpwb-discovery"
+    ],
+    "O.C.G.A. § 24-6-609": [
+      "qpwb-discovery"
+    ],
+    "O.C.G.A. § 24-7-702": [
+      "qpwb-expert-challenge",
+      "qpwb-motion-in-limine",
+      "qpwb-motion-to-exclude-expert"
+    ],
+    "O.C.G.A. § 29-3-3": [
+      "qpwb-settlement"
+    ],
+    "O.C.G.A. § 33-24-41.1": [
+      "qpwb-settlement"
+    ],
+    "O.C.G.A. § 33-4-6": [
+      "qpwb-bad-faith"
+    ],
+    "O.C.G.A. § 33-4-7": [
+      "qpwb-bad-faith"
+    ],
+    "O.C.G.A. § 33-7-11": [
+      "qpwb-discovery",
+      "qpwb-um"
+    ],
+    "O.C.G.A. § 38-3-61": [
+      "qpwb-affirmative-defenses"
+    ],
+    "O.C.G.A. § 40-1-112": [
+      "qpwb-trucking"
+    ],
+    "O.C.G.A. § 40-12-1": [
+      "qpwb-procedural-offense"
+    ],
+    "O.C.G.A. § 40-8-76.1": [
+      "qpwb-motion-in-limine",
+      "qpwb-tort-reform"
+    ],
+    "O.C.G.A. § 44-14-470": [
+      "qpwb-settlement"
+    ],
+    "O.C.G.A. § 5-6-34": [
+      "qpwb-specialized-motions"
+    ],
+    "O.C.G.A. § 51-1-56": [
+      "qpwb-negligent-security"
+    ],
+    "O.C.G.A. § 51-11-7": [
+      "qpwb-affirmative-defenses"
+    ],
+    "O.C.G.A. § 51-12-1.1": [
+      "qpwb-affirmative-defenses",
+      "qpwb-damages",
+      "qpwb-discovery",
+      "qpwb-tort-reform"
+    ],
+    "O.C.G.A. § 51-12-15": [
+      "qpwb-discovery",
+      "qpwb-tort-reform",
+      "qpwb-trucking"
+    ],
+    "O.C.G.A. § 51-12-33": [
+      "qpwb-apportionment",
+      "qpwb-carrier-report",
+      "qpwb-negligent-security",
+      "qpwb-notices",
+      "qpwb-pretrial-order",
+      "qpwb-trucking"
+    ],
+    "O.C.G.A. § 51-12-5.1": [
+      "qpwb-carrier-report",
+      "qpwb-damages",
+      "qpwb-discovery"
+    ],
+    "O.C.G.A. § 51-12-9": [
+      "qpwb-affirmative-defenses"
+    ],
+    "O.C.G.A. § 51-3-1": [
+      "qpwb-negligent-security",
+      "qpwb-premises"
+    ],
+    "O.C.G.A. § 51-3-50": [
+      "qpwb-negligent-security",
+      "qpwb-premises",
+      "qpwb-tort-reform"
+    ],
+    "O.C.G.A. § 51-4-1": [
+      "qpwb-damages"
+    ],
+    "O.C.G.A. § 51-4-2": [
+      "qpwb-damages"
+    ],
+    "O.C.G.A. § 51-4-5": [
+      "qpwb-damages"
+    ],
+    "O.C.G.A. § 9-10-166": [
+      "qpwb-specialized-motions"
+    ],
+    "O.C.G.A. § 9-10-167": [
+      "qpwb-specialized-motions"
+    ],
+    "O.C.G.A. § 9-10-184": [
+      "qpwb-damages",
+      "qpwb-tort-reform"
+    ],
+    "O.C.G.A. § 9-11-12": [
+      "qpwb-discovery",
+      "qpwb-motion-to-dismiss",
+      "qpwb-tort-reform"
+    ],
+    "O.C.G.A. § 9-11-14": [
+      "qpwb-complaint"
+    ],
+    "O.C.G.A. § 9-11-15": [
+      "qpwb-motion-to-dismiss",
+      "qpwb-specialized-motions"
+    ],
+    "O.C.G.A. § 9-11-19": [
+      "qpwb-motion-to-dismiss"
+    ],
+    "O.C.G.A. § 9-11-26": [
+      "qpwb-discovery",
+      "qpwb-specialized-motions"
+    ],
+    "O.C.G.A. § 9-11-26.1": [
+      "qpwb-discovery"
+    ],
+    "O.C.G.A. § 9-11-33": [
+      "qpwb-discovery"
+    ],
+    "O.C.G.A. § 9-11-34": [
+      "qpwb-discovery"
+    ],
+    "O.C.G.A. § 9-11-36": [
+      "qpwb-discovery",
+      "qpwb-motion-summary-judgment"
+    ],
+    "O.C.G.A. § 9-11-37": [
+      "qpwb-discovery",
+      "qpwb-motion-to-compel",
+      "qpwb-vehicle-inspection"
+    ],
+    "O.C.G.A. § 9-11-38": [
+      "qpwb-notices"
+    ],
+    "O.C.G.A. § 9-11-4": [
+      "qpwb-procedural-offense"
+    ],
+    "O.C.G.A. § 9-11-41": [
+      "qpwb-notices",
+      "qpwb-tort-reform"
+    ],
+    "O.C.G.A. § 9-11-42": [
+      "qpwb-specialized-motions"
+    ],
+    "O.C.G.A. § 9-11-56": [
+      "qpwb-motion-summary-judgment"
+    ],
+    "O.C.G.A. § 9-11-6": [
+      "qpwb-procedural-offense",
+      "qpwb-specialized-motions"
+    ],
+    "O.C.G.A. § 9-11-68": [
+      "qpwb-offer-of-settlement"
+    ],
+    "O.C.G.A. § 9-11-7": [
+      "qpwb-filings"
+    ],
+    "O.C.G.A. § 9-11-9": [
+      "qpwb-complaint"
+    ],
+    "O.C.G.A. § 9-11-9.1": [
+      "qpwb-malpractice-affidavit",
+      "qpwb-motion-to-dismiss"
+    ],
+    "O.C.G.A. § 9-11-9.2": [
+      "qpwb-discovery"
+    ],
+    "O.C.G.A. § 9-15-14": [
+      "qpwb-motion-sanctions"
+    ],
+    "O.C.G.A. § 9-15-16": [
+      "qpwb-tort-reform"
+    ],
+    "O.C.G.A. § 9-2-41": [
+      "qpwb-damages"
+    ],
+    "O.C.G.A. § 9-2-61": [
+      "qpwb-complaint",
+      "qpwb-motion-to-dismiss"
+    ],
+    "O.C.G.A. § 9-3-24": [
+      "qpwb-affirmative-defenses"
+    ],
+    "O.C.G.A. § 9-3-33": [
+      "qpwb-affirmative-defenses",
+      "qpwb-damages"
+    ],
+    "O.C.G.A. § 9-3-99": [
+      "qpwb-damages"
+    ],
+    "O.C.G.A. § 9-4-1": [
+      "qpwb-complaint"
+    ],
+    "O.C.G.A. § 9-9-10": [
+      "qpwb-arbitration"
+    ],
+    "O.C.G.A. § 9-9-12": [
+      "qpwb-arbitration"
+    ],
+    "O.C.G.A. § 9-9-13": [
+      "qpwb-arbitration",
+      "qpwb-motion-to-confirm-or-vacate-arbitration-award"
+    ],
+    "O.C.G.A. § 9-9-14": [
+      "qpwb-arbitration"
+    ],
+    "Owen v. Mobley Constr. Co.": [
+      "qpwb-affirmative-defenses"
+    ],
+    "Petree v. Dep't of Transp.": [
+      "qpwb-motion-to-dismiss"
+    ],
+    "Phillips v. Harmon": [
+      "qpwb-spoliation"
+    ],
+    "Phillips v. Phillips": [
+      "qpwb-appellate-response"
+    ],
+    "Practice Note: When the UM carrier elects under § 33-7-11(d) to\n> defend in the tortfeasor’s name, discovery responses and verifications\n> that identify the carrier by name or role can undermine that election.\n> Hossain v. Nelson": [
+      "qpwb-discovery"
+    ],
+    "Progressive Data Systems, Inc. v. Jefferson Randolph Corp.": [
+      "qpwb-arbitration"
+    ],
+    "Richardson v. Locklyn": [
+      "qpwb-offer-of-settlement"
+    ],
+    "SB 426": [
+      "qpwb-affirmative-defenses",
+      "qpwb-procedural-offense",
+      "qpwb-tort-reform",
+      "qpwb-trucking"
+    ],
+    "SB 68": [
+      "qpwb-affirmative-defenses",
+      "qpwb-damages",
+      "qpwb-discovery",
+      "qpwb-negligent-security",
+      "qpwb-premises",
+      "qpwb-procedural-offense",
+      "qpwb-tort-reform",
+      "qpwb-trucking"
+    ],
+    "SB 69": [
+      "qpwb-discovery",
+      "qpwb-tort-reform"
+    ],
+    "SB 74": [
+      "qpwb-discovery"
+    ],
+    "Scapa Dryer Fabrics, Inc. v. Knight": [
+      "qpwb-motion-to-exclude-expert"
+    ],
+    "Silman v. Associates Bellemeade": [
+      "qpwb-spoliation"
+    ],
+    "Smith v. Baptiste": [
+      "qpwb-offer-of-settlement"
+    ],
+    "Stephens v. Castano-Castano": [
+      "qpwb-motion-to-enforce-settlement"
+    ],
+    "The Coastal Bank v. Rawlins": [
+      "qpwb-offer-of-settlement"
+    ],
+    "Titshaw v. Geer": [
+      "qpwb-affirmative-defenses"
+    ],
+    "Torres v. Elkin": [
+      "qpwb-motion-to-enforce-settlement"
+    ],
+    "Toyo Tire North America Mfg., Inc. v. Davis": [
+      "qpwb-motion-to-exclude-expert"
+    ],
+    "Travis Pruitt & Assoc. v. Bowling": [
+      "qpwb-affirmative-defenses"
+    ],
+    "Wolf Creek Landfill v. Twiggs County": [
+      "qpwb-affirmative-defenses"
+    ],
+    "Woods v. Hall": [
+      "qpwb-appellate-response"
+    ]
+  },
+  "curated": {
+    "qpwb-bankruptcy": {
+      "code_context": "11 U.S.C."
+    }
+  }
+}
