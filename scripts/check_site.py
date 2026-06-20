@@ -4,6 +4,7 @@ every push and locally any time:
 
   python scripts/check_site.py          # verify; exit nonzero on any failure
   python scripts/check_site.py --fix    # restamp the ?v= asset tokens, then verify
+  python scripts/check_site.py --links  # network: external links on the hand pages (scheduled, not per-push)
 
 What it guards, and why each exists:
 
@@ -24,6 +25,15 @@ What it guards, and why each exists:
      test alone cannot see the class. Any whitespace-named file here fails.
 
   4. opinions.xml and sitemap.xml are well-formed XML.
+
+  5. External link rot (--links only, off by default). The hand-authored pages
+     link out to the firm, the bar, the courts, the schools, and LinkedIn, and
+     those URLs drift as institutions reorganize. With --links the external
+     links on index.html and resume.html are fetched; any returning 404 or 410
+     is rot (exit 3, details in scripts/link_rot.md for the issue body), a host
+     only unreachable is transient (exit 4), and a bot-block or other status is
+     treated as alive. Scoped to those two pages, so the generated permalinks
+     and their CourtListener links are never hit and the API budget is untouched.
 
 Checks are independent: all of them run and every failure is reported before the
 nonzero exit, so one push surfaces the full list.
@@ -150,7 +160,78 @@ def check_xml(errors):
             errors.append("%s: not well-formed XML (%s)" % (f, e))
 
 
+# ---- External link rot (opt-in, --links) --------------------------------
+LINK_PAGES = ("index.html", "resume.html")   # hand-authored pages only
+_LINK_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) horowitz.law-linkcheck/1.0")
+_LINK_SKIP = ("www.w3.org/2000/svg", "schema.org")  # XML / JSON-LD namespaces, not pages
+
+
+def _external_links():
+    seen = set()
+    for name in LINK_PAGES:
+        for u in re.findall(r'"(https?://[^"\s]+)"', _read(name)):
+            if "horowitz.law" in u or any(k in u for k in _LINK_SKIP):
+                continue
+            seen.add(u)
+    return sorted(seen)
+
+
+def _link_status(url):
+    """('dead'|'alive'|'unreachable', detail). 404/410 -> dead. Any other HTTP
+    response, including 403/429/5xx bot-blocks, -> alive: the URL resolves, it is
+    just guarded or hiccuping, which is not link rot. No response after a retry ->
+    unreachable (transient or DNS)."""
+    import urllib.request, urllib.error
+    for _ in range(2):                        # one retry on a transport failure
+        for method in ("HEAD", "GET"):
+            req = urllib.request.Request(url, method=method,
+                                         headers={"User-Agent": _LINK_UA})
+            try:
+                with urllib.request.urlopen(req, timeout=12) as r:
+                    return ("alive", r.status)
+            except urllib.error.HTTPError as e:
+                if e.code in (404, 410):
+                    return ("dead", e.code)
+                if method == "HEAD" and e.code in (403, 405, 501):
+                    continue                  # server refuses HEAD; try GET
+                return ("alive", e.code)
+            except Exception:
+                break                         # transport error; fall through to retry
+    return ("unreachable", "no response")
+
+
+def check_links():
+    """Verify external links on the hand-authored pages still resolve. Returns 0
+    (all resolve), 3 (a link is dead, 404/410), or 4 (only unreachable, no
+    confirmed rot). Writes scripts/link_rot.md on a dead link for the maintenance
+    workflow to file as an issue. Scoped to index.html and resume.html, so the
+    generated permalinks and their CourtListener links are never touched."""
+    urls = _external_links()
+    dead, unreachable, ok = [], [], 0
+    for u in urls:
+        state, detail = _link_status(u)
+        if state == "dead":
+            dead.append((u, detail)); print("  ! dead (%s): %s" % (detail, u))
+        elif state == "unreachable":
+            unreachable.append(u);    print("  ? unreachable: %s" % u)
+        else:
+            ok += 1;                  print("  ok (%s): %s" % (detail, u))
+    print("check_site --links: %d ok, %d unreachable, %d dead, of %d checked"
+          % (ok, len(unreachable), len(dead), len(urls)))
+    if dead:
+        with open(os.path.join(REPO, "scripts", "link_rot.md"), "w", encoding="utf-8") as f:
+            f.write("Dead external link(s) found on the hand-authored pages:\n\n")
+            for u, d in dead:
+                f.write("- `%s` returned %s\n" % (u, d))
+            f.write("\nLinked from index.html or resume.html. Update or remove them.\n")
+        return 3
+    return 4 if unreachable else 0
+
+
 def main(argv):
+    if "--links" in argv:
+        return check_links()
     fix = "--fix" in argv
     errors = []
     if fix:
