@@ -65,6 +65,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
 import render          # single source of truth renderer
 import treatment_core  # shared treatment-flag model (the forward escalation writes it)
+import skill_alert     # alert-out: extend the treats watch-list to skill-relied authorities
 import safeio          # crash-safe atomic writes
 import jurisdictions   # per-jurisdiction court config (court map, labels, patterns)
 import official_ga     # resolves a scotga card's official gasupreme.us opinion PDF (fail-open)
@@ -80,6 +81,8 @@ JSON_PATH  = os.path.join(REPO, "opinions.json")
 STATE_PATH = os.path.join(REPO, "opinions_state.json")
 LOG_PATH   = os.path.join(REPO, "opinions_pipeline_log.jsonl")  # append-only per-run health log (observability)
 REJECT_PATH = os.path.join(REPO, "opinions_rejections.jsonl")  # append-only log of candidates the screen or triage dropped, for periodic recall review
+SA_MANIFEST_PATH = os.path.join(REPO, "skill-authorities.json")   # skill-authority manifest (alert-out join key; absent = watch inactive)
+SA_STATE_PATH    = os.path.join(REPO, "skill_alert_state.json")   # per-authority adverse-treatment record (state; rides the PR / straight to main like opinions_state.json)
 REJECT_CAP  = int(os.environ.get("OPINIONS_REJECT_CAP", "5000"))  # keep only the most recent N rejection records so the committed log stays bounded
 PR_PATH    = os.path.join(REPO, "scripts", "pr_body.md")
 
@@ -922,7 +925,7 @@ def pretriage(name, docket, text):
 def triage(name, docket, text, feed_index=""):
     user = "Case name: %s\nDocket: %s\n\nFULL OPINION:\n%s" % (name, docket, clip(text))
     if feed_index:
-        user += ("\n\nCASES ALREADY IN THE FEED (id: name). If THIS opinion treats any of them "
+        user += ("\n\nCASES TO WATCH (id: name). If THIS opinion treats any of them "
                  "negatively, report them in `treats` (low threshold; a later step confirms):\n"
                  + feed_index)
     return anthropic_json({"model": TRIAGE_MODEL, "max_tokens": 1024, "system": TRIAGE_SYSTEM,
@@ -973,6 +976,33 @@ def treatment_audit(new_name, new_text, card):
             % (prop, new_name, clip(new_text)))
     return anthropic_json({"model": AUDIT_MODEL, "max_tokens": 700, "system": AUDIT_SYSTEM,
                            "messages": [{"role": "user", "content": user}]}, "treatment-audit")
+
+
+AUTHORITY_AUDIT_SYSTEM = (
+    "You are the senior editor auditing a citation event for a litigation team. A later opinion "
+    "appears to treat an AUTHORITY the team's practice materials rely on. You are given (A) the "
+    "AUTHORITY: a case name the team treats as controlling, and (B) the LATER OPINION that cites it. "
+    "Decide how the later opinion treats that authority. It is NEGATIVE only if the later opinion "
+    "overrules, reverses, abrogates, holds it superseded by statute, limits or narrows its rule, "
+    "disapproves, or criticizes it as wrongly decided. Distinguishing on the facts without narrowing "
+    "the rule is NOT negative; following or citing in support is POSITIVE; a bare mention is NEUTRAL. "
+    "Be careful and conservative: a human confirms on a citator, but your read decides whether the "
+    "team is alerted at all. Output ONLY a JSON object with keys: treatment ('positive', 'neutral', "
+    "or 'negative'); kind (one of overruled, reversed, abrogated, superseded by statute, limited, "
+    "disapproved, criticized, distinguished-narrowing, or null); note (one neutral sentence, no case "
+    "citations, on the treatment); confidence ('high', 'medium', or 'low')."
+)
+
+
+def authority_audit(new_name, new_text, authority_name):
+    """General adverse-treatment audit for a relied-on authority that is not a feed card.
+    Unlike treatment_audit there is no published proposition to test against, so this asks
+    whether the later opinion treats the authority negatively at all. Reuses the Opus audit
+    model and the same adverse-kinds vocabulary."""
+    user = ("AUTHORITY (A): %s\n\nLATER OPINION THAT CITES IT (B) -- %s:\n%s"
+            % (authority_name, new_name, clip(new_text)))
+    return anthropic_json({"model": AUDIT_MODEL, "max_tokens": 500, "system": AUTHORITY_AUDIT_SYSTEM,
+                           "messages": [{"role": "user", "content": user}]}, "authority-audit")
 
 
 CROSSCHECK_SYSTEM = (
@@ -1317,6 +1347,18 @@ def main():
                            for e in entries
                            if e.get("cluster_id") and (e.get("treatment") or "ok") != "superseded")
 
+    # Alert-out: extend the triage watch-list to the bedrock authorities the qpwb skills
+    # rely on. Most are older controlling cases not in the feed, so they ride beside the feed
+    # cards with an "sa:" id the treats loop routes separately. Fail-open: a missing or empty
+    # manifest leaves the feed-card path untouched.
+    sa_manifest = skill_alert.load_manifest(SA_MANIFEST_PATH)
+    sa_items = skill_alert.watch_items(sa_manifest)
+    sa_state = skill_alert.load_state(SA_STATE_PATH)
+    sa_events = []
+    if sa_items:
+        _sa_lines = skill_alert.feed_index_lines(sa_items)
+        feed_index = (feed_index + "\n" + _sa_lines) if feed_index else _sa_lines
+
     state = {}
     if os.path.exists(STATE_PATH):
         state = json.load(open(STATE_PATH, encoding="utf-8"))
@@ -1474,6 +1516,31 @@ def main():
                 # with an Opus audit (which also re-checks the existing card), whether
                 # or not this opinion itself earns a place in the feed.
                 for tr in (t.get("treats") or []):
+                    tid = tr.get("id")
+                    if skill_alert.is_authority_id(tid):
+                        # Skill-authority hit: not a feed card, so a dedicated general audit
+                        # (no published proposition) and a separate record + routing to skills.
+                        aname = skill_alert.authority_for_id(sa_items, tid)
+                        if not aname or skill_alert.already_seen(sa_state, aname, cid):
+                            continue
+                        try:
+                            n_audit += 1
+                            a = authority_audit(name, text, aname)
+                        except ConfigError:
+                            raise
+                        except Exception as ae:
+                            print("  ! authority audit failed for %s citing %s: %s" % (aname, name, ae))
+                            continue
+                        akind = (a.get("kind") or "").lower().strip() or None
+                        if (a.get("treatment") or "").lower() == "negative" and akind in treatment_core.NEGATIVE_KINDS:
+                            citer = {"cluster_id": cid, "name": name, "court": COURT_MAP.get(court_id),
+                                     "date": date_filed, "kind": akind, "note": (a.get("note") or "").strip()}
+                            newrec, sk = skill_alert.record(sa_state, sa_manifest, aname, citer)
+                            if newrec:
+                                sa_events.append((aname, citer, sk))
+                                print("  ~ skill-authority adverse: %s treated by %s (%s) -> %s"
+                                      % (aname[:40], name[:40], akind, ", ".join(x.replace("qpwb-", "") for x in sk)))
+                        continue
                     try:
                         card = by_id.get(int(tr.get("id")))
                     except (TypeError, ValueError):
@@ -1637,6 +1704,7 @@ def main():
         for cardnm, newnm, rev in audit_notes:
             if rev:
                 lines.append("- audit -- the **%s** card may need an edit in light of %s: %s" % (cardnm, newnm, rev))
+    lines += skill_alert.digest_lines(sa_events)
     noms = golden_nominations(added, crosschecks, {n for n, _ in flagged})
     if noms:
         lines += ["", "Golden-set nominations (the set never adopts on its own; to adopt one, paste the "
@@ -1647,7 +1715,7 @@ def main():
     if skipped:
         lines += ["", "Screened or dropped this run (not added):"]
         lines += ["- %s: %s" % (n, why) for n, why in skipped]
-    if not added and not treat_flags:
+    if not added and not treat_flags and not sa_events:
         lines += ["", "No new relevant opinions this run."]
     pr_body = "\n".join(lines) + "\n"
     funnel = "screened %d, pretriaged %d, triaged %d, summarized %d, audited %d" % (n_screen, n_pretriage, n_triage, n_opus, n_audit)
@@ -1682,6 +1750,9 @@ def main():
         "crosscheck_flags": sum(1 for c in crosschecks.values() if c["verdict"] == "flag"),
         "completeness_flags": sum(1 for c in completeness.values() if c["verdict"] == "flag"),
     })
+
+    if sa_events:
+        skill_alert.save_state(SA_STATE_PATH, sa_state)
 
     if not added and not treatment_changed:
         # Nothing to card, but persist the clusters fully evaluated this run as seen, so the
