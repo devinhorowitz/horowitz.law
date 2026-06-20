@@ -41,7 +41,6 @@ nonzero exit, so one push surfaces the full list.
 import base64
 import hashlib
 import os
-import glob
 import re
 import sys
 

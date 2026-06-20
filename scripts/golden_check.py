@@ -151,7 +151,8 @@ def _summarize_attempts(name, docket, text, expect, tries):
     error makes that attempt contribute nothing and the loop proceeds; a persistent error leaves
     the union short and is reported. Returns (covered, union, used, last_addl, last_error)."""
     union, last_addl, last_error, used = set(), 0, "", 0
-    for used in range(1, tries + 1):
+    # 'used' is the attempt count, consumed in the return below, not in the loop body.
+    for used in range(1, tries + 1):  # noqa: B007
         try:
             v = update.summarize("", name, docket, "", text, "", cl_status="")
             union |= _produced_areas(v)
