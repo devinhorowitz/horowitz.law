@@ -27,12 +27,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30     # watchdog: the golden check + a small slice + the court check is minutes of work
     steps:
-      # Supply-chain hardening (audit mode): records what this job sends over the
-      # network, so you can review egress and later switch to block with an allowlist.
+      # Supply-chain hardening (block mode). The external-link step was dropped (lychee
+      # covers external links), leaving a bounded surface, the same five hosts golden-check runs:
+      #   api.anthropic.com  cross-check and golden-check model calls.
+      #   www.courtlistener.com / storage.courtlistener.com  court-registry validate, card text, PDF.
+      #   github.com / api.github.com  checkout + keepalive push, and the issue-management gh steps.
+      # Cache/infra endpoints are auto-allowed.
       - name: Harden the runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          allowed-endpoints: >
+            api.anthropic.com:443
+            www.courtlistener.com:443
+            storage.courtlistener.com:443
+            github.com:443
+            api.github.com:443
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       # Keepalive (folded from keepalive.yml): a daily marker commit keeps the repository
@@ -115,52 +125,6 @@ jobs:
           else
             gh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body "$body"
           fi
-
-      # External link rot (folded in, not a standalone workflow): the hand-authored
-      # pages link out to the firm, the bar, the courts, the schools, and LinkedIn,
-      # whose URLs drift as institutions reorganize. check_site.py --links fetches them,
-      # scoped to index.html and resume.html so the permalinks and CourtListener are never
-      # touched. Capture the exit without failing the job (0 all resolve, 3 a link is dead
-      # at 404/410, 4 only unreachable); a finding surfaces as an issue the same way the
-      # court check does, and a bot-block or a transient blip never fails the run.
-      - name: Check external links
-        id: links
-        run: |
-          set +e
-          python scripts/check_site.py --links
-          code=$?
-          set -e
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-
-      - name: External link rot flag
-        if: ${{ steps.links.outputs.code == '3' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          title="Dead external link detected"
-          existing=$(gh issue list --state open --search "$title in:title" --json number,title \
-            --jq "[.[] | select(.title==\"$title\")] | .[0].number" 2>/dev/null || true)
-          if [ -n "$existing" ] && [ "$existing" != "null" ]; then
-            gh issue comment "$existing" --body-file scripts/link_rot.md
-          else
-            gh issue create --title "$title" --body-file scripts/link_rot.md
-          fi
-
-      - name: External links clean
-        if: ${{ steps.links.outputs.code == '0' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          title="Dead external link detected"
-          for n in $(gh issue list --state open --search "$title in:title" --json number,title \
-            --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
-            gh issue comment "$n" --body "Resolved: every external link on the hand-authored pages resolves again."
-            gh issue close "$n"
-          done
-
-      - name: External link check deferred
-        if: ${{ steps.links.outputs.code == '4' }}
-        run: echo "::notice title=External links::Some links were unreachable (transient or bot-block); no rot confirmed, will retry next run."
 
       - name: Run maintenance
         env:
