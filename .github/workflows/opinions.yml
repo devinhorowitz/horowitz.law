@@ -145,6 +145,7 @@ jobs:
             stats.html
             digests.html
             o
+            areas
 
       # No-op run: the funnel carded nothing, so there is no review PR. It still records this
       # run's health stats, and marks the clusters it screened as seen so the next run does not
