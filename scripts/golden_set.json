@@ -196,22 +196,18 @@
     "cluster_id": 10877589,
     "name": "Restoration Doctor, Zaldivar v. Citizens Property Insurance Corporation",
     "docket": "2D2025-1935",
-    "expect_relevant": true,
-    "expect_areas": [
-      "coverage"
-    ],
-    "note": "Florida positive control (property-insurance coverage / assignment of benefits). Validates that supplementary Florida keeps an in-area insurance decision. From the Florida DCA feed.",
+    "expect_relevant": false,
+    "expect_areas": [],
+    "note": "Florida negative control (insurance caption, bare per curiam affirmance with no opinion). Confirms the funnel drops a Florida disposition that decides nothing even when the caption looks in-area. From the Florida DCA feed.",
     "text": "DISTRICT COURT OF APPEAL OF FLORIDA\n SECOND DISTRICT\n\n\n RESTORATION DOCTOR individually and\n as assignee of Robert Zaldivar,\n\n Appellant,\n\n v.\n\n CITIZENS PROPERTY INSURANCE CORPORATION,\n\n Appellee.\n\n\n No. 2D2025-1935\n\n\n June 19, 2026\n\nAppeal from the County Court for Hillsborough County; Lisa A. Allen,\nJudge.\n\nMatthew McElligott of Valiente, Carollo & McElligott, PLLC, Miami\n(withdrew after briefing), for Appellant.\n\nMichelle Diverio and Alejandro Sanchez Parraga of Lydecker LLP, Miami,\nfor Appellee.\n\n\nPER CURIAM.\n Affirmed.\n\n\n\nSILBERMAN, KELLY, and ROTHSTEIN-YOUAKIM, JJ., Concur.\n\n\nOpinion subject to revision prior to official publication."
   },
   {
     "cluster_id": 10877591,
     "name": "Progressive American Insurance Company v. Prieto",
     "docket": "2D2025-1760",
-    "expect_relevant": true,
-    "expect_areas": [
-      "coverage"
-    ],
-    "note": "Florida positive control (auto-insurer coverage dispute). Validates supplementary Florida recall on insurance content. From the Florida DCA feed.",
+    "expect_relevant": false,
+    "expect_areas": [],
+    "note": "Florida negative control (insurance caption, bare per curiam dismissal of a certiorari petition, no merits). Confirms the funnel drops a no-merits Florida disposition despite an in-area caption. From the Florida DCA feed.",
     "text": "DISTRICT COURT OF APPEAL OF FLORIDA\n SECOND DISTRICT\n\n PROGRESSIVE AMERICAN INSURANCE COMPANY,\n\n Petitioner,\n\n v.\n\n ANTHONY PRIETO,\n\n Respondent.\n\n No. 2D2025-1760\n\n\n June 19, 2026\n\nPetition for Writ of Certiorari to the County Court for Hillsborough\nCounty; Lisa A. Allen, Judge.\n\nLissette Gonzalez of Cole, Scott & Kissane, P.A., Miami, for Petitioner.\n\nDavid M. Caldevilla of de la Parte, Gilbert, McNamara & Caldevilla, P.A.,\nTampa; Michael V. Laurato, Ocala; Christopher P. Calkin and Mike N.\nKoulianos of The Law Office of Christopher P. Calkin, P.A., Tampa; and\nAnthony T. Prieto, pro se, for Respondent.\n\n\nPER CURIAM.\n\n Dismissed.\n\nSILBERMAN, KELLY, and ROTHSTEIN-YOUAKIM, JJ., Concur.\n\n\nOpinion subject to revision prior to official publication."
   },
   {
