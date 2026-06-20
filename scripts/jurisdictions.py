@@ -99,8 +99,11 @@ JURISDICTION = ACTIVE                                    # active jurisdiction k
 # decision surfaces while its criminal and family bulk drops. The prompts stay
 # Georgia-centered and the Georgia-specific tags (tort_reform, division) stay null on
 # a Florida card. Its cards carry jurisdiction "fl" (see COURT_JURISDICTION) so they
-# file under the Florida filter, not the active-jurisdiction fallback. Alabama stays
-# overlay-only for now (both its courts are in CourtListener when we turn them on).
+# file under the Florida filter, not the active-jurisdiction fallback. Alabama is
+# supplementary as well: its Supreme Court (ala) and Court of Civil Appeals (alacivapp)
+# ride the feed in the same areas; its Court of Criminal Appeals (alacrimapp) is
+# deliberately not monitored, since it is entirely criminal and would only add screen
+# drops. Alabama cards carry jurisdiction "al" and use the Southern Reporter, like Florida.
 JURISDICTIONS["fl"] = {
     "label": "Florida", "mode": "supplementary", "filter_note": "also pulled",
     "courts": [
@@ -113,7 +116,18 @@ JURISDICTIONS["fl"] = {
     "docket_re": r"\b(?:[1-6]D|SC)\d{4}-\d{3,5}\b",
     "cite_re": r"\b\d+\s+So\.?\s*(?:2d|3d)?\s+\d+\b",
 }
-JURISDICTIONS["al"] = {"label": "Alabama", "mode": "overlay", "courts": []}
+JURISDICTIONS["al"] = {
+    "label": "Alabama", "mode": "supplementary", "filter_note": "also pulled",
+    "courts": [
+        {"cl": "ala",       "key": "scotal",   "label": "Supreme Court of Alabama",          "suffix": " (Ala.)",          "system": "state"},
+        {"cl": "alacivapp", "key": "civappal", "label": "Court of Civil Appeals of Alabama", "suffix": " (Ala. Civ. App.)", "system": "state"},
+    ],
+    # Alabama appellate dockets are letter-prefixed by court: SC-YYYY-#### (Supreme),
+    # CL-YYYY-#### (Civil Appeals), CR-YYYY-#### (Criminal Appeals). Cites are the Southern
+    # Reporter (So., So. 2d, So. 3d), shared with Florida. Used via the DOCKET_RE / CITE_RE union.
+    "docket_re": r"\b(?:SC|CL|CR|CC)-\d{4}-\d{3,6}\b",
+    "cite_re": r"\b\d+\s+So\.?\s*(?:2d|3d)?\s+\d+\b",
+}
 
 # Court tables, derived from the active jurisdiction's courts plus any courts of
 # other registered jurisdictions monitored at less than full coverage (today just
