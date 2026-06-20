@@ -74,7 +74,10 @@ statutes and controlling cases each depends on into `skill-authorities.json`. `s
 adds the case authorities to the triage watch-list, most of them older controlling cases that are
 not in the feed at all; when a new opinion is confirmed to treat one adversely, the finding is
 recorded in `skill_alert_state.json` and routed back to the skills that rely on it. This is the
-alert-out half of a feed-to-drafting integration; the per-area drip-in half is still to come.
+alert-out half of a feed-to-drafting integration. Its per-area drip-in half now has a source:
+`scripts/render.py` publishes `/areas/<area>.json` per practice area, a deterministic extract of
+`opinions.json` carrying each opinion's synopsis and treatment state. What remains is wiring a
+drafting skill to read its area slice at draft time.
 
 ## How the pieces fit
 
@@ -86,8 +89,10 @@ alert-out half of a feed-to-drafting integration; the per-area drip-in half is s
   to `scripts/pr_body.md`.
 - `scripts/render.py` renders `opinions.json` into the cards in `opinions.html` (between the
   `opinions:start` / `opinions:end` markers), `archive.html`, the per-opinion permalink pages
-  under `/o/`, the `opinions.xml` feed, and the `/changes` and `/stats` pages. It changes nothing
-  outside its markers and stamps the footer year in place on the static pages.
+  under `/o/`, the `opinions.xml` and `changes.xml` feeds, the `/changes`, `/stats`, and
+  `/digests` pages, the `sitemap.xml` entries, and the per-area slices under `/areas` (the
+  drip-in source, see The authority watch). It changes nothing outside its markers and stamps
+  the footer year in place on the static pages.
 - `scripts/jurisdictions.py` is the single source of truth for the court set, labels, and the
   citation and docket patterns; `update.py`, `render.py`, and `treatment.py` all read it.
 - `scripts/cl_rate.py` is the rate governor: it paces every CourtListener call inside the free

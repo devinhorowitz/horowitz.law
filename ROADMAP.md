@@ -1,207 +1,164 @@
-# Roadmap: integrating the extension set
+# Roadmap: Georgia Appellate Watch
 
-Sequenced by one principle: **marginal API cost.** Almost everything proposed is a
-render-time transformation of `opinions.json`, client-side JavaScript, or static
-pages — zero additional CourtListener calls, zero additional model tokens. The
-only structurally expensive item is the second jurisdiction, which is why it goes
-last. The instinct that Florida threatens the CourtListener budget and the model
-bill is correct, and the numbers below say so.
+Most of the original plan has shipped. This rewrite records what is done and sequences what
+is left, by the one principle that has always ordered this work: **marginal API cost.**
+
+## The organizing principle
+
+Almost everything worth doing here is a render-time transformation of `opinions.json`,
+client-side JavaScript, or a static page: zero additional CourtListener calls, zero
+additional model tokens, $0 ongoing. The only structurally expensive move is promoting a
+second jurisdiction to full curated coverage, which is why it goes last. The instinct that
+Florida threatens the CourtListener budget and the model bill is correct, and the numbers
+below say so.
 
 ## The budget picture, plainly
 
-**CourtListener.** The free tier is 5/min, 50/hr, 125/day (cl_rate paces all of
-it, and opinion *text* already rides the storage PDFs, which cost no REST quota).
-Georgia is two state courts. Florida is a supreme court plus **five** District
-Courts of Appeal — a volume multiple, not an increment. Levers when the time
-comes: a Free Law Project membership (raises the limits *and* funds the data
-source — the one donation that literally buys capacity), `OPINIONS_MAX`, a
-court-subset ramp (fla + one DCA first), and schedule offsets so the two states
-never contend for the same windows.
+**CourtListener.** The free tier is 5/min, 50/hr, 125/day, `cl_rate` paces all of it, and
+opinion *text* already rides the storage PDFs, which cost no REST quota. Georgia is two state
+courts. A full Florida is a supreme court plus **five** District Courts of Appeal, a volume
+multiple, not an increment. Levers when the time comes: a Free Law Project membership (raises
+the limits *and* funds the data source, the one donation that literally buys capacity),
+`OPINIONS_MAX`, a court-subset ramp, and schedule offsets so two states never contend for the
+same windows. The Florida and Alabama supplementary overlays already live within this budget
+because "also pulled" rides the same per-run cap; a full upgrade is the part that does not.
 
-**Claude.** The three-tier cascade is the cost control: Haiku absorbs the
-firehose, Sonnet reads only survivors, Opus writes only keepers. Florida’s token
-growth is roughly proportional to its candidate volume. Everything in Phases
-1–4 costs **$0 ongoing**; the two one-time exceptions are pennies and are
-flagged inline.
+**Claude.** The four-tier cascade is the cost control: Haiku absorbs the firehose, Sonnet
+reads only survivors, Opus writes only keepers. Token growth tracks candidate volume.
+Everything below except the full-jurisdiction upgrade costs $0 ongoing.
 
-## Engineering invariants for every phase
+## Engineering invariants for every change
 
-Any new page must carry the byte-identical pre-paint inline `<script>` (the CSP
-pin) and be added to `check_site.py`’s `PAGES` list so the guard covers it. Any
-new generated artifact must be deterministic from `opinions.json` so the CI
-render-idempotency step stays green. Asset `?v=` tokens self-stamp via
-`render.py`; nothing new to remember there.
+Any new page must carry the byte-identical pre-paint inline `<script>` (the CSP pin) and be
+added to `check_site.py`'s `PAGES` list so the guard covers it. Any new generated artifact
+must be deterministic from `opinions.json` so the CI render-idempotency step stays green, and
+its path must be added to that step's diff list and to the render-sync and content-PR
+add-paths so it actually commits. Asset `?v=` tokens self-stamp via `render.py`.
 
 -----
 
-## Phase 0 — truth and footing *(this commit)*
+## Shipped
 
-- **Colophon truth-pass.** Three claims had drifted: “No newsletter signups”
-  (there is one now), “No third-party scripts” (Turnstile loads on /subscribe),
-  and “nothing is rendered server-side” (the subscribe endpoint is a Function).
-  All three corrected in the site’s own voice — the exception named honestly
-  rather than the claim quietly weakened.
-- **“Under the hood” section** (`/colophon#under-the-hood`): the funnel, the
-  tripwire doctrine, the golden set, the rate governor, with terminal-lines to
-  /PIPELINE.md and the feed. This section is the future home of the specialized
-  feeds directory as Phase 2–3 ship them.
-- **“Keeping it running” section**: the support ask, drafted deletable (one
-  self-contained `<section id="keeping-it-running">`). **Decision gate before
-  merge:** github.com/sponsors/devinhorowitz currently redirects to the profile
-  — Sponsors is not enrolled. Either enable it (Settings → Sponsors, Stripe
-  onboarding, ~15 min), swap the link (Ko-fi / Buy Me a Coffee work but take
-  fees), or delete the section and sleep on it. Everything else in the file
-  stands alone.
+The bulk of the original Phases 0 through 4, plus everything since:
 
-Cost: $0.
+- **Reader and truth layer.** Colophon truth-pass and the "under the hood" section; reader
+  tools on /opinions and /archive (filter state in the shareable URL, copy-citation buttons,
+  a print stylesheet).
+- **Surfaces from existing data.** The corrections ledger at /changes plus the `changes.xml`
+  feed; per-opinion permalinks under /o/ with their own OG and Article JSON-LD; the /stats
+  coverage page.
+- **Distribution.** Per-area subscription topics on /subscribe; the /digests archive;
+  instant-alert broadcast for a landmark merge.
+- **Taxonomy and trust.** The tort-reform tag and first-impression badge; the `editor_note`
+  human-analysis layer; golden-set hardening, self-nomination, and the `law_applied` Erie
+  refinement for the federal overlay.
+- **The phone app.** Installable PWA: `manifest.webmanifest`, `sw.js`, and the app meta on
+  every page, with offline reading, network-first pages, and cache-first hashed assets.
+- **Treatment subsystem.** Forward escalation in the funnel plus the weekend reverse sweep,
+  both recording through `treatment_core.py`; the machine only ever raises a card to caution.
+- **Florida and Alabama, supplementary.** The registry's second and third jurisdictions ride
+  the feed as "also pulled," same areas, lighter touch, the site still named for Georgia.
+  Not yet curated-full and not yet per-state-subscribed (see the last section).
+- **The authority watch (alert-out).** `skill_authorities.py` extracts the statutes and
+  controlling cases the practice's drafting skills rely on into `skill-authorities.json`;
+  `skill_alert.py` puts the case authorities on the triage watch-list; a confirmed adverse
+  treatment is recorded in `skill_alert_state.json` and routed back to the relying skills.
+- **Supply-chain hardening.** Every networked workflow runs under Harden-Runner block mode,
+  declaring the hosts it may reach; Dependabot behind it.
+- **Drip-in generation.** `render.py` publishes `/areas/<area>.json` and an index, a
+  deterministic per-area extract of `opinions.json`. The source half of the integration
+  below.
 
-## Phase 1 — reader tools *(client-side only)*
+-----
 
-- **Filter state in the URL.** Only `?q=` survives a share today; push the area
-  chips, court toggle, and jurisdiction select through `URLSearchParams` so
-  “every trucking case” is a sendable link.
-- **Copy-citation button per card**, assembled from fields the JSON already
-  holds, labeled with the house verify-on-Shepard’s caveat.
-- **Print stylesheet** for /opinions and /archive: a filtered set becomes a
-  binder-ready digest.
+## Next, by marginal cost
 
-Files: opinions.js, base.css, render.py card chrome. Cost: $0.
+### Drip-in consumption ($0, one decision)
 
-## Phase 2 — new surfaces from existing data *(render-time only)*
+Generation shipped; the slices publish at `horowitz.law/areas/<area>.json`. The remaining
+half is wiring a drafting skill to read its area slice at draft time, so recent and flagged
+law in the area surfaces during drafting rather than at Shepardizing. It forks on one fact:
+do the qpwb skills have web access at draft time? If yes, the skill fetches its slice live and
+there is no sync to build. If no, the slices sync into the skill tree and the skill reads the
+local copy. The slices are designed to serve both, and a public per-area reader feed (below)
+shares the same selection, so this is purely a consumption-wiring decision.
 
-- **Corrections changelog + corrections RSS.** The treatment machinery already
-  stamps `treatment_date` and the email digest already reports it; give it a web
-  face (a section or /changes) and an RSS item type. The most distinctive thing
-  the pipeline does, finally public outside email.
-- **Per-opinion permalinks**: deterministic stub pages per card (own OG tags,
-  Article JSON-LD, sitemap entries). Extend `check_site.PAGES` accordingly.
-- **Stats page**: volume by court/area/quarter, disposition mix, treatment
-  counts — rendered from the JSON in the terminal aesthetic.
+### A "cited by" view ($0, data already fetched)
 
-Files: render.py (+ small templates), sitemap handling, check_site. Cost: $0.
+The reverse sweep already walks every card's citation graph and tracks seen citers in
+`treatment_state.json`, so the data is paid for. Surface "cited by N later decisions, M
+flagged" per card, or a small graph. The pipeline's most distinctive work, made visible, at
+no new call. The strongest novel render-time addition.
 
-## Phase 3 — distribution *(configuration, not computation)*
+### Public per-area feeds ($0, render-time)
 
-- **Per-area subscriptions**: the Resend architecture is already Topic-scoped;
-  N topics, checkboxes on /subscribe, a per-topic filter in digest.py.
-- **Digest archive page** for cadence-proof.
-- **Instant-alert broadcast** for a landmark merge, gated by a flag in the PR
-  body — reuses the merged card; one Resend call.
+An `/areas/<area>.xml` RSS alongside the JSON slices, for a reader who wants only premises or
+only trucking. It reuses the per-area selection already built for drip-in; the only new work
+is an XML rendering. This is the colophon's standing "per-area feeds still to come," delivered.
 
-Files: subscribe.html/functions, digest.py, one workflow tweak. Cost: $0 model
-spend; Resend free tier holds.
+### Statute-currency watch (pennies, extends alert-out)
 
-## Phase 4 — taxonomy and trust *(one-time pennies)*
+The manifest already lists the statutes the skills rely on, but alert-out v1 is case-only. A
+one-line triage-prompt addition can flag when a new opinion construes or invalidates a
+relied-on statute, no new fetch. Closes the statute gap in the authority watch.
 
-- *(shipped 2026-06-11; run the tagfill workflow to backfill)* - **SB 68 / tort-reform tracker tag** + **first-impression badge.** Tag forward
-  at triage ($0 ongoing); backfill the ~32 archive cards from their existing
-  synopses with Haiku (cents) or by hand in an evening. Badge semantics
-  ruled 2026-06-11 (option c): the badge marks a decision that APPLIES a reform
-  act, or one a reform act SUPERSEDED or was enacted in direct response to --
-  Quynn wears it (HB 961 answered it); Martin does not (generic pre-amendment
-  section 51-12-33 application); routine pre-reform applications stay untagged.
-- *(shipped 2026-06-11; hand-edit opinions.json, the nightly render carries it live)* - **`editor_note` field**: a human-analysis layer rendered visually distinct
-  from the AI synopsis — the credibility complement to the AI label.
-- *(shipped 2026-06-11; three negative controls cached, two thin-area anchors await one build-mode run)* - **Golden-set hardening** (BACKLOG #1 and #2: negative controls, thin-area
-  anchors). One-time build fetches for the controls; check-mode pennies. This is
-  the explicit prerequisite for ever exercising PIPELINE.md’s “dropping the
-  gate” path.
+### Authority-watch surface ($0)
 
-- *(shipped 2026-06-11)* **Golden-set self-nomination, never self-adoption.**
-  When a freshly carded opinion covers an area the golden set anchors thinly
-  (fewer than OPINIONS_GOLDEN_THIN positives, default 2), the run's PR carries
-  a paste-ready golden entry. The set's labels must stay independent of the
-  system under test, so the pipeline only nominates: adoption is the editor's
-  paste + merge, the same ratification the original seed went through, and the
-  set is append-mostly (entries replay frozen text, so they stay valid forever;
-  swapping old anchors out is how a benchmark drifts to match the system).
-  One exception, learned 2026-06-11: an entry that fails its very FIRST check
-  never validated as ground truth, so fixing it on arrival is label correction,
-  not drift. Anchors must be unambiguous keepers (published, substantive,
-  confident), or the guard cries wolf.
-- *(shipped 2026-06-11; law_applied narrows the overlay, the tagfill backfills it)* - **Erie refinement for the federal overlay (optional, pennies).** The
-  jurisdiction dropdown's "florida · federal" / "alabama · federal" views are
-  court-level bindingness, so an Eleventh Circuit diversity case applying
-  *Georgia* substantive law shows there too. A one-word triage field
-  ("substantive law applied: federal / ga / fl / al") would let render narrow
-  overlay membership per card; the honest "· federal" label carries the load
-  until then.
+Beyond the Actions run summary: a weekly digest section or a small private page reading
+`skill_alert_state.json`, so a relied-on authority going bad reaches you outside the log.
 
-## Phase 5 — Florida *(last, and here is the math that says so)*
+### opinions.json as a documented public API ($0)
 
-The registry was built for this (`jurisdictions.py`: one entry per state), and
-its own comments name the remaining work: parameterize the three Georgia-written
-prompts, “validated against a second-state test.” Sequence inside the phase:
+It already is a structured public feed. A documented schema, and optionally a thin
+`/api/opinions` endpoint, turns "the whole machine is public" into a usable interface.
 
-1. **Florida golden set first** — known keepers and controls from the FL
-   practice, cached once.
-1. **Prompt parameterization**, checked against that set before anything runs
-   on a schedule.
-1. **Court-subset ramp**: fla + 3rd DCA to start; expand DCA-by-DCA as the
-   budget proves out. Decide on Free Law Project membership at this point, not
-   before — it is the capacity lever and the right donation.
-1. **Output design question** to settle: unified pages with the jurisdiction
-   filter (the selector already exists and is pre-wired) plus per-state feeds,
-   versus separate /fl pages. Recommendation: unified page, namespaced feeds.
-1. **Schedule offsets** so GA and FL runs never share a rate window.
-1. **Subscription model — design locked now, wired then.** The form half
-   already ships dormant: /subscribe carries a registry-gated "which states"
-   checkbox group that appears automatically when jurisdictions.py grows past
-   one state, and subscribe.js already collects and posts `juris` (empty today,
-   meaning all). The Phase 5 commit that adds Florida to the registry is the
-   same commit that must wire the rest, to these decisions:
-   - **Topics:** one per state ("fl") and per state-area ("fl:premises"), in a
-     composite-key `RESEND_TOPIC_MAP` that supersedes `RESEND_AREA_TOPICS`;
-     bare area keys stay honored as Georgia-implicit during migration, so
-     existing subscriptions never need touching.
-   - **Confirm-link HMAC v2:** sign `email.ts.a:<areasCsv>.j:<jurisCsv>` with
-     both slots always present once v2 ships (prefixes make empty slots
-     unambiguous); accept the two legacy shapes for the link TTL's 7 days,
-     then drop them.
-   - **digest.py:** filter every selection by `e.jurisdiction`; per-state main
-     broadcasts plus per-state-area broadcasts, same duplicate-proof naming
-     with the state in the bracket ("… [fl:premises]").
-   - **alert.py:** unchanged — an instant alert goes to the main Topic
-     regardless of state, because "worth knowing today" is the whole point.
-1. **Federal bindingness is derived, never stored** (shipped with the
-   multistate prep). `jurisdictions.court_binds()` maps each federal court to
-   every registered jurisdiction it binds by judicial hierarchy (ca11 ->
-   ga/fl/al; scotus -> "*", meaning all, present and future), and render stamps
-   `data-jurisdiction` from it — so an Eleventh Circuit card appears under
-   every state's filter with no per-card data, no backfills, and no staleness
-   when the registry grows. State-court cards carry their own stamp, which the
-   pipeline may make a list once a second state is covered in full. Per-state
-   digest selection tests membership, never equality.
-1. **Overlay -> full upgrade.** Florida ships by flipping its registry entry's
-   `mode` to "full" and filling its `courts` list: the dropdown label drops
-   " · federal", the subscribe checkboxes appear (the gate counts fully-covered
-   states only), and the per-state Topics wire up per the locked design above.
-   Nothing else moves.
+### Web Push for the installed PWA (small infra, ~$0)
 
-## Carried items (outside the repo)
+iOS supports push for home-screen PWAs: a VAPID keypair, a subscription endpoint (Pages
+Function plus KV), and a sender step on the alert workflow. Turns the instant-alert email tier
+into real push. The email tier covers notifications until then.
 
-Two zone-level Cloudflare dashboard items remain from the header audit: the
-doubled `Cache-Control` on /fonts/* and the global
-`Access-Control-Allow-Origin: *` — both come from a Transform/Cache rule or
-Worker, not from `_headers`.
+-----
 
-## The phone app (decided + shipped 2026-06-11)
+## The expensive one, last: Florida or Alabama, full
 
-The site is now an installable PWA: `manifest.webmanifest` + `sw.js` + the
-app meta on every page. On an iPhone: Share → Add to Home Screen → a
-standalone "GA Watch" app that opens on /opinions, launches instantly, and
-reads offline from the last-fetched copy (courthouse basements included).
-Pages are network-first so signal always means fresh; `?v=`-stamped assets
-and fonts are cache-first because the tokens make them immutable; feeds and
-/api are never intercepted. Bump the CACHE constant in sw.js when the
-strategy changes.
+The supplementary overlays are live. Promoting either to a curated-full jurisdiction with
+per-state subscriptions is the one structurally expensive move, the CourtListener volume named
+above. The scaffolding is already built: the registry takes one entry per state, the subscribe
+form ships a registry-gated "which states" checkbox group that appears once a second full state
+exists, `subscribe.js` already posts `juris`, and federal bindingness is derived, never stored
+(`jurisdictions.court_binds()` maps ca11 to ga/fl/al and scotus to all, and render stamps
+`data-jurisdiction` from it). The remaining work, in order:
 
-Open, cheap, later: **Web Push for the installed app** — iOS supports push
-for home-screen PWAs; it needs a VAPID keypair, a subscription endpoint
-(Pages Function + KV), and a tiny sender step on the alert workflow. The
-instant-alert email tier covers notifications until then.
+1. **State golden set first**, known keepers and controls from that state's practice, cached
+   once.
+1. **Prompt parameterization**, the three Georgia-written prompts made jurisdiction-aware,
+   checked against that set before anything runs on a schedule.
+1. **Court-subset ramp**, one or two courts first, expanding as the budget proves out. Decide
+   the Free Law Project membership here, not before; it is the capacity lever and the right
+   donation.
+1. **Schedule offsets** so the states never share a rate window.
+1. **Wire the locked subscription design.** One Topic per state ("fl") and per state-area
+   ("fl:premises") in a composite-key `RESEND_TOPIC_MAP` that supersedes `RESEND_AREA_TOPICS`,
+   with bare area keys honored as Georgia-implicit during migration; a confirm-link HMAC v2
+   signing `email.ts.a:<areas>.j:<juris>` with both slots always present, accepting the legacy
+   shapes for the 7-day link TTL; `digest.py` filtering every selection by `e.jurisdiction`
+   with per-state and per-state-area broadcasts; `alert.py` unchanged, since "worth knowing
+   today" goes to the main Topic regardless of state.
+1. **Overlay to full upgrade** is then flipping the registry entry's `mode` to "full" and
+   filling its `courts`: the dropdown label drops " · federal", the subscribe checkboxes
+   appear, and the Topics wire up. Nothing else moves.
 
-Declined, deliberately: a **native App Store app**. $99/year, a second
-codebase, review latency on every tweak, and Apple's minimum-functionality
-rule frowns on site wrappers — every cost this roadmap exists to avoid, for
-no capability the PWA lacks except App Store presence.
+-----
+
+## Carried (outside the repo)
+
+Two zone-level Cloudflare dashboard items remain from the header audit: the doubled
+`Cache-Control` on /fonts/* and the global `Access-Control-Allow-Origin: *`, both from a
+Transform or Cache rule or a Worker, not from `_headers`.
+
+## Declined, deliberately
+
+A native App Store app: $99/year, a second codebase, review latency on every tweak, and
+Apple's minimum-functionality rule frowns on site wrappers, every cost this roadmap exists to
+avoid, for no capability the PWA lacks except App Store presence.
