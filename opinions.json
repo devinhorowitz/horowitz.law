@@ -1732,5 +1732,26 @@
     "first_seen": "2026-06-18",
     "law_applied": "federal",
     "official_url": "https://www.supremecourt.gov/opinions/25pdf/25-197_bp7c.pdf"
+  },
+  {
+    "cluster_id": 10877643,
+    "name": "T. M. v. University of Maryland Medical System Corporation",
+    "court": "scotus",
+    "division": null,
+    "date": "2026-06-18",
+    "dockets": [
+      "25-197"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10877643/t-m-v-university-of-md-medical-system-corporation-revisions-61926/",
+    "synopsis": "The Supreme Court held that the Rooker-Feldman doctrine bars federal district court jurisdiction over cases brought by state-court losers complaining of injuries caused by state-court judgments rendered before the federal proceedings commenced and seeking district court review and rejection of those judgments, regardless of whether the state-court judgment remains subject to further review in state appellate proceedings. The Court rejected the argument that the doctrine applies only to final judgments rendered by the highest court of a State, reasoning that the doctrine rests on the functional distinction between original and appellate jurisdiction under 28 U.S.C. sections 1331 and 1257, not solely on a negative inference from section 1257. Petitioner had sued in federal court to declare a state consent order unconstitutional and unenforceable while simultaneously appealing it in state court. The Court resolved a conflict among the Courts of Appeals.",
+    "why": "The decision clarifies the scope of a threshold jurisdictional doctrine and confirms that Rooker-Feldman can bar a federal suit even when the underlying state-court judgment is still on appeal, which directly affects civil litigants pursuing parallel state and federal proceedings.",
+    "precedential": "published",
+    "first_seen": "2026-06-20",
+    "law_applied": "federal",
+    "official_url": "https://www.supremecourt.gov/opinions/25pdf/25-197_new_4g15.pdf"
   }
 ]
