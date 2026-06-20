@@ -256,6 +256,7 @@
     width: fit-content;
   }
 
+  .hero-portrait picture { display: contents; }   /* format wrapper only; the img stays the grid item */
   .hero-portrait img {
     grid-area: 1 / 1;
     width: 170px;
@@ -870,8 +871,14 @@
 
     <header class="hero">
       <div class="hero-portrait">
-        <img class="portrait-dark" src="/devin-dark.webp" alt="Devin R. Horowitz" width="170" height="170" loading="eager" fetchpriority="high" decoding="async">
-        <img class="portrait-light" src="/devin-light.webp" alt="" aria-hidden="true" width="170" height="170" loading="eager" decoding="async">
+        <picture>
+          <source srcset="/devin-dark.avif" type="image/avif">
+          <img class="portrait-dark" src="/devin-dark.webp" alt="Devin R. Horowitz" width="170" height="170" loading="eager" fetchpriority="high" decoding="async">
+        </picture>
+        <picture>
+          <source srcset="/devin-light.avif" type="image/avif">
+          <img class="portrait-light" src="/devin-light.webp" alt="" aria-hidden="true" width="170" height="170" loading="eager" decoding="async">
+        </picture>
         <span class="portrait-corner tl"></span>
         <span class="portrait-corner tr"></span>
         <span class="portrait-corner bl"></span>
