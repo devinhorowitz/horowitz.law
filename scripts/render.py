@@ -250,13 +250,17 @@ def _jurisdiction_options():
     for key, label in jurisdictions.ALL_JURISDICTIONS:
         sel = " selected" if key == jurisdictions.JURISDICTION else ""
         # Options are honest at the point of choice. A jurisdiction may name its
-        # coverage explicitly (Florida: "supreme court", the only state court
-        # screened there); otherwise an overlay says the view is federal-only, and
-        # a fully covered state carries no qualifier.
+        # coverage explicitly (Florida: "also pulled", a supplementary state whose
+        # in-area decisions surface but is not a curated focus); a supplementary
+        # state with no explicit note still shows "also pulled", an overlay says the
+        # view is federal-only, and a fully covered state carries no qualifier.
         note = jurisdictions.jurisdiction_filter_note(key)
+        mode = jurisdictions.jurisdiction_mode(key)
         if note:
             suffix = " \u00b7 " + _esc(note)
-        elif jurisdictions.jurisdiction_mode(key) == "overlay":
+        elif mode == "supplementary":
+            suffix = " \u00b7 also pulled"
+        elif mode == "overlay":
             suffix = " \u00b7 federal"
         else:
             suffix = ""
