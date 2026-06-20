@@ -32,12 +32,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30     # watchdog: a hung build or summarize run fails fast, well under the 6h cap
     steps:
-      # Supply-chain hardening (audit mode): records what this job sends over the
-      # network, so you can review egress and later switch to block with an allowlist.
+      # Supply-chain hardening (block mode): only the endpoints below are reachable.
+      #   api.anthropic.com         the screen/triage/summarize/pretriage model calls (every mode).
+      #   github.com                checkout (every run); golden_set.json push in build mode.
+      #   www.courtlistener.com     build mode only: fetch opinion text to cache.
+      #   storage.courtlistener.com build mode only: the PDF text behind that fetch.
+      #   api.github.com            the gh failure-alert step (only on a failed run).
+      # A check/summarize/recall run reaches only Anthropic and github; the CourtListener
+      # hosts and api.github are here for build and failure paths a single run won't exercise.
+      # Actions cache/infra endpoints are auto-allowed.
       - name: Harden the runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          allowed-endpoints: >
+            api.anthropic.com:443
+            github.com:443
+            api.github.com:443
+            www.courtlistener.com:443
+            storage.courtlistener.com:443
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
