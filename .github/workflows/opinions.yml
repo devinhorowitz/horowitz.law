@@ -28,7 +28,7 @@ jobs:
     steps:
       # Supply-chain hardening (block mode): only the endpoints below are reachable.
       #   api.anthropic.com         the screen/triage/summarize model calls (update.py).
-      #   status.anthropic.com      update.py's pre-flight API-health check (fail-open).
+      #   status.claude.com         update.py's pre-flight outage check (the status page's real host).
       #   www.courtlistener.com     the feeds and REST API (update.py).
       #   storage.courtlistener.com the opinion PDFs (update.py).
       #   pypi.org                  the pip index for the pypdf install.
@@ -45,7 +45,7 @@ jobs:
           egress-policy: block
           allowed-endpoints: >
             api.anthropic.com:443
-            status.anthropic.com:443
+            status.claude.com:443
             www.courtlistener.com:443
             storage.courtlistener.com:443
             pypi.org:443
