@@ -26,12 +26,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45     # watchdog: a hung daily run fails fast instead of running to the 6h cap
     steps:
-      # Supply-chain hardening (audit mode): records what this job sends over the
-      # network, so you can review egress and later switch to block with an allowlist.
+      # Supply-chain hardening (block mode): only the endpoints below are reachable.
+      #   api.anthropic.com         the screen/triage/summarize model calls (update.py).
+      #   www.courtlistener.com     the feeds and REST API (update.py).
+      #   storage.courtlistener.com the opinion PDFs (update.py).
+      #   pypi.org                  the pip index for the pypdf install.
+      #   files.pythonhosted.org    the pypdf wheel download.
+      #   github.com                checkout, the branch pushes, create-pull-request's push.
+      #   api.github.com            four gated gh steps: the schedule-only PR guard, the
+      #                             content-only PR open, the scan-status pr-list on every
+      #                             non-skip run, and the failure-only alert. No single run
+      #                             hits them all, so the allowlist covers every path.
+      # Actions cache/infra endpoints are auto-allowed.
       - name: Harden the runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          allowed-endpoints: >
+            api.anthropic.com:443
+            www.courtlistener.com:443
+            storage.courtlistener.com:443
+            pypi.org:443
+            files.pythonhosted.org:443
+            github.com:443
+            api.github.com:443
       # Faster cadence is only safe if a slot does not redo work that is already
       # waiting in an open PR. opinions_state.json advances only when that PR merges,
       # so on a scheduled run, if an opinions PR is already open, skip: a later slot
