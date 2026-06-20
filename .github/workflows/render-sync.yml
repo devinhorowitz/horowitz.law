@@ -88,6 +88,7 @@ jobs:
             digests.html
             changes.xml
             o
+            .well-known/security.txt
 
       # Surfaces a broken run instead of letting it fail silently: comments on the one
       # open tracking issue, or opens it the first time, so repeated failures collect
