@@ -514,7 +514,19 @@ def feed_court(court, deadline=None):
         snippet = re.sub(r"<[^>]+>", " ", html.unescape(sm.text or "")) if sm is not None else ""
         snippet = re.sub(r"\s+", " ", snippet).strip()
         dm = DOCKET_RE.search(snippet)
-        path = href.split("courtlistener.com", 1)[-1] if "courtlistener.com" in href else href
+        # site-relative path for absolute_url; check the parsed host, not a substring,
+        # so a look-alike host cannot be mistaken for CourtListener. CL feeds are
+        # always fully qualified, so no scheme-normalization is needed here.
+        parsed_href = urllib.parse.urlparse(href)
+        host = (parsed_href.hostname or "").lower()
+        if host == "courtlistener.com" or host.endswith(".courtlistener.com"):
+            path = parsed_href.path or "/"
+            if parsed_href.query:
+                path += "?" + parsed_href.query
+            if parsed_href.fragment:
+                path += "#" + parsed_href.fragment
+        else:
+            path = href
         out.append({"cluster_id": int(m.group(1)), "caseName": name, "court_id": court,
                     "absolute_url": path, "dateFiled": date_filed,
                     "docketNumber": dm.group(0) if dm else "", "snippet": snippet[:1500],

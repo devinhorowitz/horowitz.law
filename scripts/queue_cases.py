@@ -54,6 +54,7 @@ Env:
 Run via .github/workflows/queue.yml (push to queue.txt, or workflow_dispatch).
 """
 import os, re, sys, json, time, datetime
+from urllib.parse import urlparse
 import update             # daily funnel: screen/triage/summarize, cl_get, text, constants
 import backfill           # cluster resolver (seed_result): cluster -> court/text-url, audited
 import render             # single source of truth renderer
@@ -100,7 +101,12 @@ def parse_line(raw):
     if force:
         body = body[:-1].strip()
     token, cid, court = body, None, None
-    if "courtlistener.com" in token:
+    # classify by the parsed host, not a substring; normalize a missing scheme so a
+    # bare paste (www.courtlistener.com/opinion/...) still resolves, and a look-alike
+    # host (courtlistener.com.evil.tld) does not.
+    u = token if "://" in token else "https://" + token
+    host = (urlparse(u).hostname or "").lower()
+    if host == "courtlistener.com" or host.endswith(".courtlistener.com"):
         m = OPINION_RE.search(token)
         if m:
             cid = int(m.group(1))
