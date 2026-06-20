@@ -50,7 +50,7 @@ Environment:
   OPINIONS_SEARCH_BUDGET_SEC  wall-clock cap on the CourtListener search phase (default 120)
   ANTHROPIC_STATUS         status-page preflight: on (log + skip on a confirmed API outage),
                            warn (log only), or off (no check). Default on. Fail-open on any error.
-  ANTHROPIC_STATUS_URL     status summary endpoint (default https://status.anthropic.com/api/v2/summary.json)
+  ANTHROPIC_STATUS_URL     status summary endpoint (default https://status.claude.com/api/v2/summary.json)
   CL_PER_MINUTE / CL_PER_HOUR / CL_PER_DAY / CL_RATE_MARGIN  CourtListener REST budget (see cl_rate.py)
 """
 import os, re, sys, json, time, html, datetime, io
@@ -105,7 +105,7 @@ DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "ye
 BUDGET_SEC   = int(os.environ.get("OPINIONS_BUDGET_SEC", "480"))
 BREAKER      = int(os.environ.get("OPINIONS_BREAKER", "4"))
 SEARCH_BUDGET= int(os.environ.get("OPINIONS_SEARCH_BUDGET_SEC", "120"))
-STATUS_URL   = os.environ.get("ANTHROPIC_STATUS_URL", "https://status.anthropic.com/api/v2/summary.json")
+STATUS_URL   = os.environ.get("ANTHROPIC_STATUS_URL", "https://status.claude.com/api/v2/summary.json")
 STATUS_MODE  = (os.environ.get("ANTHROPIC_STATUS", "on") or "on").strip().lower()  # on | warn | off
 
 COURT_MAP   = jurisdictions.COURT_MAP       # CL court id -> our internal key
