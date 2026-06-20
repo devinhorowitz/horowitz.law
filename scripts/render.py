@@ -38,6 +38,7 @@ CHANGES_XML_PATH = os.path.join(REPO, "changes.xml")
 PERMA_DIR = os.path.join(REPO, "o")
 DIGESTS_PATH = os.path.join(REPO, "digests.html")
 SUBSCRIBE_PATH = os.path.join(REPO, "subscribe.html")
+SECURITY_TXT_PATH = os.path.join(REPO, ".well-known", "security.txt")
 # Pages outside the marker-injection set whose footer year would otherwise rot on
 # Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
 # place, writing only when the year actually changed, so it is a no-op all year;
@@ -813,6 +814,43 @@ def _inject(path, marker, block):
     doc = _stamp_tokens(_stamp_year(doc))
     safeio.atomic_write_text(path, doc)
 
+def _stamp_security_txt(window_days=30, renew_days=365):
+    """Keep .well-known/security.txt's Expires from lapsing.
+
+    RFC 9116 requires an Expires field, and a lapsed one reads as a neglected
+    policy. When the value is missing, unparseable, within `window_days` of now,
+    or already past, rewrite it to today + `renew_days` (UTC). Written only when
+    the value changes, so this is inert until the renewal window and the bump
+    then rides render-sync, exactly like the footer year. For the bump to land,
+    .well-known/security.txt must stay in render-sync.yml add-paths.
+    """
+    if not os.path.exists(SECURITY_TXT_PATH):
+        return
+    doc = open(SECURITY_TXT_PATH, encoding="utf-8").read()
+    m = re.search(r"(?mi)^(Expires:[ \t]*)(\S.*?)[ \t]*$", doc)
+    today = datetime.datetime.now(datetime.timezone.utc).date()
+    fresh = False
+    if m:
+        dm = re.match(r"(\d{4})-(\d{2})-(\d{2})", m.group(2))
+        if dm:
+            try:
+                cur = datetime.date(int(dm.group(1)), int(dm.group(2)), int(dm.group(3)))
+                fresh = (cur - today).days > window_days
+            except ValueError:
+                fresh = False
+    if fresh:
+        return
+    new_val = (today + datetime.timedelta(days=renew_days)).strftime("%Y-%m-%dT00:00:00.000Z")
+    if m:
+        new_doc = doc[:m.start(2)] + new_val + doc[m.end(2):]
+    else:
+        new_doc = re.sub(r"(?mi)^(Contact:.*\n)", r"\1Expires: " + new_val + "\n", doc, count=1)
+        if new_doc == doc:
+            new_doc = "Expires: " + new_val + "\n" + doc
+    if new_doc != doc:
+        safeio.atomic_write_text(SECURITY_TXT_PATH, new_doc)
+
+
 def render(entries=None):
     if entries is None:
         entries = json.load(open(JSON_PATH, encoding="utf-8"))
@@ -889,6 +927,7 @@ def render(entries=None):
             if stamped != doc:
                 safeio.atomic_write_text(p, stamped)
 
+    _stamp_security_txt()
     _update_sitemap(recent, entries)
     return len(recent), len(entries)
 
