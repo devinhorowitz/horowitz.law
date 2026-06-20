@@ -1,0 +1,4 @@
+# Regex per line. Add hosts that rate-limit or block bots and produce false
+# positives here. Start minimal and expand as the weekly report shows noise.
+^mailto:
+^tel:
