@@ -6,12 +6,9 @@
 #   B904  exception chaining (re-raise ... from); used deliberately throughout
 #   B023  loop-var closure; the one hit is an immediately-invoked re.sub lambda, safe
 #   F541  f-string without a placeholder
-# Baseline to clear before enforcing (then drop continue-on-error in ruff.yml):
-#   scripts/check_site.py    unused import `glob`     (F401)
-#   scripts/backfill.py      unused local `disp`      (F841)
-#   scripts/golden_check.py  unused loop var `used`   (B007)
 target-version = "py312"
-
+ 
 [lint]
 select = ["E9", "F", "B"]
 ignore = ["B904", "B023", "F541"]
+ 
