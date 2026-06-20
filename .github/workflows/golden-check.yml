@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: write          # build commits the cached scripts/golden_set.json
+  issues: write            # the failure-alert step opens or comments on a tracking issue
 
 concurrency:
   group: golden-check
@@ -62,4 +63,18 @@ jobs:
             git push origin HEAD:main
           else
             echo "no golden-set changes to commit"
+          fi
+
+      - name: Report a failed run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="A manually-triggered golden-check run failed. ${run_url}"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Golden-check run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Golden-check run failures" --body "$body"
           fi
