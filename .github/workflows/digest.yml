@@ -42,12 +42,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20     # watchdog: the email broadcast is quick; fail fast if it stalls
     steps:
-      # Supply-chain hardening (audit mode): records what this job sends over the
-      # network, so you can review egress and later switch to block with an allowlist.
+      # Supply-chain hardening (block mode).
+      # Resend send job, no pip, no funnel:
+      #   api.resend.com  the broadcast send.
+      #   github.com      checkout of merged main.
+      #   api.github.com  the failure-alert gh step only.
+      # The dry-run artifact upload uses auto-allowed Actions storage; cache/infra auto-allowed.
       - name: Harden the runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          allowed-endpoints: >
+            api.resend.com:443
+            github.com:443
+            api.github.com:443
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
