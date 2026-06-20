@@ -46,6 +46,8 @@ import golden_check    # the regression guard; reused so it tests what the funne
 RESERVE   = int(os.environ.get("OPINIONS_MAINT_RESERVE", "50"))     # trailing-24h funnel cl_calls at or above which the CL re-validation is skipped
 SLICE     = int(os.environ.get("OPINIONS_MAINT_SLICE", "3"))        # published cards to re-validate per run
 FETCH_SEC = int(os.environ.get("OPINIONS_MAINT_FETCH_SEC", "180"))  # per-run wall-clock budget for the slice's fetches; a full window or 429 defers the rest
+REQUIRED_FIELDS = ("cluster_id", "name", "court", "date", "dockets", "disposition",
+                   "areas", "url", "synopsis", "why", "first_seen", "precedential")
 
 
 def _now():
@@ -146,6 +148,29 @@ def revalidate(cards):
     return flags, checked, deferred
 
 
+def completeness(cards):
+    """Field-integrity scan of published cards (CourtListener-free). Flags any card missing a
+    required field, carrying an empty areas/dockets list, or holding an unparseable date. The
+    funnel always populates these, so a flag means a regression, a schema drift, or a bad manual
+    edit. Surfaces; does not self-edit."""
+    issues = []
+    for c in cards:
+        nm = (c.get("name") or "?")[:60]
+        missing = [k for k in REQUIRED_FIELDS if not c.get(k)]
+        if missing:
+            issues.append((nm, "missing " + ", ".join(missing)))
+            continue
+        if not isinstance(c.get("areas"), list) or not c["areas"]:
+            issues.append((nm, "empty areas"))
+        if not isinstance(c.get("dockets"), list) or not c["dockets"]:
+            issues.append((nm, "empty dockets"))
+        try:
+            datetime.date.fromisoformat(c["date"])
+        except Exception:
+            issues.append((nm, "unparseable date %r" % c.get("date")))
+    return issues
+
+
 def main():
     if not update.KEY:
         print("ERROR: ANTHROPIC_API_KEY is not set.")
@@ -157,10 +182,23 @@ def main():
     print("== golden regression check ==")
     gc_rc = golden_check.check()
 
+    # 1b. Card completeness scan (CourtListener-free, runs every time). Catches a published
+    #     card that lost a required field, or carries an empty areas/dockets list or a bad date.
+    print("\n== published-card completeness ==")
+    cards = json.load(open(update.JSON_PATH, encoding="utf-8")) if os.path.exists(update.JSON_PATH) else []
+    comp_issues = completeness(cards)
+    if comp_issues:
+        print("  %d card(s) with completeness gaps:" % len(comp_issues))
+        for nm, why in comp_issues:
+            print("    - %s: %s" % (nm, why))
+        _summary("\n### Card completeness %s\n\n" % _stamp()
+                 + "".join("- GAP: %s (%s)\n" % (nm, why) for nm, why in comp_issues))
+    else:
+        print("  all %d card(s) complete" % len(cards))
+
     # 2. Budget-gated re-validation of published cards.
     print("\n== published-card re-validation ==")
     used, n_runs = trailing_24h_cl_calls()
-    cards = json.load(open(update.JSON_PATH, encoding="utf-8")) if os.path.exists(update.JSON_PATH) else []
     flags = []
     if used >= RESERVE:
         reason = ("skipped: the funnel used %d CourtListener call(s) in the last 24h across %d run(s), "
@@ -182,7 +220,7 @@ def main():
     # Exit nonzero only when a person should look: a golden regression or a published-card
     # flag. A deferral or a budget skip is normal operation and exits clean. The workflow's
     # failure step opens or updates the maintenance issue.
-    sys.exit(1 if (gc_rc or flags) else 0)
+    sys.exit(1 if (gc_rc or flags or comp_issues) else 0)
 
 
 if __name__ == "__main__":

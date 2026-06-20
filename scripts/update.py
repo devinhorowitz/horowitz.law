@@ -779,6 +779,10 @@ def anthropic_json(body, label="call"):
             with urllib.request.urlopen(req, timeout=240) as r:
                 data = json.loads(r.read().decode("utf-8"))
             _dbg("%s %s ok in %.1fs (attempt %d)" % (label, model, time.time() - t0, attempt + 1))
+            u = data.get("usage", {}) or {}
+            _dbg("%s %s usage in=%s out=%s cache_write=%s cache_read=%s"
+                 % (label, model, u.get("input_tokens"), u.get("output_tokens"),
+                    u.get("cache_creation_input_tokens", 0), u.get("cache_read_input_tokens", 0)))
             txt = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
             try:
                 return parse_json(txt)
