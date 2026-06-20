@@ -56,7 +56,7 @@ ASSETS = ["base.css", "app.js", "opinions.js", "subscribe.js"]
 HEADERS_PATH = os.path.join(REPO, "_headers")
 TOKEN_LEN = 10  # hex chars of sha256 in the ?v= token; plenty against collision here
 
-_INLINE_RE = re.compile(r"<script>(.*?)</script>", re.S)
+_INLINE_RE = re.compile(r"<script>(.*?)</script>", re.S | re.I)
 _CSP_HASH_RE = re.compile(r"'sha256-([A-Za-z0-9+/=]+)'")
 
 
