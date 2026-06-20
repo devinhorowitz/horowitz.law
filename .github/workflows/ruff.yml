@@ -15,7 +15,18 @@ jobs:
       - name: Harden the runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          # Egress observed in audit run 27872008274 (step-initiated only;
+          # Actions cache/infra endpoints are auto-allowed by Harden-Runner):
+          #   github.com                 checkout clone and action fetch
+          #   raw.githubusercontent.com  ruff-action version manifest (astral-sh/versions)
+          #   releases.astral.sh         ruff binary download
+          # ruff itself runs offline. If a future bump adds an endpoint, the run
+          # annotates it as Blocked; add it here after confirming it is legitimate.
+          allowed-endpoints: >
+            github.com:443
+            raw.githubusercontent.com:443
+            releases.astral.sh:443
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       # Enforced: a finding outside the ruff.toml ignore list fails the check.
       - name: Ruff
