@@ -27,6 +27,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30     # watchdog: the golden check + a small slice + the court check is minutes of work
     steps:
+      # Supply-chain hardening (audit mode): records what this job sends over the
+      # network, so you can review egress and later switch to block with an allowlist.
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       # Keepalive (folded from keepalive.yml): a daily marker commit keeps the repository
