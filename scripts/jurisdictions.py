@@ -87,22 +87,31 @@ JURISDICTION = ACTIVE                                    # active jurisdiction k
 # them by judicial hierarchy (the Eleventh Circuit sits over Georgia, Florida, and
 # Alabama; the Supreme Court over everything). They appear in the site's
 # jurisdiction filter with a "\u00b7 federal" label and never on the subscribe
-# form: filters show what exists, subscriptions promise curation, and the screen
-# curates for Georgia relevance only until a state is covered in full (mode: "full").
+# form: filters show what exists, subscriptions promise curation. A third mode,
+# "supplementary", sits between full and overlay: the state's appellate courts ride
+# the feed and are screened in the SAME practice areas as the active jurisdiction, so
+# its in-area decisions surface under its own filter, but it stays off the subscribe
+# form because it is not a curated focus.
 #
-# Florida is monitored at the high-court level: the Supreme Court of Florida is in
-# the feed and screened for Georgia relevance like any other court, so most
-# Florida-law decisions are dropped at triage and surface only in the rejection
-# log, while the District Courts of Appeal -- where most Florida appellate law
-# lives, and which CourtListener does not currently ingest -- await a separate
-# source. Its cards carry jurisdiction "fl" (see COURT_JURISDICTION) so they file
-# under the Florida filter, not the active-jurisdiction fallback. Alabama stays
+# Florida is supplementary: both its appellate courts -- the Supreme Court of Florida
+# and the District Courts of Appeal (which CourtListener now ingests) -- ride the feed
+# and are screened in the same areas as Georgia, so a Florida insurance or civil
+# decision surfaces while its criminal and family bulk drops. The prompts stay
+# Georgia-centered and the Georgia-specific tags (tort_reform, division) stay null on
+# a Florida card. Its cards carry jurisdiction "fl" (see COURT_JURISDICTION) so they
+# file under the Florida filter, not the active-jurisdiction fallback. Alabama stays
 # overlay-only for now (both its courts are in CourtListener when we turn them on).
 JURISDICTIONS["fl"] = {
-    "label": "Florida", "mode": "overlay", "filter_note": "supreme court",
+    "label": "Florida", "mode": "supplementary", "filter_note": "also pulled",
     "courts": [
-        {"cl": "fla", "key": "scotfl", "label": "Supreme Court of Florida", "suffix": " (Fla.)", "system": "state"},
+        {"cl": "fla",          "key": "scotfl", "label": "Supreme Court of Florida",            "suffix": " (Fla.)",     "system": "state"},
+        {"cl": "fladistctapp", "key": "dcafl",  "label": "District Court of Appeal of Florida", "suffix": " (Fla. DCA)", "system": "state"},
     ],
+    # Florida appellate dockets: District Courts of Appeal (e.g. 2D2025-1935) and the
+    # Supreme Court of Florida (e.g. SC2024-1234); cites are the Southern Reporter
+    # (So., So. 2d, So. 3d). Used via the DOCKET_RE / CITE_RE union below.
+    "docket_re": r"\b(?:[1-6]D|SC)\d{4}-\d{3,5}\b",
+    "cite_re": r"\b\d+\s+So\.?\s*(?:2d|3d)?\s+\d+\b",
 }
 JURISDICTIONS["al"] = {"label": "Alabama", "mode": "overlay", "courts": []}
 
@@ -157,5 +166,19 @@ def court_binds(court):
     return keys if b == "*" else [k for k in b if k in JURISDICTIONS]
 
 ALL_JURISDICTIONS = [(k, v["label"]) for k, v in JURISDICTIONS.items()]  # (key, label) per registered jurisdiction, for the page's jurisdiction selector
-DOCKET_RE = re.compile(_cfg["docket_re"])
-CITE_RE = re.compile(_cfg["cite_re"], re.I)
+# Docket and cite patterns: the active jurisdiction's, unioned with those of any
+# monitored extra jurisdiction (a supplementary state whose courts ride this feed),
+# so a Florida docket or a So.3d cite on a Florida card is recognized by the same
+# docket extraction and citation-hygiene checks that serve Georgia.
+_docket_pats = [_cfg["docket_re"]]
+_cite_pats = [_cfg["cite_re"]]
+for _jk, _jcfg in JURISDICTIONS.items():
+    if _jk == ACTIVE:
+        continue
+    if any(isinstance(_c, dict) and _c.get("cl") in COURTS_ALL for _c in (_jcfg.get("courts") or [])):
+        if _jcfg.get("docket_re"):
+            _docket_pats.append(_jcfg["docket_re"])
+        if _jcfg.get("cite_re"):
+            _cite_pats.append(_jcfg["cite_re"])
+DOCKET_RE = re.compile("|".join("(?:%s)" % _p for _p in _docket_pats))
+CITE_RE = re.compile("|".join("(?:%s)" % _p for _p in _cite_pats), re.I)

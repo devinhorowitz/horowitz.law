@@ -191,5 +191,45 @@
     "expect_areas": [],
     "note": "negative control (mandamus against a court clerk): the funnel must DROP this; a keep here is a false positive. Drawn from a production screen rejection.",
     "text": "Court of Appeals\nof the State of Georgia\n\n ATLANTA,____________________\n June 10, 2026\n\nThe Court of Appeals hereby passes the following order:\n\nA26O0022. TYRUS ALPHONSE WILLIAMS v. DANIELLE FORTE, CLERK.\n\n Tyrus Alphonse Williams filed this original mandamus petition, seeking an\norder compelling Danielle Forte, the Muscogee County Clerk of Superior and State\nCourt, to accept documents for filing.1 Williams has not, however, shown that this is\none of the rare cases in which this Court will exercise its limited original mandamus\njurisdiction.\n “Generally, the superior courts of this state have the power, in proper cases, to\nissue process in the nature of mandamus, prohibition, specific performance, quo\nwarranto, and injunction, and hence the need to resort to the appellate courts for such\nrelief by petition filed in the appellate courts will be extremely rare.” Brown v.\nJohnson, 251 Ga. 436, 436 (306 SE2d 655) (1983); see also Ga. Const. of 1983, Art. VI,\nSec. I, Par. IV. As the Supreme Court of Georgia recently made clear, an appellate\ncourt’s authority to issue such writs “is connected only to such powers as necessary\nin aid of its jurisdiction or to protect or effectuate its judgments. It does not grant\njurisdiction to [the appellate court] to issue process as an original matter wholly\nunconnected to its appellate jurisdiction.” Arnold v. Alexander, 321 Ga. 330, 334(1)\n(914 SE2d 311) (2025) (punctuation omitted). Thus, except in the rarest of cases, the\nprocedure to be followed before seeking to invoke this Court’s original mandamus\njurisdiction is to file the petition in the appropriate lower court first. See Graham v.\n\n\n 1\n Williams filed his mandamus petition in the Supreme Court, which transferred\nthe petition to this Court. S26O1231 (May 19, 2026).\n\fCavender, 252 Ga. 123, 123 (311 SE2d 832) (1984); Expedia, Inc. v. City of Columbus,\n305 Ga. App. 450, 455(2)(b) (699 SE2d 600) (2010).\n Here, Williams does not allege that he attempted to file a mandamus petition\nin the superior court or that any such petition was refused for filing. Because it does\nnot appear that Williams attempted to comply with the requisite procedure for\nobtaining mandamus relief, this is not one of the extremely rare cases in which this\nCourt will exercise original jurisdiction. Accordingly, this petition is hereby\nDISMISSED.\n\n Court of Appeals of the State of Georgia\n Clerk’s Office, Atlanta,____________________\n 06/10/2026\n I certify that the above is a true extract from\n the minutes of the Court of Appeals of Georgia.\n Witness my signature and the seal of said court\n hereto affixed the day and year last above written.\n\n\n , Clerk."
+  },
+  {
+    "cluster_id": 10877589,
+    "name": "Restoration Doctor, Zaldivar v. Citizens Property Insurance Corporation",
+    "docket": "2D2025-1935",
+    "expect_relevant": true,
+    "expect_areas": [
+      "coverage"
+    ],
+    "note": "Florida positive control (property-insurance coverage / assignment of benefits). Validates that supplementary Florida keeps an in-area insurance decision. From the Florida DCA feed.",
+    "text": ""
+  },
+  {
+    "cluster_id": 10877591,
+    "name": "Progressive American Insurance Company v. Prieto",
+    "docket": "2D2025-1760",
+    "expect_relevant": true,
+    "expect_areas": [
+      "coverage"
+    ],
+    "note": "Florida positive control (auto-insurer coverage dispute). Validates supplementary Florida recall on insurance content. From the Florida DCA feed.",
+    "text": ""
+  },
+  {
+    "cluster_id": 10877622,
+    "name": "Kevin Jerome Black v. State of Florida",
+    "docket": "6D2025-0028",
+    "expect_relevant": false,
+    "expect_areas": [],
+    "note": "Florida negative control (criminal). Confirms supplementary Florida still drops out-of-area cases. From the Florida DCA feed.",
+    "text": ""
+  },
+  {
+    "cluster_id": 10877597,
+    "name": "Cotton-Betteridge v. Cotton-Betteridge",
+    "docket": "2D2025-0459",
+    "expect_relevant": false,
+    "expect_areas": [],
+    "note": "Florida negative control (family/domestic). Confirms supplementary Florida still drops out-of-area cases. From the Florida DCA feed.",
+    "text": ""
   }
 ]
