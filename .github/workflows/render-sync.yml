@@ -33,12 +33,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10      # render is seconds of work; fail fast if something hangs
     steps:
-      # Supply-chain hardening (audit mode): records what this job sends over the
-      # network, so you can review egress and later switch to block with an allowlist.
+      # Supply-chain hardening (block mode): only the endpoints below are reachable.
+      #   github.com      checkout and the branch push/delete (git-remote-http); seen in audit.
+      #   api.github.com  create-pull-request opening and labeling the PR when the pages
+      #                   drift, and the gh failure-alert step. Both are gated (drift /
+      #                   if: failure()), so a clean no-diff run never reaches them, but
+      #                   normal runs do. The job's pull-requests/issues:write scopes exist
+      #                   for exactly these two REST paths.
+      # setup-python used the runner's cached 3.12 here, so it fetched nothing. If an image
+      #   ever lacks it, the tarball fetch annotates as Blocked; add objects.githubusercontent.com
+      #   and raw.githubusercontent.com then. Actions cache/infra endpoints are auto-allowed.
       - name: Harden the runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
