@@ -38,6 +38,7 @@ CHANGES_XML_PATH = os.path.join(REPO, "changes.xml")
 PERMA_DIR = os.path.join(REPO, "o")
 DIGESTS_PATH = os.path.join(REPO, "digests.html")
 SUBSCRIBE_PATH = os.path.join(REPO, "subscribe.html")
+AREAS_DIR    = os.path.join(REPO, "areas")
 SECURITY_TXT_PATH = os.path.join(REPO, ".well-known", "security.txt")
 # Pages outside the marker-injection set whose footer year would otherwise rot on
 # Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
@@ -855,6 +856,63 @@ def _stamp_security_txt(window_days=30, renew_days=365):
         safeio.atomic_write_text(SECURITY_TXT_PATH, new_doc)
 
 
+def _slice_entry(e):
+    """The per-area slice shape: the fields a draft-time consumer needs, derived
+    wholly from opinions.json with no timestamps, so the slices stay deterministic
+    and the render-idempotency guard holds. Treatment fields ride only when the
+    card carries a flag, so a stale or cautioned opinion is visible at draft time."""
+    rec = {
+        "cluster_id": e["cluster_id"],
+        "name": e["name"],
+        "court": COURT_LABELS[e["court"]],
+        "date": e["date"],
+        "disposition": e.get("disposition", ""),
+        "areas": all_areas(e),
+        "precedential": e.get("precedential", ""),
+        "url": e["url"],
+        "synopsis": e.get("synopsis", ""),
+        "why": e.get("why", ""),
+    }
+    if e.get("dockets"):
+        rec["dockets"] = e["dockets"]
+    t = e.get("treatment")
+    if t and t != "ok":
+        rec["treatment"] = t
+        if e.get("treatment_auto_note"):
+            rec["treatment_note"] = e["treatment_auto_note"]
+        if e.get("treatment_date"):
+            rec["treatment_date"] = e["treatment_date"]
+    return rec
+
+
+def _write_area_slices(entries):
+    """Per-area extracts of opinions.json: one /areas/<area>.json per practice
+    area, plus /areas/index.json. The drip-in source -- a drafting skill (or a
+    per-area reader) pulls just its area's opinions and their treatment state.
+    `entries` arrives sorted desc, so each slice is newest-first and fully
+    determined by opinions.json; it rides the same idempotency guard as the pages."""
+    os.makedirs(AREAS_DIR, exist_ok=True)
+    index = []
+    for code, label in AREA_LABELS.items():
+        sel = [e for e in entries if code in all_areas(e)]
+        doc = {
+            "area": code,
+            "label": label,
+            "count": len(sel),
+            "opinions": [_slice_entry(e) for e in sel],
+        }
+        safeio.atomic_write_text(
+            os.path.join(AREAS_DIR, code + ".json"),
+            json.dumps(doc, ensure_ascii=False, indent=2) + "\n",
+        )
+        index.append({"area": code, "label": label, "count": len(sel),
+                      "url": "%s/areas/%s.json" % (SITE, code)})
+    safeio.atomic_write_text(
+        os.path.join(AREAS_DIR, "index.json"),
+        json.dumps({"areas": index}, ensure_ascii=False, indent=2) + "\n",
+    )
+
+
 def render(entries=None):
     if entries is None:
         entries = json.load(open(JSON_PATH, encoding="utf-8"))
@@ -864,6 +922,10 @@ def render(entries=None):
                   % (e.get("date"), (e.get("name") or "?")[:50]))
     entries = [e for e in entries if _valid_date(e.get("date"))]
     entries = _sorted(entries)
+
+    # Per-area slices for drip-in (and per-area readers): /areas/<area>.json,
+    # deterministic from opinions.json so the idempotency guard covers them.
+    _write_area_slices(entries)
 
     cutoff = _cutoff_iso()
     recent = [e for e in entries if e["date"] >= cutoff]
