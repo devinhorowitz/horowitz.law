@@ -156,9 +156,15 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add opinions_state.json opinions_pipeline_log.jsonl opinions_rejections.jsonl skill_alert_state.json 2>/dev/null || git add opinions_state.json opinions_pipeline_log.jsonl skill_alert_state.json
-          git commit -m "opinions: record run stats; mark screened cases seen [skip ci]"
-          git push origin HEAD:main
+          git add opinions_state.json opinions_pipeline_log.jsonl
+          git add opinions_rejections.jsonl 2>/dev/null || true
+          git add skill_alert_state.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No changes to record."
+          else
+            git commit -m "opinions: record run stats; mark screened cases seen [skip ci]"
+            git push origin HEAD:main
+          fi
 
       # Writes a tiny status.json (last-scanned time, whether a review batch is pending,
       # when content last landed on main) straight to main -- the same no-review lane the
