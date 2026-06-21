@@ -179,6 +179,11 @@ def _stamp_identity(doc):
             block = re.sub(r'("%s":\s*")[^"]*(")' % jkey,
                            lambda mm, v=val: mm.group(1) + v.replace('"', '\\"') + mm.group(2),
                            block, count=1)
+        firm = I.get("firm")
+        if firm is not None:
+            block = re.sub(r'("worksFor"\s*:\s*\{[^{}]*?"name"\s*:\s*")[^"]*(")',
+                           lambda mm, v=firm: mm.group(1) + v.replace('"', '\\"') + mm.group(2),
+                           block, count=1)
         return block
     doc = re.sub(r'<script\b[^>]*\bdata-cfg-jsonld\b[^>]*>.*?</script>', _jsonld, doc, flags=re.S)
     return doc

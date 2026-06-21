@@ -60,6 +60,9 @@ IDENTITY = {
                          f"synopses of {COVERAGE} opinions for civil litigation and insurance practice."),
     "desc_subscribe":   (f"Subscribe to the Georgia Appellate Watch weekly email: new {COVERAGE} "
                          "decisions for civil litigation and insurance practice."),
+    "og_desc_resume":   "Civil litigation attorney with a decade of Georgia trial experience.",
+    "firm":             FIRM,
+    "og_image_alt":     f"{NAME} {_DASH} {ROLE_LINE}, Georgia state and federal courts.",
 }
 
 # Metadata used by render.py for the generated feeds and permalinks (JSON-LD).
