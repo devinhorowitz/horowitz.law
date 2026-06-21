@@ -1,0 +1,160 @@
+{
+  "area": "expert",
+  "label": "expert",
+  "count": 8,
+  "opinions": [
+    {
+      "cluster_id": 10875605,
+      "name": "Cayamcela v. Advocacy Trust, LLC",
+      "court": "Supreme Court of Georgia",
+      "date": "2026-06-16",
+      "disposition": "affirmed",
+      "areas": [
+        "expert",
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10875605/cayamcela-v-advocacy-trust-llc-two-cases/",
+      "synopsis": "In a medical malpractice and wrongful death action arising from a patient's death in the ICU after childbirth, the jury returned a $42 million verdict against a doctor and a medical staffing agency. The Supreme Court of Georgia affirmed the trial court's exclusion under OCGA section 24-7-702(b) of a defense expert's testimony about ICU care, holding the court acted within its gatekeeping discretion where the expert repeatedly admitted he had not reviewed the relevant ICU records well enough to opine on that care and that the matter fell outside his specialty. The court rejected the argument that these gaps went only to credibility rather than admissibility.",
+      "why": "The decision confirms that a trial court may exclude expert testimony as unreliable under Rule 702(b) when the expert concedes an insufficient factual basis, and that such deficiencies bear on admissibility, not merely weight.",
+      "dockets": [
+        "S26A0229",
+        "S26A0242"
+      ]
+    },
+    {
+      "cluster_id": 10862062,
+      "name": "Johnson v. Everett",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-05-20",
+      "disposition": "vacated and remanded in part",
+      "areas": [
+        "procedure",
+        "expert"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10862062/john-johnson-v-christopher-b-everett/",
+      "synopsis": "In a medical-malpractice case that ended in a defense verdict, the Court of Appeals held that the trial court mistakenly believed it had no choice but to let the jury consider the emergency-medical-care gross-negligence standard of O.C.G.A. § 51-1-29.5, an issue the parties had not listed in their pretrial order, when in fact the court had discretion to disallow it. The court vacated the denial of a new trial and remanded for the court to exercise that discretion, and found no error in admitting the defense expert's opinions or a complaint from another case.",
+      "why": "A pretrial order frames the issues for trial, but the court keeps discretion over an issue the parties left out of it, and treating that discretion as nonexistent is reversible error.",
+      "dockets": [
+        "A26A0099"
+      ]
+    },
+    {
+      "cluster_id": 10145422,
+      "name": "Jenkins v. BP Exploration & Production Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-10-18",
+      "disposition": "affirmed",
+      "areas": [
+        "expert",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10145422/lester-jenkins-v-bp-exploration-production-inc/",
+      "synopsis": "Cleanup workers from the Deepwater Horizon oil spill sued, alleging that exposure to crude oil and dispersants caused chronic sinusitis, and offered toxicology and epidemiology experts on general causation. The Eleventh Circuit held that, under its toxic-tort precedent, a plaintiff must demonstrate the threshold level of exposure that is hazardous to human beings generally as part of general causation, not only specific causation, and that the experts' failure to identify any such harmful dose justified exclusion. The court further held that the experts' opinions were independently excludable for failing to identify a statistically significant association, assess the cited studies' acknowledged limitations, and meaningfully apply the Bradford Hill factors. Applying the abuse-of-discretion standard, the court affirmed the exclusion of both experts and the resulting summary judgment.",
+      "why": "The decision clarifies that the harmful-dose or threshold-exposure requirement is part of general causation in toxic-tort cases, governing the admissibility of causation experts under Daubert and Rule 702.",
+      "dockets": [
+        "23-11535",
+        "23-11538",
+        "23-11539"
+      ]
+    },
+    {
+      "cluster_id": 10680052,
+      "name": "Miller v. Golden Peanut Company, LLC",
+      "court": "Supreme Court of Georgia",
+      "date": "2023-08-21",
+      "disposition": "vacated and remanded with direction",
+      "areas": [
+        "expert",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680052/miller-v-golden-peanut-company-llc/",
+      "synopsis": "In a wrongful death action arising from a collision between a tractor-trailer and a car, the Supreme Court of Georgia held that the pre-2013 investigating officer rule, under which a law enforcement officer was treated as presumptively qualified as an expert on the cause of a collision, did not survive adoption of the current Evidence Code. Because OCGA section 24-7-702 contains no carve-out for law enforcement officers, a trial court must perform the same three-prong Daubert gatekeeping inquiry, qualification, reliability, and helpfulness, for expert opinion testimony from an investigating officer as for any other expert. The court found that the disputed accident-reconstruction opinions, including that the deceased driver was distracted, constituted expert rather than lay testimony, and that the trial court abused its discretion by assessing only qualification and not reliability or helpfulness. The court vacated the Court of Appeals' opinion, directed it to vacate the trial court's order, and remanded, and expressly disapproved Court of Appeals decisions applying the investigating officer rule to expert testimony in civil cases.",
+      "why": "The decision establishes that investigating officers who offer accident-reconstruction or causation opinions in civil cases are subject to the full Daubert reliability and helpfulness analysis, eliminating the prior presumption of expert qualification.",
+      "dockets": [
+        "S22G0905"
+      ]
+    },
+    {
+      "cluster_id": 4503667,
+      "name": "Stephens v. Castano-Castano",
+      "court": "Court of Appeals of Georgia",
+      "date": "2018-05-29",
+      "disposition": "affirmed in part, reversed in part",
+      "areas": [
+        "auto",
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4503667/stephens-v-castano-castano/",
+      "synopsis": "In an auto collision case, the trial court excluded evidence that the plaintiff's treating physician held a lien on the lawsuit proceeds and barred questioning about an attorney-to-physician referral. The Court of Appeals held that evidence of the physician's lien-based financial interest in the verdict was admissible to show potential bias and affect credibility, and that the collateral source rule did not bar it because the plaintiff still owed the full cost of treatment and no benefit or write-off reduced the obligation. The court affirmed exclusion of the attorney-referral evidence, holding that the referral standing alone was insufficient to show bias and presented a danger of unfair prejudice, and it affirmed denial of the defendant's motion to enforce a purported settlement because the relied-upon email omitted the essential settlement amount. The court noted that any such financial-interest evidence remains subject to a Rule 403 analysis. The opinion is physical precedent only.",
+      "why": "The decision clarifies that a treating physician's lien on lawsuit proceeds is admissible to show financial interest and bias and is not barred by the collateral source rule, while a bare attorney-to-physician referral, standing alone, is not.",
+      "dockets": [
+        "A18A0100"
+      ]
+    },
+    {
+      "cluster_id": 4406052,
+      "name": "Hospital Authority of Valdosta/Lowndes County v. Fender",
+      "court": "Court of Appeals of Georgia",
+      "date": "2017-06-23",
+      "disposition": "affirmed in part, reversed in part, and remanded in a17a0002; affirmed in a17a0003",
+      "areas": [
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4406052/hospital-authority-of-valdostalowndes-county-dba-south-georgia-medical/",
+      "synopsis": "In a medical malpractice action, the Court of Appeals held that a fact question existed on whether the new injury exception to the two-year statute of limitation in OCGA section 9-3-71(a) applied, where the patient remained asymptomatic for a period after an alleged misdiagnosis of carotid stenosis and later suffered a massive stroke, so the limitation period could begin on the date of the stroke. The court also held that the Respondeat Superior Rule, which entitles an employer to summary judgment on negligent hiring, training, supervision, and retention claims when it admits vicarious liability and no punitive damages are sought, was not superseded by the apportionment statute, OCGA section 51-12-33(b), reasoning that the statute does not apply to claims based on respondeat superior or to derivative claims that are merely duplicative of it. The court further affirmed denial of a motion under OCGA section 24-7-702(b) to exclude a medical expert's causation opinion. The court reversed summary judgment as to the negligent hiring claims and otherwise affirmed.",
+      "why": "The decision clarifies that Georgia's apportionment statute does not displace the Respondeat Superior Rule barring direct negligence claims against an employer that admits vicarious liability and faces no punitive damages claim, and it applies the new injury exception to the medical malpractice limitation period where a misdiagnosed patient remains asymptomatic before a later distinct injury.",
+      "dockets": [
+        "A17A0002",
+        "A17A0003"
+      ]
+    },
+    {
+      "cluster_id": 3219794,
+      "name": "Scapa Dryer Fabrics, Inc. v. Knight",
+      "court": "Supreme Court of Georgia",
+      "date": "2016-07-05",
+      "disposition": "reversed",
+      "areas": [
+        "expert",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/3219794/scapa-dryer-fabrics-inc-v-knight/",
+      "synopsis": "In an asbestos mesothelioma case, the Supreme Court of Georgia held that an expert's cumulative exposure opinion, which told the jury that any exposure above background, even de minimis, was a contributing cause of the disease, did not 'fit' the legal causation standard and was inadmissible under former OCGA section 24-9-67.1 (b). The Court reaffirmed that, while a plaintiff need not prove a substantial contribution, a de minimis contribution does not satisfy Georgia's 'contributing factor' causation standard, and an expert must tie a cumulative exposure opinion to a reliable estimate of actual exposure showing more than de minimis exposure. Because the expert did not condition his causation opinion on such an estimate, its admission was an abuse of the trial court's gatekeeping discretion. The Court reversed the Court of Appeals' affirmance of the judgment.",
+      "why": "The decision clarifies that expert causation testimony in toxic tort cases must satisfy the 'fit' requirement by being tied to a reliable estimate of more than de minimis exposure, and that an 'any exposure' or pure cumulative exposure theory unconnected to actual exposure is inadmissible.",
+      "dockets": [
+        "S15G1278"
+      ]
+    },
+    {
+      "cluster_id": 3209755,
+      "name": "Toyo Tire North America Manufacturing, Inc. v. Davis",
+      "court": "Supreme Court of Georgia",
+      "date": "2016-06-06",
+      "disposition": "affirmed",
+      "areas": [
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/3209755/toyo-tire-north-america-manufacturing-inc-v-davis/",
+      "synopsis": "In a continuing nuisance and trespass action by homeowners against a nearby manufacturing facility, the Supreme Court of Georgia held that a plaintiff who both occupies and owns the affected property may recover separately for past discomfort and annoyance and for the diminution in the property's market value, treating these as two distinct injuries rather than a double recovery, and it expressly overruled Stanfield v. Waste Management of Georgia. The Court also held that alleged deficiencies in an expert appraiser's methodology go to the admissibility of his testimony under OCGA sections 24-7-702 and 24-7-703, an issue committed to the trial court's gatekeeping discretion in the first instance, and not to whether his opinion suffices to defeat summary judgment on causation. Because the defendant had not moved to exclude the expert testimony in the trial court, the appellate courts could consider that testimony in assessing whether causation survived summary judgment. The Court affirmed the denial of summary judgment.",
+      "why": "The decision clarifies that past discomfort and annoyance damages and diminution in property value are separately recoverable in continuing nuisance cases and establishes that unchallenged expert testimony with methodological weaknesses may still be considered on summary judgment unless a Daubert exclusion motion is made to the trial court.",
+      "dockets": [
+        "S15G1804"
+      ]
+    }
+  ]
+}

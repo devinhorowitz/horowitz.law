@@ -1,0 +1,354 @@
+{
+  "area": "auto",
+  "label": "auto",
+  "count": 19,
+  "opinions": [
+    {
+      "cluster_id": 10873711,
+      "name": "Waddle Trucking of Mississippi, Inc. v. Johnson",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-11",
+      "disposition": "reversed",
+      "areas": [
+        "procedure",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10873711/waddle-trucking-of-mississippi-inc-v-aileen-johnson/",
+      "synopsis": "A trucking defendant in a personal injury action was served in state court, after which a codefendant removed the case to federal court, where the defendant filed an answer that was untimely under Fed.R.Civ.P. 81(c)(2). After remand, the state court entered default judgment against the defendant. The Court of Appeals held that the answer filed in district court, even though untimely there, prevented default in state court because the district court never struck the answer and no default was entered under Fed.R.Civ.P. 55, and because on remand the defendant still had time remaining to answer.",
+      "why": "The decision clarifies that an answer filed in federal court after removal continues to have effect on remand and prevents entry of default in state court so long as the federal court did not strike it or enter default, even if the federal answer was untimely.",
+      "dockets": [
+        "A26A0145"
+      ]
+    },
+    {
+      "cluster_id": 10873663,
+      "name": "Keathley v. Buddy Ayers Construction, Inc.",
+      "court": "Supreme Court of the United States",
+      "date": "2026-06-11",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "procedure",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10873663/keathley-v-buddy-ayers-construction-inc/",
+      "synopsis": "A debtor in an open Chapter 13 bankruptcy failed to disclose a personal-injury claim arising from a car accident, and the lower courts applied judicial estoppel to bar the tort suit using the Fifth Circuit's two-factor test, asking only whether the debtor knew the underlying facts and had a potential motive to conceal. The Supreme Court, assuming without deciding that judicial estoppel can apply in the bankruptcy context and that inadvertence or mistake can be an exception, held that courts must look to the totality of the circumstances surrounding the omission. The Court found the Fifth Circuit's approach both too rigid, because equity eschews mechanical rules, and too broad, because its motive criterion is almost always satisfied, making it a poor fit for assessing whether an omission was actually inadvertent or mistaken.",
+      "why": "It establishes that whether a plaintiff-debtor's failure to schedule a personal-injury claim was inadvertent or mistaken for judicial-estoppel purposes turns on the totality of the circumstances rather than a knowledge-plus-motive test, governing how civil litigants raise and defend against judicial estoppel when a tort claim was omitted from bankruptcy schedules.",
+      "dockets": [
+        "25-6"
+      ]
+    },
+    {
+      "cluster_id": 10873661,
+      "name": "Hodge v. Molson Coors Beverage Company USA, LLC",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2026-06-11",
+      "disposition": "vacated in part, affirmed in part, and remanded",
+      "areas": [
+        "auto"
+      ],
+      "precedential": "unpublished",
+      "url": "https://www.courtlistener.com/opinion/10873661/willy-hodge-v-molson-coors-beverage-company-usa-llc/",
+      "synopsis": "A family injured by a semitruck sued a freight broker and a shipper, alleging negligent hiring of the carrier. The district court held that the FAAAA preempted the negligent-selection claim against the broker. Following the Supreme Court's decision in Montgomery v. Caribe Transport II, which abrogated the Eleventh Circuit's prior holding in Aspen American Insurance Co. v. Landstar Ranger, the court vacated and remanded, noting the district court had relied on now-abrogated caselaw.",
+      "why": "It applies the Supreme Court's recent holding that the FAAAA does not preempt negligent-selection-of-carrier claims against brokers, abrogating prior Eleventh Circuit precedent that had foreclosed such claims.",
+      "dockets": [
+        "25-12983"
+      ]
+    },
+    {
+      "cluster_id": 10872456,
+      "name": "Vu v. City of Atlanta",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-09",
+      "disposition": "reversed",
+      "areas": [
+        "auto",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10872456/jenny-vu-v-city-of-atlanta/",
+      "synopsis": "A city employee driving a city-owned truck rear-ended plaintiff's car, and plaintiff served a municipal ante litem notice demanding $1,000,000. The trial court dismissed the suit, accepting the city's argument that the notice failed to state a 'specific amount' under OCGA § 36-33-5(e) because it exceeded the $500,000 sovereign-immunity waiver for negligent motor-vehicle use. The Court of Appeals reversed, holding that OCGA § 36-92-2 does not cap or limit the waiver but automatically waives immunity up to $500,000 while specifying ways to increase it, and reaffirming that the demanded amount need not be one the municipality is capable of accepting.",
+      "why": "The decision clarifies that a municipal ante litem notice satisfies the specific-amount requirement of OCGA § 36-33-5(e) even when the demand exceeds the automatic sovereign-immunity waiver under OCGA § 36-92-2.",
+      "dockets": [
+        "A26A0563"
+      ]
+    },
+    {
+      "cluster_id": 10872097,
+      "name": "GoAuto Insurance Company v. 2B Claims Services Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2026-06-08",
+      "disposition": "affirmed",
+      "areas": [
+        "badfaith",
+        "auto"
+      ],
+      "precedential": "unpublished",
+      "url": "https://www.courtlistener.com/opinion/10872097/goauto-insurance-company-v-2b-claims-services-inc/",
+      "synopsis": "An insurer sued the third-party claims adjuster it hired, alleging the adjuster negligently failed to advise it about the risk of excess bad-faith liability after the insurer let a checks-in-hand policy-limits deadline pass and later settled for about $220,000 above the policy limits. Applying Florida bad-faith law, the Eleventh Circuit affirmed summary judgment for the adjuster, holding that a claims adjuster has no duty to advise an insurer about its own legal risk of excess bad-faith exposure because such advice constitutes legal advice, and that the insurer's own decision to demand signed releases and not deliver the checks by the deadline, not the adjuster's conduct, proximately caused the excess settlement. The court noted the insurer knew of the checks-in-hand requirement eleven days before the deadline and could have delivered the checks.",
+      "why": "The decision clarifies that a third-party claims adjuster owes no duty to advise an insurer about its own extracontractual bad-faith exposure and that an insurer's independent settlement and payment decisions, not the adjuster's handling, control causation in a negligence claim against the adjuster.",
+      "dockets": [
+        "24-13643"
+      ]
+    },
+    {
+      "cluster_id": 10862301,
+      "name": "State Farm Mut. Auto. Ins. Co. & GEICO Indemnity Co. v. Barnor-Cooper",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-05-20",
+      "disposition": "reversed",
+      "areas": [
+        "coverage",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10862301/state-farm-mutual-automobile-insurance-company-v-charity-barnor-cooper/",
+      "synopsis": "The Court of Appeals reversed the denial of summary judgment to State Farm and GEICO in a UM claim arising from a hit-and-run collision, holding the plaintiff was not entitled to UM benefits under either policy. Injured while making a delivery in a Turo-rented Buick, she was not an insured under the State Farm policy: the Buick was not a \"temporary substitute car\" because the scheduled vehicle it would have replaced had been sold, and the named-insured LLC is a separate legal entity from its members and managers.",
+      "why": "Reads the 'temporary substitute car' and named-insured provisions strictly: a borrowed vehicle is not a temporary substitute once the scheduled car it would replace has been sold, and an LLC policyholder is a separate legal entity from its members and managers, which narrows who qualifies as an insured for UM purposes.",
+      "dockets": [
+        "A26A0526",
+        "A26A0550"
+      ]
+    },
+    {
+      "cluster_id": 10858760,
+      "name": "Montgomery v. Caribe Transport II, LLC",
+      "court": "Supreme Court of the United States",
+      "date": "2026-05-14",
+      "disposition": "reversed and remanded",
+      "areas": [
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10858760/montgomery-v-caribe-transport-ii-llc/",
+      "synopsis": "An injured motorist sued a transportation broker for negligent hiring, alleging that the broker selected a motor carrier with a subpar federal safety rating that was reasonably likely to cause crashes. The Court held that even assuming the FAAAA's preemption provision in 49 U.S.C. section 14501(c)(1) would otherwise reach the negligent-hiring claim, the safety exception in section 14501(c)(2)(A) saves it because such a claim is one regulating safety 'with respect to motor vehicles.' Construing 'with respect to' to mean 'concerns' or 'regards,' the Court reasoned that requiring a broker to exercise ordinary care in selecting a carrier concerns the trucks that will transport the goods.",
+      "why": "The decision resolves a circuit split and establishes that state-law negligent-hiring claims against freight brokers who select unsafe motor carriers are not preempted by the FAAAA, abrogating the contrary Eleventh Circuit rule that had governed in Georgia.",
+      "dockets": [
+        "24-1238"
+      ]
+    },
+    {
+      "cluster_id": 10809283,
+      "name": "Cannon v. Safeco Insurance Co. of Illinois",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-03-16",
+      "disposition": "reversed",
+      "areas": [
+        "coverage",
+        "badfaith",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10809283/trever-cannon-v-safeco-insurance-company-of-illinois/",
+      "synopsis": "The Court of Appeals reversed the dismissal of a failure-to-settle action against a liability insurer. After a $1.65 million excess judgment was entered against its insured following a fatal collision, the insured alleged that Safeco had interpleaded and tendered its $100,000 limits into the court registry without obtaining any release of the claims against him. Because an insurer must give equal consideration to the insured's interests and may be liable for an excess judgment for a negligent or bad-faith failure to settle, the complaint stated a claim.",
+      "why": "Tendering policy limits by interpleader, without obtaining a release for the insured, does not by itself discharge the insurer or bar a later failure-to-settle or bad-faith claim.",
+      "dockets": [
+        "A25A1847"
+      ]
+    },
+    {
+      "cluster_id": 10809157,
+      "name": "Sullivan v. Trustgard Insurance Co.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-03-16",
+      "disposition": "reversed",
+      "areas": [
+        "coverage",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10809157/stephen-michael-sullivan-v-trustgard-insurance-company/",
+      "synopsis": "The Court of Appeals reversed partial summary judgment that had set uninsured-motorist limits at $100,000 on a commercial auto policy. The insurer's application directed that its uninsured-motorist selection section was not to be used in Georgia and required a state-specific supplement, and neither that section nor the mandatory offer form was signed or initialed. Because the insurer never obtained a valid written election of reduced limits, the court held the coverage defaulted to the $1 million liability limit.",
+      "why": "Without a compliant, signed election of reduced uninsured-motorist limits, the coverage defaults to the bodily-injury liability limit under O.C.G.A. § 33-7-11.",
+      "dockets": [
+        "A25A1720"
+      ]
+    },
+    {
+      "cluster_id": 10713919,
+      "name": "Williams v. Reddick",
+      "court": "Court of Appeals of Georgia",
+      "date": "2025-10-29",
+      "disposition": "reversed",
+      "areas": [
+        "auto",
+        "coverage"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10713919/michael-williams-v-robert-reddick/",
+      "synopsis": "The Court of Appeals reversed summary judgment for a defendant driver in a tractor-trailer collision case. The plaintiff had signed a limited liability release under O.C.G.A. § 33-24-41.1 that preserved claims to the extent other insurance was available, and a fact question remained on whether the employer's policy provided uninsured-motorist coverage, because an undated coverage summary did not establish a valid written rejection under O.C.G.A. § 33-7-11(a)(3).",
+      "why": "A limited liability release under O.C.G.A. § 33-24-41.1 does not end the case where other coverage may exist, and a written uninsured-motorist rejection under O.C.G.A. § 33-7-11(a)(3) must actually appear in the record to be effective.",
+      "dockets": [
+        "A25A1226"
+      ]
+    },
+    {
+      "cluster_id": 10669247,
+      "name": "Ferriero v. Progressive Premier Insurance Co.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2025-09-10",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "procedure",
+        "coverage",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10669247/beverly-ferriero-v-progressive-premier-insurance-company-of-illinois/",
+      "synopsis": "The Court of Appeals vacated the dismissal of a collision suit for failure to serve the defendant. The plaintiff had served Progressive as her uninsured-motorist carrier and pointed to a process server's affidavit and email showing copies left with the defendant's mother, and the trial court abused its discretion in finding no evidence of substitute service under O.C.G.A. § 9-11-4(e)(7) when that evidence was in the record.",
+      "why": "Substitute-service proof under O.C.G.A. § 9-11-4(e)(7) that is in the record must be addressed before dismissing for lack of service, and once the limitation period has run the case turns on the plaintiff's diligence in perfecting service.",
+      "dockets": [
+        "A25A0999"
+      ]
+    },
+    {
+      "cluster_id": 10620084,
+      "name": "John Doe v. Jones",
+      "court": "Court of Appeals of Georgia",
+      "date": "2025-06-30",
+      "disposition": "reversed",
+      "areas": [
+        "auto",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10620084/john-doe-v-perry-jones/",
+      "synopsis": "The Court of Appeals reversed the denial of partial summary judgment to a John Doe defendant, litigated in the name of the homeowners' uninsured-motorist carrier, after a phantom vehicle allegedly forced another driver into the plaintiffs' house. The plaintiff sought emotional-distress damages without a physical injury, and under Mayorga v. Benton he could not recover on a pecuniary-loss theory based on property damage alone.",
+      "why": "Under Mayorga v. Benton, a plaintiff cannot recover emotional-distress damages without a physical injury on a pecuniary-loss theory based on property damage alone, here in a John Doe uninsured-motorist posture.",
+      "dockets": [
+        "A25A0077"
+      ]
+    },
+    {
+      "cluster_id": 10614235,
+      "name": "Patterson v. United Services Automobile Association",
+      "court": "Court of Appeals of Georgia",
+      "date": "2025-06-20",
+      "disposition": "affirmed",
+      "areas": [
+        "coverage",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10614235/dennis-malcolm-patterson-v-united-services-automobile-association/",
+      "synopsis": "The Court of Appeals affirmed the denial of uninsured-motorist coverage to an insured who was struck as a pedestrian and sought UM benefits from USAA. The policy required prompt notice as a condition precedent, and a twenty-one-month delay in notifying the insurer failed that requirement as a matter of law, with the insured's unawareness that UM coverage might apply not excusing the delay.",
+      "why": "A prompt-notice condition precedent in a first-party uninsured-motorist policy can be enforced as a matter of law, and a long, unexplained reporting delay, here twenty-one months, can forfeit coverage even if the insured did not realize UM might apply.",
+      "dockets": [
+        "A25A0259"
+      ]
+    },
+    {
+      "cluster_id": 10458281,
+      "name": "Prime Property and Casualty Insurance Company v. Kepali Group, Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2025-05-02",
+      "disposition": "affirmed",
+      "areas": [
+        "coverage",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10458281/prime-property-and-casualty-insurance-company-v-kepali-group-inc/",
+      "synopsis": "Applying Florida law in a diversity action, the Eleventh Circuit held that a commercial automobile policy's after-acquired auto provision provided continuing coverage for a newly acquired vehicle once the insured gave the required notice within 30 days, because that provision listed only two conditions for coverage and did not make payment of an additional premium a condition precedent. The court rejected the insurer's argument that coverage expired at the end of the 30-day notice period for nonpayment, reasoning that nothing in the provision so stated and that the policy's integration clause barred reliance on extrinsic terms. The court further held that the policy's premium audit and cancellation provisions, not a common-law reasonable-time default, governed when any additional premium was due and how coverage could be terminated for nonpayment, and that the insurer's failure to perform a premium audit or follow the cancellation procedures left coverage in force. The court affirmed the district court's ruling that the insurer had a duty to defend.",
+      "why": "It clarifies that under Florida law a commercial fleet policy's after-acquired auto provision triggers continuing coverage upon timely notice without requiring premium payment as a condition precedent, and that the policy's own premium audit and cancellation mechanisms control the timing and consequences of nonpayment.",
+      "dockets": [
+        "23-12518"
+      ]
+    },
+    {
+      "cluster_id": 10680496,
+      "name": "Love v. McKnight",
+      "court": "Supreme Court of Georgia",
+      "date": "2025-03-04",
+      "disposition": "reversed",
+      "areas": [
+        "auto",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680496/love-v-mcknight/",
+      "synopsis": "Plaintiff sought expenses of litigation under OCGA section 13-6-11 based on bad faith after a rear-end collision in which defendant was cited and pleaded guilty to following too closely. The Supreme Court of Georgia held that bad faith under the statute requires conduct that is intentional, wanton, reckless, or at least indicative of conscious indifference to known harmful consequences, and that mere negligence does not suffice. The court held that the violation of a strict-liability traffic law, by itself, does not establish bad faith, and that evidence of distraction from cell phone use, raising at most an issue of negligence, was insufficient to submit the claim to the jury. The court reasoned that allowing litigation expenses in routine negligence cases would contradict the statute's prefatory language that expenses generally shall not be allowed.",
+      "why": "This decision clarifies that bad faith under OCGA section 13-6-11 requires more than negligence or a traffic-law violation, setting the threshold for submitting litigation-expense claims to a jury in tort and auto cases.",
+      "dockets": [
+        "S24G0371"
+      ]
+    },
+    {
+      "cluster_id": 10680052,
+      "name": "Miller v. Golden Peanut Company, LLC",
+      "court": "Supreme Court of Georgia",
+      "date": "2023-08-21",
+      "disposition": "vacated and remanded with direction",
+      "areas": [
+        "expert",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680052/miller-v-golden-peanut-company-llc/",
+      "synopsis": "In a wrongful death action arising from a collision between a tractor-trailer and a car, the Supreme Court of Georgia held that the pre-2013 investigating officer rule, under which a law enforcement officer was treated as presumptively qualified as an expert on the cause of a collision, did not survive adoption of the current Evidence Code. Because OCGA section 24-7-702 contains no carve-out for law enforcement officers, a trial court must perform the same three-prong Daubert gatekeeping inquiry, qualification, reliability, and helpfulness, for expert opinion testimony from an investigating officer as for any other expert. The court found that the disputed accident-reconstruction opinions, including that the deceased driver was distracted, constituted expert rather than lay testimony, and that the trial court abused its discretion by assessing only qualification and not reliability or helpfulness. The court vacated the Court of Appeals' opinion, directed it to vacate the trial court's order, and remanded, and expressly disapproved Court of Appeals decisions applying the investigating officer rule to expert testimony in civil cases.",
+      "why": "The decision establishes that investigating officers who offer accident-reconstruction or causation opinions in civil cases are subject to the full Daubert reliability and helpfulness analysis, eliminating the prior presumption of expert qualification.",
+      "dockets": [
+        "S22G0905"
+      ]
+    },
+    {
+      "cluster_id": 10367320,
+      "name": "Quynn v. Hulsey",
+      "court": "Supreme Court of Georgia",
+      "date": "2020-11-02",
+      "disposition": "reversed",
+      "areas": [
+        "auto",
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10367320/quynn-v-hulsey/",
+      "synopsis": "In a wrongful death action arising from a truck striking and killing a pedestrian, the trial court granted partial summary judgment to the employer on the estate's claims for negligent entrustment, hiring, training, and supervision because the employer had admitted respondeat superior liability and no punitive damages claim survived. The Supreme Court of Georgia held that the apportionment statute, OCGA section 51-12-33, abrogated the decisional law 'Respondeat Superior Rule,' which had entitled an employer that conceded vicarious liability to summary judgment on direct-negligence claims absent a valid punitive damages claim. The Court reasoned that direct-negligence claims allege the employer's own fault, which the jury must consider under the statute, and that such fault is divisible from the employee's fault. The Court reversed and overruled contrary Court of Appeals decisions.",
+      "why": "The decision establishes that an employer's admission of respondeat superior no longer bars a plaintiff's negligent entrustment, hiring, training, supervision, and retention claims, so those direct-negligence claims may proceed to the jury alongside vicarious liability under OCGA section 51-12-33.",
+      "dockets": [
+        "S19G1612"
+      ]
+    },
+    {
+      "cluster_id": 4503667,
+      "name": "Stephens v. Castano-Castano",
+      "court": "Court of Appeals of Georgia",
+      "date": "2018-05-29",
+      "disposition": "affirmed in part, reversed in part",
+      "areas": [
+        "auto",
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4503667/stephens-v-castano-castano/",
+      "synopsis": "In an auto collision case, the trial court excluded evidence that the plaintiff's treating physician held a lien on the lawsuit proceeds and barred questioning about an attorney-to-physician referral. The Court of Appeals held that evidence of the physician's lien-based financial interest in the verdict was admissible to show potential bias and affect credibility, and that the collateral source rule did not bar it because the plaintiff still owed the full cost of treatment and no benefit or write-off reduced the obligation. The court affirmed exclusion of the attorney-referral evidence, holding that the referral standing alone was insufficient to show bias and presented a danger of unfair prejudice, and it affirmed denial of the defendant's motion to enforce a purported settlement because the relied-upon email omitted the essential settlement amount. The court noted that any such financial-interest evidence remains subject to a Rule 403 analysis. The opinion is physical precedent only.",
+      "why": "The decision clarifies that a treating physician's lien on lawsuit proceeds is admissible to show financial interest and bias and is not barred by the collateral source rule, while a bare attorney-to-physician referral, standing alone, is not.",
+      "dockets": [
+        "A18A0100"
+      ]
+    },
+    {
+      "cluster_id": 4372487,
+      "name": "Harris v. Mahone",
+      "court": "Court of Appeals of Georgia",
+      "date": "2017-03-01",
+      "disposition": "affirmed in part, reversed in part, and remanded with direction",
+      "areas": [
+        "procedure",
+        "auto",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4372487/harris-v-mahone/",
+      "synopsis": "In an auto negligence case, plaintiff sought attorney fees under OCGA Section 9-11-68 after recovering a verdict exceeding 125 percent of his pretrial counteroffer. The court held that a counteroffer made within 20 days of trial under subsection (a) must still remain open 30 days under subsection (c), and that fees under subsection (b)(2) run only from the date the offer is deemed rejected through entry of judgment. Because the counteroffer was deemed rejected three days after the trial concluded and plaintiff showed no fees incurred in the window between that date and judgment, no fees were recoverable; a counteroffer can avoid this result only by being withdrawn in writing before its expiration. The court separately reversed the denial of fees under OCGA Section 9-15-14, holding that counsel's statement in his place as to hours and reasonableness on a specific issue was sufficient proof.",
+      "why": "The decision clarifies the interplay of OCGA Section 9-11-68 subsections (a), (b)(2), and (c), holding that a near-trial counteroffer must remain open 30 days and that recoverable fees run only from the deemed-rejection date to judgment, and confirms that counsel's in-place statement of hours and reasonableness suffices to support a Section 9-15-14 fee motion.",
+      "dockets": [
+        "A16A1748"
+      ]
+    }
+  ]
+}

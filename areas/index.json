@@ -1,0 +1,52 @@
+{
+  "areas": [
+    {
+      "area": "coverage",
+      "label": "coverage",
+      "count": 13,
+      "url": "https://horowitz.law/areas/coverage.json"
+    },
+    {
+      "area": "badfaith",
+      "label": "bad faith",
+      "count": 3,
+      "url": "https://horowitz.law/areas/badfaith.json"
+    },
+    {
+      "area": "auto",
+      "label": "auto",
+      "count": 19,
+      "url": "https://horowitz.law/areas/auto.json"
+    },
+    {
+      "area": "premises",
+      "label": "premises",
+      "count": 9,
+      "url": "https://horowitz.law/areas/premises.json"
+    },
+    {
+      "area": "negsec",
+      "label": "negligent security",
+      "count": 4,
+      "url": "https://horowitz.law/areas/negsec.json"
+    },
+    {
+      "area": "expert",
+      "label": "expert",
+      "count": 8,
+      "url": "https://horowitz.law/areas/expert.json"
+    },
+    {
+      "area": "procedure",
+      "label": "procedure",
+      "count": 45,
+      "url": "https://horowitz.law/areas/procedure.json"
+    },
+    {
+      "area": "damages",
+      "label": "damages",
+      "count": 22,
+      "url": "https://horowitz.law/areas/damages.json"
+    }
+  ]
+}

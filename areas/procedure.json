@@ -1,0 +1,814 @@
+{
+  "area": "procedure",
+  "label": "procedure",
+  "count": 45,
+  "opinions": [
+    {
+      "cluster_id": 10877643,
+      "name": "T. M. v. University of Maryland Medical System Corporation",
+      "court": "Supreme Court of the United States",
+      "date": "2026-06-18",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10877643/t-m-v-university-of-md-medical-system-corporation-revisions-61926/",
+      "synopsis": "The Supreme Court held that the Rooker-Feldman doctrine bars federal district court jurisdiction over cases brought by state-court losers complaining of injuries caused by state-court judgments rendered before the federal proceedings commenced and seeking district court review and rejection of those judgments, regardless of whether the state-court judgment remains subject to further review in state appellate proceedings. The Court rejected the argument that the doctrine applies only to final judgments rendered by the highest court of a State, reasoning that the doctrine rests on the functional distinction between original and appellate jurisdiction under 28 U.S.C. sections 1331 and 1257, not solely on a negative inference from section 1257. Petitioner had sued in federal court to declare a state consent order unconstitutional and unenforceable while simultaneously appealing it in state court. The Court resolved a conflict among the Courts of Appeals.",
+      "why": "The decision clarifies the scope of a threshold jurisdictional doctrine and confirms that Rooker-Feldman can bar a federal suit even when the underlying state-court judgment is still on appeal, which directly affects civil litigants pursuing parallel state and federal proceedings.",
+      "dockets": [
+        "25-197"
+      ]
+    },
+    {
+      "cluster_id": 10876934,
+      "name": "T. M. v. University of Maryland Medical System Corporation",
+      "court": "Supreme Court of the United States",
+      "date": "2026-06-18",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10876934/t-m-v-university-of-md-medical-system-corporation/",
+      "synopsis": "The Supreme Court held that the Rooker-Feldman doctrine bars federal district court jurisdiction over cases brought by state-court losers complaining of injuries caused by state-court judgments rendered before the federal proceedings commenced and seeking review and rejection of those judgments, regardless of whether the state-court judgment remains subject to further review in state appellate proceedings. The Court rejected the argument that the doctrine applies only to final judgments rendered by the highest court of a state, reasoning that its precedents adopted a functional view of original versus appellate jurisdiction rather than a strict negative inference from 28 U.S.C. section 1257. The Court emphasized that the doctrine remains narrow and that it neither expanded nor constrained it beyond resolving the circuit conflict. A four-justice dissent argued that under Exxon the doctrine applies only after state proceedings have ended.",
+      "why": "It resolves a circuit split and clarifies that a litigant cannot seek federal district court review and rejection of a state-court judgment even while that judgment remains on appeal in state court, a jurisdictional limit civil litigators must account for before challenging a state-court judgment in federal court.",
+      "dockets": [
+        "25-197"
+      ]
+    },
+    {
+      "cluster_id": 10875860,
+      "name": "Lloyd v. City of Atlanta",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-16",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10875860/maugan-lloyd-v-city-of-atlanta/",
+      "synopsis": "Plaintiff, injured when his bike tire became lodged in a city storm drain grate, sent an ante litem notice jointly addressed to the City of Atlanta and Fulton County demanding a \"global settlement amount\" of $2,000,000. The Court of Appeals held that this notice failed to comply with OCGA section 36-33-5(e), which requires a specific amount of monetary damages being sought from the municipal corporation, because demanding a single global amount from two entities jointly does not identify the specific amount sought from the city alone and leaves the city to speculate what portion constituted an offer it could accept. The court noted it need not decide whether subsection (e) requires strict or substantial compliance because the notice failed under either standard, and rejected the argument that use of \"and/or\" cured the defect, finding the term was used only to reference the applicable notice statutes.",
+      "why": "The decision clarifies that an ante litem notice presenting a single combined settlement demand against a municipality and another governmental entity, without specifying the amount sought from the municipality alone, fails the specific-amount requirement of OCGA section 36-33-5(e) and bars suit as a condition precedent.",
+      "dockets": [
+        "A26A0625"
+      ]
+    },
+    {
+      "cluster_id": 10875605,
+      "name": "Cayamcela v. Advocacy Trust, LLC",
+      "court": "Supreme Court of Georgia",
+      "date": "2026-06-16",
+      "disposition": "affirmed",
+      "areas": [
+        "expert",
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10875605/cayamcela-v-advocacy-trust-llc-two-cases/",
+      "synopsis": "In a medical malpractice and wrongful death action arising from a patient's death in the ICU after childbirth, the jury returned a $42 million verdict against a doctor and a medical staffing agency. The Supreme Court of Georgia affirmed the trial court's exclusion under OCGA section 24-7-702(b) of a defense expert's testimony about ICU care, holding the court acted within its gatekeeping discretion where the expert repeatedly admitted he had not reviewed the relevant ICU records well enough to opine on that care and that the matter fell outside his specialty. The court rejected the argument that these gaps went only to credibility rather than admissibility.",
+      "why": "The decision confirms that a trial court may exclude expert testimony as unreliable under Rule 702(b) when the expert concedes an insufficient factual basis, and that such deficiencies bear on admissibility, not merely weight.",
+      "dockets": [
+        "S26A0229",
+        "S26A0242"
+      ]
+    },
+    {
+      "cluster_id": 10875604,
+      "name": "Clark v. Leigh",
+      "court": "Supreme Court of Georgia",
+      "date": "2026-06-16",
+      "disposition": "vacated and remanded with direction",
+      "areas": [
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10875604/clark-v-leigh-and-vice-versa/",
+      "synopsis": "In a medical malpractice and wrongful death action where a jury awarded $29,250,000 for the full value of the decedent's life, $2,500,000 for pain and suffering, and medical expenses, the trial court applied the OCGA section 51-13-1(b) noneconomic damages cap to reduce the wrongful death award to $350,000. The Supreme Court of Georgia reaffirmed Nestlehutt, holding that the right to trial by jury under the Georgia Constitution does not permit applying the cap to pain and suffering and loss of consortium damages in medical malpractice actions, and declined to overrule it under stare decisis. The court then held that, under ordinary principles of statutory construction and in light of Nestlehutt, the cap statute cannot operate at all on a judgment in a case like this one, where the jury's verdict includes noneconomic damages for a cause of action to which the jury trial right applies, because making it operative would require impermissibly rewriting the statute. The court vacated the order applying the cap and remanded for the trial court to decide the defendants' excessiveness claim as to the wrongful death award.",
+      "why": "The decision reaffirms that the OCGA section 51-13-1(b) medical malpractice noneconomic damages cap is unenforceable as to constitutionally protected jury-determined damages and extends that result, on statutory-construction grounds, to render the cap inoperative on the entire judgment including 'full value of life' wrongful death damages in such cases.",
+      "dockets": [
+        "S26A0349",
+        "S26X0350"
+      ]
+    },
+    {
+      "cluster_id": 10875034,
+      "name": "Crook v. Six Flags Over Georgia II, L.P.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-15",
+      "disposition": "reversed and remanded with direction",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10875034/lokin-crook-v-six-flags-over-georgia-ii-lp/",
+      "synopsis": "Plaintiff, the surviving spouse and administrator of an employee who died after falling from a cargo van at a theme park, sued the employer and a co-worker, and the trial court dismissed under OCGA 9-11-12(b)(1) for lack of subject matter jurisdiction based on the exclusive remedy provision of the Workers' Compensation Act. The Court of Appeals held that the Act's exclusivity bar is a statutory affirmative defense, not a question of subject matter jurisdiction, so the employer bears the burden of proving the bar applies and the defense can be waived if not timely raised. The court disapproved Kellogg Co. v. Pinkston, Savannah Hospitality Servs. v. Scriven, and T & R S. Sanitation v. Lowe to the extent they treated the exclusivity bar as jurisdictional. The trial court therefore erred in placing the burden on plaintiff to disprove the bar.",
+      "why": "This decision establishes that the Workers' Compensation Act exclusive remedy provision must be litigated as a waivable affirmative defense, with the burden on the employer, rather than as a non-waivable subject matter jurisdiction bar, which changes how WCA exclusivity is raised and proved in Georgia tort and wrongful death cases.",
+      "dockets": [
+        "A26A0470"
+      ]
+    },
+    {
+      "cluster_id": 10873711,
+      "name": "Waddle Trucking of Mississippi, Inc. v. Johnson",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-11",
+      "disposition": "reversed",
+      "areas": [
+        "procedure",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10873711/waddle-trucking-of-mississippi-inc-v-aileen-johnson/",
+      "synopsis": "A trucking defendant in a personal injury action was served in state court, after which a codefendant removed the case to federal court, where the defendant filed an answer that was untimely under Fed.R.Civ.P. 81(c)(2). After remand, the state court entered default judgment against the defendant. The Court of Appeals held that the answer filed in district court, even though untimely there, prevented default in state court because the district court never struck the answer and no default was entered under Fed.R.Civ.P. 55, and because on remand the defendant still had time remaining to answer.",
+      "why": "The decision clarifies that an answer filed in federal court after removal continues to have effect on remand and prevents entry of default in state court so long as the federal court did not strike it or enter default, even if the federal answer was untimely.",
+      "dockets": [
+        "A26A0145"
+      ]
+    },
+    {
+      "cluster_id": 10873663,
+      "name": "Keathley v. Buddy Ayers Construction, Inc.",
+      "court": "Supreme Court of the United States",
+      "date": "2026-06-11",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "procedure",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10873663/keathley-v-buddy-ayers-construction-inc/",
+      "synopsis": "A debtor in an open Chapter 13 bankruptcy failed to disclose a personal-injury claim arising from a car accident, and the lower courts applied judicial estoppel to bar the tort suit using the Fifth Circuit's two-factor test, asking only whether the debtor knew the underlying facts and had a potential motive to conceal. The Supreme Court, assuming without deciding that judicial estoppel can apply in the bankruptcy context and that inadvertence or mistake can be an exception, held that courts must look to the totality of the circumstances surrounding the omission. The Court found the Fifth Circuit's approach both too rigid, because equity eschews mechanical rules, and too broad, because its motive criterion is almost always satisfied, making it a poor fit for assessing whether an omission was actually inadvertent or mistaken.",
+      "why": "It establishes that whether a plaintiff-debtor's failure to schedule a personal-injury claim was inadvertent or mistaken for judicial-estoppel purposes turns on the totality of the circumstances rather than a knowledge-plus-motive test, governing how civil litigants raise and defend against judicial estoppel when a tort claim was omitted from bankruptcy schedules.",
+      "dockets": [
+        "25-6"
+      ]
+    },
+    {
+      "cluster_id": 10872980,
+      "name": "Ya Mon Expeditions, LLC v. YATCO, LLC",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2026-06-10",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "unpublished",
+      "url": "https://www.courtlistener.com/opinion/10872980/ya-mon-expeditions-llc-v-yatco-llc/",
+      "synopsis": "In an interlocutory appeal from the denial of a motion to compel arbitration under the FAA, an MLS company sought to compel nonsignatory yacht-seller plaintiffs to arbitrate antitrust claims based on a subscription agreement their brokers allegedly accepted. The court held that under Florida law, which governs the threshold question of whether an arbitration agreement exists, the party seeking to compel arbitration bears the burden of proving an enforceable agreement, and the movant relied on speculation and assumption rather than evidence that the brokers actually listed the plaintiffs' yachts on its website or accepted the relevant version of the agreement. The court rejected the movant's argument that the nonsignatory plaintiffs opposing arbitration bore the burden of disproving its evidence.",
+      "why": "It clarifies that the FAA presumption favoring arbitration does not apply to the threshold question of whether an agreement to arbitrate exists, and that state law places the burden of proving an enforceable arbitration agreement on the party seeking to compel it.",
+      "dockets": [
+        "25-10140"
+      ]
+    },
+    {
+      "cluster_id": 10872456,
+      "name": "Vu v. City of Atlanta",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-09",
+      "disposition": "reversed",
+      "areas": [
+        "auto",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10872456/jenny-vu-v-city-of-atlanta/",
+      "synopsis": "A city employee driving a city-owned truck rear-ended plaintiff's car, and plaintiff served a municipal ante litem notice demanding $1,000,000. The trial court dismissed the suit, accepting the city's argument that the notice failed to state a 'specific amount' under OCGA § 36-33-5(e) because it exceeded the $500,000 sovereign-immunity waiver for negligent motor-vehicle use. The Court of Appeals reversed, holding that OCGA § 36-92-2 does not cap or limit the waiver but automatically waives immunity up to $500,000 while specifying ways to increase it, and reaffirming that the demanded amount need not be one the municipality is capable of accepting.",
+      "why": "The decision clarifies that a municipal ante litem notice satisfies the specific-amount requirement of OCGA § 36-33-5(e) even when the demand exceeds the automatic sovereign-immunity waiver under OCGA § 36-92-2.",
+      "dockets": [
+        "A26A0563"
+      ]
+    },
+    {
+      "cluster_id": 10862062,
+      "name": "Johnson v. Everett",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-05-20",
+      "disposition": "vacated and remanded in part",
+      "areas": [
+        "procedure",
+        "expert"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10862062/john-johnson-v-christopher-b-everett/",
+      "synopsis": "In a medical-malpractice case that ended in a defense verdict, the Court of Appeals held that the trial court mistakenly believed it had no choice but to let the jury consider the emergency-medical-care gross-negligence standard of O.C.G.A. § 51-1-29.5, an issue the parties had not listed in their pretrial order, when in fact the court had discretion to disallow it. The court vacated the denial of a new trial and remanded for the court to exercise that discretion, and found no error in admitting the defense expert's opinions or a complaint from another case.",
+      "why": "A pretrial order frames the issues for trial, but the court keeps discretion over an issue the parties left out of it, and treating that discretion as nonexistent is reversible error.",
+      "dockets": [
+        "A26A0099"
+      ]
+    },
+    {
+      "cluster_id": 10669247,
+      "name": "Ferriero v. Progressive Premier Insurance Co.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2025-09-10",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "procedure",
+        "coverage",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10669247/beverly-ferriero-v-progressive-premier-insurance-company-of-illinois/",
+      "synopsis": "The Court of Appeals vacated the dismissal of a collision suit for failure to serve the defendant. The plaintiff had served Progressive as her uninsured-motorist carrier and pointed to a process server's affidavit and email showing copies left with the defendant's mother, and the trial court abused its discretion in finding no evidence of substitute service under O.C.G.A. § 9-11-4(e)(7) when that evidence was in the record.",
+      "why": "Substitute-service proof under O.C.G.A. § 9-11-4(e)(7) that is in the record must be addressed before dismissing for lack of service, and once the limitation period has run the case turns on the plaintiff's diligence in perfecting service.",
+      "dockets": [
+        "A25A0999"
+      ]
+    },
+    {
+      "cluster_id": 10680446,
+      "name": "Docs of CT, LLC v. Biotek Services, LLC",
+      "court": "Supreme Court of Georgia",
+      "date": "2025-05-28",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680446/docs-of-ct-llc-v-biotek-services-llc/",
+      "synopsis": "A party sought to vacate an arbitration award under OCGA section 9-9-13 (b), arguing that ex parte communications between the arbitrator and opposing counsel were per se prejudicial. The Supreme Court of Georgia held that to establish that its rights were prejudiced by one of the listed grounds for vacatur, the moving party must show that the challenged conduct affected or influenced the outcome of the arbitration, and that prejudice is not presumed outside rare contexts. Because the moving party offered no basis for concluding the ex parte communications affected the outcome, the Court affirmed.",
+      "why": "This decision establishes that prejudice under OCGA section 9-9-13 (b) requires an outcome-focused showing of actual prejudice, so parties seeking to vacate arbitral awards must demonstrate how the challenged conduct affected the result rather than relying on per se or presumed prejudice.",
+      "dockets": [
+        "S24G0435"
+      ]
+    },
+    {
+      "cluster_id": 10588200,
+      "name": "Merritt Island Woodwerx, LLC v. Space Coast Credit Union",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2025-05-21",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10588200/merritt-island-woodwerx-llc-v-space-coast-credit-union/",
+      "synopsis": "A credit union moved to compel arbitration under the Federal Arbitration Act after the AAA declined to administer a consumer's demand because the credit union had not registered its arbitration clause or paid the required compliance fee. Applying Bedgood v. Wyndham, the Eleventh Circuit held that the credit union's failure to comply with its chosen arbitral forum's policies placed it in default under Section 3 and rendered relief under Sections 3 and 4 unavailable. The court further held that a co-plaintiff with an identical, already-rejected arbitration clause could rely on a futility showing and need not separately demand arbitration, and that the substitute-forum clause permitted resolution in court because a court is a forum.",
+      "why": "It establishes that post-filing compliance with arbitral-forum registration requirements cannot cure a party's prior noncompliance that caused the forum to decline arbitration, so a party that delayed remedying a self-created barrier to arbitration cannot later compel it.",
+      "dockets": [
+        "24-10019"
+      ]
+    },
+    {
+      "cluster_id": 10358249,
+      "name": "Fu Wu v. Chun Liu",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2025-03-19",
+      "disposition": "appeal dismissed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10358249/fu-wu-v-chun-liu/",
+      "synopsis": "A defendant removed a state-court action under 9 U.S.C. section 205 of the Federal Arbitration Act, invoking the Convention on the Recognition and Enforcement of Foreign Arbitral Awards, and moved to compel arbitration. In a single order, the district court denied the motion to compel and remanded for lack of subject-matter jurisdiction, finding the defendant could not enforce the arbitration clause. The Eleventh Circuit held that 28 U.S.C. section 1447(d) bars appellate review of such an order because FAA section 16(a)(1)(C) contains no express statutory exception to the remand bar, and neither the matter-of-substantive-law exception nor the Waco exception applies when the arbitration ruling is intrinsic to the jurisdictional determination. The court reasoned that the denial of arbitration was a jurisdictional finding with no conclusive effect on the state action, leaving the state court free to revisit it.",
+      "why": "The decision clarifies that a litigant cannot use the FAA's appeal-of-arbitration-denial provision to circumvent the section 1447(d) bar when the district court's arbitration ruling is bound up in a jurisdictional remand, defining the limits of appellate review of arbitration-based removal.",
+      "dockets": [
+        "24-10397"
+      ]
+    },
+    {
+      "cluster_id": 10357471,
+      "name": "Various Insurers, Reinsurers and Retrocessionaires v. General Electric International, Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2025-03-18",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10357471/various-insurers-reinsurers-and-retrocessionaires-v-general-electric/",
+      "synopsis": "Insurers, suing as subrogees of a power plant owner after a turbine failure, resisted arbitration of claims against various General Electric entities under a services contract their subrogor never signed. Applying federal common law and Section 302 of the Restatement (Second) of Contracts, the Eleventh Circuit held that the non-signatory plant owner was an intended third-party beneficiary of the services contract because the contract repeatedly named it as project owner and gave it explicit, unilateral rights, including the right to direct changes to the power train sets and to act in emergencies. As subrogees, the insurers stood in the owner's shoes and were therefore bound by the contract's arbitration clause.",
+      "why": "The decision clarifies that under federal common law a non-signatory may be compelled to arbitrate as a third-party beneficiary when the contract names it and confers specific enforceable rights, and that a subrogee takes that obligation along with the subrogor's rights.",
+      "dockets": [
+        "23-11211"
+      ]
+    },
+    {
+      "cluster_id": 10350664,
+      "name": "Liberty Surplus Insurance Corporation v. Kaufman Lynn Construction, Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2025-03-05",
+      "disposition": "affirmed in part, reversed in part, and remanded",
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10350664/liberty-surplus-insurance-corporation-v-kaufman-lynn-construction-inc/",
+      "synopsis": "Applying Florida law, the Eleventh Circuit construed a Course of Construction Exclusion in a commercial general liability policy, which barred coverage for property damage to any insured project during the course of construction until the project is completed. The court held that the undefined phrase until the project is completed unambiguously means the entire multi-phase project must be finished, not merely the portion that sustained damage, so water damage to completed buildings was excluded while other buildings remained under construction and old buildings remained to be demolished. The court declined to import the policy's products-completed operations hazard definition of completed work into the exclusion, reasoning that your work and project are not synonymous. The coverage ruling was affirmed.",
+      "why": "It establishes how courts applying Florida law read a Course of Construction Exclusion in a CGL policy, holding that completion of the project means the entire project rather than the damaged component.",
+      "dockets": [
+        "23-12715",
+        "23-12835"
+      ]
+    },
+    {
+      "cluster_id": 10339957,
+      "name": "Waetzig v. Halliburton Energy Services, Inc.",
+      "court": "Supreme Court of the United States",
+      "date": "2025-02-26",
+      "disposition": "reversed and remanded",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10339957/waetzig-v-halliburton-energy-services-inc/",
+      "synopsis": "A plaintiff voluntarily dismissed his federal lawsuit without prejudice under Rule 41(a) and submitted his claims to arbitration, then sought to reopen the dismissed case under Rule 60(b) after losing at arbitration. The Supreme Court unanimously held that a Rule 41(a) voluntary dismissal without prejudice qualifies as a \"final proceeding\" under Rule 60(b), so a district court may use Rule 60(b) to reopen such a case. The Court rejected importing the appellate-jurisdiction concept of finality from 28 U.S.C. section 1291 into Rule 60(b), and read \"judgment, order, or proceeding\" as ascending in generality so that \"proceeding\" reaches all steps in an action. The Court expressly declined to decide whether the district court had jurisdiction over the motion to vacate the arbitration award, leaving that and the propriety of relief for remand.",
+      "why": "It clarifies that a Rule 41(a) voluntary dismissal without prejudice is reachable under Rule 60(b), establishing the mechanism by which a litigant may ask a federal court to reopen a case that was voluntarily dismissed.",
+      "dockets": [
+        "23-971"
+      ]
+    },
+    {
+      "cluster_id": 10334703,
+      "name": "Wilson v. Hearos, LLC",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2025-02-18",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10334703/james-h-wilson-iii-v-hearos-llc/",
+      "synopsis": "A plaintiff sued an earplug manufacturer in Georgia state court for product-related hearing loss, and a non-party parent company removed the case to federal court. The Eleventh Circuit held that removal by a non-party, which lacks statutory authority under 28 U.S.C. section 1441(a) to remove, is a waivable procedural defect under 28 U.S.C. section 1447(c) rather than a jurisdictional one, so long as the federal court would have had original subject matter jurisdiction had the case been filed there. Because complete diversity and the amount in controversy were satisfied and the plaintiff did not move to remand within 30 days, the objection was waived.",
+      "why": "It establishes that a non-party's improper removal does not defeat subject matter jurisdiction and must be challenged within 28 U.S.C. section 1447(c)'s 30-day window or be waived, clarifying when a removal defect can be raised.",
+      "dockets": [
+        "23-12550"
+      ]
+    },
+    {
+      "cluster_id": 10680529,
+      "name": "Wasserman v. Franklin County",
+      "court": "Supreme Court of Georgia",
+      "date": "2025-01-28",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680529/wasserman-v-franklin-county/",
+      "synopsis": "Plaintiff sought to assert a third party's federal equal protection rights in Georgia courts under the federal doctrine of third-party standing. The Georgia Supreme Court held that the federal doctrine of third-party standing is not part of Georgia constitutional standing law, because the Judicial Power Paragraph of the Georgia Constitution requires a plaintiff, at a minimum, to assert a violation of her own legal rights to invoke a Georgia court's judicial power, and overruled Burgess and later decisions to the extent they adopted that doctrine. The Court also rejected the plaintiff's Supremacy Clause argument, holding that Georgia's constitutional standing requirement is a neutral jurisdictional rule that may be applied to bar a Section 1983 claim brought by someone asserting only a nonparty's rights. The Court vacated and remanded, leaving the plaintiff's separate assignment-of-claim theory for the courts below to address in the first instance.",
+      "why": "It establishes that a Georgia plaintiff must assert a violation of her own legal rights to have standing and eliminates federal third-party standing as a basis for suing in Georgia courts, a threshold rule of broad importance to all civil litigators.",
+      "dockets": [
+        "S23G1029"
+      ]
+    },
+    {
+      "cluster_id": 10776876,
+      "name": "Royal Canin U.S.A., Inc. v. Wullschleger",
+      "court": "Supreme Court of the United States",
+      "date": "2025-01-15",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10776876/royal-canin-u-s-a-v-wullschleger/",
+      "synopsis": "Plaintiff sued in state court asserting both federal and state-law claims, and defendant removed based on the federal claim, with the state claims proceeding under supplemental jurisdiction. After removal, plaintiff amended the complaint to delete every federal-law claim and sought remand. A unanimous Court held that when a post-removal amendment excises the federal-law claims that enabled removal, leaving only state-law claims, the federal court loses supplemental jurisdiction under 28 U.S.C. section 1367 and must remand to state court, because section 1367 draws no distinction between original and removed cases and jurisdiction follows the amended, now operative, pleading. The Court treated the contrary statement in the Rockwell footnote as non-binding dictum that does not withstand analysis.",
+      "why": "It establishes that a plaintiff who originally pleads federal claims alongside state-law claims can defeat federal jurisdiction after removal by amending to drop all federal claims, requiring remand to state court, which directly bears on removal and remand strategy whenever federal and state tort claims are pleaded together.",
+      "dockets": [
+        "23-677"
+      ]
+    },
+    {
+      "cluster_id": 10680196,
+      "name": "Cook-Rose v. Waffle House, Inc.",
+      "court": "Supreme Court of Georgia",
+      "date": "2024-12-20",
+      "disposition": "reversed and remanded",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680196/cook-rose-v-waffle-house-inc/",
+      "synopsis": "Plaintiffs voluntarily dismissed a premises liability suit, filed a renewal action under OCGA section 9-2-61(a), and then sought to appeal a post-dismissal attorneys' fees award entered in the dismissed case by filing a discretionary application. The Court of Appeals dismissed for failure to obtain a certificate of immediate review, reasoning that the pendency of the renewal action meant the case remained pending below. The Supreme Court held that a renewal action is a new case de novo, not a continuance of the dismissed action, so the pendency of the renewal did not keep the dismissed case pending. Because the fee order made the dismissed case no longer pending in the court below, it was a final judgment under OCGA section 5-6-34(a)(1) and no certificate of immediate review was required.",
+      "why": "The decision clarifies that a post-dismissal attorneys' fees order in a case that has been voluntarily dismissed and renewed is a final judgment appealable by discretionary application without a certificate of immediate review, because the renewal action is a separate new case.",
+      "dockets": [
+        "S24A1094"
+      ]
+    },
+    {
+      "cluster_id": 10292992,
+      "name": "Lubin v. Starbucks Corporation",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-12-16",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10292992/raphyr-lubin-v-starbucks-corporation/",
+      "synopsis": "A former employee's spouse, who obtained health coverage as a dependent but never signed an arbitration agreement, brought a putative class action against the employer alleging deficient COBRA notices. The employer moved to compel arbitration under the wife's employment agreement. The Eleventh Circuit held that a non-signatory cannot be compelled to arbitrate under an agreement he did not sign, particularly where his claim arises from an independent federal statutory right rather than from the contract. The court also held that the agreement's delegation clause did not clearly and unmistakably commit arbitrability to the arbitrator because it conflicted with an exclusion clause carving out actions to compel arbitration, so the court, not the arbitrator, decided arbitrability.",
+      "why": "It clarifies that an arbitration agreement's delegation clause does not provide the clear and unmistakable evidence needed to send arbitrability to the arbitrator when it conflicts with an exclusion clause for actions to compel arbitration, and that a non-signatory suing on an independent statutory right is not bound to arbitrate.",
+      "dockets": [
+        "21-11215"
+      ]
+    },
+    {
+      "cluster_id": 10680223,
+      "name": "Whitaker Farms, LLC v. Fitzgerald Fruit Farms, LLC",
+      "court": "Supreme Court of Georgia",
+      "date": "2024-10-31",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680223/whitaker-farms-llc-v-fitzgerald-fruit-farms-llc/",
+      "synopsis": "After a jury awarded punitive damages on a trespass claim, the defendant challenged the admission of statements its officer made during a settlement conference, which the Court of Appeals had upheld as admissible under OCGA section 24-4-408 (c) to show state of mind. The Supreme Court of Georgia held that a request for punitive damages is a 'claim' within the meaning of Rule 408 (a), and that because a defendant's state of mind is an element of a punitive damages claim, evidence offered to prove that state of mind is offered to prove liability for the claim and is therefore inadmissible. The court did not decide whether Rule 408 (b) categorically excludes all statements made in compromise negotiations. The court vacated and remanded for the Court of Appeals to determine whether the erroneous admission was harmful.",
+      "why": "The decision clarifies that settlement-conference statements cannot be admitted to prove a defendant's state of mind for purposes of establishing entitlement to punitive damages, because such evidence proves an element of, and thus liability for, the punitive damages claim under OCGA section 24-4-408 (a).",
+      "dockets": [
+        "S23G1162"
+      ]
+    },
+    {
+      "cluster_id": 10173346,
+      "name": "Schleider v. GVDB Operations, LLC",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-10-31",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10173346/howard-schleider-v-gvdb-operations-llc/",
+      "synopsis": "Plaintiffs brought state-law survival and wrongful death claims under Florida's Assisted Living Facilities Act, alleging an assisted living facility failed to prevent the spread of COVID-19. Defendants removed under the federal officer removal statute and the PREP Act, and the district court remanded. The Eleventh Circuit held that defendants did not act under a federal officer for purposes of 28 U.S.C. section 1442(a)(1), because mere compliance with federal guidance and designation as critical infrastructure do not establish the required relationship of subjection, guidance, or control, nor assistance with a basic governmental task.",
+      "why": "It clarifies that compliance with federal regulations and recommendations and a critical-infrastructure designation are insufficient to support federal officer removal, narrowing the availability of that removal route for private entities.",
+      "dockets": [
+        "21-11765"
+      ]
+    },
+    {
+      "cluster_id": 10163320,
+      "name": "VFS Leasing Co. v. Markel Insurance Company",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-10-30",
+      "disposition": "reversed and remanded",
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10163320/vfs-leasing-co-v-markel-insurance-company/",
+      "synopsis": "An insurer issued five joint checks to a lessee insured and a lessor loss payee as nonalternative co-payees, but the drawee bank cashed them solely for the lessee without the loss payee's endorsement, and the loss payee sued the insurer for breach of contract. Deciding a question of first impression under Florida law, the Eleventh Circuit held that under Florida Statute section 673.4141(3) a drawer's payment obligation is discharged once a jointly issued draft is accepted by a drawee bank, regardless of when or by whom acceptance was obtained, even though under section 673.1101(4) a single co-payee acting alone is not a holder. The court reasoned that the loss payee's remedy lies in a conversion claim against the bank under the UCC, not a breach-of-contract action against the insurer, and that the underlying obligation on the checks is suspended rather than discharged as to the bank. The court reversed the grant of summary judgment to the loss payee.",
+      "why": "It establishes, in a federal forum applying Florida's UCC, that a drawer-insurer's obligation to a loss payee co-payee is discharged upon a bank's acceptance of a joint check, directing the loss payee's recourse to a conversion claim against the bank rather than the insurer.",
+      "dockets": [
+        "22-13338"
+      ]
+    },
+    {
+      "cluster_id": 10680229,
+      "name": "Titshaw v. Geer",
+      "court": "Supreme Court of Georgia",
+      "date": "2024-10-22",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680229/titshaw-v-geer/",
+      "synopsis": "The Supreme Court of Georgia held that a claim for breach of a contract for legal services may be governed by either the six-year statute of limitation in OCGA section 9-3-24 or the four-year statute in OCGA section 9-3-25, depending on whether the duty allegedly breached arose directly from a written contract, applying the framework set out in Newell Recycling. The Court clarified that the six-year period applies when the breach concerns a duty growing directly out of an enforceable written contract for legal services, including duties implied by law, while the four-year period applies when no written contract exists, the writing is unenforceable, or the breach relates only remotely to the written agreement. The Court disapproved broad readings of Armstrong v. Cuffie and Coe v. Proskauer Rose as suggesting that all breach-of-contract-for-legal-services claims are governed by the four-year period. The judgments were vacated and remanded.",
+      "why": "The decision establishes that the Newell Recycling framework, not a single fixed limitation period, determines whether the six-year or four-year statute of limitation governs a breach-of-contract-for-legal-services claim.",
+      "dockets": [
+        "S23G1124"
+      ]
+    },
+    {
+      "cluster_id": 10105570,
+      "name": "Steines v. Westgate Palace, L.L.C.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-09-05",
+      "disposition": "appeal dismissed for lack of jurisdiction",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10105570/adam-u-steines-v-westgate-palace-llc/",
+      "synopsis": "Servicemember borrowers brought a class action alleging that a timeshare lender violated the Military Lending Act, and the lender moved to compel arbitration under a delegation clause and the FAA. The Eleventh Circuit held that the antecedent question of whether another act of Congress overrides the FAA always belongs to the court and cannot be delegated to an arbitrator, even by a delegation clause, because the FAA's severability principle applies only if the contract falls within the FAA's scope. The court further held that the MLA, through 10 U.S.C. section 987(e)(3) and (f)(4), unambiguously displaces the FAA and renders any agreement to arbitrate, including a delegation clause, unenforceable against covered servicemembers.",
+      "why": "It establishes that a challenge to the applicability of the FAA itself, premised on a conflicting federal statute, is a gateway question reserved for the court regardless of a delegation clause, clarifying the limits of delegation agreements in FAA arbitration practice.",
+      "dockets": [
+        "22-14211"
+      ]
+    },
+    {
+      "cluster_id": 10680270,
+      "name": "Vest Monroe, LLC v. Doe",
+      "court": "Supreme Court of Georgia",
+      "date": "2024-09-04",
+      "disposition": "reversed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680270/vest-monroe-llc-v-doe/",
+      "synopsis": "A named plaintiff sought to certify a class of patients whose protected health information was disclosed by a former facility employee, and the trial court denied certification for lack of commonality and typicality. The Supreme Court of Georgia held that the trial court did not abuse its discretion in finding a lack of typicality under OCGA section 9-11-23 (a) (3), because the plaintiff's information consisted only of discharge summaries and census reports while other class members had clinical and diagnostic information disclosed, making the plaintiff's injury qualitatively different and subject to different theories of liability, proof, and defenses. The Court clarified that under the rigorous-analysis standard and abuse-of-discretion review, a factual variation defeats typicality when the representative's factual position markedly differs from that of other class members, even where all claims arise from the same general event. Because failure on typicality alone defeats certification, the Court did not reach commonality.",
+      "why": "It clarifies that a class representative's claims can fail the typicality requirement when the representative's injury is qualitatively different from other class members' even though all arise from the same event, and reaffirms the deferential abuse-of-discretion scope of appellate review of class-certification rulings.",
+      "dockets": [
+        "S23G1224"
+      ]
+    },
+    {
+      "cluster_id": 10104639,
+      "name": "Hensley v. Westin Hotel",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-09-04",
+      "disposition": "vacated and remanded with instructions to remand to state court",
+      "areas": [
+        "procedure",
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10104639/candace-hensley-v-westin-hotel/",
+      "synopsis": "A worker injured in a trip and fall at a hotel sued in Georgia state court, and the defendants removed based on diversity jurisdiction. A workers' compensation insurer, Hartford, intervened to protect its subrogation lien under O.C.G.A. section 34-9-11.1 and filed an intervenor complaint against a defendant that shared its Connecticut citizenship. The Eleventh Circuit held that Hartford had a right to intervene under Rule 24(a)(2) because Georgia law requires such insurers to intervene to protect their subrogation rights, and that Hartford was an indispensable party under Rule 19(b) because a judgment in its absence would impair its lien and no remedy could mitigate that prejudice. Because Hartford's intervention destroyed complete diversity and section 1367(b) barred supplemental jurisdiction over its claims, the district court lost subject matter jurisdiction once intervention was granted.",
+      "why": "The decision establishes that a workers' compensation subrogation insurer intervening under O.C.G.A. section 34-9-11.1 is both an intervenor of right and an indispensable party whose nondiverse citizenship destroys diversity jurisdiction, requiring vacatur and remand to state court rather than dismissal of the intervenor.",
+      "dockets": [
+        "22-11458"
+      ]
+    },
+    {
+      "cluster_id": 10096863,
+      "name": "ECB USA, Inc. v. Chubb Insurance Company of New Jersey",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-08-29",
+      "disposition": "affirmed",
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10096863/ecb-usa-inc-v-chubb-insurance-company-of-new-jersey/",
+      "synopsis": "An accounting firm's professional liability policy covered liability arising from management consulting services, defined as services directed toward expertise in banking finance, accounting, risk and systems analysis, design and implementation, asset recovery and strategy planning for financial institutions. The insured performed an allegedly negligent audit for a food company, and the assignees of the insured's rights sued the insurer for coverage. Applying New Jersey law and the series-qualifier canon, the court held that the postpositive phrase 'for financial institutions' modifies every parallel item in the list, including 'accounting,' so an audit performed for a non-financial-institution client was not covered. The court rejected the assignees' reliance on the last-antecedent and nearest-reasonable-referent canons, reasoning those canons do not apply to a parallel series of nouns.",
+      "why": "The decision applies the series-qualifier canon to construe a scope-of-coverage definition, holding that an end-of-list qualifier modifies every parallel item in the list rather than only the last, which guides interpretation of similarly structured coverage grants.",
+      "dockets": [
+        "22-10811"
+      ]
+    },
+    {
+      "cluster_id": 10032563,
+      "name": "Biscayne Beach Club Condominium Association, Inc. v. Westchester Surplus Lines Insurance Company",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-08-06",
+      "disposition": "affirmed",
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10032563/biscayne-beach-club-condominium-association-inc-v-westchester-surplus/",
+      "synopsis": "An insurer removed a property-insurance coverage dispute, and the parties proceeded to a binding appraisal of the loss under the policy's appraisal clause. On the day the panel met for final negotiations, the insured's appraiser disclosed what he believed was a contingency-fee arrangement, but the insurer did not object and waited until about a month after the roughly $14 million award issued to move to reopen and vacate on partiality grounds. The Eleventh Circuit held that the insurer waived its partiality objection by failing to object at the time it learned of the conflict, applying the arbitration waiver rule that a party who knows of an adjudicator's bias must object before the award issues rather than sit idle to see whether the result is favorable. The court treated insurance appraisal proceedings the same as arbitration for this purpose, reasoning that both involve third-party adjudication of disputes between contracting parties.",
+      "why": "The decision establishes that the arbitration waiver doctrine requiring timely objection to an adjudicator's partiality applies equally to insurance appraisal proceedings, so a party that learns of an appraiser's conflict must object during the appraisal or lose the right to challenge it after the award.",
+      "dockets": [
+        "23-10467"
+      ]
+    },
+    {
+      "cluster_id": 10000982,
+      "name": "Johnson v. City of Atlanta",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-07-12",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10000982/charles-johnson-jr-v-city-of-atlanta/",
+      "synopsis": "Plaintiff sued an officer and the city under 42 U.S.C. section 1983 and Georgia law over injuries sustained during a DUI arrest, and the district court dismissed after considering body camera and dashcam footage not referenced in the complaint. Applying the prior-panel-precedent rule to reconcile conflicting circuit authority, the Eleventh Circuit held that under the incorporation-by-reference doctrine a court may consider a document not attached to or referred to in the complaint when ruling on a Rule 12(b)(6) or 12(c) motion, so long as the document is central to the plaintiff's claims and its authenticity is undisputed. The court found both requirements satisfied by the footage and considered it.",
+      "why": "The decision settles a split in Eleventh Circuit precedent by holding that the incorporation-by-reference doctrine has only two requirements, central to the claims and undisputed authenticity, and does not require that the complaint mention the document, a rule that governs what materials may be considered on a motion to dismiss or for judgment on the pleadings.",
+      "dockets": [
+        "22-11359"
+      ]
+    },
+    {
+      "cluster_id": 10680301,
+      "name": "Golden v. Floyd Healthcare Management, Inc.",
+      "court": "Supreme Court of Georgia",
+      "date": "2024-07-02",
+      "disposition": "reversed",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680301/golden-v-floyd-healthcare-management-inc/",
+      "synopsis": "Plaintiff filed a renewal medical malpractice action that defendant argued was barred by the five-year statute of repose in OCGA § 9-3-71 (b). The Supreme Court of Georgia held that OCGA § 38-3-62 (a) of the Judicial Emergency Act empowers an authorized judicial official to suspend, toll, extend, or otherwise grant relief from a statute of repose, because a repose period is a 'deadline' within the statute's non-exhaustive list. The Court further held that the March 14, 2020 COVID-19 emergency order and subsequent orders did toll OCGA § 9-3-71 (b), so plaintiff's claims were not time-barred. In reaching the first holding, the Court disapproved Simmons v. Sonyika and any other Georgia case to the extent they establish an absolute rule that a statute of repose can never be tolled under any circumstances.",
+      "why": "This decision clarifies that Georgia statutes of repose are not categorically immune from tolling and that the Judicial Emergency Act's COVID-19 orders tolled the medical malpractice repose period, affecting the timeliness of claims filed during and after the pandemic.",
+      "dockets": [
+        "S24G0008"
+      ]
+    },
+    {
+      "cluster_id": 9391147,
+      "name": "Aspen American Insurance Company v. Landstar Ranger, Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2023-04-13",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/9391147/aspen-american-insurance-company-v-landstar-ranger-inc/",
+      "synopsis": "After a thief posing as a registered carrier stole a shipment, the cargo owner's insurer sued the transportation broker for negligent selection of the carrier, and the district court dismissed the claims as preempted by the FAAAA. The Eleventh Circuit affirmed, holding that the FAAAA's express preemption provision bars state-law negligence claims against a broker based on carrier selection because such claims relate to a broker's service with respect to the transportation of property. The court further held that the FAAAA's safety exception does not save the claims because a broker's carrier-selection services have only an indirect, not a direct, connection to motor vehicles, so the claims are not 'with respect to motor vehicles.'",
+      "why": "This decision establishes binding Eleventh Circuit authority that the FAAAA preempts state-law negligent-carrier-selection claims against freight brokers and that the safety exception does not apply to such broker claims, defining the scope of broker liability in trucking cases in the circuit.",
+      "dockets": [
+        "22-10740"
+      ],
+      "treatment": "negative",
+      "treatment_note": "Possibly abrogated by a later in-scope decision (Montgomery v. Caribe Transport II, LLC; Willy Hodge v. Molson Coors Beverage Company USA, LLC). Confirm on Shepard's.",
+      "treatment_date": "2026-06-12"
+    },
+    {
+      "cluster_id": 10367651,
+      "name": "Adventure Motorsports Reinsurance, Ltd. v. Interstate National Dealer Services, Inc.",
+      "court": "Supreme Court of Georgia",
+      "date": "2021-12-14",
+      "disposition": "reversed and remanded in part, vacated and remanded in part",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10367651/adventure-motorsports-reinsurance-ltd-v-interstate-national-dealer/",
+      "synopsis": "The Supreme Court of Georgia held that vacatur of an arbitration award for manifest disregard of the law under OCGA section 9-9-13 (b) (5) requires concrete evidence that the arbitrator was conscious of the correct law and intentionally and knowingly chose to ignore it, and that a mere erroneous interpretation or misapplication of law to the facts does not suffice. Applying this standard, the court concluded that the arbitrator interpreted the parties' contracts and fashioned an equitable remedy that drew its essence from the agreements, and that nothing in the record showed a deliberate decision to disregard applicable law. The court reversed the Court of Appeals' decision vacating the confirmation of the award and remanded for consideration of the unresolved argument under OCGA section 9-9-13 (b) (3) that the arbitrator overstepped his authority, and it vacated and remanded the related appeal concerning a delayed-payment penalty as potentially no longer moot.",
+      "why": "The decision clarifies the demanding evidentiary threshold for vacating arbitration awards on manifest-disregard grounds under Georgia's Arbitration Code, an issue that recurs in disputes governed by arbitration clauses.",
+      "dockets": [
+        "S21G0008",
+        "S21G0015"
+      ]
+    },
+    {
+      "cluster_id": 10367320,
+      "name": "Quynn v. Hulsey",
+      "court": "Supreme Court of Georgia",
+      "date": "2020-11-02",
+      "disposition": "reversed",
+      "areas": [
+        "auto",
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10367320/quynn-v-hulsey/",
+      "synopsis": "In a wrongful death action arising from a truck striking and killing a pedestrian, the trial court granted partial summary judgment to the employer on the estate's claims for negligent entrustment, hiring, training, and supervision because the employer had admitted respondeat superior liability and no punitive damages claim survived. The Supreme Court of Georgia held that the apportionment statute, OCGA section 51-12-33, abrogated the decisional law 'Respondeat Superior Rule,' which had entitled an employer that conceded vicarious liability to summary judgment on direct-negligence claims absent a valid punitive damages claim. The Court reasoned that direct-negligence claims allege the employer's own fault, which the jury must consider under the statute, and that such fault is divisible from the employee's fault. The Court reversed and overruled contrary Court of Appeals decisions.",
+      "why": "The decision establishes that an employer's admission of respondeat superior no longer bars a plaintiff's negligent entrustment, hiring, training, supervision, and retention claims, so those direct-negligence claims may proceed to the jury alongside vicarious liability under OCGA section 51-12-33.",
+      "dockets": [
+        "S19G1612"
+      ]
+    },
+    {
+      "cluster_id": 4549173,
+      "name": "The Coastal Bank v. Rawlins",
+      "court": "Court of Appeals of Georgia",
+      "date": "2018-10-29",
+      "disposition": "vacated and remanded with direction",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4549173/the-coastal-bank-v-larry-rawlins-jr/",
+      "synopsis": "After prevailing on appeal and obtaining a judgment of no liability, defendant moved for attorney fees under Georgia's offer of settlement statute, OCGA Section 9-11-68, based on a rejected $3,000 offer. The trial court denied fees, finding the offer was not made in good faith, but relied exclusively on objective factors such as the offer's relationship to alleged damages. The Court of Appeals held that under the test adopted in Richardson v. Locklyn, a court cannot base a good-faith ruling solely on objective factors but must weigh those factors against the offeror's subjective belief in the strength of its defense, here the no-standing argument. The court vacated and remanded for application of the Richardson test.",
+      "why": "The decision clarifies that a good-faith determination under OCGA Section 9-11-68 requires weighing objective factors against the offeror's subjectively reasonable belief, and that exclusive reliance on objective factors is an abuse of discretion.",
+      "dockets": [
+        "A18A1010"
+      ]
+    },
+    {
+      "cluster_id": 4503667,
+      "name": "Stephens v. Castano-Castano",
+      "court": "Court of Appeals of Georgia",
+      "date": "2018-05-29",
+      "disposition": "affirmed in part, reversed in part",
+      "areas": [
+        "auto",
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4503667/stephens-v-castano-castano/",
+      "synopsis": "In an auto collision case, the trial court excluded evidence that the plaintiff's treating physician held a lien on the lawsuit proceeds and barred questioning about an attorney-to-physician referral. The Court of Appeals held that evidence of the physician's lien-based financial interest in the verdict was admissible to show potential bias and affect credibility, and that the collateral source rule did not bar it because the plaintiff still owed the full cost of treatment and no benefit or write-off reduced the obligation. The court affirmed exclusion of the attorney-referral evidence, holding that the referral standing alone was insufficient to show bias and presented a danger of unfair prejudice, and it affirmed denial of the defendant's motion to enforce a purported settlement because the relied-upon email omitted the essential settlement amount. The court noted that any such financial-interest evidence remains subject to a Rule 403 analysis. The opinion is physical precedent only.",
+      "why": "The decision clarifies that a treating physician's lien on lawsuit proceeds is admissible to show financial interest and bias and is not barred by the collateral source rule, while a bare attorney-to-physician referral, standing alone, is not.",
+      "dockets": [
+        "A18A0100"
+      ]
+    },
+    {
+      "cluster_id": 10366850,
+      "name": "Cooper Tire & Rubber Company v. Koch",
+      "court": "Supreme Court of Georgia",
+      "date": "2018-03-15",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10366850/cooper-tire-rubber-company-v-koch/",
+      "synopsis": "In a product liability action arising from a fatal single-vehicle crash following a tire tread separation, the defendant tire manufacturer sought dismissal or other sanctions for spoliation after the plaintiff allowed the vehicle and remaining tires to be crushed for scrap. The Supreme Court of Georgia held that the common-law duty to preserve relevant evidence is defined the same for plaintiffs and defendants, arising when a party actually anticipates or reasonably should anticipate litigation, though the practical timing of the duty may differ because plaintiffs generally control whether and when litigation is pursued. The court confirmed that the Phillips factors are a non-exclusive list, that the most severe sanctions are reserved for evidence lost intentionally in bad faith with uncurable prejudice, and that loss through mere negligence normally warrants lesser sanctions or none. Applying a summary judgment standard, the court affirmed the finding that the plaintiff had no duty to preserve at the time the evidence was destroyed.",
+      "why": "The decision clarifies that the duty to preserve evidence and the reasonable-foreseeability test apply equally to plaintiffs and defendants, sets out how the Phillips factors and sophistication of the party bear on when that duty is triggered, and confirms that severe spoliation sanctions require intentional bad faith while negligent loss warrants lesser or no sanctions.",
+      "dockets": [
+        "S17G0654"
+      ]
+    },
+    {
+      "cluster_id": 4406052,
+      "name": "Hospital Authority of Valdosta/Lowndes County v. Fender",
+      "court": "Court of Appeals of Georgia",
+      "date": "2017-06-23",
+      "disposition": "affirmed in part, reversed in part, and remanded in a17a0002; affirmed in a17a0003",
+      "areas": [
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4406052/hospital-authority-of-valdostalowndes-county-dba-south-georgia-medical/",
+      "synopsis": "In a medical malpractice action, the Court of Appeals held that a fact question existed on whether the new injury exception to the two-year statute of limitation in OCGA section 9-3-71(a) applied, where the patient remained asymptomatic for a period after an alleged misdiagnosis of carotid stenosis and later suffered a massive stroke, so the limitation period could begin on the date of the stroke. The court also held that the Respondeat Superior Rule, which entitles an employer to summary judgment on negligent hiring, training, supervision, and retention claims when it admits vicarious liability and no punitive damages are sought, was not superseded by the apportionment statute, OCGA section 51-12-33(b), reasoning that the statute does not apply to claims based on respondeat superior or to derivative claims that are merely duplicative of it. The court further affirmed denial of a motion under OCGA section 24-7-702(b) to exclude a medical expert's causation opinion. The court reversed summary judgment as to the negligent hiring claims and otherwise affirmed.",
+      "why": "The decision clarifies that Georgia's apportionment statute does not displace the Respondeat Superior Rule barring direct negligence claims against an employer that admits vicarious liability and faces no punitive damages claim, and it applies the new injury exception to the medical malpractice limitation period where a misdiagnosed patient remains asymptomatic before a later distinct injury.",
+      "dockets": [
+        "A17A0002",
+        "A17A0003"
+      ]
+    },
+    {
+      "cluster_id": 4372487,
+      "name": "Harris v. Mahone",
+      "court": "Court of Appeals of Georgia",
+      "date": "2017-03-01",
+      "disposition": "affirmed in part, reversed in part, and remanded with direction",
+      "areas": [
+        "procedure",
+        "auto",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4372487/harris-v-mahone/",
+      "synopsis": "In an auto negligence case, plaintiff sought attorney fees under OCGA Section 9-11-68 after recovering a verdict exceeding 125 percent of his pretrial counteroffer. The court held that a counteroffer made within 20 days of trial under subsection (a) must still remain open 30 days under subsection (c), and that fees under subsection (b)(2) run only from the date the offer is deemed rejected through entry of judgment. Because the counteroffer was deemed rejected three days after the trial concluded and plaintiff showed no fees incurred in the window between that date and judgment, no fees were recoverable; a counteroffer can avoid this result only by being withdrawn in writing before its expiration. The court separately reversed the denial of fees under OCGA Section 9-15-14, holding that counsel's statement in his place as to hours and reasonableness on a specific issue was sufficient proof.",
+      "why": "The decision clarifies the interplay of OCGA Section 9-11-68 subsections (a), (b)(2), and (c), holding that a near-trial counteroffer must remain open 30 days and that recoverable fees run only from the deemed-rejection date to judgment, and confirms that counsel's in-place statement of hours and reasonableness suffices to support a Section 9-15-14 fee motion.",
+      "dockets": [
+        "A16A1748"
+      ]
+    },
+    {
+      "cluster_id": 4323507,
+      "name": "Richardson v. Locklyn",
+      "court": "Court of Appeals of Georgia",
+      "date": "2016-11-15",
+      "disposition": "vacated and remanded with direction",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4323507/richardson-v-locklyn/",
+      "synopsis": "In an auto-collision case where the jury verdict came in below 75 percent of the defendant's rejected settlement offer, the trial court denied the defendant's motion for attorney fees under OCGA section 9-11-68 by finding the offer was not made in good faith based on the offer's relationship to claimed medical expenses and the defendant's stipulation to liability. The Court of Appeals held for the first time that an evidentiary hearing is required before a trial court may rule on a fee request under OCGA section 9-11-68, that a timely objection asserting bad faith triggers the hearing requirement, and that the burden rests on the offeree to prove the absence of good faith. Adopting Florida's framework, the court held that good faith cannot be assessed on objective factors alone but must consider the offeror's subjective reasonable belief, and it vacated the judgment and remanded for a hearing.",
+      "why": "This decision establishes that an offeror's good faith under Georgia's offer-of-settlement statute is measured by the offeror's subjective reasonable belief rather than objective factors alone, places the burden on the offeree to show absence of good faith, and requires an evidentiary hearing triggered by a timely bad-faith objection.",
+      "dockets": [
+        "A16A0978"
+      ]
+    },
+    {
+      "cluster_id": 3209755,
+      "name": "Toyo Tire North America Manufacturing, Inc. v. Davis",
+      "court": "Supreme Court of Georgia",
+      "date": "2016-06-06",
+      "disposition": "affirmed",
+      "areas": [
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/3209755/toyo-tire-north-america-manufacturing-inc-v-davis/",
+      "synopsis": "In a continuing nuisance and trespass action by homeowners against a nearby manufacturing facility, the Supreme Court of Georgia held that a plaintiff who both occupies and owns the affected property may recover separately for past discomfort and annoyance and for the diminution in the property's market value, treating these as two distinct injuries rather than a double recovery, and it expressly overruled Stanfield v. Waste Management of Georgia. The Court also held that alleged deficiencies in an expert appraiser's methodology go to the admissibility of his testimony under OCGA sections 24-7-702 and 24-7-703, an issue committed to the trial court's gatekeeping discretion in the first instance, and not to whether his opinion suffices to defeat summary judgment on causation. Because the defendant had not moved to exclude the expert testimony in the trial court, the appellate courts could consider that testimony in assessing whether causation survived summary judgment. The Court affirmed the denial of summary judgment.",
+      "why": "The decision clarifies that past discomfort and annoyance damages and diminution in property value are separately recoverable in continuing nuisance cases and establishes that unchallenged expert testimony with methodological weaknesses may still be considered on summary judgment unless a Daubert exclusion motion is made to the trial court.",
+      "dockets": [
+        "S15G1804"
+      ]
+    },
+    {
+      "cluster_id": 2812616,
+      "name": "Phillips v. Harmon",
+      "court": "Supreme Court of Georgia",
+      "date": "2015-06-29",
+      "disposition": "affirmed in part, reversed in part, and remanded",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/2812616/phillips-v-harmon/",
+      "synopsis": "In a medical malpractice action, the Supreme Court of Georgia clarified that a defendant's duty to preserve evidence is triggered not only by actual or express notice of a claim from the plaintiff but whenever litigation is reasonably foreseeable to the party in control of the evidence, and that constructive notice may be shown by circumstances including the type and extent of injury, the clarity of fault, potential financial exposure, the frequency of litigation in similar circumstances, and the defendant's own conduct such as internal investigations and notification of counsel and insurers. The Court reversed the spoliation portion of the Court of Appeals judgment because the lower courts rested on the legally incorrect premise that actual notice from the plaintiff was required, and disapproved several Court of Appeals decisions to the extent they endorsed that analysis. The Court separately affirmed that the trial judge's ex parte communication with the deadlocked jury, conducted outside the presence of the parties and counsel and never disclosed before the verdict, violated the civil parties' right to be present and, under the unique circumstances including the inability to reconstruct the note, constituted harmful error requiring a new trial.",
+      "why": "The decision reframes the trigger for a defendant's evidence-preservation duty around a reasonable-foreseeability standard with enumerated factors, disapproving prior precedent that required actual notice, and confirms that substantive ex parte judge-jury communications in civil trials can require a new trial.",
+      "dockets": [
+        "S14G1868",
+        "S14G1893",
+        "S14G1895"
+      ]
+    }
+  ]
+}

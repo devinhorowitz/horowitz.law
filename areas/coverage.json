@@ -1,0 +1,245 @@
+{
+  "area": "coverage",
+  "label": "coverage",
+  "count": 13,
+  "opinions": [
+    {
+      "cluster_id": 10873765,
+      "name": "Allied Property & Casualty Insurance Company v. Bloodworth Wholesale Drugs Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2026-06-11",
+      "disposition": "question certified",
+      "areas": [
+        "coverage"
+      ],
+      "precedential": "unpublished",
+      "url": "https://www.courtlistener.com/opinion/10873765/allied-property-casualty-insurance-company-v-bloodworth-wholesale-drugs/",
+      "synopsis": "Two pharmacies sued for their alleged role in the opioid epidemic sought defense and indemnity under liability and druggist liability policies covering damages 'because of bodily injury.' The insurers contended that the underlying government and healthcare suits seek economic losses not tied to identifiable injured persons and are therefore not covered, and the district courts granted summary judgment for the insurers. The Eleventh Circuit found no clear controlling Georgia or Florida precedent on whether such opioid lawsuits seek damages 'because of bodily injury,' distinguishing Georgia decisions like Cesnik, Lunceford, Presidential Hotel, and O'Dell as not dispositive. It certified to the Supreme Court of Georgia and the Supreme Court of Florida the question whether the policies require the insurers to defend and indemnify the insureds in the underlying opioid litigation.",
+      "why": "The certification flags an unresolved, high-value coverage question of whether CGL and druggist liability policies covering 'damages because of bodily injury' reach opioid-epidemic suits seeking economic losses, leaving Georgia coverage law on the point to be settled by the Supreme Court of Georgia.",
+      "dockets": [
+        "24-11398",
+        "25-11185"
+      ]
+    },
+    {
+      "cluster_id": 10862301,
+      "name": "State Farm Mut. Auto. Ins. Co. & GEICO Indemnity Co. v. Barnor-Cooper",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-05-20",
+      "disposition": "reversed",
+      "areas": [
+        "coverage",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10862301/state-farm-mutual-automobile-insurance-company-v-charity-barnor-cooper/",
+      "synopsis": "The Court of Appeals reversed the denial of summary judgment to State Farm and GEICO in a UM claim arising from a hit-and-run collision, holding the plaintiff was not entitled to UM benefits under either policy. Injured while making a delivery in a Turo-rented Buick, she was not an insured under the State Farm policy: the Buick was not a \"temporary substitute car\" because the scheduled vehicle it would have replaced had been sold, and the named-insured LLC is a separate legal entity from its members and managers.",
+      "why": "Reads the 'temporary substitute car' and named-insured provisions strictly: a borrowed vehicle is not a temporary substitute once the scheduled car it would replace has been sold, and an LLC policyholder is a separate legal entity from its members and managers, which narrows who qualifies as an insured for UM purposes.",
+      "dockets": [
+        "A26A0526",
+        "A26A0550"
+      ]
+    },
+    {
+      "cluster_id": 10809283,
+      "name": "Cannon v. Safeco Insurance Co. of Illinois",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-03-16",
+      "disposition": "reversed",
+      "areas": [
+        "coverage",
+        "badfaith",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10809283/trever-cannon-v-safeco-insurance-company-of-illinois/",
+      "synopsis": "The Court of Appeals reversed the dismissal of a failure-to-settle action against a liability insurer. After a $1.65 million excess judgment was entered against its insured following a fatal collision, the insured alleged that Safeco had interpleaded and tendered its $100,000 limits into the court registry without obtaining any release of the claims against him. Because an insurer must give equal consideration to the insured's interests and may be liable for an excess judgment for a negligent or bad-faith failure to settle, the complaint stated a claim.",
+      "why": "Tendering policy limits by interpleader, without obtaining a release for the insured, does not by itself discharge the insurer or bar a later failure-to-settle or bad-faith claim.",
+      "dockets": [
+        "A25A1847"
+      ]
+    },
+    {
+      "cluster_id": 10809157,
+      "name": "Sullivan v. Trustgard Insurance Co.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-03-16",
+      "disposition": "reversed",
+      "areas": [
+        "coverage",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10809157/stephen-michael-sullivan-v-trustgard-insurance-company/",
+      "synopsis": "The Court of Appeals reversed partial summary judgment that had set uninsured-motorist limits at $100,000 on a commercial auto policy. The insurer's application directed that its uninsured-motorist selection section was not to be used in Georgia and required a state-specific supplement, and neither that section nor the mandatory offer form was signed or initialed. Because the insurer never obtained a valid written election of reduced limits, the court held the coverage defaulted to the $1 million liability limit.",
+      "why": "Without a compliant, signed election of reduced uninsured-motorist limits, the coverage defaults to the bodily-injury liability limit under O.C.G.A. § 33-7-11.",
+      "dockets": [
+        "A25A1720"
+      ]
+    },
+    {
+      "cluster_id": 10713919,
+      "name": "Williams v. Reddick",
+      "court": "Court of Appeals of Georgia",
+      "date": "2025-10-29",
+      "disposition": "reversed",
+      "areas": [
+        "auto",
+        "coverage"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10713919/michael-williams-v-robert-reddick/",
+      "synopsis": "The Court of Appeals reversed summary judgment for a defendant driver in a tractor-trailer collision case. The plaintiff had signed a limited liability release under O.C.G.A. § 33-24-41.1 that preserved claims to the extent other insurance was available, and a fact question remained on whether the employer's policy provided uninsured-motorist coverage, because an undated coverage summary did not establish a valid written rejection under O.C.G.A. § 33-7-11(a)(3).",
+      "why": "A limited liability release under O.C.G.A. § 33-24-41.1 does not end the case where other coverage may exist, and a written uninsured-motorist rejection under O.C.G.A. § 33-7-11(a)(3) must actually appear in the record to be effective.",
+      "dockets": [
+        "A25A1226"
+      ]
+    },
+    {
+      "cluster_id": 10669247,
+      "name": "Ferriero v. Progressive Premier Insurance Co.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2025-09-10",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "procedure",
+        "coverage",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10669247/beverly-ferriero-v-progressive-premier-insurance-company-of-illinois/",
+      "synopsis": "The Court of Appeals vacated the dismissal of a collision suit for failure to serve the defendant. The plaintiff had served Progressive as her uninsured-motorist carrier and pointed to a process server's affidavit and email showing copies left with the defendant's mother, and the trial court abused its discretion in finding no evidence of substitute service under O.C.G.A. § 9-11-4(e)(7) when that evidence was in the record.",
+      "why": "Substitute-service proof under O.C.G.A. § 9-11-4(e)(7) that is in the record must be addressed before dismissing for lack of service, and once the limitation period has run the case turns on the plaintiff's diligence in perfecting service.",
+      "dockets": [
+        "A25A0999"
+      ]
+    },
+    {
+      "cluster_id": 10614235,
+      "name": "Patterson v. United Services Automobile Association",
+      "court": "Court of Appeals of Georgia",
+      "date": "2025-06-20",
+      "disposition": "affirmed",
+      "areas": [
+        "coverage",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10614235/dennis-malcolm-patterson-v-united-services-automobile-association/",
+      "synopsis": "The Court of Appeals affirmed the denial of uninsured-motorist coverage to an insured who was struck as a pedestrian and sought UM benefits from USAA. The policy required prompt notice as a condition precedent, and a twenty-one-month delay in notifying the insurer failed that requirement as a matter of law, with the insured's unawareness that UM coverage might apply not excusing the delay.",
+      "why": "A prompt-notice condition precedent in a first-party uninsured-motorist policy can be enforced as a matter of law, and a long, unexplained reporting delay, here twenty-one months, can forfeit coverage even if the insured did not realize UM might apply.",
+      "dockets": [
+        "A25A0259"
+      ]
+    },
+    {
+      "cluster_id": 10458281,
+      "name": "Prime Property and Casualty Insurance Company v. Kepali Group, Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2025-05-02",
+      "disposition": "affirmed",
+      "areas": [
+        "coverage",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10458281/prime-property-and-casualty-insurance-company-v-kepali-group-inc/",
+      "synopsis": "Applying Florida law in a diversity action, the Eleventh Circuit held that a commercial automobile policy's after-acquired auto provision provided continuing coverage for a newly acquired vehicle once the insured gave the required notice within 30 days, because that provision listed only two conditions for coverage and did not make payment of an additional premium a condition precedent. The court rejected the insurer's argument that coverage expired at the end of the 30-day notice period for nonpayment, reasoning that nothing in the provision so stated and that the policy's integration clause barred reliance on extrinsic terms. The court further held that the policy's premium audit and cancellation provisions, not a common-law reasonable-time default, governed when any additional premium was due and how coverage could be terminated for nonpayment, and that the insurer's failure to perform a premium audit or follow the cancellation procedures left coverage in force. The court affirmed the district court's ruling that the insurer had a duty to defend.",
+      "why": "It clarifies that under Florida law a commercial fleet policy's after-acquired auto provision triggers continuing coverage upon timely notice without requiring premium payment as a condition precedent, and that the policy's own premium audit and cancellation mechanisms control the timing and consequences of nonpayment.",
+      "dockets": [
+        "23-12518"
+      ]
+    },
+    {
+      "cluster_id": 10350664,
+      "name": "Liberty Surplus Insurance Corporation v. Kaufman Lynn Construction, Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2025-03-05",
+      "disposition": "affirmed in part, reversed in part, and remanded",
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10350664/liberty-surplus-insurance-corporation-v-kaufman-lynn-construction-inc/",
+      "synopsis": "Applying Florida law, the Eleventh Circuit construed a Course of Construction Exclusion in a commercial general liability policy, which barred coverage for property damage to any insured project during the course of construction until the project is completed. The court held that the undefined phrase until the project is completed unambiguously means the entire multi-phase project must be finished, not merely the portion that sustained damage, so water damage to completed buildings was excluded while other buildings remained under construction and old buildings remained to be demolished. The court declined to import the policy's products-completed operations hazard definition of completed work into the exclusion, reasoning that your work and project are not synonymous. The coverage ruling was affirmed.",
+      "why": "It establishes how courts applying Florida law read a Course of Construction Exclusion in a CGL policy, holding that completion of the project means the entire project rather than the damaged component.",
+      "dockets": [
+        "23-12715",
+        "23-12835"
+      ]
+    },
+    {
+      "cluster_id": 10163320,
+      "name": "VFS Leasing Co. v. Markel Insurance Company",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-10-30",
+      "disposition": "reversed and remanded",
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10163320/vfs-leasing-co-v-markel-insurance-company/",
+      "synopsis": "An insurer issued five joint checks to a lessee insured and a lessor loss payee as nonalternative co-payees, but the drawee bank cashed them solely for the lessee without the loss payee's endorsement, and the loss payee sued the insurer for breach of contract. Deciding a question of first impression under Florida law, the Eleventh Circuit held that under Florida Statute section 673.4141(3) a drawer's payment obligation is discharged once a jointly issued draft is accepted by a drawee bank, regardless of when or by whom acceptance was obtained, even though under section 673.1101(4) a single co-payee acting alone is not a holder. The court reasoned that the loss payee's remedy lies in a conversion claim against the bank under the UCC, not a breach-of-contract action against the insurer, and that the underlying obligation on the checks is suspended rather than discharged as to the bank. The court reversed the grant of summary judgment to the loss payee.",
+      "why": "It establishes, in a federal forum applying Florida's UCC, that a drawer-insurer's obligation to a loss payee co-payee is discharged upon a bank's acceptance of a joint check, directing the loss payee's recourse to a conversion claim against the bank rather than the insurer.",
+      "dockets": [
+        "22-13338"
+      ]
+    },
+    {
+      "cluster_id": 10160436,
+      "name": "Gemini Insurance Company v. Zurich American Insurance Company",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-10-23",
+      "disposition": "affirmed in part, reversed in part, and remanded",
+      "areas": [
+        "coverage",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10160436/gemini-insurance-company-v-zurich-american-insurance-company/",
+      "synopsis": "Two insurers covering the same trucking-fatality settlement disputed how to allocate a $2 million share under their respective 'other insurance' clauses. Applying Florida law, the Eleventh Circuit held that one insurer's clause stating that its coverage is 'excess over and shall not contribute with' other insurance is a pure excess clause that prevails over the other insurer's clause stating it 'will pay only our share' in proportion to limits, which is a pro rata clause. Relying on Florida intermediate-court decisions, the court rejected the argument that two clauses both labeled excess are mutually repugnant and must share pro rata, focusing instead on the operative 'shall not contribute' and 'we will pay the proportion' language. The court reversed and directed entry of judgment requiring the pro rata insurer to pay the full $1 million share.",
+      "why": "It clarifies how Florida law ranks competing 'other insurance' clauses, holding that a non-contribution excess clause defeats a proportional-share clause regardless of the 'excess' label, which governs priority-of-coverage disputes between insurers.",
+      "dockets": [
+        "22-13495"
+      ]
+    },
+    {
+      "cluster_id": 10096863,
+      "name": "ECB USA, Inc. v. Chubb Insurance Company of New Jersey",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-08-29",
+      "disposition": "affirmed",
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10096863/ecb-usa-inc-v-chubb-insurance-company-of-new-jersey/",
+      "synopsis": "An accounting firm's professional liability policy covered liability arising from management consulting services, defined as services directed toward expertise in banking finance, accounting, risk and systems analysis, design and implementation, asset recovery and strategy planning for financial institutions. The insured performed an allegedly negligent audit for a food company, and the assignees of the insured's rights sued the insurer for coverage. Applying New Jersey law and the series-qualifier canon, the court held that the postpositive phrase 'for financial institutions' modifies every parallel item in the list, including 'accounting,' so an audit performed for a non-financial-institution client was not covered. The court rejected the assignees' reliance on the last-antecedent and nearest-reasonable-referent canons, reasoning those canons do not apply to a parallel series of nouns.",
+      "why": "The decision applies the series-qualifier canon to construe a scope-of-coverage definition, holding that an end-of-list qualifier modifies every parallel item in the list rather than only the last, which guides interpretation of similarly structured coverage grants.",
+      "dockets": [
+        "22-10811"
+      ]
+    },
+    {
+      "cluster_id": 10032563,
+      "name": "Biscayne Beach Club Condominium Association, Inc. v. Westchester Surplus Lines Insurance Company",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-08-06",
+      "disposition": "affirmed",
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10032563/biscayne-beach-club-condominium-association-inc-v-westchester-surplus/",
+      "synopsis": "An insurer removed a property-insurance coverage dispute, and the parties proceeded to a binding appraisal of the loss under the policy's appraisal clause. On the day the panel met for final negotiations, the insured's appraiser disclosed what he believed was a contingency-fee arrangement, but the insurer did not object and waited until about a month after the roughly $14 million award issued to move to reopen and vacate on partiality grounds. The Eleventh Circuit held that the insurer waived its partiality objection by failing to object at the time it learned of the conflict, applying the arbitration waiver rule that a party who knows of an adjudicator's bias must object before the award issues rather than sit idle to see whether the result is favorable. The court treated insurance appraisal proceedings the same as arbitration for this purpose, reasoning that both involve third-party adjudication of disputes between contracting parties.",
+      "why": "The decision establishes that the arbitration waiver doctrine requiring timely objection to an adjudicator's partiality applies equally to insurance appraisal proceedings, so a party that learns of an appraiser's conflict must object during the appraisal or lose the right to challenge it after the award.",
+      "dockets": [
+        "23-10467"
+      ]
+    }
+  ]
+}
