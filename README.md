@@ -1,63 +1,65 @@
 # horowitz.law
 
-The source for [horowitz.law](https://horowitz.law), the personal site of Devin R. Horowitz,
-a civil-litigation attorney in Marietta, Georgia. Hand-coded, no framework, no build step. It
-also runs **Georgia Appellate Watch**, an automated feed of new appellate opinions written for
-an insurance-defense and civil-litigation practice.
+The source for [horowitz.law](https://horowitz.law), the hand-coded personal site of Devin R.
+Horowitz, a civil-litigation attorney in Marietta, Georgia. It also runs Georgia Appellate
+Watch, an automated feed of new appellate opinions for an insurance-defense and civil-litigation
+practice. The pipeline's architecture and setup are in [PIPELINE.md](./PIPELINE.md); what's
+planned is in [ROADMAP.md](./ROADMAP.md).
 
-## The site
+## stack
 
-Vanilla HTML, CSS, and JavaScript, served as static files from Cloudflare Pages and deployed on
-every push to `main`. No bundler, no framework, no compile step: what is in the repo is what
-ships. JetBrains Mono is self-hosted in four weights, the ornamentation is SVG, and the styling
-is plain CSS. Dark and light themes, a strict hash-pinned Content Security Policy, and an
-installable PWA layer (a web-app manifest plus a small service worker) with offline reading of
-the last-fetched opinions.
+This site is hand-coded HTML, CSS, and JavaScript. No framework. No build step. No compiled
+bundles. JetBrains Mono is self-hosted in four weights. The QR code, portrait corner brackets,
+favicon, and other ornamentation are SVG. Everything else is plain CSS.
 
-The full rundown of stack, hosting, and principles is in the
-[colophon](https://horowitz.law/colophon).
+The typing animation in the hero, the analog flicker on theme transitions, and the click sound on
+the theme toggle each carry a small amount of randomization, so no two page loads are exactly
+alike. Small analog gestures in a digital medium.
 
-## Georgia Appellate Watch
+## hosting
 
-A GitHub Actions pipeline that, every four hours, checks CourtListener for new opinions across
-eight courts (the Georgia appellate courts at the core, an Eleventh Circuit and U.S. Supreme
-Court overlay, and Florida and Alabama as a supplementary tier), filters them for relevance
-through a cheapest-to-most-expensive chain of models, drafts a short synopsis in the house style,
-and opens a pull request. A human reviews and merges to publish; nothing reaches the page on its
-own.
+Deployed automatically from GitHub on every push and served over a global CDN. DNSSEC is active,
+HSTS is set, and the Content Security Policy is strict. The site is static — nothing is rendered
+server-side, and nothing is fetched at runtime from anywhere but the CDN edge — with one
+deliberate seam: the subscribe endpoint runs as a small serverless function, because a mailing
+list cannot be static.
 
-It also watches for law that moves. A forward tripwire inside the funnel and a weekend reverse
-sweep flag when a later decision treats a published opinion, or an authority the practice's
-drafting relies on, adversely. The machine only ever raises a flag to caution; declaring a case
-bad law stays human work.
+## under the hood
 
-The architecture, one-time setup, and tuning are documented in [PIPELINE.md](./PIPELINE.md).
+The opinions feed is not hand-typed. Every four hours a pipeline wakes on GitHub Actions, checks
+CourtListener for new Georgia appellate decisions, and runs them through three models, cheapest
+first: one glances at case names and openings and discards the categorically unrelated, one reads
+the survivors in full against a narrow relevance bar, and one drafts the card — and may still
+decline. Nothing publishes without a human merge.
 
-## Layout
+A second process is paid to distrust the first. Each Saturday a reverse sweep walks every
+published card's citation graph looking for later decisions that treat it adversely. It is a
+tripwire, not a citator: the machine may only ever raise a flag to caution. Declaring a case bad
+law remains human work, done on Shepard's, by hand.
 
-- Root: the pages (`index.html`, `opinions.html`, `colophon.html`, and the rest), the shared
-  styles (`base.css`), the client scripts (`app.js`, `opinions.js`), `opinions.json` (the feed's
-  source of truth), and the generated feeds and state files.
-- `scripts/`: the Python pipeline (`update.py`, `render.py`, `treatment.py`, and the supporting
-  modules).
-- `.github/workflows/`: the workflows that run and guard it.
-- `functions/`: the one serverless seam, the subscribe endpoint, because a mailing list cannot
-  be static.
-- `o/`: the per-opinion permalink pages.
+The site is also installable: a web-app manifest and a seventy-line service worker make it a
+home-screen app on a phone — Share, then Add to Home Screen — with offline reading of the
+last-fetched cards. Pages load network-first so signal always means fresh; hash-stamped assets
+cache-first, because the tokens make them immutable; the feeds and the subscribe API are never
+intercepted.
 
-## Running it
+A golden set of known cases re-runs against the live prompts daily, so a quiet model change
+cannot silently move the editorial line. A rate governor paces every CourtListener call inside the
+free tier's rolling windows. The CI refuses any page whose cards have drifted from the data. Every
+job that touches the network runs under an egress lockdown, each declaring the handful of hosts it
+may reach so a poisoned dependency cannot phone home. The whole machine is public — the pipeline
+doc, the prompts, the state files, even the rejections.
 
-The site needs no build: edit and push, and Cloudflare Pages deploys. The pipeline is documented
-in [PIPELINE.md](./PIPELINE.md), including a local dry run that prints its decisions without
-writing anything. The steps that change published content are gated behind a review PR; the rest
-run on a schedule. Generated HTML belongs to the renderer, so edit `opinions.json` and the page
-templates, never the generated cards between their markers.
+## what isn't here
 
-## Use
+No analytics. No cookies. No fingerprinting. No tracking pixels. No ads. No popups. No funnels.
 
-The source is open. Borrow bits for a personal project; that is how the open web is supposed to
+One honest exception each way: the subscribe form loads a single third-party script — a bot check
+— and a confirmed subscriber's address is kept by the mail service for exactly one weekly digest,
+with a one-click way out. *Beyond that, the site does not know you came here, and will not remember
+if you come back.*
+
+## source
+
+The source is open. Borrow bits for a personal project: that's how the open web is supposed to
 work. For commercial use, please reach out first.
-
----
-
-Maintained by Devin R. Horowitz. The [roadmap](./ROADMAP.md) lives alongside this file.
