@@ -72,7 +72,3 @@ AREA_LABELS = {
 }
 AREA_CODES = list(AREA_LABELS)   # ["coverage", "badfaith", ...] for prompt text
 
-# Canonical usage terms, single-sourced: render.py injects this verbatim into both
-# the colophon (/colophon) and the README, so the two can never state different terms.
-USE_TERMS = ("The source is open. Borrow bits for a personal project: that's how the open "
-             "web is supposed to work. For commercial use, please reach out first.")

@@ -802,18 +802,6 @@ def archive_html(entries):
         )
     return nav + "\n\n" + "\n\n".join(blocks)
 
-def _inject_if_present(path, marker, block):
-    """Inject between a marker pair, but only when the file actually carries it, so a
-    hand-authored file (the colophon, the README) that has not yet adopted the markers
-    is skipped rather than failing the whole render."""
-    try:
-        present = ("<!-- " + marker + ":start") in open(path, encoding="utf-8").read()
-    except OSError:
-        present = False
-    if present:
-        _inject(path, marker, block)
-
-
 def _inject(path, marker, block):
     # Capture the start marker's leading indent and reuse it for the regenerated
     # end marker, so a marker pair nested at any depth (for example inside a
@@ -927,6 +915,71 @@ def _write_area_slices(entries):
     )
 
 
+# --- README as the canonical source for the colophon's shared prose -------------------
+# The README is hand-edited lyrical markdown. render derives the colophon's shared
+# sections from it (converting the small markdown subset the README uses to HTML) so the
+# two never diverge; the colophon then carries everything the README has plus its
+# web-only extras -- the terminal lines, the support ask, and the page chrome.
+
+README_TO_COLOPHON = {
+    "stack":           "col-stack",
+    "hosting":         "col-hosting",
+    "under the hood":  "col-underhood",
+    "what isn't here": "col-whatisnt",
+    "source":          "col-source",
+}
+
+
+def _md_inline(s):
+    """The inline markdown the README uses -> HTML. HTML-special characters in the prose
+    are escaped first so the text stays literal, then links, code, strong, and em are
+    converted. Deliberately small: the README's shared sections use only this subset."""
+    s = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', s)
+    s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+    s = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", s)
+    s = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", s)
+    return s
+
+
+def _md_paragraphs(body, indent="      "):
+    """A markdown section body -> the colophon's one-line <p> blocks: blank-line-separated
+    paragraphs, each unwrapped (the README hard-wraps its prose) into a single <p>."""
+    out = []
+    for para in re.split(r"\n[ \t]*\n", body.strip()):
+        text = " ".join(ln.strip() for ln in para.splitlines() if ln.strip())
+        if text:
+            out.append(indent + "<p>" + _md_inline(text) + "</p>")
+    return "\n".join(out)
+
+
+def _readme_sections():
+    """Parse README.md into {header: body}, keyed by each '## header' line."""
+    out, name, buf = {}, None, []
+    for line in open(README_PATH, encoding="utf-8").read().splitlines():
+        m = re.match(r"##[ \t]+(.+?)[ \t]*$", line)
+        if m:
+            if name is not None:
+                out[name] = "\n".join(buf)
+            name, buf = m.group(1).strip(), []
+        elif name is not None:
+            buf.append(line)
+    if name is not None:
+        out[name] = "\n".join(buf)
+    return out
+
+
+def _inject_readme_into_colophon():
+    """Inject each shared README section into its colophon marker, so the colophon's prose
+    is a derived view of the README. Fails loud if the README is missing a shared section
+    or the colophon is missing a marker -- the marker pair is the contract."""
+    sections = _readme_sections()
+    for header, marker in README_TO_COLOPHON.items():
+        if header not in sections:
+            raise RuntimeError("render: README is missing the '%s' section" % header)
+        _inject(COLOPHON_PATH, marker, _md_paragraphs(sections[header]))
+
+
 def render(entries=None):
     if entries is None:
         entries = json.load(open(JSON_PATH, encoding="utf-8"))
@@ -941,12 +994,10 @@ def render(entries=None):
     # deterministic from opinions.json so the idempotency guard covers them.
     _write_area_slices(entries)
 
-    # Single-source the usage terms: siteconfig.USE_TERMS is canonical, injected into
-    # both the colophon and the README so the two can never diverge.
-    _terms = getattr(siteconfig, "USE_TERMS", "")
-    if _terms:
-        _inject_if_present(COLOPHON_PATH, "useterms", "      <p>" + _terms + "</p>")
-        _inject_if_present(README_PATH, "useterms", _terms)
+    # The README is the canonical lyrical source; the colophon's shared prose is derived
+    # from it, and the colophon adds its web-only extras around each injected block. This
+    # keeps the README and the colophon from ever diverging on the shared sections.
+    _inject_readme_into_colophon()
 
     cutoff = _cutoff_iso()
     recent = [e for e in entries if e["date"] >= cutoff]
