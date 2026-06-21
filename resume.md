@@ -1,6 +1,6 @@
 ## summary
 
-Georgia civil litigator with a decade of experience on both sides of the docket. Current insurance defense practice in personal injury, premises liability, and trucking matters draws on six prior years of plaintiff-side personal injury work: drafting demands, reviewing medical records, and negotiating liens. The cross-side exposure informs how cases are built, valued, and resolved.
+Georgia civil litigator practicing on both sides of the docket since 2017. Current insurance defense practice in personal injury, premises liability, and trucking matters draws on six prior years of plaintiff-side personal injury work: drafting demands, reviewing medical records, and negotiating liens. The cross-side exposure informs how cases are built, valued, and resolved.
 
 ## education
 

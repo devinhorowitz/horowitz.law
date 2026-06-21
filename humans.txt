@@ -7,7 +7,7 @@
 /* SITE */
     Standards:    HTML5, CSS3, ECMAScript 2020+
     Stack:        vanilla everything — no framework, no build step
-    Typography:   JetBrains Mono (self-hosted, 4 weights)
+    Typography:   JetBrains Mono (self-hosted)
     Graphics:     SVG (QR, ornament, favicon)
     Hosting:      static files on a global CDN
     Analytics:    intentionally none

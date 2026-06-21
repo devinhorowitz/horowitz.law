@@ -10,7 +10,7 @@ is maintained is in [MAINTENANCE.md](./MAINTENANCE.md); how to work on the repo 
 ## stack
 
 This site is hand-coded HTML, CSS, and JavaScript. No framework. No build step. No compiled
-bundles. JetBrains Mono is self-hosted in four weights. The QR code, portrait corner brackets,
+bundles. JetBrains Mono is self-hosted. The QR code, portrait corner brackets,
 favicon, and other ornamentation are SVG. Everything else is plain CSS.
 
 The typing animation in the hero, the analog flicker on theme transitions, and the click sound on
