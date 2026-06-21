@@ -39,6 +39,8 @@ PERMA_DIR = os.path.join(REPO, "o")
 DIGESTS_PATH = os.path.join(REPO, "digests.html")
 SUBSCRIBE_PATH = os.path.join(REPO, "subscribe.html")
 AREAS_DIR    = os.path.join(REPO, "areas")
+COLOPHON_PATH = os.path.join(REPO, "colophon.html")
+README_PATH  = os.path.join(REPO, "README.md")
 SECURITY_TXT_PATH = os.path.join(REPO, ".well-known", "security.txt")
 # Pages outside the marker-injection set whose footer year would otherwise rot on
 # Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
@@ -800,6 +802,18 @@ def archive_html(entries):
         )
     return nav + "\n\n" + "\n\n".join(blocks)
 
+def _inject_if_present(path, marker, block):
+    """Inject between a marker pair, but only when the file actually carries it, so a
+    hand-authored file (the colophon, the README) that has not yet adopted the markers
+    is skipped rather than failing the whole render."""
+    try:
+        present = ("<!-- " + marker + ":start") in open(path, encoding="utf-8").read()
+    except OSError:
+        present = False
+    if present:
+        _inject(path, marker, block)
+
+
 def _inject(path, marker, block):
     # Capture the start marker's leading indent and reuse it for the regenerated
     # end marker, so a marker pair nested at any depth (for example inside a
@@ -926,6 +940,13 @@ def render(entries=None):
     # Per-area slices for drip-in (and per-area readers): /areas/<area>.json,
     # deterministic from opinions.json so the idempotency guard covers them.
     _write_area_slices(entries)
+
+    # Single-source the usage terms: siteconfig.USE_TERMS is canonical, injected into
+    # both the colophon and the README so the two can never diverge.
+    _terms = getattr(siteconfig, "USE_TERMS", "")
+    if _terms:
+        _inject_if_present(COLOPHON_PATH, "useterms", "      <p>" + _terms + "</p>")
+        _inject_if_present(README_PATH, "useterms", _terms)
 
     cutoff = _cutoff_iso()
     recent = [e for e in entries if e["date"] >= cutoff]
