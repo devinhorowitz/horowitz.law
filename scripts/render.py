@@ -41,6 +41,8 @@ SUBSCRIBE_PATH = os.path.join(REPO, "subscribe.html")
 AREAS_DIR    = os.path.join(REPO, "areas")
 COLOPHON_PATH = os.path.join(REPO, "colophon.html")
 README_PATH  = os.path.join(REPO, "README.md")
+RESUME_PATH  = os.path.join(REPO, "resume.html")
+RESUME_MD_PATH = os.path.join(REPO, "resume.md")
 SECURITY_TXT_PATH = os.path.join(REPO, ".well-known", "security.txt")
 # Pages outside the marker-injection set whose footer year would otherwise rot on
 # Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
@@ -980,6 +982,150 @@ def _inject_readme_into_colophon():
         _inject(COLOPHON_PATH, marker, _md_paragraphs(sections[header]))
 
 
+# --- resume.md -> resume.html -------------------------------------------------
+# resume.md is the hand-editable source for the CV's main sections; the page keeps
+# its header, footer, and chrome, and each section body is derived here. Same marker
+# contract as the colophon. The entry sections (education, work experience) carry
+# structure -- employer, optional link and practice, role or degree, dates, bullets --
+# so the converter is a small CV templater, not just a prose injector.
+RESUME_SECTIONS = {
+    "summary":                "resume-summary",
+    "education":              "resume-education",
+    "bar & court admissions": "resume-bar",
+    "work experience":        "resume-work",
+}
+RESUME_ROLE_SECTIONS = {"work experience"}   # jobs (entry-role); else schooling (degree span)
+_MONTHS = {"jan": "01", "feb": "02", "mar": "03", "apr": "04", "may": "05", "jun": "06",
+           "jul": "07", "aug": "08", "sep": "09", "sept": "09", "oct": "10", "nov": "11",
+           "dec": "12"}
+
+
+def _md_link(s, link_class=""):
+    """Inline markdown -> HTML for the resume: [text](url) links (http links get
+    target/rel; link_class is added when given), **strong**, and *em*. Text is
+    HTML-escaped with quotes and apostrophes preserved (so "DA's Office" stays literal);
+    link URLs are left intact."""
+    cls = (' class="%s"' % link_class) if link_class else ""
+    out, last = [], 0
+    for m in re.finditer(r"\[([^\]]+)\]\(([^)]+)\)", s):
+        out.append(_esc(s[last:m.start()]))
+        url = m.group(2)
+        rel = ' target="_blank" rel="noopener noreferrer"' if url.startswith("http") else ""
+        out.append('<a href="%s"%s%s>%s</a>' % (url, rel, cls, _esc(m.group(1))))
+        last = m.end()
+    out.append(_esc(s[last:]))
+    r = "".join(out)
+    r = re.sub(r"\*\*([^*]+)\*\*", lambda m: "<strong>%s</strong>" % m.group(1), r)
+    r = re.sub(r"\*([^*]+)\*", lambda m: "<em>%s</em>" % m.group(1), r)
+    return r
+
+
+def _resume_dates(s):
+    """'Mon YYYY - Mon YYYY' (en dash or hyphen accepted) -> <time> spans, emitting an
+    en dash. A token that is not 'Mon YYYY' (e.g. 'Present') passes through verbatim."""
+    out = []
+    for tok in re.split(r"\s+[-\u2013]\s+", s.strip()):
+        m = re.match(r"^([A-Za-z]+)\s+(\d{4})$", tok)
+        key = m.group(1).lower() if m else ""
+        if m and key in _MONTHS:
+            out.append('<time datetime="%s-%s">%s</time>' % (m.group(2), _MONTHS[key], tok))
+        else:
+            out.append(tok)
+    return " \u2013 ".join(out)
+
+
+def _resume_prose(body):
+    """A prose section (summary, bar & court admissions) -> the admissions-body div,
+    blank-line-separated paragraphs joined by <br><br>."""
+    paras = []
+    for p in re.split(r"\n[ \t]*\n", body.strip()):
+        if p.strip():
+            paras.append(_md_link(" ".join(ln.strip() for ln in p.splitlines() if ln.strip())))
+    inner = "\n        <br><br>\n".join("        " + p for p in paras)
+    return '      <div class="admissions-body">\n' + inner + "\n      </div>"
+
+
+def _resume_entry(block, is_role, cfg_role=False):
+    """One '### ...' entry block -> the entry div. is_role picks the job subhead
+    (entry-role) over the schooling subhead (a plain degree span); cfg_role adds the
+    data-cfg-text="role" identity hook to the current job. The title line is
+    '[employer](url) (practice) <middot> location' (link and practice optional); the
+    next line is 'role-or-degree <middot> dates'; the rest are '- ' bullets."""
+    lines = block.split("\n")
+    head, _, location = lines[0].lstrip()[3:].strip().rpartition(" \u00b7 ")
+    lm = re.match(r"\[([^\]]+)\]\(([^)]+)\)\s*(.*)$", head)
+    if lm:
+        rel = ' target="_blank" rel="noopener noreferrer"' if lm.group(2).startswith("http") else ""
+        emp = '<a href="%s"%s class="text-link">%s</a>' % (lm.group(2), rel, _esc(lm.group(1)))
+        tail = lm.group(3).strip()
+    else:
+        pm = re.search(r"\s*\(([^)]+)\)\s*$", head)
+        tail = "(%s)" % pm.group(1) if pm else ""
+        emp = _md_link(head[:pm.start()].strip() if pm else head)
+    practice_html = ""
+    if tail.startswith("(") and tail.endswith(")"):
+        practice_html = ' <span class="entry-practice">(%s)</span>' % _md_link(tail[1:-1])
+
+    role_text, _, dates_text = lines[1].strip().rpartition(" \u00b7 ")
+    if is_role:
+        cfg = ' data-cfg-text="role"' if cfg_role else ""
+        role_html = '<span class="entry-role"%s>%s</span>' % (cfg, _md_link(role_text))
+    else:
+        role_html = "<span>%s</span>" % _md_link(role_text)
+
+    bullets = [ln.strip()[2:].strip() for ln in lines[2:] if ln.strip().startswith("- ")]
+    L = ['      <div class="entry">',
+         '        <div class="entry-head">',
+         '          <span class="entry-title">%s%s</span>' % (emp, practice_html),
+         '          <span class="entry-location">%s</span>' % _md_link(location),
+         "        </div>",
+         '        <div class="entry-subhead">',
+         "          " + role_html,
+         '          <span class="entry-dates">%s</span>' % _resume_dates(dates_text),
+         "        </div>"]
+    if bullets:
+        L.append('        <ul class="entry-bullets">')
+        L += ["          <li>%s</li>" % _md_link(b) for b in bullets]
+        L.append("        </ul>")
+    L.append("      </div>")
+    return "\n".join(L)
+
+
+def _resume_sections():
+    """Parse resume.md into {header: body}, keyed by each '## header' line (lowercased).
+    '### ' entry lines are body, not section headers."""
+    out, name, buf = {}, None, []
+    for line in open(RESUME_MD_PATH, encoding="utf-8").read().splitlines():
+        m = re.match(r"##[ \t]+(.+?)[ \t]*$", line)
+        if m:
+            if name is not None:
+                out[name] = "\n".join(buf).strip()
+            name, buf = m.group(1).lower(), []
+        elif name is not None:
+            buf.append(line)
+    if name is not None:
+        out[name] = "\n".join(buf).strip()
+    return out
+
+
+def _inject_resume():
+    """Derive the resume's main sections from resume.md into resume.html. Fails loud if a
+    section is missing from the source or its marker is missing from the page."""
+    sections = _resume_sections()
+    for header, marker in RESUME_SECTIONS.items():
+        if header not in sections:
+            raise RuntimeError("render: resume.md is missing the '%s' section" % header)
+        body = sections[header]
+        if "###" in body:
+            is_role = header in RESUME_ROLE_SECTIONS
+            blocks = [b for b in re.split(r"\n(?=###[ \t])", body.strip()) if b.lstrip().startswith("###")]
+            html = "\n\n".join(_resume_entry(b, is_role, cfg_role=(is_role and i == 0))
+                               for i, b in enumerate(blocks))
+        else:
+            html = _resume_prose(body)
+        _inject(RESUME_PATH, marker, html)
+
+
 def render(entries=None):
     if entries is None:
         entries = json.load(open(JSON_PATH, encoding="utf-8"))
@@ -998,6 +1144,11 @@ def render(entries=None):
     # from it, and the colophon adds its web-only extras around each injected block. This
     # keeps the README and the colophon from ever diverging on the shared sections.
     _inject_readme_into_colophon()
+
+    # resume.html's main sections are derived from resume.md the same way. This runs
+    # before the STATIC_PAGES stamp loop below so _stamp_identity fills the injected
+    # role hook on the current job from siteconfig.
+    _inject_resume()
 
     cutoff = _cutoff_iso()
     recent = [e for e in entries if e["date"] >= cutoff]
