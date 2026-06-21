@@ -16,7 +16,7 @@ below say so.
 
 **CourtListener.** The free tier is 5/min, 50/hr, 125/day, `cl_rate` paces all of it, and
 opinion *text* already rides the storage PDFs, which cost no REST quota. Georgia is two state
-courts. A full Florida is a supreme court plus **five** District Courts of Appeal, a volume
+courts. A full Florida is a supreme court plus **six** District Courts of Appeal, a volume
 multiple, not an increment. Levers when the time comes: a Free Law Project membership (raises
 the limits *and* funds the data source, the one donation that literally buys capacity),
 `OPINIONS_MAX`, a court-subset ramp, and schedule offsets so two states never contend for the
@@ -47,6 +47,10 @@ The bulk of the original Phases 0 through 4, plus everything since:
 - **Surfaces from existing data.** The corrections ledger at /changes plus the `changes.xml`
   feed; per-opinion permalinks under /o/ with their own OG and Article JSON-LD; the /stats
   coverage page.
+- **Official court links.** A card's case name links to the issuing court's own opinion PDF,
+  with CourtListener kept below as the full record: the Supreme Court of Georgia resolved from
+  its own site by `official_ga.py`, the Eleventh Circuit and SCOTUS from the `download_url`
+  CourtListener already carries. The Court of Appeals stays CourtListener-only behind its WAF.
 - **Distribution.** Per-area subscription topics on /subscribe; the /digests archive;
   instant-alert broadcast for a landmark merge.
 - **Taxonomy and trust.** The tort-reform tag and first-impression badge; the `editor_note`
