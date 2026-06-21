@@ -190,6 +190,24 @@ branch and PR, where CI flags render-idempotency (expected), and `render-sync.ym
 and commits the HTML. An edit that touches no derived output, a workflow, a config, a doc, or a
 state file, goes straight to main.
 
+Each entry is one JSON object. The fields:
+
+- `cluster_id` (integer): the CourtListener cluster id. It is the unique key and the
+  permalink slug (`/o/<cluster_id>`), so it must be unique and must never change.
+- `name`, `court`, `division`, `date` (`YYYY-MM-DD`), `dockets` (list), `disposition`, and
+  `precedential` (`published` or `unpublished`): the case identity. `division` may be empty
+  for a court without one.
+- `areas` (list): practice-area codes from `siteconfig.AREA_CODES`; they drive the filters,
+  the `data-areas` attribute, and the RSS categories.
+- `url`: the CourtListener opinion link. `official_url` (optional): the court's own PDF.
+- `synopsis`: the summary shown on the card and in the feed. `why`: the one-line relevance.
+- Optional enrichment: `law_applied`, `additional_holdings` (list), `first_impression`,
+  `tort_reform`, and `editor_note`.
+- Pipeline-managed, leave them alone: `first_seen`, and the `treatment*` and `treated_by`
+  fields the authority watch sets.
+
+When adding an entry by hand, copy an existing one for shape.
+
 ## Tuning
 
 Set these as repository Variables, as `env:` on the funnel step in the workflow, or export them when

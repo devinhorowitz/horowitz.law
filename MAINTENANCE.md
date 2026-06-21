@@ -152,10 +152,18 @@ Run by hand, from the Actions tab:
   render-sync produce them, or upload the source and all regenerated files together.
 - The `o/*.html` permalinks and `areas/*.json` slices are fully managed by render, which
   creates, updates, and deletes them. Do not add or remove them by hand.
+- Internal links use extensionless clean URLs (`/archive`, `/o/<cluster_id>`), which
+  Cloudflare Pages serves from the matching `.html` file. Link to `/archive`, not
+  `/archive.html`.
 - The committed state files are written by the pipeline and kept public on purpose. Do not
   hand-edit them.
 - The service worker `sw.js` is the one script render does not cache-stamp, by design. When
   you change its caching strategy, bump its `CACHE` constant by hand.
+- Every page carries one identical inline pre-paint script, kept on `opinions.html` and
+  spliced verbatim into the other pages by render, with its `sha256` allow-listed in the
+  `_headers` CSP. If you edit that script, regenerate its hash and set it in `_headers` in
+  the same commit; the ci `check_site` step fails until they match, and prints the exact
+  hash to use.
 - Cloudflare: Rocket Loader and Email Address Obfuscation must stay off. Both rewrite the
   HTML and inject scripts that break the hash-based Content Security Policy. The apex and
   `www` records stay proxied for certificate issuance, and the CAA record must include
