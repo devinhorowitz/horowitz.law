@@ -65,7 +65,9 @@ Run the offline checks before handing over any deliverable:
 - A probe session is read-only: establish ground truth from the actual code, report the
   findings, change nothing.
 - A build session stages deliverables to `/mnt/user-data/outputs`, mirroring the repo
-  paths, and hands them over with present_files. The user uploads them to GitHub.
+  paths, and hands them over with present_files. The user uploads them to GitHub. The outputs
+  mount can be flaky on directory operations, so build in the working tree or `/home/claude`
+  and copy the finished files over once.
 - The bash sandbox network is allowlisted (codeload and github, courtlistener and the court
   sites, the package registries); a domain outside the list fails, and the user can add it
   in the network settings.
@@ -73,9 +75,11 @@ Run the offline checks before handing over any deliverable:
 
 ## Landmines not covered elsewhere
 
-- `claude-opus-4-8` rejects any temperature other than 1 with HTTP 400. This is a parameter
-  error, not a model retirement. The model ids live in repository Variables with fallback
-  defaults (PIPELINE.md, Tuning).
+- `claude-opus-4-8` rejects any temperature other than 1 with HTTP 400, which the error
+  handler can mislabel as a retired model. It is a parameter error, not a retirement, and
+  there is intentionally no global temperature override: set a temperature on one model only,
+  after confirming that model accepts it. The model ids live in repository Variables with
+  fallback defaults (PIPELINE.md, Tuning).
 - CourtListener feeds carry more than the published-only REST filter: `stat_Published=True`
   drops unpublished orders and dispositions that appear in the `/feed/` output. The free-tier
   rate limits are documented at the top of `scripts/cl_rate.py` and in PIPELINE.md.
