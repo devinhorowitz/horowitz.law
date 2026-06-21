@@ -1,7 +1,7 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 45,
+  "count": 44,
   "opinions": [
     {
       "cluster_id": 10877643,
@@ -16,23 +16,6 @@
       "url": "https://www.courtlistener.com/opinion/10877643/t-m-v-university-of-md-medical-system-corporation-revisions-61926/",
       "synopsis": "The Supreme Court held that the Rooker-Feldman doctrine bars federal district court jurisdiction over cases brought by state-court losers complaining of injuries caused by state-court judgments rendered before the federal proceedings commenced and seeking district court review and rejection of those judgments, regardless of whether the state-court judgment remains subject to further review in state appellate proceedings. The Court rejected the argument that the doctrine applies only to final judgments rendered by the highest court of a State, reasoning that the doctrine rests on the functional distinction between original and appellate jurisdiction under 28 U.S.C. sections 1331 and 1257, not solely on a negative inference from section 1257. Petitioner had sued in federal court to declare a state consent order unconstitutional and unenforceable while simultaneously appealing it in state court. The Court resolved a conflict among the Courts of Appeals.",
       "why": "The decision clarifies the scope of a threshold jurisdictional doctrine and confirms that Rooker-Feldman can bar a federal suit even when the underlying state-court judgment is still on appeal, which directly affects civil litigants pursuing parallel state and federal proceedings.",
-      "dockets": [
-        "25-197"
-      ]
-    },
-    {
-      "cluster_id": 10876934,
-      "name": "T. M. v. University of Maryland Medical System Corporation",
-      "court": "Supreme Court of the United States",
-      "date": "2026-06-18",
-      "disposition": "affirmed",
-      "areas": [
-        "procedure"
-      ],
-      "precedential": "published",
-      "url": "https://www.courtlistener.com/opinion/10876934/t-m-v-university-of-md-medical-system-corporation/",
-      "synopsis": "The Supreme Court held that the Rooker-Feldman doctrine bars federal district court jurisdiction over cases brought by state-court losers complaining of injuries caused by state-court judgments rendered before the federal proceedings commenced and seeking review and rejection of those judgments, regardless of whether the state-court judgment remains subject to further review in state appellate proceedings. The Court rejected the argument that the doctrine applies only to final judgments rendered by the highest court of a state, reasoning that its precedents adopted a functional view of original versus appellate jurisdiction rather than a strict negative inference from 28 U.S.C. section 1257. The Court emphasized that the doctrine remains narrow and that it neither expanded nor constrained it beyond resolving the circuit conflict. A four-justice dissent argued that under Exxon the doctrine applies only after state proceedings have ended.",
-      "why": "It resolves a circuit split and clarifies that a litigant cannot seek federal district court review and rejection of a state-court judgment even while that judgment remains on appeal in state court, a jurisdictional limit civil litigators must account for before challenging a state-court judgment in federal court.",
       "dockets": [
         "25-197"
       ]
