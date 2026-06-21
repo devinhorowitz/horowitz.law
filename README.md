@@ -38,7 +38,7 @@ published card's citation graph looking for later decisions that treat it advers
 tripwire, not a citator: the machine may only ever raise a flag to caution. Declaring a case bad
 law remains human work, done on Shepard's, by hand.
 
-The site is also installable: a web-app manifest and a seventy-line service worker make it a
+The site is also installable: a web-app manifest and a sixty-line service worker make it a
 home-screen app on a phone — Share, then Add to Home Screen — with offline reading of the
 last-fetched cards. Pages load network-first so signal always means fresh; hash-stamped assets
 cache-first, because the tokens make them immutable; the feeds and the subscribe API are never
@@ -47,8 +47,9 @@ intercepted.
 A golden set of known cases re-runs against the live prompts daily, so a quiet model change
 cannot silently move the editorial line. A rate governor paces every CourtListener call inside the
 free tier's rolling windows. The CI refuses any page whose cards have drifted from the data. Every
-job that touches the network runs under an egress lockdown, each declaring the handful of hosts it
-may reach so a poisoned dependency cannot phone home. The whole machine is public — the pipeline
+job that touches the network runs under egress control: the ones with a fixed host list are locked
+to it, so a poisoned dependency cannot phone home, and the two that must crawl the open web, the
+link and Lighthouse checks, run in audit instead. The whole machine is public — the pipeline
 doc, the prompts, the state files, even the rejections.
 
 ## what isn't here
