@@ -70,6 +70,22 @@ AUTHOR_NAME      = NAME
 AUTHOR_URL       = SITE_URL + "/"
 PUBLISHER_NAME   = NAME
 
+# ---- Top-level page registry --------------------------------------------
+# The site's top-level pages as (path, label) pairs. render.py renders the
+# /404 "ls /" listing from this, so a new page surfaces there on the next
+# render without editing 404.html. The label keeps the 404's directory-style
+# trailing slash for the pages that have sub-content.
+PAGES = [
+    ("/opinions",  "opinions/"),
+    ("/archive",   "archive/"),
+    ("/changes",   "changes"),
+    ("/stats",     "stats"),
+    ("/digests",   "digests"),
+    ("/subscribe", "subscribe"),
+    ("/resume",    "resume"),
+    ("/colophon",  "colophon"),
+]
+
 # ---- Public feed window -------------------------------------------------
 WINDOW_YEARS = 2
 

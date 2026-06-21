@@ -45,6 +45,7 @@ RESUME_PATH  = os.path.join(REPO, "resume.html")
 RESUME_MD_PATH = os.path.join(REPO, "resume.md")
 SECURITY_TXT_PATH = os.path.join(REPO, ".well-known", "security.txt")
 VCARD_PATH = os.path.join(REPO, "devin-horowitz.vcf")
+NOTFOUND_PATH = os.path.join(REPO, "404.html")
 # Pages outside the marker-injection set whose footer year would otherwise rot on
 # Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
 # place, writing only when the year actually changed, so it is a no-op all year;
@@ -251,6 +252,14 @@ def _area_chips():
         out.append('      <button class="chip" type="button" data-area-filter="%s" aria-pressed="false">%s</button>'
                    % (code, _esc(label)))
     return "\n".join(out)
+
+
+def _nav_block():
+    """The /404 listing's top-level page links, between the pages markers. Driven
+    by siteconfig.PAGES so a newly added page surfaces here on the next render
+    without touching 404.html."""
+    return "\n".join('        <a href="%s">%s</a>' % (path, _esc(label))
+                     for path, label in siteconfig.PAGES)
 
 
 def _jurisdiction_options():
@@ -1244,6 +1253,12 @@ def render(entries=None):
         if "jurischoices:start" in sub_doc:
             _inject(SUBSCRIBE_PATH, "jurischoices", jurisdiction_choices())
     _write_permalinks(entries)
+
+    # The /404 listing's top-level links, from siteconfig.PAGES, so a new page
+    # surfaces there without editing 404.html. Before the STATIC_PAGES stamp loop
+    # so the injected links are token- and identity-stamped with the page.
+    if os.path.exists(NOTFOUND_PATH):
+        _inject(NOTFOUND_PATH, "pages", _nav_block())
 
     # Footer year on the non-generated pages: stamped in place (no markers involved),
     # written only when the year actually changed, so this is inert all year and the
