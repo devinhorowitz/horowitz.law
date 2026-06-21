@@ -27,10 +27,11 @@ list cannot be static.
 ## under the hood
 
 The opinions feed is not hand-typed. Every four hours a pipeline wakes on GitHub Actions, checks
-CourtListener for new Georgia appellate decisions, and runs them through three models, cheapest
-first: one glances at case names and openings and discards the categorically unrelated, one reads
-the survivors in full against a narrow relevance bar, and one drafts the card — and may still
-decline. Nothing publishes without a human merge.
+CourtListener for new appellate decisions from Georgia and the federal courts above it, with
+Florida and Alabama alongside, and runs them through three models, cheapest first: one glances at
+case names and openings and discards the categorically unrelated, one reads the survivors in full
+against a narrow relevance bar, and one drafts the card — and may still decline. Nothing publishes
+without a human merge.
 
 A second process is paid to distrust the first. Each Saturday a reverse sweep walks every
 published card's citation graph looking for later decisions that treat it adversely. It is a
