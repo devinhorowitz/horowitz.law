@@ -44,6 +44,7 @@ README_PATH  = os.path.join(REPO, "README.md")
 RESUME_PATH  = os.path.join(REPO, "resume.html")
 RESUME_MD_PATH = os.path.join(REPO, "resume.md")
 SECURITY_TXT_PATH = os.path.join(REPO, ".well-known", "security.txt")
+VCARD_PATH = os.path.join(REPO, "devin-horowitz.vcf")
 # Pages outside the marker-injection set whose footer year would otherwise rot on
 # Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
 # place, writing only when the year actually changed, so it is a no-op all year;
@@ -860,6 +861,39 @@ def _stamp_security_txt(window_days=30, renew_days=365):
         safeio.atomic_write_text(SECURITY_TXT_PATH, new_doc)
 
 
+def _vcard_escape(value):
+    """vCard 3.0 text-value escaping (RFC 2426): backslash first, then ; and ,
+    and a literal newline. FIRM's commas become \\, which is what the file holds."""
+    return (value.replace("\\", "\\\\").replace(";", "\\;")
+                 .replace(",", "\\,").replace("\n", "\\n"))
+
+
+def _stamp_vcard():
+    """Keep the downloadable vCard's TITLE and ORG in step with siteconfig.
+
+    devin-horowitz.vcf duplicates identity that lives in siteconfig (ROLE,
+    FIRM); left static it drifts on a promotion or a firm move (the title sat
+    at the old one once already). Rewrite only those two lines from siteconfig,
+    leaving everything else, including the embedded PHOTO, untouched. newline=""
+    preserves the file's CRLF on read; the text write preserves it on Linux.
+    Deterministic from siteconfig, not the clock, so unlike security.txt it can
+    sit in ci.yml's render-idempotency diff as a drift tripwire. Written only
+    when a value changes, so it is inert unless siteconfig and the card disagree,
+    and the fix then rides render-sync, like the footer year. For the bump to
+    land, devin-horowitz.vcf must stay in render-sync.yml add-paths.
+    """
+    if not os.path.exists(VCARD_PATH):
+        return
+    doc = open(VCARD_PATH, encoding="utf-8", newline="").read()
+    new_doc = re.sub(r"(?m)^(TITLE:)([^\r\n]*)(\r?)$",
+                     lambda m: m.group(1) + siteconfig.ROLE + m.group(3), doc, count=1)
+    new_doc = re.sub(r"(?m)^(ORG:)([^\r\n]*)(\r?)$",
+                     lambda m: m.group(1) + _vcard_escape(siteconfig.FIRM) + m.group(3),
+                     new_doc, count=1)
+    if new_doc != doc:
+        safeio.atomic_write_text(VCARD_PATH, new_doc)
+
+
 def _slice_entry(e):
     """The per-area slice shape: the fields a draft-time consumer needs, derived
     wholly from opinions.json with no timestamps, so the slices stay deterministic
@@ -1217,6 +1251,7 @@ def render(entries=None):
                 safeio.atomic_write_text(p, stamped)
 
     _stamp_security_txt()
+    _stamp_vcard()
     _update_sitemap(recent, entries)
     return len(recent), len(entries)
 
