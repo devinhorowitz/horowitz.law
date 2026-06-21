@@ -24,7 +24,7 @@ cycle. The Anthropic audit call stays in update.py (which owns the client); this
 module only builds the watch-list, classifies ids, routes via the manifest, holds
 state, and composes summary lines.
 """
-import json, os, re, datetime
+import json, re, datetime
 
 PREFIX = "sa:"
 _CITER_FIELDS = ("cluster_id", "name", "court", "date", "kind", "note")

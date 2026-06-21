@@ -34,6 +34,13 @@ _DASH = "\u2014"  # em dash used as the title separator, kept to match existing 
 
 # Keys the page data-cfg hooks resolve against. Composed strings interpolate the
 # fields above so a single ROLE/ROLE_LINE edit ripples through all of them.
+# The curated core named in every Georgia Appellate Watch description: the Georgia appellate
+# courts plus the federal courts that reach a Georgia civil practice. Defined once so the meta
+# descriptions, the RSS feed, and the email preheader cannot drift apart again. Supplementary
+# Florida and Alabama are deliberately not listed here; they are an "also pulled" mention in the
+# colophon and the page subtitle, not a promise in the feed descriptions.
+COVERAGE = "Georgia appellate, Eleventh Circuit, and U.S. Supreme Court"
+
 IDENTITY = {
     "name":           NAME,
     "role":           ROLE,
@@ -45,6 +52,14 @@ IDENTITY = {
                        "Georgia trial experience. Personal injury, complex liability. Based in metro Atlanta."),
     "og_desc_index":  (f"{ROLE} and civil litigation attorney with a decade of Georgia trial "
                        "experience. Personal injury and complex liability matters."),
+    "desc_opinions":    (f"Curated, AI-assisted synopses of recent {COVERAGE} opinions, filtered "
+                         "for civil litigation and insurance practice."),
+    "og_desc_opinions": (f"Curated, AI-assisted synopses of recent {COVERAGE} opinions for civil "
+                         "litigation and insurance practice."),
+    "desc_archive":     (f"The complete Georgia Appellate Watch record, organized by year. AI-assisted "
+                         f"synopses of {COVERAGE} opinions for civil litigation and insurance practice."),
+    "desc_subscribe":   (f"Subscribe to the Georgia Appellate Watch weekly email: new {COVERAGE} "
+                         "decisions for civil litigation and insurance practice."),
 }
 
 # Metadata used by render.py for the generated feeds and permalinks (JSON-LD).

@@ -40,6 +40,7 @@ Environment:
 import os, json, time, html, datetime, textwrap
 import urllib.request, urllib.error
 import render  # shared COURT_LABELS / AREA_LABELS
+import siteconfig  # shared COVERAGE phrase
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_PATH = os.path.join(REPO, "opinions.json")
@@ -54,7 +55,7 @@ SEGMENT_ID = os.environ.get("RESEND_SEGMENT_ID") or ""        # broadcast recipi
 TOPIC_ID   = os.environ.get("RESEND_TOPIC_ID") or ""          # scopes the send + per-topic unsubscribe
 POSTAL     = os.environ.get("DIGEST_POSTAL") or ""            # optional physical address in the footer
 DISCLAIMER = os.environ.get("DIGEST_DISCLAIMER") or ""        # optional not-legal-advice / advertising line
-PREHEADER  = os.environ.get("DIGEST_PREHEADER") or "New Georgia appellate decisions in civil litigation and insurance practice."
+PREHEADER  = os.environ.get("DIGEST_PREHEADER") or f"New {siteconfig.COVERAGE} decisions in civil litigation and insurance practice."
 PREVIEW    = os.environ.get("DIGEST_PREVIEW") or os.path.join(REPO, "digest_preview.html")
 
 # Per-area sends. RESEND_AREA_TOPICS maps area code -> Resend Topic id, e.g.

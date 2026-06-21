@@ -1171,9 +1171,9 @@ def render(entries=None):
 
     # RSS: same rolling window as the page.
     build = _rfc822(recent[0]["date"]) if recent else _rfc822(datetime.date.today().isoformat())
-    desc = ("AI-assisted synopses of new Georgia appellate, Eleventh Circuit, and U.S. Supreme Court "
-            "opinions, filtered for civil litigation and insurance practice. Each synopsis is AI-drafted; "
-            "the linked opinion is the authority. A curated core, not a complete docket. This feed covers "
+    desc = (f"AI-assisted synopses of new {siteconfig.COVERAGE} opinions, filtered for civil litigation "
+            "and insurance practice. Each synopsis is AI-drafted; the linked opinion is the authority. "
+            "A curated core, not a complete docket. This feed covers "
             f"the most recent {siteconfig.years_word(WINDOW_YEARS)}; older opinions are archived by year at {ARCHIVE_URL}.")
     out = ['<?xml version="1.0" encoding="UTF-8"?>',
            '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
