@@ -106,6 +106,7 @@ jobs:
             changes.xml
             o
             .well-known/security.txt
+            devin-horowitz.vcf
             areas
 
       # Surfaces a broken run instead of letting it fail silently: comments on the one
