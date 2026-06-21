@@ -53,17 +53,19 @@ folder drag, so upload `.gitignore`, `.well-known/`, and `.github/` files indivi
   or remove a card.
 - `resume.md`: résumé content, rendered to `resume.html`.
 - `README.md`: the readme, and the source of the colophon's shared prose.
+- `PIPELINE.md`, `ROADMAP.md`, `MAINTENANCE.md`: standalone docs, rendered into nothing.
+  (`HANDOFF.md` is a development scratchpad, not part of the published site.)
 - `siteconfig.py`: site identity, the `COVERAGE` coverage line, page descriptions, and
   the practice-area labels. One place for the copy that appears across pages.
 - `scripts/*.py`: the pipeline, the renderer, and the helpers.
-- `app.js`, `opinions.js`, `subscribe.js`, `base.css`, `functions/*`: front end and the
-  subscribe serverless function.
+- `app.js`, `opinions.js`, `subscribe.js`, `sw.js`, `base.css`, `functions/*`: front end,
+  the service worker, and the subscribe serverless function.
 - Config and assets: `_headers`, `_redirects`, `wrangler.toml`, `robots.txt`, both
-  manifests, `.gitignore`, `.lycheeignore`, the workflows, `.github/dependabot.yml`,
-  `.well-known/mta-sts.txt`, `humans.txt`, the fonts, icons, `og-card.jpg`, the portraits,
-  and the vCard.
-- The `<head>` and layout of any page, meaning the parts outside the markers and outside
-  render's content blocks.
+  manifests, `ruff.toml`, `lighthouserc.json`, `.gitignore`, `.lycheeignore`, the
+  workflows, `.github/dependabot.yml`, `.well-known/mta-sts.txt`, `humans.txt`,
+  `health.txt`, the fonts, icons, `og-card.jpg`, the portraits, and the vCard.
+- Page layout and heads: `index.html`, `404.html`, and `subscribe.html` are hand-edited
+  pages that render only stamps, as are the heads of the generated pages.
 
 ### Generated, never hand-edit (render writes these; run render-sync after editing the source)
 
@@ -152,6 +154,8 @@ Run by hand, from the Actions tab:
   creates, updates, and deletes them. Do not add or remove them by hand.
 - The committed state files are written by the pipeline and kept public on purpose. Do not
   hand-edit them.
+- The service worker `sw.js` is the one script render does not cache-stamp, by design. When
+  you change its caching strategy, bump its `CACHE` constant by hand.
 - Cloudflare: Rocket Loader and Email Address Obfuscation must stay off. Both rewrite the
   HTML and inject scripts that break the hash-based Content Security Policy. The apex and
   `www` records stay proxied for certificate issuance, and the CAA record must include
