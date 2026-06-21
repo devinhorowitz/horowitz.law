@@ -41,7 +41,7 @@ jobs:
           #   404/410/5xx/timeout/DNS still flag, so genuine rot is still caught.
       - name: Open an issue on broken links
         if: steps.lychee.outputs.exit_code != 0
-        uses: peter-evans/create-issue-from-file@e8ef132d6df98ed982188e460ebb3b5d4ef3a9cd # v5.0.1
+        uses: peter-evans/create-issue-from-file@fca9117c27cdc29c6c4db3b86c48e4115a786710 # v6.0.0
         with:
           title: Link checker found broken links
           content-filepath: ./lychee/out.md
