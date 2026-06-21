@@ -48,10 +48,10 @@ IDENTITY = {
     "role_short":     ROLE_SHORT,
     "email":          EMAIL,
     "name_role_line": f"{NAME} {_DASH} {ROLE_LINE}",
-    "desc_index":     (f"{NAME} {_DASH} {ROLE} and civil litigation attorney with a decade of "
-                       "Georgia trial experience. Personal injury, complex liability. Based in metro Atlanta."),
-    "og_desc_index":  (f"{ROLE} and civil litigation attorney with a decade of Georgia trial "
-                       "experience. Personal injury and complex liability matters."),
+    "desc_index":     (f"{NAME} {_DASH} {ROLE} and civil litigation attorney with Georgia trial "
+                       "experience since 2017. Personal injury, complex liability. Based in metro Atlanta."),
+    "og_desc_index":  (f"{ROLE} and civil litigation attorney with Georgia trial experience "
+                       "since 2017. Personal injury and complex liability matters."),
     "desc_opinions":    (f"Curated, AI-assisted synopses of recent {COVERAGE} opinions, filtered "
                          "for civil litigation and insurance practice."),
     "og_desc_opinions": (f"Curated, AI-assisted synopses of recent {COVERAGE} opinions for civil "
@@ -60,9 +60,9 @@ IDENTITY = {
                          f"synopses of {COVERAGE} opinions for civil litigation and insurance practice."),
     "desc_subscribe":   (f"Subscribe to the Georgia Appellate Watch weekly email: new {COVERAGE} "
                          "decisions for civil litigation and insurance practice."),
-    "og_desc_resume":   "Civil litigation attorney with a decade of Georgia trial experience.",
+    "og_desc_resume":   "Civil litigation attorney with Georgia trial experience since 2017.",
     "firm":             FIRM,
-    "og_image_alt":     f"{NAME} {_DASH} {ROLE_LINE}, Georgia state and federal courts.",
+    "og_image_alt":     f"{NAME}, Civil Litigation Attorney, Georgia state and federal courts.",
 }
 
 # Metadata used by render.py for the generated feeds and permalinks (JSON-LD).
