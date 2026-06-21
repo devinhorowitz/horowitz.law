@@ -4,8 +4,8 @@ Backfill the Georgia Appellate Watch archive (scripts/backfill.py).
 
 SEED MODE (this file): given an explicit list of CourtListener cluster IDs --
 the decisions harvested from the QPWB skill library, i.e. the cases the practice
-actually relies on -- run each through the SAME three-tier funnel as the daily
-pipeline and write a card for each into opinions.json.
+actually relies on -- run each through the daily pipeline's screen, triage, and
+summarize stages and write a card for each into opinions.json.
 
 Because the seed is pre-vetted (every case was pulled from a skill), the Tier-1
 screen and Tier-2 triage are run as a RECALL TEST: their verdicts are recorded,
@@ -152,7 +152,7 @@ def render_recall(rows, new_cards):
 
     L = ["## Backfill seed run: recall test + drafted cards", ""]
     L.append("Seed of %d known-relevant decisions from the QPWB skills, run through the live "
-             "three-tier funnel (screen / triage / summarize). Screen and triage are recorded, "
+             "screen / triage / summarize funnel. Screen and triage are recorded, "
              "not gating; the summarizer drafts each card." % run_n)
     L.append("")
     L.append("**Recall (Tier-1 screen on known-relevant cases): passed %d, dropped %d, error %d of %d scored.**"
