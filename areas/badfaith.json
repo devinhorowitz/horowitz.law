@@ -1,0 +1,62 @@
+{
+  "area": "badfaith",
+  "label": "bad faith",
+  "count": 3,
+  "opinions": [
+    {
+      "cluster_id": 10872097,
+      "name": "GoAuto Insurance Company v. 2B Claims Services Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2026-06-08",
+      "disposition": "affirmed",
+      "areas": [
+        "badfaith",
+        "auto"
+      ],
+      "precedential": "unpublished",
+      "url": "https://www.courtlistener.com/opinion/10872097/goauto-insurance-company-v-2b-claims-services-inc/",
+      "synopsis": "An insurer sued the third-party claims adjuster it hired, alleging the adjuster negligently failed to advise it about the risk of excess bad-faith liability after the insurer let a checks-in-hand policy-limits deadline pass and later settled for about $220,000 above the policy limits. Applying Florida bad-faith law, the Eleventh Circuit affirmed summary judgment for the adjuster, holding that a claims adjuster has no duty to advise an insurer about its own legal risk of excess bad-faith exposure because such advice constitutes legal advice, and that the insurer's own decision to demand signed releases and not deliver the checks by the deadline, not the adjuster's conduct, proximately caused the excess settlement. The court noted the insurer knew of the checks-in-hand requirement eleven days before the deadline and could have delivered the checks.",
+      "why": "The decision clarifies that a third-party claims adjuster owes no duty to advise an insurer about its own extracontractual bad-faith exposure and that an insurer's independent settlement and payment decisions, not the adjuster's handling, control causation in a negligence claim against the adjuster.",
+      "dockets": [
+        "24-13643"
+      ]
+    },
+    {
+      "cluster_id": 10809283,
+      "name": "Cannon v. Safeco Insurance Co. of Illinois",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-03-16",
+      "disposition": "reversed",
+      "areas": [
+        "coverage",
+        "badfaith",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10809283/trever-cannon-v-safeco-insurance-company-of-illinois/",
+      "synopsis": "The Court of Appeals reversed the dismissal of a failure-to-settle action against a liability insurer. After a $1.65 million excess judgment was entered against its insured following a fatal collision, the insured alleged that Safeco had interpleaded and tendered its $100,000 limits into the court registry without obtaining any release of the claims against him. Because an insurer must give equal consideration to the insured's interests and may be liable for an excess judgment for a negligent or bad-faith failure to settle, the complaint stated a claim.",
+      "why": "Tendering policy limits by interpleader, without obtaining a release for the insured, does not by itself discharge the insurer or bar a later failure-to-settle or bad-faith claim.",
+      "dockets": [
+        "A25A1847"
+      ]
+    },
+    {
+      "cluster_id": 10381207,
+      "name": "Kinsale Insurance Company v. Pride of St. Lucie Lodge 1189, Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2025-04-18",
+      "disposition": "reversed and remanded",
+      "areas": [
+        "badfaith",
+        "negsec"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10381207/kinsale-insurance-company-v-pride-of-st-lucie-lodge-1189-inc/",
+      "synopsis": "Applying Florida law in a diversity action, the Eleventh Circuit reversed summary judgment for the insurer on a common-law bad-faith claim premised on the insurer's failure to initiate settlement negotiations before suit was filed. The court held that, viewing the evidence in the light most favorable to the nonmovants, a jury could reasonably find that liability was clear under the Powell rule on a negligent-security fact pattern where a bar's security simultaneously ejected two feuding groups into a dark, unmonitored parking lot and a fatal shooting followed within ten to fifteen minutes, with injuries far exceeding the policy sublimit. The court clarified that the Powell 'clear liability' standard is one part of the totality-of-the-circumstances analysis rather than a separate threshold to bad-faith liability, and that 'clear' liability means liability that is obvious or easily understood, not liability that is guaranteed.",
+      "why": "It clarifies that the duty to initiate settlement negotiations where liability is clear is a component of the totality-of-the-circumstances bad-faith analysis rather than a separate threshold, and defines what 'clear' liability means, guidance relevant to practitioners handling insurer bad-faith and negligent-security matters under analogous frameworks.",
+      "dockets": [
+        "22-12675"
+      ]
+    }
+  ]
+}

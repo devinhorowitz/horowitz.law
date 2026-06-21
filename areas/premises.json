@@ -1,0 +1,167 @@
+{
+  "area": "premises",
+  "label": "premises",
+  "count": 9,
+  "opinions": [
+    {
+      "cluster_id": 10815924,
+      "name": "Loveless v. GSH Investments, LLC",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-03-26",
+      "disposition": "affirmed in part, reversed in part",
+      "areas": [
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10815924/monnie-loveless-v-gsh-investments-llc/",
+      "synopsis": "The Court of Appeals reversed summary judgment for an apartment owner whose tenant's visitor was injured when an exterior wooden staircase collapsed, and affirmed the denial of the plaintiff's motions to compel. Before buying the complex the owner received an appraisal and an insurer survey flagging below-average condition and deferred maintenance, yet it never inspected the building exteriors or the stairways and kept no formal inspection process, relying on tenants to report problems. That evidence created a jury question on whether the owner had constructive knowledge of the hazard.",
+      "why": "Prior reports flagging below-average condition, combined with the owner's lack of any inspection routine, can supply constructive knowledge of a hazard and create a jury question that defeats summary judgment.",
+      "dockets": [
+        "A26A0113"
+      ]
+    },
+    {
+      "cluster_id": 10786768,
+      "name": "Radheshvar, LLC v. Perez Larios",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-02-10",
+      "disposition": "affirmed",
+      "areas": [
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10786768/radheshvar-llc-v-kenneth-a-perez-larios/",
+      "synopsis": "The Court of Appeals affirmed the denial of summary judgment to a motel owner in a premises case brought by a guest's social visitor who was attacked in a breezeway. The owner argued the visitor was a licensee owed only a duty to avoid wilful or wanton injury, but the court held a jury could find he was an invitee, leaving the applicable standard of care for the factfinder.",
+      "why": "Invitee-versus-licensee status under O.C.G.A. §§ 51-3-1 and 51-3-2 is often a jury question, which can leave the standard of care for the factfinder and preclude summary judgment.",
+      "dockets": [
+        "A25A1723"
+      ]
+    },
+    {
+      "cluster_id": 10785227,
+      "name": "Giles v. Greenhouse Apartments, LLC",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-02-06",
+      "disposition": "affirmed",
+      "areas": [
+        "negsec",
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10785227/james-giles-v-greenhouse-apartments-llc/",
+      "synopsis": "The Court of Appeals affirmed summary judgment for an apartment owner and its manager in a negligent-security action by a tenant beaten by unknown assailants on the property in 2020. The landlord conceded it owed the tenant a duty of ordinary care; the affirmance rests solely on causation — the tenant could not establish that any claimed security failure proximately caused the attack — and, given that holding, the court expressly declined to reach the equal-or-superior-knowledge and assumption-of-risk defenses and the challenge to excluded evidence of other crime in the area.",
+      "why": "Causation is an independently dispositive element of a negligent-security claim: a defendant can win summary judgment without litigating foreseeability at all. The incident predates SB 68, so the common-law framework applies; for incidents on or after April 21, 2025 the analysis runs through the statutory regime at O.C.G.A. §§ 51-3-50 to 51-3-57.",
+      "dockets": [
+        "A25A2143"
+      ]
+    },
+    {
+      "cluster_id": 10779964,
+      "name": "Mejia v. SK Battery America, Inc.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-01-27",
+      "disposition": "affirmed",
+      "areas": [
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10779964/daniella-mejia-v-sk-battery-america-inc/",
+      "synopsis": "In a wrongful-death action arising from a fatal fall at a battery-plant construction site, the Court of Appeals affirmed summary judgment for the premises defendants on assumption of the risk, analyzed as an affirmative defense. The decedent, a foreman, had actual knowledge of the specific hazard — twelve days earlier he had watched a coworker fall through the same red-taped, non-weight-bearing louvers — and he stepped onto them without tying off and fell over fifty feet; his repeated safety training and written hazard acknowledgment supplied secondary support for the defense.",
+      "why": "Actual knowledge drawn from witnessing a prior, identical accident can establish assumption of the risk as a matter of law; documentation like training records and signed acknowledgments corroborates the defense rather than carries it.",
+      "dockets": [
+        "A25A2164"
+      ]
+    },
+    {
+      "cluster_id": 10715536,
+      "name": "Venetian Hills Apartments, LLC v. Hughes",
+      "court": "Court of Appeals of Georgia",
+      "date": "2025-10-31",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "premises",
+        "negsec"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10715536/venetian-hills-apartments-llc-v-marie-hughes-as-authorized-administrator/",
+      "synopsis": "In a wrongful-death action after a tenant died in a fire set during an assault by another tenant's guest, the Court of Appeals held the landlord was not entitled to judgment notwithstanding the verdict: it could be liable under O.C.G.A. § 44-7-14 for defective construction and missing fire-safety measures even after parting with possession, and the criminal acts did not demand a defense verdict. The court nonetheless vacated the judgment and ordered a full retrial because the jury charges conflated landlord-tenant and premises-liability law.",
+      "why": "A landlord can remain liable under O.C.G.A. § 44-7-14 for defective construction and missing fire-safety measures even after giving up possession, but jury charges that blend § 44-7-14 with § 51-3-1 premises law can require a full retrial.",
+      "dockets": [
+        "A25A1091"
+      ]
+    },
+    {
+      "cluster_id": 10704224,
+      "name": "SMG Construction Services, LLC v. Cook",
+      "court": "Supreme Court of Georgia",
+      "date": "2025-10-15",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10704224/smg-construction-services-llc-v-cook/",
+      "synopsis": "The Supreme Court of Georgia vacated a Court of Appeals decision that had reversed summary judgment for a property owner whose independent contractor fell from an exposed second-story ledge. The Court held the Court of Appeals conflated actual and constructive knowledge and wrongly used constructive-knowledge principles to create a fact question about the contractor's actual knowledge of the open, unguarded ledge. Because the lower court stopped there, it had not addressed all elements of the owner's defenses, so the case was remanded.",
+      "why": "Actual knowledge of an open and obvious hazard is analyzed on its own terms under O.C.G.A. § 51-3-1 and is not blurred into the constructive-knowledge inquiry; this is the decision the Mejia panel applied.",
+      "dockets": [
+        "S25G0389"
+      ]
+    },
+    {
+      "cluster_id": 10680420,
+      "name": "Walmart Stores East, LP v. Leverette",
+      "court": "Supreme Court of Georgia",
+      "date": "2025-06-24",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "damages",
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680420/walmart-stores-east-lp-v-leverette/",
+      "synopsis": "The Supreme Court of Georgia vacated a $1 million \"nominal damages\" award in a premises injury case in which a shopper was struck by a heavy box. The Court held that nominal damages under Georgia law remain only a trivial sum, as at common law, and overruled the Court of Appeals precedent treating nominal damages as having no maximum. Because a million dollars is not a trivial sum, the judgment was vacated, with the remedy and invited-error questions left for the courts below.",
+      "why": "Nominal damages under Georgia law remain only a trivial sum, and the Court overruled precedent that had treated them as having no ceiling, so a seven-figure 'nominal' award cannot stand.",
+      "dockets": [
+        "S24G1104"
+      ]
+    },
+    {
+      "cluster_id": 10104639,
+      "name": "Hensley v. Westin Hotel",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-09-04",
+      "disposition": "vacated and remanded with instructions to remand to state court",
+      "areas": [
+        "procedure",
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10104639/candace-hensley-v-westin-hotel/",
+      "synopsis": "A worker injured in a trip and fall at a hotel sued in Georgia state court, and the defendants removed based on diversity jurisdiction. A workers' compensation insurer, Hartford, intervened to protect its subrogation lien under O.C.G.A. section 34-9-11.1 and filed an intervenor complaint against a defendant that shared its Connecticut citizenship. The Eleventh Circuit held that Hartford had a right to intervene under Rule 24(a)(2) because Georgia law requires such insurers to intervene to protect their subrogation rights, and that Hartford was an indispensable party under Rule 19(b) because a judgment in its absence would impair its lien and no remedy could mitigate that prejudice. Because Hartford's intervention destroyed complete diversity and section 1367(b) barred supplemental jurisdiction over its claims, the district court lost subject matter jurisdiction once intervention was granted.",
+      "why": "The decision establishes that a workers' compensation subrogation insurer intervening under O.C.G.A. section 34-9-11.1 is both an intervenor of right and an indispensable party whose nondiverse citizenship destroys diversity jurisdiction, requiring vacatur and remand to state court rather than dismissal of the intervenor.",
+      "dockets": [
+        "22-11458"
+      ]
+    },
+    {
+      "cluster_id": 5749712,
+      "name": "Martin v. Six Flags Over Georgia II, L.P.",
+      "court": "Supreme Court of Georgia",
+      "date": "2017-06-05",
+      "disposition": "affirmed in part and reversed in part, and case remanded with direction",
+      "areas": [
+        "premises",
+        "negsec",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/5749712/martin-v-six-flags-over-georgia-ii-lp/",
+      "synopsis": "The Supreme Court of Georgia held that a premises owner can be liable under OCGA section 51-3-1 for a criminal attack that begins on its premises but is completed off-premises, when the injuries are a foreseeable proximate result of the owner's breach of its duty to keep the premises safe, expressly adopting the principle from Wilks v. Piggly Wiggly Southern. The court clarified that the bus stop where the attack concluded was not part of the park's 'approaches,' because the owner had not exercised the control and dominion required to extend its duty to that public way. On apportionment, the court held that an apportionment error under OCGA section 51-12-33 ordinarily requires a retrial limited to the apportionment of fault among tortfeasors, not a full retrial, because the allocation of relative fault is a step distinct from the determinations of liability and total damages. The court affirmed liability, reversed the Court of Appeals' order of a full retrial, and remanded for retrial limited to apportionment.",
+      "why": "The decision establishes that off-premises injuries can support landowner liability where the attack originates on the premises and is foreseeable, clarifies the 'approaches' and control-and-dominion analysis, and holds that apportionment error generally requires retrial only on apportionment rather than a full retrial.",
+      "dockets": [
+        "S16G0743",
+        "S16G0750"
+      ]
+    }
+  ]
+}

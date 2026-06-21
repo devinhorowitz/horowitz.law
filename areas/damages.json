@@ -1,0 +1,418 @@
+{
+  "area": "damages",
+  "label": "damages",
+  "count": 22,
+  "opinions": [
+    {
+      "cluster_id": 10875860,
+      "name": "Lloyd v. City of Atlanta",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-16",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10875860/maugan-lloyd-v-city-of-atlanta/",
+      "synopsis": "Plaintiff, injured when his bike tire became lodged in a city storm drain grate, sent an ante litem notice jointly addressed to the City of Atlanta and Fulton County demanding a \"global settlement amount\" of $2,000,000. The Court of Appeals held that this notice failed to comply with OCGA section 36-33-5(e), which requires a specific amount of monetary damages being sought from the municipal corporation, because demanding a single global amount from two entities jointly does not identify the specific amount sought from the city alone and leaves the city to speculate what portion constituted an offer it could accept. The court noted it need not decide whether subsection (e) requires strict or substantial compliance because the notice failed under either standard, and rejected the argument that use of \"and/or\" cured the defect, finding the term was used only to reference the applicable notice statutes.",
+      "why": "The decision clarifies that an ante litem notice presenting a single combined settlement demand against a municipality and another governmental entity, without specifying the amount sought from the municipality alone, fails the specific-amount requirement of OCGA section 36-33-5(e) and bars suit as a condition precedent.",
+      "dockets": [
+        "A26A0625"
+      ]
+    },
+    {
+      "cluster_id": 10875605,
+      "name": "Cayamcela v. Advocacy Trust, LLC",
+      "court": "Supreme Court of Georgia",
+      "date": "2026-06-16",
+      "disposition": "affirmed",
+      "areas": [
+        "expert",
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10875605/cayamcela-v-advocacy-trust-llc-two-cases/",
+      "synopsis": "In a medical malpractice and wrongful death action arising from a patient's death in the ICU after childbirth, the jury returned a $42 million verdict against a doctor and a medical staffing agency. The Supreme Court of Georgia affirmed the trial court's exclusion under OCGA section 24-7-702(b) of a defense expert's testimony about ICU care, holding the court acted within its gatekeeping discretion where the expert repeatedly admitted he had not reviewed the relevant ICU records well enough to opine on that care and that the matter fell outside his specialty. The court rejected the argument that these gaps went only to credibility rather than admissibility.",
+      "why": "The decision confirms that a trial court may exclude expert testimony as unreliable under Rule 702(b) when the expert concedes an insufficient factual basis, and that such deficiencies bear on admissibility, not merely weight.",
+      "dockets": [
+        "S26A0229",
+        "S26A0242"
+      ]
+    },
+    {
+      "cluster_id": 10875604,
+      "name": "Clark v. Leigh",
+      "court": "Supreme Court of Georgia",
+      "date": "2026-06-16",
+      "disposition": "vacated and remanded with direction",
+      "areas": [
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10875604/clark-v-leigh-and-vice-versa/",
+      "synopsis": "In a medical malpractice and wrongful death action where a jury awarded $29,250,000 for the full value of the decedent's life, $2,500,000 for pain and suffering, and medical expenses, the trial court applied the OCGA section 51-13-1(b) noneconomic damages cap to reduce the wrongful death award to $350,000. The Supreme Court of Georgia reaffirmed Nestlehutt, holding that the right to trial by jury under the Georgia Constitution does not permit applying the cap to pain and suffering and loss of consortium damages in medical malpractice actions, and declined to overrule it under stare decisis. The court then held that, under ordinary principles of statutory construction and in light of Nestlehutt, the cap statute cannot operate at all on a judgment in a case like this one, where the jury's verdict includes noneconomic damages for a cause of action to which the jury trial right applies, because making it operative would require impermissibly rewriting the statute. The court vacated the order applying the cap and remanded for the trial court to decide the defendants' excessiveness claim as to the wrongful death award.",
+      "why": "The decision reaffirms that the OCGA section 51-13-1(b) medical malpractice noneconomic damages cap is unenforceable as to constitutionally protected jury-determined damages and extends that result, on statutory-construction grounds, to render the cap inoperative on the entire judgment including 'full value of life' wrongful death damages in such cases.",
+      "dockets": [
+        "S26A0349",
+        "S26X0350"
+      ]
+    },
+    {
+      "cluster_id": 10620084,
+      "name": "John Doe v. Jones",
+      "court": "Court of Appeals of Georgia",
+      "date": "2025-06-30",
+      "disposition": "reversed",
+      "areas": [
+        "auto",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10620084/john-doe-v-perry-jones/",
+      "synopsis": "The Court of Appeals reversed the denial of partial summary judgment to a John Doe defendant, litigated in the name of the homeowners' uninsured-motorist carrier, after a phantom vehicle allegedly forced another driver into the plaintiffs' house. The plaintiff sought emotional-distress damages without a physical injury, and under Mayorga v. Benton he could not recover on a pecuniary-loss theory based on property damage alone.",
+      "why": "Under Mayorga v. Benton, a plaintiff cannot recover emotional-distress damages without a physical injury on a pecuniary-loss theory based on property damage alone, here in a John Doe uninsured-motorist posture.",
+      "dockets": [
+        "A25A0077"
+      ]
+    },
+    {
+      "cluster_id": 10680420,
+      "name": "Walmart Stores East, LP v. Leverette",
+      "court": "Supreme Court of Georgia",
+      "date": "2025-06-24",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "damages",
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680420/walmart-stores-east-lp-v-leverette/",
+      "synopsis": "The Supreme Court of Georgia vacated a $1 million \"nominal damages\" award in a premises injury case in which a shopper was struck by a heavy box. The Court held that nominal damages under Georgia law remain only a trivial sum, as at common law, and overruled the Court of Appeals precedent treating nominal damages as having no maximum. Because a million dollars is not a trivial sum, the judgment was vacated, with the remedy and invited-error questions left for the courts below.",
+      "why": "Nominal damages under Georgia law remain only a trivial sum, and the Court overruled precedent that had treated them as having no ceiling, so a seven-figure 'nominal' award cannot stand.",
+      "dockets": [
+        "S24G1104"
+      ]
+    },
+    {
+      "cluster_id": 10680450,
+      "name": "Statham v. Quang",
+      "court": "Supreme Court of Georgia",
+      "date": "2025-05-13",
+      "disposition": "reversed",
+      "areas": [
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680450/statham-v-quang/",
+      "synopsis": "After a patient was injured during a hysterectomy in which a medical student manipulated a sponge stick under the physicians' supervision, she sought to hold the supervising physicians vicariously liable for the student's negligence. The Supreme Court of Georgia held that OCGA section 51-1-38, which immunizes medical students from civil liability under certain circumstances, neither imposes vicarious liability on supervising physicians nor renders them immune from it, leaving their liability to be determined as otherwise provided by law. The Court further held that a physician may be vicariously liable under respondeat superior for a supervised medical student's negligence where the evidence shows the physician assumed actual control over the student's physical conduct, even absent a contractual right of control, and that the undisputed evidence here created a jury question on that issue.",
+      "why": "The decision clarifies that a contract disclaiming an agency relationship is not dispositive of vicarious liability and that assumed control over an agent's physical conduct can independently establish a master-servant relationship for respondeat superior, an issue central to medical malpractice and agency law.",
+      "dockets": [
+        "S24G0842"
+      ]
+    },
+    {
+      "cluster_id": 10680496,
+      "name": "Love v. McKnight",
+      "court": "Supreme Court of Georgia",
+      "date": "2025-03-04",
+      "disposition": "reversed",
+      "areas": [
+        "auto",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680496/love-v-mcknight/",
+      "synopsis": "Plaintiff sought expenses of litigation under OCGA section 13-6-11 based on bad faith after a rear-end collision in which defendant was cited and pleaded guilty to following too closely. The Supreme Court of Georgia held that bad faith under the statute requires conduct that is intentional, wanton, reckless, or at least indicative of conscious indifference to known harmful consequences, and that mere negligence does not suffice. The court held that the violation of a strict-liability traffic law, by itself, does not establish bad faith, and that evidence of distraction from cell phone use, raising at most an issue of negligence, was insufficient to submit the claim to the jury. The court reasoned that allowing litigation expenses in routine negligence cases would contradict the statute's prefatory language that expenses generally shall not be allowed.",
+      "why": "This decision clarifies that bad faith under OCGA section 13-6-11 requires more than negligence or a traffic-law violation, setting the threshold for submitting litigation-expense claims to a jury in tort and auto cases.",
+      "dockets": [
+        "S24G0371"
+      ]
+    },
+    {
+      "cluster_id": 10680223,
+      "name": "Whitaker Farms, LLC v. Fitzgerald Fruit Farms, LLC",
+      "court": "Supreme Court of Georgia",
+      "date": "2024-10-31",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680223/whitaker-farms-llc-v-fitzgerald-fruit-farms-llc/",
+      "synopsis": "After a jury awarded punitive damages on a trespass claim, the defendant challenged the admission of statements its officer made during a settlement conference, which the Court of Appeals had upheld as admissible under OCGA section 24-4-408 (c) to show state of mind. The Supreme Court of Georgia held that a request for punitive damages is a 'claim' within the meaning of Rule 408 (a), and that because a defendant's state of mind is an element of a punitive damages claim, evidence offered to prove that state of mind is offered to prove liability for the claim and is therefore inadmissible. The court did not decide whether Rule 408 (b) categorically excludes all statements made in compromise negotiations. The court vacated and remanded for the Court of Appeals to determine whether the erroneous admission was harmful.",
+      "why": "The decision clarifies that settlement-conference statements cannot be admitted to prove a defendant's state of mind for purposes of establishing entitlement to punitive damages, because such evidence proves an element of, and thus liability for, the punitive damages claim under OCGA section 24-4-408 (a).",
+      "dockets": [
+        "S23G1162"
+      ]
+    },
+    {
+      "cluster_id": 10160436,
+      "name": "Gemini Insurance Company v. Zurich American Insurance Company",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-10-23",
+      "disposition": "affirmed in part, reversed in part, and remanded",
+      "areas": [
+        "coverage",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10160436/gemini-insurance-company-v-zurich-american-insurance-company/",
+      "synopsis": "Two insurers covering the same trucking-fatality settlement disputed how to allocate a $2 million share under their respective 'other insurance' clauses. Applying Florida law, the Eleventh Circuit held that one insurer's clause stating that its coverage is 'excess over and shall not contribute with' other insurance is a pure excess clause that prevails over the other insurer's clause stating it 'will pay only our share' in proportion to limits, which is a pro rata clause. Relying on Florida intermediate-court decisions, the court rejected the argument that two clauses both labeled excess are mutually repugnant and must share pro rata, focusing instead on the operative 'shall not contribute' and 'we will pay the proportion' language. The court reversed and directed entry of judgment requiring the pro rata insurer to pay the full $1 million share.",
+      "why": "It clarifies how Florida law ranks competing 'other insurance' clauses, holding that a non-contribution excess clause defeats a proportional-share clause regardless of the 'excess' label, which governs priority-of-coverage disputes between insurers.",
+      "dockets": [
+        "22-13495"
+      ]
+    },
+    {
+      "cluster_id": 10145422,
+      "name": "Jenkins v. BP Exploration & Production Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2024-10-18",
+      "disposition": "affirmed",
+      "areas": [
+        "expert",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10145422/lester-jenkins-v-bp-exploration-production-inc/",
+      "synopsis": "Cleanup workers from the Deepwater Horizon oil spill sued, alleging that exposure to crude oil and dispersants caused chronic sinusitis, and offered toxicology and epidemiology experts on general causation. The Eleventh Circuit held that, under its toxic-tort precedent, a plaintiff must demonstrate the threshold level of exposure that is hazardous to human beings generally as part of general causation, not only specific causation, and that the experts' failure to identify any such harmful dose justified exclusion. The court further held that the experts' opinions were independently excludable for failing to identify a statistically significant association, assess the cited studies' acknowledged limitations, and meaningfully apply the Bradford Hill factors. Applying the abuse-of-discretion standard, the court affirmed the exclusion of both experts and the resulting summary judgment.",
+      "why": "The decision clarifies that the harmful-dose or threshold-exposure requirement is part of general causation in toxic-tort cases, governing the admissibility of causation experts under Daubert and Rule 702.",
+      "dockets": [
+        "23-11535",
+        "23-11538",
+        "23-11539"
+      ]
+    },
+    {
+      "cluster_id": 10680301,
+      "name": "Golden v. Floyd Healthcare Management, Inc.",
+      "court": "Supreme Court of Georgia",
+      "date": "2024-07-02",
+      "disposition": "reversed",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10680301/golden-v-floyd-healthcare-management-inc/",
+      "synopsis": "Plaintiff filed a renewal medical malpractice action that defendant argued was barred by the five-year statute of repose in OCGA § 9-3-71 (b). The Supreme Court of Georgia held that OCGA § 38-3-62 (a) of the Judicial Emergency Act empowers an authorized judicial official to suspend, toll, extend, or otherwise grant relief from a statute of repose, because a repose period is a 'deadline' within the statute's non-exhaustive list. The Court further held that the March 14, 2020 COVID-19 emergency order and subsequent orders did toll OCGA § 9-3-71 (b), so plaintiff's claims were not time-barred. In reaching the first holding, the Court disapproved Simmons v. Sonyika and any other Georgia case to the extent they establish an absolute rule that a statute of repose can never be tolled under any circumstances.",
+      "why": "This decision clarifies that Georgia statutes of repose are not categorically immune from tolling and that the Judicial Emergency Act's COVID-19 orders tolled the medical malpractice repose period, affecting the timeliness of claims filed during and after the pandemic.",
+      "dockets": [
+        "S24G0008"
+      ]
+    },
+    {
+      "cluster_id": 10367320,
+      "name": "Quynn v. Hulsey",
+      "court": "Supreme Court of Georgia",
+      "date": "2020-11-02",
+      "disposition": "reversed",
+      "areas": [
+        "auto",
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10367320/quynn-v-hulsey/",
+      "synopsis": "In a wrongful death action arising from a truck striking and killing a pedestrian, the trial court granted partial summary judgment to the employer on the estate's claims for negligent entrustment, hiring, training, and supervision because the employer had admitted respondeat superior liability and no punitive damages claim survived. The Supreme Court of Georgia held that the apportionment statute, OCGA section 51-12-33, abrogated the decisional law 'Respondeat Superior Rule,' which had entitled an employer that conceded vicarious liability to summary judgment on direct-negligence claims absent a valid punitive damages claim. The Court reasoned that direct-negligence claims allege the employer's own fault, which the jury must consider under the statute, and that such fault is divisible from the employee's fault. The Court reversed and overruled contrary Court of Appeals decisions.",
+      "why": "The decision establishes that an employer's admission of respondeat superior no longer bars a plaintiff's negligent entrustment, hiring, training, supervision, and retention claims, so those direct-negligence claims may proceed to the jury alongside vicarious liability under OCGA section 51-12-33.",
+      "dockets": [
+        "S19G1612"
+      ]
+    },
+    {
+      "cluster_id": 4549173,
+      "name": "The Coastal Bank v. Rawlins",
+      "court": "Court of Appeals of Georgia",
+      "date": "2018-10-29",
+      "disposition": "vacated and remanded with direction",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4549173/the-coastal-bank-v-larry-rawlins-jr/",
+      "synopsis": "After prevailing on appeal and obtaining a judgment of no liability, defendant moved for attorney fees under Georgia's offer of settlement statute, OCGA Section 9-11-68, based on a rejected $3,000 offer. The trial court denied fees, finding the offer was not made in good faith, but relied exclusively on objective factors such as the offer's relationship to alleged damages. The Court of Appeals held that under the test adopted in Richardson v. Locklyn, a court cannot base a good-faith ruling solely on objective factors but must weigh those factors against the offeror's subjective belief in the strength of its defense, here the no-standing argument. The court vacated and remanded for application of the Richardson test.",
+      "why": "The decision clarifies that a good-faith determination under OCGA Section 9-11-68 requires weighing objective factors against the offeror's subjectively reasonable belief, and that exclusive reliance on objective factors is an abuse of discretion.",
+      "dockets": [
+        "A18A1010"
+      ]
+    },
+    {
+      "cluster_id": 4503667,
+      "name": "Stephens v. Castano-Castano",
+      "court": "Court of Appeals of Georgia",
+      "date": "2018-05-29",
+      "disposition": "affirmed in part, reversed in part",
+      "areas": [
+        "auto",
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4503667/stephens-v-castano-castano/",
+      "synopsis": "In an auto collision case, the trial court excluded evidence that the plaintiff's treating physician held a lien on the lawsuit proceeds and barred questioning about an attorney-to-physician referral. The Court of Appeals held that evidence of the physician's lien-based financial interest in the verdict was admissible to show potential bias and affect credibility, and that the collateral source rule did not bar it because the plaintiff still owed the full cost of treatment and no benefit or write-off reduced the obligation. The court affirmed exclusion of the attorney-referral evidence, holding that the referral standing alone was insufficient to show bias and presented a danger of unfair prejudice, and it affirmed denial of the defendant's motion to enforce a purported settlement because the relied-upon email omitted the essential settlement amount. The court noted that any such financial-interest evidence remains subject to a Rule 403 analysis. The opinion is physical precedent only.",
+      "why": "The decision clarifies that a treating physician's lien on lawsuit proceeds is admissible to show financial interest and bias and is not barred by the collateral source rule, while a bare attorney-to-physician referral, standing alone, is not.",
+      "dockets": [
+        "A18A0100"
+      ]
+    },
+    {
+      "cluster_id": 10366850,
+      "name": "Cooper Tire & Rubber Company v. Koch",
+      "court": "Supreme Court of Georgia",
+      "date": "2018-03-15",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10366850/cooper-tire-rubber-company-v-koch/",
+      "synopsis": "In a product liability action arising from a fatal single-vehicle crash following a tire tread separation, the defendant tire manufacturer sought dismissal or other sanctions for spoliation after the plaintiff allowed the vehicle and remaining tires to be crushed for scrap. The Supreme Court of Georgia held that the common-law duty to preserve relevant evidence is defined the same for plaintiffs and defendants, arising when a party actually anticipates or reasonably should anticipate litigation, though the practical timing of the duty may differ because plaintiffs generally control whether and when litigation is pursued. The court confirmed that the Phillips factors are a non-exclusive list, that the most severe sanctions are reserved for evidence lost intentionally in bad faith with uncurable prejudice, and that loss through mere negligence normally warrants lesser sanctions or none. Applying a summary judgment standard, the court affirmed the finding that the plaintiff had no duty to preserve at the time the evidence was destroyed.",
+      "why": "The decision clarifies that the duty to preserve evidence and the reasonable-foreseeability test apply equally to plaintiffs and defendants, sets out how the Phillips factors and sophistication of the party bear on when that duty is triggered, and confirms that severe spoliation sanctions require intentional bad faith while negligent loss warrants lesser or no sanctions.",
+      "dockets": [
+        "S17G0654"
+      ]
+    },
+    {
+      "cluster_id": 4406052,
+      "name": "Hospital Authority of Valdosta/Lowndes County v. Fender",
+      "court": "Court of Appeals of Georgia",
+      "date": "2017-06-23",
+      "disposition": "affirmed in part, reversed in part, and remanded in a17a0002; affirmed in a17a0003",
+      "areas": [
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4406052/hospital-authority-of-valdostalowndes-county-dba-south-georgia-medical/",
+      "synopsis": "In a medical malpractice action, the Court of Appeals held that a fact question existed on whether the new injury exception to the two-year statute of limitation in OCGA section 9-3-71(a) applied, where the patient remained asymptomatic for a period after an alleged misdiagnosis of carotid stenosis and later suffered a massive stroke, so the limitation period could begin on the date of the stroke. The court also held that the Respondeat Superior Rule, which entitles an employer to summary judgment on negligent hiring, training, supervision, and retention claims when it admits vicarious liability and no punitive damages are sought, was not superseded by the apportionment statute, OCGA section 51-12-33(b), reasoning that the statute does not apply to claims based on respondeat superior or to derivative claims that are merely duplicative of it. The court further affirmed denial of a motion under OCGA section 24-7-702(b) to exclude a medical expert's causation opinion. The court reversed summary judgment as to the negligent hiring claims and otherwise affirmed.",
+      "why": "The decision clarifies that Georgia's apportionment statute does not displace the Respondeat Superior Rule barring direct negligence claims against an employer that admits vicarious liability and faces no punitive damages claim, and it applies the new injury exception to the medical malpractice limitation period where a misdiagnosed patient remains asymptomatic before a later distinct injury.",
+      "dockets": [
+        "A17A0002",
+        "A17A0003"
+      ]
+    },
+    {
+      "cluster_id": 5749712,
+      "name": "Martin v. Six Flags Over Georgia II, L.P.",
+      "court": "Supreme Court of Georgia",
+      "date": "2017-06-05",
+      "disposition": "affirmed in part and reversed in part, and case remanded with direction",
+      "areas": [
+        "premises",
+        "negsec",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/5749712/martin-v-six-flags-over-georgia-ii-lp/",
+      "synopsis": "The Supreme Court of Georgia held that a premises owner can be liable under OCGA section 51-3-1 for a criminal attack that begins on its premises but is completed off-premises, when the injuries are a foreseeable proximate result of the owner's breach of its duty to keep the premises safe, expressly adopting the principle from Wilks v. Piggly Wiggly Southern. The court clarified that the bus stop where the attack concluded was not part of the park's 'approaches,' because the owner had not exercised the control and dominion required to extend its duty to that public way. On apportionment, the court held that an apportionment error under OCGA section 51-12-33 ordinarily requires a retrial limited to the apportionment of fault among tortfeasors, not a full retrial, because the allocation of relative fault is a step distinct from the determinations of liability and total damages. The court affirmed liability, reversed the Court of Appeals' order of a full retrial, and remanded for retrial limited to apportionment.",
+      "why": "The decision establishes that off-premises injuries can support landowner liability where the attack originates on the premises and is foreseeable, clarifies the 'approaches' and control-and-dominion analysis, and holds that apportionment error generally requires retrial only on apportionment rather than a full retrial.",
+      "dockets": [
+        "S16G0743",
+        "S16G0750"
+      ]
+    },
+    {
+      "cluster_id": 4372487,
+      "name": "Harris v. Mahone",
+      "court": "Court of Appeals of Georgia",
+      "date": "2017-03-01",
+      "disposition": "affirmed in part, reversed in part, and remanded with direction",
+      "areas": [
+        "procedure",
+        "auto",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4372487/harris-v-mahone/",
+      "synopsis": "In an auto negligence case, plaintiff sought attorney fees under OCGA Section 9-11-68 after recovering a verdict exceeding 125 percent of his pretrial counteroffer. The court held that a counteroffer made within 20 days of trial under subsection (a) must still remain open 30 days under subsection (c), and that fees under subsection (b)(2) run only from the date the offer is deemed rejected through entry of judgment. Because the counteroffer was deemed rejected three days after the trial concluded and plaintiff showed no fees incurred in the window between that date and judgment, no fees were recoverable; a counteroffer can avoid this result only by being withdrawn in writing before its expiration. The court separately reversed the denial of fees under OCGA Section 9-15-14, holding that counsel's statement in his place as to hours and reasonableness on a specific issue was sufficient proof.",
+      "why": "The decision clarifies the interplay of OCGA Section 9-11-68 subsections (a), (b)(2), and (c), holding that a near-trial counteroffer must remain open 30 days and that recoverable fees run only from the deemed-rejection date to judgment, and confirms that counsel's in-place statement of hours and reasonableness suffices to support a Section 9-15-14 fee motion.",
+      "dockets": [
+        "A16A1748"
+      ]
+    },
+    {
+      "cluster_id": 4323507,
+      "name": "Richardson v. Locklyn",
+      "court": "Court of Appeals of Georgia",
+      "date": "2016-11-15",
+      "disposition": "vacated and remanded with direction",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/4323507/richardson-v-locklyn/",
+      "synopsis": "In an auto-collision case where the jury verdict came in below 75 percent of the defendant's rejected settlement offer, the trial court denied the defendant's motion for attorney fees under OCGA section 9-11-68 by finding the offer was not made in good faith based on the offer's relationship to claimed medical expenses and the defendant's stipulation to liability. The Court of Appeals held for the first time that an evidentiary hearing is required before a trial court may rule on a fee request under OCGA section 9-11-68, that a timely objection asserting bad faith triggers the hearing requirement, and that the burden rests on the offeree to prove the absence of good faith. Adopting Florida's framework, the court held that good faith cannot be assessed on objective factors alone but must consider the offeror's subjective reasonable belief, and it vacated the judgment and remanded for a hearing.",
+      "why": "This decision establishes that an offeror's good faith under Georgia's offer-of-settlement statute is measured by the offeror's subjective reasonable belief rather than objective factors alone, places the burden on the offeree to show absence of good faith, and requires an evidentiary hearing triggered by a timely bad-faith objection.",
+      "dockets": [
+        "A16A0978"
+      ]
+    },
+    {
+      "cluster_id": 3219794,
+      "name": "Scapa Dryer Fabrics, Inc. v. Knight",
+      "court": "Supreme Court of Georgia",
+      "date": "2016-07-05",
+      "disposition": "reversed",
+      "areas": [
+        "expert",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/3219794/scapa-dryer-fabrics-inc-v-knight/",
+      "synopsis": "In an asbestos mesothelioma case, the Supreme Court of Georgia held that an expert's cumulative exposure opinion, which told the jury that any exposure above background, even de minimis, was a contributing cause of the disease, did not 'fit' the legal causation standard and was inadmissible under former OCGA section 24-9-67.1 (b). The Court reaffirmed that, while a plaintiff need not prove a substantial contribution, a de minimis contribution does not satisfy Georgia's 'contributing factor' causation standard, and an expert must tie a cumulative exposure opinion to a reliable estimate of actual exposure showing more than de minimis exposure. Because the expert did not condition his causation opinion on such an estimate, its admission was an abuse of the trial court's gatekeeping discretion. The Court reversed the Court of Appeals' affirmance of the judgment.",
+      "why": "The decision clarifies that expert causation testimony in toxic tort cases must satisfy the 'fit' requirement by being tied to a reliable estimate of more than de minimis exposure, and that an 'any exposure' or pure cumulative exposure theory unconnected to actual exposure is inadmissible.",
+      "dockets": [
+        "S15G1278"
+      ]
+    },
+    {
+      "cluster_id": 3209755,
+      "name": "Toyo Tire North America Manufacturing, Inc. v. Davis",
+      "court": "Supreme Court of Georgia",
+      "date": "2016-06-06",
+      "disposition": "affirmed",
+      "areas": [
+        "damages",
+        "expert",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/3209755/toyo-tire-north-america-manufacturing-inc-v-davis/",
+      "synopsis": "In a continuing nuisance and trespass action by homeowners against a nearby manufacturing facility, the Supreme Court of Georgia held that a plaintiff who both occupies and owns the affected property may recover separately for past discomfort and annoyance and for the diminution in the property's market value, treating these as two distinct injuries rather than a double recovery, and it expressly overruled Stanfield v. Waste Management of Georgia. The Court also held that alleged deficiencies in an expert appraiser's methodology go to the admissibility of his testimony under OCGA sections 24-7-702 and 24-7-703, an issue committed to the trial court's gatekeeping discretion in the first instance, and not to whether his opinion suffices to defeat summary judgment on causation. Because the defendant had not moved to exclude the expert testimony in the trial court, the appellate courts could consider that testimony in assessing whether causation survived summary judgment. The Court affirmed the denial of summary judgment.",
+      "why": "The decision clarifies that past discomfort and annoyance damages and diminution in property value are separately recoverable in continuing nuisance cases and establishes that unchallenged expert testimony with methodological weaknesses may still be considered on summary judgment unless a Daubert exclusion motion is made to the trial court.",
+      "dockets": [
+        "S15G1804"
+      ]
+    },
+    {
+      "cluster_id": 2812616,
+      "name": "Phillips v. Harmon",
+      "court": "Supreme Court of Georgia",
+      "date": "2015-06-29",
+      "disposition": "affirmed in part, reversed in part, and remanded",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/2812616/phillips-v-harmon/",
+      "synopsis": "In a medical malpractice action, the Supreme Court of Georgia clarified that a defendant's duty to preserve evidence is triggered not only by actual or express notice of a claim from the plaintiff but whenever litigation is reasonably foreseeable to the party in control of the evidence, and that constructive notice may be shown by circumstances including the type and extent of injury, the clarity of fault, potential financial exposure, the frequency of litigation in similar circumstances, and the defendant's own conduct such as internal investigations and notification of counsel and insurers. The Court reversed the spoliation portion of the Court of Appeals judgment because the lower courts rested on the legally incorrect premise that actual notice from the plaintiff was required, and disapproved several Court of Appeals decisions to the extent they endorsed that analysis. The Court separately affirmed that the trial judge's ex parte communication with the deadlocked jury, conducted outside the presence of the parties and counsel and never disclosed before the verdict, violated the civil parties' right to be present and, under the unique circumstances including the inability to reconstruct the note, constituted harmful error requiring a new trial.",
+      "why": "The decision reframes the trigger for a defendant's evidence-preservation duty around a reasonable-foreseeability standard with enumerated factors, disapproving prior precedent that required actual notice, and confirms that substantive ex parte judge-jury communications in civil trials can require a new trial.",
+      "dockets": [
+        "S14G1868",
+        "S14G1893",
+        "S14G1895"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "area": "negsec",
+  "label": "negligent security",
+  "count": 4,
+  "opinions": [
+    {
+      "cluster_id": 10785227,
+      "name": "Giles v. Greenhouse Apartments, LLC",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-02-06",
+      "disposition": "affirmed",
+      "areas": [
+        "negsec",
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10785227/james-giles-v-greenhouse-apartments-llc/",
+      "synopsis": "The Court of Appeals affirmed summary judgment for an apartment owner and its manager in a negligent-security action by a tenant beaten by unknown assailants on the property in 2020. The landlord conceded it owed the tenant a duty of ordinary care; the affirmance rests solely on causation — the tenant could not establish that any claimed security failure proximately caused the attack — and, given that holding, the court expressly declined to reach the equal-or-superior-knowledge and assumption-of-risk defenses and the challenge to excluded evidence of other crime in the area.",
+      "why": "Causation is an independently dispositive element of a negligent-security claim: a defendant can win summary judgment without litigating foreseeability at all. The incident predates SB 68, so the common-law framework applies; for incidents on or after April 21, 2025 the analysis runs through the statutory regime at O.C.G.A. §§ 51-3-50 to 51-3-57.",
+      "dockets": [
+        "A25A2143"
+      ]
+    },
+    {
+      "cluster_id": 10715536,
+      "name": "Venetian Hills Apartments, LLC v. Hughes",
+      "court": "Court of Appeals of Georgia",
+      "date": "2025-10-31",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "premises",
+        "negsec"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10715536/venetian-hills-apartments-llc-v-marie-hughes-as-authorized-administrator/",
+      "synopsis": "In a wrongful-death action after a tenant died in a fire set during an assault by another tenant's guest, the Court of Appeals held the landlord was not entitled to judgment notwithstanding the verdict: it could be liable under O.C.G.A. § 44-7-14 for defective construction and missing fire-safety measures even after parting with possession, and the criminal acts did not demand a defense verdict. The court nonetheless vacated the judgment and ordered a full retrial because the jury charges conflated landlord-tenant and premises-liability law.",
+      "why": "A landlord can remain liable under O.C.G.A. § 44-7-14 for defective construction and missing fire-safety measures even after giving up possession, but jury charges that blend § 44-7-14 with § 51-3-1 premises law can require a full retrial.",
+      "dockets": [
+        "A25A1091"
+      ]
+    },
+    {
+      "cluster_id": 10381207,
+      "name": "Kinsale Insurance Company v. Pride of St. Lucie Lodge 1189, Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2025-04-18",
+      "disposition": "reversed and remanded",
+      "areas": [
+        "badfaith",
+        "negsec"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10381207/kinsale-insurance-company-v-pride-of-st-lucie-lodge-1189-inc/",
+      "synopsis": "Applying Florida law in a diversity action, the Eleventh Circuit reversed summary judgment for the insurer on a common-law bad-faith claim premised on the insurer's failure to initiate settlement negotiations before suit was filed. The court held that, viewing the evidence in the light most favorable to the nonmovants, a jury could reasonably find that liability was clear under the Powell rule on a negligent-security fact pattern where a bar's security simultaneously ejected two feuding groups into a dark, unmonitored parking lot and a fatal shooting followed within ten to fifteen minutes, with injuries far exceeding the policy sublimit. The court clarified that the Powell 'clear liability' standard is one part of the totality-of-the-circumstances analysis rather than a separate threshold to bad-faith liability, and that 'clear' liability means liability that is obvious or easily understood, not liability that is guaranteed.",
+      "why": "It clarifies that the duty to initiate settlement negotiations where liability is clear is a component of the totality-of-the-circumstances bad-faith analysis rather than a separate threshold, and defines what 'clear' liability means, guidance relevant to practitioners handling insurer bad-faith and negligent-security matters under analogous frameworks.",
+      "dockets": [
+        "22-12675"
+      ]
+    },
+    {
+      "cluster_id": 5749712,
+      "name": "Martin v. Six Flags Over Georgia II, L.P.",
+      "court": "Supreme Court of Georgia",
+      "date": "2017-06-05",
+      "disposition": "affirmed in part and reversed in part, and case remanded with direction",
+      "areas": [
+        "premises",
+        "negsec",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/5749712/martin-v-six-flags-over-georgia-ii-lp/",
+      "synopsis": "The Supreme Court of Georgia held that a premises owner can be liable under OCGA section 51-3-1 for a criminal attack that begins on its premises but is completed off-premises, when the injuries are a foreseeable proximate result of the owner's breach of its duty to keep the premises safe, expressly adopting the principle from Wilks v. Piggly Wiggly Southern. The court clarified that the bus stop where the attack concluded was not part of the park's 'approaches,' because the owner had not exercised the control and dominion required to extend its duty to that public way. On apportionment, the court held that an apportionment error under OCGA section 51-12-33 ordinarily requires a retrial limited to the apportionment of fault among tortfeasors, not a full retrial, because the allocation of relative fault is a step distinct from the determinations of liability and total damages. The court affirmed liability, reversed the Court of Appeals' order of a full retrial, and remanded for retrial limited to apportionment.",
+      "why": "The decision establishes that off-premises injuries can support landowner liability where the attack originates on the premises and is foreseeable, clarifies the 'approaches' and control-and-dominion analysis, and holds that apportionment error generally requires retrial only on apportionment rather than a full retrial.",
+      "dockets": [
+        "S16G0743",
+        "S16G0750"
+      ]
+    }
+  ]
+}
