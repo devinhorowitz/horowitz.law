@@ -43,7 +43,7 @@ jobs:
             storage.courtlistener.com:443
             github.com:443
             api.github.com:443
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       # Keepalive (folded from keepalive.yml): a daily marker commit keeps the repository
       # active so GitHub does not auto-disable the scheduled workflows after 60 days.
