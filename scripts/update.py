@@ -1315,6 +1315,47 @@ def assemble_entry(v, cluster_id, name, court, areas, docket, date_filed, url, f
     return entry
 
 
+def _pr_card(e, i):
+    """Full, phone-readable markdown for one pending card, so a reviewer can read
+    and vet it from the PR's main page without opening the diff. Mirrors the site
+    card's vocabulary (the synopsis, "Why it matters", the first-impression and
+    tort-reform badges, the editor's note), so the PR reads like the card it will
+    become. Returns markdown lines; the per-card review and check flags are
+    appended by the caller."""
+    prec = (e.get("precedential") or "").strip().lower()
+    prec_note = {"unpublished": "unpublished, not binding precedent",
+                 "physical precedent": "physical precedent only, not binding"}.get(prec, "")
+    meta = "%s \u00b7 decided %s \u00b7 %s \u00b7 %s" % (
+        render.COURT_LABELS[e["court"]], render._date_label(e["date"]),
+        render._no_label(e["dockets"]), e["disposition"] or "(disposition not stated)")
+    if prec_note:
+        meta += " \u00b7 " + prec_note
+    areas = ", ".join(render.AREA_LABELS[c] for c in render.all_areas(e))
+    if e.get("first_impression"):
+        areas += " \u00b7 first impression"
+    if e.get("tort_reform"):
+        areas += " \u00b7 tort reform"
+    out = ["### %d. %s" % (i, e["name"]), "", meta, "", "areas: %s" % areas,
+           "", "> %s" % e["synopsis"], "", "**Why it matters:** %s" % e["why"]]
+    for h in (e.get("additional_holdings") or []):
+        ha = ", ".join(render.AREA_LABELS[c] for c in (h.get("areas") or []))
+        label = ("**Also (%s):** " % ha) if ha else "**Also:** "
+        out += ["", "> %s%s" % (label, h.get("synopsis") or ""),
+                "", "**Why it matters:** %s" % (h.get("why") or "")]
+    la = (e.get("law_applied") or "").strip().lower()
+    if la and la != "federal":
+        jl = jurisdictions.JURISDICTIONS.get(la, {}).get("label")
+        out += ["", "**Law applied:** %s law" % (jl or la)]
+    note = (e.get("editor_note") or "").strip()
+    if note:
+        out += ["", "**Editor's note:** %s" % note]
+    links = "CourtListener: %s" % e["url"]
+    if e.get("official_url"):
+        links += " \u00b7 Official PDF: %s" % e["official_url"]
+    out += ["", links]
+    return out
+
+
 def main():
     if not KEY:
         print("ERROR: ANTHROPIC_API_KEY is not set."); sys.exit(1)
@@ -1673,29 +1714,29 @@ def main():
         print("  + %s [%s] %s (sig=%s%s)" % (entry["name"], ",".join(areas), disp, v.get("significance"), hold_note))
 
     lines = ["## Georgia Appellate Watch: %d new opinion(s)" % len(added), ""]
-    for e in added:
-        cl = render.COURT_LABELS[e["court"]]
-        hold_note = " [%d holdings]" % (1 + len(e["additional_holdings"])) if e.get("additional_holdings") else ""
-        lines.append("- **%s** (%s, %s): %s. areas: %s%s. Read: %s"
-                     % (e["name"], cl, e["date"], e["disposition"] or "(none)",
-                        ", ".join(render.all_areas(e)), hold_note, e["url"]))
+    for i, e in enumerate(added, 1):
+        lines += _pr_card(e, i)
+        checks = []
         fr = dict(flagged).get(e["name"])
         if fr:
-            lines.append("  - review: %s" % "; ".join(fr))
+            checks.append("review: %s" % "; ".join(fr))
         cc = crosschecks.get(e["cluster_id"])
         if cc and cc["verdict"] == "flag":
-            lines.append("  - cross-check FLAG: %s" % (cc["reason"] or "the summary may misstate the holding; verify against the opinion"))
+            checks.append("cross-check FLAG: %s" % (cc["reason"] or "the summary may misstate the holding; verify against the opinion"))
         elif cc and cc["verdict"] == "unavailable":
-            lines.append("  - cross-check could not run (%s); verify this card manually" % cc["reason"])
+            checks.append("cross-check could not run (%s); verify this card manually" % cc["reason"])
         elif cc:
-            lines.append("  - cross-check: holding matches the opinion")
+            checks.append("cross-check: holding matches the opinion")
         cp = completeness.get(e["cluster_id"])
         if cp and cp["verdict"] == "flag":
-            lines.append("  - completeness FLAG: %s" % (cp["reason"] or "the opinion may decide a material point in a covered area the card omits; verify against the opinion"))
+            checks.append("completeness FLAG: %s" % (cp["reason"] or "the opinion may decide a material point in a covered area the card omits; verify against the opinion"))
         elif cp and cp["verdict"] == "unavailable":
-            lines.append("  - completeness check could not run (%s); verify this card manually" % cp["reason"])
+            checks.append("completeness check could not run (%s); verify this card manually" % cp["reason"])
         elif cp:
-            lines.append("  - completeness: no material holding omitted")
+            checks.append("completeness: no material holding omitted")
+        if checks:
+            lines += ["", "**Checks:**"] + ["- %s" % c for c in checks]
+        lines.append("")
     if treat_flags or audit_notes:
         lines += ["", "Treatment flags this run (existing cards; confirm on Shepard\u2019s before relying):"]
         for cardnm, newnm, kind in treat_flags:
