@@ -31,8 +31,9 @@ Everything below except the full-jurisdiction upgrade costs $0 ongoing.
 
 Any new page must carry the byte-identical pre-paint inline `<script>` (the CSP pin) and be
 added to `check_site.py`'s `PAGES` list so the guard covers it. Any new generated artifact
-must be deterministic from `opinions.json` so the CI render-idempotency step stays green, and
-its path must be added to that step's diff list and to the render-sync and content-PR
+must be deterministic from its source (`opinions.json`, or `siteconfig.PAGES` for the page
+list) so the CI render-idempotency step stays green, and its path must be added to that
+step's diff list and to the render-sync and content-PR
 add-paths so it actually commits. Asset `?v=` tokens self-stamp via `render.py`.
 
 -----
@@ -72,6 +73,9 @@ The bulk of the original Phases 0 through 4, plus everything since:
 - **Drip-in generation.** `render.py` publishes `/areas/<area>.json` and an index, a
   deterministic per-area extract of `opinions.json`. The source half of the integration
   below.
+- **Single-source page registry.** `siteconfig.PAGES` is the one list of top-level pages;
+  `render.py` builds both the `/404` link list and the sitemap's static URLs from it, so
+  adding a page is a single tuple there and neither generated file is hand-edited.
 
 -----
 

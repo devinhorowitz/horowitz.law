@@ -55,8 +55,10 @@ folder drag, so upload `.gitignore`, `.well-known/`, and `.github/` files indivi
 - `README.md`: the readme, and the source of the colophon's shared prose.
 - `PIPELINE.md`, `ROADMAP.md`, `MAINTENANCE.md`: standalone docs, rendered into nothing.
   (`HANDOFF.md` is a development scratchpad, not part of the published site.)
-- `siteconfig.py`: site identity, the `COVERAGE` coverage line, page descriptions, and
-  the practice-area labels. One place for the copy that appears across pages.
+- `siteconfig.py`: site identity, the `COVERAGE` coverage line, page descriptions, the
+  practice-area labels, and `PAGES`, the registry of top-level pages that drives the `/404`
+  link list and the sitemap's static URLs. One place for the copy and the page list that
+  appear across pages.
 - `scripts/*.py`: the pipeline, the renderer, and the helpers.
 - `app.js`, `opinions.js`, `subscribe.js`, `sw.js`, `base.css`, `functions/*`: front end,
   the service worker, and the subscribe serverless function.
@@ -65,18 +67,22 @@ folder drag, so upload `.gitignore`, `.well-known/`, and `.github/` files indivi
   workflows, `.github/dependabot.yml`, `.well-known/mta-sts.txt`, `humans.txt`,
   `health.txt`, the fonts, icons, `og-card.jpg`, the portraits, and the vCard.
 - Page layout and heads: `index.html`, `404.html`, and `subscribe.html` are hand-edited
-  pages that render only stamps, as are the heads of the generated pages.
+  shells. render stamps them and fills any marker regions they carry: the `/404` link list
+  comes from `siteconfig.PAGES`, and `subscribe.html`'s area and jurisdiction choices from
+  the registries. The heads of the generated pages are hand-edited the same way.
 
 ### Generated, never hand-edit (render writes these; run render-sync after editing the source)
 
-- From `opinions.json`: `opinions.html`, `archive.html`, `opinions.xml`, `sitemap.xml`,
-  `changes.html`, `changes.xml`, `stats.html`, `digests.html`, `o/*.html` (the
-  permalinks), and `areas/*.json` (the per-area slices).
+- From `opinions.json`: `opinions.html`, `archive.html`, `opinions.xml`, `changes.html`,
+  `changes.xml`, `stats.html`, `digests.html`, `o/*.html` (the permalinks), and
+  `areas/*.json` (the per-area slices). Also `sitemap.xml`'s permalink entries; its static
+  URLs come from `siteconfig.PAGES` (below).
 - From `resume.md`: `resume.html` (the four `resume-*` marker regions).
 - From `README.md`: `colophon.html` (the five `col-*` marker regions). Colophon-only text
   outside those regions is edited in `colophon.html` directly.
 - From `siteconfig.py`: the meta, Open Graph, and Twitter descriptions and identity fields
-  on the pages (the `data-cfg` hooks), plus `.well-known/security.txt`.
+  on the pages (the `data-cfg` hooks); the `/404` link list and `sitemap.xml`'s static URLs
+  (both from `PAGES`); and `.well-known/security.txt`.
 - render also stamps the footer year and the asset `?v=` cache tokens on every page.
 
 ### Auto-written state, never hand-edit (committed on purpose, for transparency)
@@ -103,6 +109,11 @@ bodies a workflow produces and consumes; they are never committed.
 - **Change a page description, the site identity, or the coverage line.** Edit
   `siteconfig.py` (`IDENTITY`, `COVERAGE`), run render-sync. The pages pick it up through
   the `data-cfg` hooks.
+- **Add or change a top-level page.** Edit the `PAGES` registry in `siteconfig.py`, run
+  render-sync. One tuple `(path, label, changefreq, priority, lastmod)` adds the page to
+  both the `/404` link list and the sitemap's static URLs. An empty label keeps it out of
+  the `/404` list (home is sitemap-only); an empty lastmod lets render date it from the
+  feed. Never hand-edit `404.html`'s link list or `sitemap.xml`'s URLs.
 - **Add a monitored court or jurisdiction.** Edit one `JURISDICTIONS` entry in
   `scripts/jurisdictions.py`. If it joins the curated core, also update `COVERAGE` in
   `siteconfig.py` so the descriptions name it.

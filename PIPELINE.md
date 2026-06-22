@@ -90,9 +90,10 @@ drafting skill to read its area slice at draft time.
 - `scripts/render.py` renders `opinions.json` into the cards in `opinions.html` (between the
   `opinions:start` / `opinions:end` markers), `archive.html`, the per-opinion permalink pages
   under `/o/`, the `opinions.xml` and `changes.xml` feeds, the `/changes`, `/stats`, and
-  `/digests` pages, the `sitemap.xml` entries, and the per-area slices under `/areas` (the
-  drip-in source, see The authority watch). It changes nothing outside its markers and stamps
-  the footer year in place on the static pages.
+  `/digests` pages, the `sitemap.xml` permalink entries (its static URLs come from
+  `siteconfig.PAGES`), and the per-area slices under `/areas` (the drip-in source, see The
+  authority watch). It changes nothing outside its markers and stamps the footer year in
+  place on the static pages.
 - `scripts/jurisdictions.py` is the single source of truth for the court set, labels, and the
   citation and docket patterns; `update.py`, `render.py`, and `treatment.py` all read it.
 - `scripts/cl_rate.py` is the rate governor: it paces every CourtListener call inside the free
