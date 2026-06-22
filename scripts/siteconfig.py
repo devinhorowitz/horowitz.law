@@ -71,19 +71,23 @@ AUTHOR_URL       = SITE_URL + "/"
 PUBLISHER_NAME   = NAME
 
 # ---- Top-level page registry --------------------------------------------
-# The site's top-level pages as (path, label) pairs. render.py renders the
-# /404 "ls /" listing from this, so a new page surfaces there on the next
-# render without editing 404.html. The label keeps the 404's directory-style
-# trailing slash for the pages that have sub-content.
+# The site's top-level pages, as (path, label, changefreq, priority, lastmod).
+# render.py drives both the /404 "ls /" listing and the sitemap's static URLs
+# from this, so adding a page is a single edit here. An empty label drops the
+# page from the /404 listing (home is sitemap-only). An empty lastmod means
+# render fills it from the feed data, for the pages whose content tracks the
+# feed (opinions, archive, changes, stats, digests); a date is the hand-set
+# value for the rarely-touched pages.
 PAGES = [
-    ("/opinions",  "opinions/"),
-    ("/archive",   "archive/"),
-    ("/changes",   "changes"),
-    ("/stats",     "stats"),
-    ("/digests",   "digests"),
-    ("/subscribe", "subscribe"),
-    ("/resume",    "resume"),
-    ("/colophon",  "colophon"),
+    ("/",          "",           "monthly", "1.0", "2026-05-30"),
+    ("/opinions",  "opinions/",  "weekly",  "0.8", ""),
+    ("/archive",   "archive/",   "weekly",  "0.5", ""),
+    ("/changes",   "changes",    "weekly",  "0.5", ""),
+    ("/stats",     "stats",      "weekly",  "0.3", ""),
+    ("/digests",   "digests",    "weekly",  "0.4", ""),
+    ("/subscribe", "subscribe",  "monthly", "0.4", "2026-06-10"),
+    ("/resume",    "resume",     "monthly", "0.8", "2026-05-30"),
+    ("/colophon",  "colophon",   "monthly", "0.5", "2026-05-30"),
 ]
 
 # ---- Public feed window -------------------------------------------------

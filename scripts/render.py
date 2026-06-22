@@ -256,10 +256,10 @@ def _area_chips():
 
 def _nav_block():
     """The /404 listing's top-level page links, between the pages markers. Driven
-    by siteconfig.PAGES so a newly added page surfaces here on the next render
-    without touching 404.html."""
+    by siteconfig.PAGES (the same registry the sitemap uses); an empty label
+    drops a page from the listing, so home is sitemap-only."""
     return "\n".join('        <a href="%s">%s</a>' % (path, _esc(label))
-                     for path, label in siteconfig.PAGES)
+                     for path, label, *_ in siteconfig.PAGES if label)
 
 
 def _jurisdiction_options():
@@ -1277,30 +1277,37 @@ def render(entries=None):
 
 
 def _update_sitemap(recent, entries):
-    """Keep sitemap lastmod current for the two pages this renderer owns. The value
-    is the newest decision date, deterministic from the data, so a re-render with
-    unchanged cards changes nothing and the CI idempotency check stays green. The
-    other URLs' lastmod stay hand-set. Skipped gracefully if the file is absent."""
+    """Regenerate the sitemap's static URL block from siteconfig.PAGES and its
+    permalink block from opinions.json, so adding a page to PAGES surfaces it
+    here (and in the /404 listing) with no hand edit. The list, changefreq, and
+    priority come from PAGES; lastmod is the hand-set date there, or the newest
+    relevant date from the data for the pages that track the feed. All values are
+    deterministic, so an unchanged re-render is a no-op and CI stays green.
+    Skipped gracefully if the file is absent."""
     if not os.path.exists(SITEMAP_PATH):
         return
     doc = open(SITEMAP_PATH, encoding="utf-8").read()
 
-    def set_lastmod(d, loc, date):
-        pat = re.compile(r'(<loc>%s</loc>\s*<lastmod>)[^<]*(</lastmod>)' % re.escape(loc))
-        return pat.sub(lambda m: m.group(1) + date + m.group(2), d, count=1)
-
-    new = doc
-    if recent:                              # recent arrives sorted desc; [0] is newest
-        new = set_lastmod(new, f"{SITE}/opinions", recent[0]["date"])
-    if entries:                             # entries likewise sorted desc
-        new = set_lastmod(new, f"{SITE}/archive", entries[0]["date"])
-        new = set_lastmod(new, f"{SITE}/stats", entries[0]["date"])
-        newest_seen = max(((e.get("first_seen") or e.get("date") or "")[:10] for e in entries), default="")
-        if newest_seen:
-            new = set_lastmod(new, f"{SITE}/digests", newest_seen)
+    # Data-driven lastmods for the pages whose content tracks the feed. A page
+    # left empty in PAGES but absent here falls back to the newest decision date,
+    # so a new feed-backed page is coarse but never wrong.
     flagged = _flagged(entries)
-    if flagged:
-        new = set_lastmod(new, f"{SITE}/changes", flagged[0].get("treatment_date") or flagged[0]["date"])
+    newest = entries[0]["date"] if entries else datetime.date.today().isoformat()
+    newest_seen = max(((e.get("first_seen") or e.get("date") or "")[:10] for e in entries), default=newest)
+    dyn = {
+        "/opinions": recent[0]["date"] if recent else newest,
+        "/archive":  newest,
+        "/stats":    newest,
+        "/digests":  newest_seen,
+        "/changes":  (flagged[0].get("treatment_date") or flagged[0]["date"]) if flagged else newest,
+    }
+    rows = ["  <url>\n    <loc>%s%s</loc>\n    <lastmod>%s</lastmod>\n"
+            "    <changefreq>%s</changefreq>\n    <priority>%s</priority>\n  </url>"
+            % (SITE, path, lm or dyn.get(path) or newest, freq, prio)
+            for path, label, freq, prio, lm in siteconfig.PAGES]
+    new = re.sub(r"([ \t]*)(<!-- pages:start.*?-->).*?<!-- pages:end -->",
+                 lambda m: m.group(1) + m.group(2) + "\n" + "\n".join(rows) + "\n" + m.group(1) + "<!-- pages:end -->",
+                 doc, count=1, flags=re.S)
     # Permalink entries live between sitemap markers and regenerate wholesale.
     urls = []
     for e in entries:
