@@ -648,6 +648,12 @@ def _card_styles():
 def permalink_html(e):
     name = _esc(e["name"])
     desc = (e["synopsis"][:157] + "\u2026") if len(e["synopsis"]) > 158 else e["synopsis"]
+    # The social/SEO description leads with the AI caveat as a prefix, so the
+    # signal survives the platform's own display truncation and the unfurl that
+    # travels (a shared LinkedIn card, a search snippet) leads with the same
+    # disclosure the card and the JSON-LD already carry. JSON-LD keeps its own
+    # suffix form below, so it is left on the bare desc to avoid a double caveat.
+    social_desc = "AI-drafted summary. " + desc
     modified = e.get("treatment_date") or (e.get("first_seen") or "")[:10] or e["date"]
     ld = json.dumps({
         "@context": "https://schema.org", "@type": "Article",
@@ -673,7 +679,7 @@ def permalink_html(e):
 '<meta charset="UTF-8">\n'
 '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
 f"<title>{name} \u00b7 horowitz.law</title>\n"
-f'<meta name="description" content="{_attr(desc)}">\n'
+f'<meta name="description" content="{_attr(social_desc)}">\n'
 '<meta name="theme-color" content="#0d0e10" media="(prefers-color-scheme: dark)">\n'
 '<meta name="theme-color" content="#f5ede0" media="(prefers-color-scheme: light)">\n'
 "\n"
@@ -683,14 +689,14 @@ f'<link rel="canonical" href="{SITE}/o/{e["cluster_id"]}">\n'
 f'<meta property="og:url" content="{SITE}/o/{e["cluster_id"]}">\n'
 '<meta property="og:locale" content="en_US">\n'
 f'<meta property="og:title" content="{_attr(e["name"])}">\n'
-f'<meta property="og:description" content="{_attr(desc)}">\n'
+f'<meta property="og:description" content="{_attr(social_desc)}">\n'
 f'<meta property="og:image" content="{SITE}/og-card.jpg">\n'
 '<meta property="og:site_name" content="horowitz.law">\n'
 f'<meta property="article:published_time" content="{e["date"]}">\n'
 "\n"
 '<meta name="twitter:card" content="summary">\n'
 f'<meta name="twitter:title" content="{_attr(e["name"])}">\n'
-f'<meta name="twitter:description" content="{_attr(desc)}">\n'
+f'<meta name="twitter:description" content="{_attr(social_desc)}">\n'
 '<link rel="icon" type="image/svg+xml" href="/favicon.svg">\n'
 '<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">\n'
 '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">\n'
