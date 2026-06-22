@@ -140,6 +140,27 @@ jobs:
           OPINIONS_MAINT_SLICE: ${{ vars.OPINIONS_MAINT_SLICE || '3' }}
         run: python scripts/maintain.py
 
+      # A one-glance record of the daily chore on the run page: keepalive, the court-registry
+      # outcome (from the validate step's exit code), and that the golden cross-check ran.
+      - name: Run summary
+        if: success()
+        env:
+          CODE: ${{ steps.courts.outputs.code }}
+        run: |
+          case "$CODE" in
+            0) reg="clean" ;;
+            3) reg="drift detected (issue filed)" ;;
+            4) reg="deferred (transient throttle or network)" ;;
+            *) reg="error (exit ${CODE:-?})" ;;
+          esac
+          {
+            echo "## Daily maintenance"
+            echo ""
+            echo "- Keepalive: committed"
+            echo "- Court registry: $reg"
+            echo "- Golden cross-check: ran"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Report maintenance findings
         if: failure()
         env:

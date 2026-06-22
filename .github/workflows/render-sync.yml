@@ -69,6 +69,7 @@ jobs:
       # never the data. Confirm the latest tag at github.com/peter-evans/create-pull-request
       # before pinning.
       - name: Open a render-sync PR if the pages drifted
+        id: pr
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           branch: bot/opinions-render
@@ -108,6 +109,24 @@ jobs:
             .well-known/security.txt
             devin-horowitz.vcf
             areas
+
+      # One-glance record on the run page: whether the pages had drifted (a PR opened to
+      # reconcile) or already matched opinions.json (nothing to do).
+      - name: Run summary
+        if: success()
+        env:
+          PR: ${{ steps.pr.outputs.pull-request-number }}
+          OP: ${{ steps.pr.outputs.pull-request-operation }}
+        run: |
+          {
+            echo "## Render sync"
+            echo ""
+            if [ -n "$PR" ]; then
+              echo "Pages had drifted from \`opinions.json\`; ${OP:-opened} PR #$PR to reconcile."
+            else
+              echo "Pages already match \`opinions.json\`; no drift."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # Surfaces a broken run instead of letting it fail silently: comments on the one
       # open tracking issue, or opens it the first time, so repeated failures collect
