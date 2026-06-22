@@ -41,6 +41,7 @@ import os, json, time, html, datetime, textwrap
 import urllib.request, urllib.error
 import render  # shared COURT_LABELS / AREA_LABELS
 import siteconfig  # shared COVERAGE phrase
+import safeio  # GitHub Actions run-summary helper
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_PATH = os.path.join(REPO, "opinions.json")
@@ -428,7 +429,10 @@ def main():
     print("digest window: since %s (%d days) | new: %d | corrections: %d"
           % (since, DAYS, len(new), len(corrections)))
     if not new and not corrections:
-        print("nothing new and no corrections in the window; not sending."); return
+        print("nothing new and no corrections in the window; not sending.")
+        safeio.step_summary("## Georgia Appellate Watch \u00b7 weekly digest\n\n"
+                            "Nothing new or corrected this window; no digest sent.")
+        return
     subject = subject_line(new, corrections)
     html_body, text_body = build_html(new, corrections), build_text(new, corrections)
     if DRY_RUN or not API_KEY:
@@ -481,6 +485,11 @@ def main():
         print("created DRAFT broadcast id=%s (not sent). Review and send it in the Resend dashboard." % bid)
     else:
         print("created and sent broadcast id=%s to segment %s (topic %s)." % (bid, SEGMENT_ID, TOPIC_ID or "none"))
+
+    safeio.step_summary(
+        "## Georgia Appellate Watch \u00b7 weekly digest\n\n"
+        "%s %d new opinion(s) and %d correction(s) to the main list."
+        % ("Drafted" if DRAFT else "Sent", len(new), len(corrections)))
 
     # Per-area digests: one broadcast per area with content in the window,
     # scoped to that area's Topic so only its subscribers receive it and its

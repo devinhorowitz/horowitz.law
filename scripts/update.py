@@ -1356,6 +1356,10 @@ def _pr_card(e, i):
     return out
 
 
+# Console log prefixes, so a raw job log reads at a glance: "+" an opinion added
+# or a routing override, "~" an adverse-treatment flag raised on an existing card,
+# "!" a warning or error, "." a minor or best-effort step that was skipped. The
+# same run also writes a rendered summary to the Actions run page (safeio.step_summary).
 def main():
     if not KEY:
         print("ERROR: ANTHROPIC_API_KEY is not set."); sys.exit(1)
@@ -1424,6 +1428,8 @@ def main():
     if not results:
         print("no candidates returned from the courtlistener feeds "
               "(feed unreachable or empty); nothing written this run.")
+        safeio.step_summary("## Georgia Appellate Watch \u00b7 funnel\n\n"
+                            "**No candidates returned from the feeds this run.**")
         return
     cand, ids = [], set()
     for r in results:
@@ -1766,7 +1772,18 @@ def main():
         ("; %d candidate(s) deferred to the next run (%s)" % (cl_deferred, cl_rate.PACER.defer_note()))
         if cl_deferred else "")
 
+    def _summary(headline, extra=""):
+        # Rendered run summary for the Actions page, so "what did this run do" is
+        # legible from a phone without opening the diff or scrolling the log.
+        safeio.step_summary(
+            "## Georgia Appellate Watch \u00b7 funnel\n\n%s\n\n"
+            "| screened | pretriaged | triaged | summarized | audited | dropped |\n"
+            "| ---: | ---: | ---: | ---: | ---: | ---: |\n"
+            "| %d | %d | %d | %d | %d | %d |\n\n%s"
+            % (headline, n_screen, n_pretriage, n_triage, n_opus, n_audit, len(skipped), extra))
+
     if cfg_error:
+        _summary("**Stopped on a configuration error; nothing was committed.**", cl_line)
         print("Stopped on a configuration error; nothing was committed. "
               "Exiting non-zero so the failure is visible (e.g. emailed) rather than silently deferred.")
         print(cl_line)
@@ -1796,6 +1813,7 @@ def main():
         skill_alert.save_state(SA_STATE_PATH, sa_state)
 
     if not added and not treatment_changed:
+        _summary("No new opinions this run.", "%s \u00b7 since %s" % (cl_line, since))
         # Nothing to card, but persist the clusters fully evaluated this run as seen, so the
         # next scheduled run does not re-screen and re-triage the same recent opinions during
         # a no-card stretch. Deferred or rolled-over candidates are deliberately not in
@@ -1827,6 +1845,9 @@ def main():
     print("rendered %d entries; added %d, flagged %d, treatment %d (%s, dropped %d)"
           % (n, len(added), len(flagged), len(treat_flags), funnel, len(skipped)))
     print(cl_line)
+    _summary("**%d new opinion(s)** proposed in a review PR." % len(added),
+             "flagged for review: %d \u00b7 treatment flags: %d \u00b7 %s \u00b7 since %s"
+             % (len(flagged), len(treat_flags), cl_line, since))
 
 
 if __name__ == "__main__":

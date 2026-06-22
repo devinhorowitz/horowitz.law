@@ -376,6 +376,13 @@ def main():
           % (classified, len(new_flags), cl_rate.PACER.calls,
              (" (stopped: %s%s)" % (stopped, "; " + defer if defer else "")) if stopped else ""))
 
+    safeio.step_summary(
+        "## Georgia Appellate Watch \u00b7 treatment sweep\n\n"
+        "Classified %d citing opinion(s); raised %d flag(s) to caution.\n\n"
+        "CourtListener REST calls: %d%s"
+        % (classified, len(new_flags), cl_rate.PACER.calls,
+           " \u00b7 run stopped early, remaining cards roll to the next run" if stopped else ""))
+
     if DRY_RUN:
         print("\n--- DRY RUN, nothing written ---\n" + pr_body)
         return

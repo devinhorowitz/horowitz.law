@@ -41,3 +41,20 @@ def atomic_write_json(path, obj, ensure_ascii=False, indent=2):
     so converting an existing direct dump to this produces no spurious diff.
     """
     atomic_write_text(path, json.dumps(obj, ensure_ascii=ensure_ascii, indent=indent))
+
+
+def step_summary(markdown):
+    """Append markdown to the GitHub Actions run summary, the rendered page shown
+    on a run's main tab (and on a phone). A no-op anywhere but Actions, where
+    GITHUB_STEP_SUMMARY names the file to append to. Deliberately not atomic: the
+    summary is a disposable log, not durable state, so a half-written line costs
+    nothing and best-effort beats failing a run over a cosmetic write.
+    """
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(markdown.rstrip("\n") + "\n\n")
+    except OSError as e:
+        print("  . step-summary write skipped: %s" % e)
