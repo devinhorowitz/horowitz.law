@@ -2,7 +2,7 @@
   "name": "Georgia Appellate Watch — horowitz.law",
   "short_name": "GA Watch",
   "description": "AI-assisted synopses of recent Georgia appellate, Eleventh Circuit, and U.S. Supreme Court opinions, filtered for civil litigation and insurance practice. Human-reviewed, correction-ledgered.",
-  "id": "/",
+  "id": "/opinions",
   "start_url": "/opinions",
   "scope": "/",
   "display": "standalone",
@@ -10,6 +10,6 @@
   "theme_color": "#0d0e10",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
