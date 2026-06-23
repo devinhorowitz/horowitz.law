@@ -1732,5 +1732,70 @@
     "first_seen": "2026-06-20",
     "law_applied": "federal",
     "official_url": "https://www.supremecourt.gov/opinions/25pdf/25-197_new_4g15.pdf"
+  },
+  {
+    "cluster_id": 10878114,
+    "name": "Douglas v. Bhakta",
+    "court": "ctapp",
+    "division": "Second Division",
+    "date": "2026-06-22",
+    "dockets": [
+      "A26A0189"
+    ],
+    "disposition": "affirmed in part, reversed in part, and remanded",
+    "areas": [
+      "auto",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10878114/jovan-douglas-v-chirag-bhakta/",
+    "synopsis": "In an auto-accident suit, defendant admitted in his answer that he was a Kansas resident at the time of the accident and at the time of suit but did not assert insufficiency of service of process by motion filed before or simultaneously with the answer. The Court of Appeals held that a defendant waives the defense of insufficiency of service of process under OCGA section 9-11-12(h)(1)(B) by failing to raise it in the original answer or a contemporaneously filed motion, and that a general reference to lack of personal jurisdiction does not preserve the service defense. The court further held that, because defendant admitted out-of-state residency in his answer, he was subject to service under the Nonresident Motorist Act, and his later conclusory affidavit asserting Georgia residency could not overcome that binding judicial admission, which he never moved to withdraw. The court also clarified that a nonresident defendant involved in a Georgia accident is subject to jurisdiction under the NRMA when nonresident at both the time of accident and time of suit, while the Long Arm Statute applies when the defendant was a Georgia resident at the time of the accident and later became a nonresident. The dismissal was reversed.",
+    "why": "It clarifies that the service-of-process defense in NRMA auto cases must be raised in the original answer or a simultaneously filed motion or it is waived, and that an answer admission of residency is a binding judicial admission that a later self-serving affidavit cannot overcome absent a motion to withdraw.",
+    "precedential": "published",
+    "first_seen": "2026-06-23",
+    "additional_holdings": [
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "The trial court had granted defendant's motion to withdraw deemed admissions under OCGA section 9-11-36(b), including admissions concerning residence. Following its holding in Division 1, the Court of Appeals reversed the withdrawal as to the residency-related requests because defendant had admitted Kansas residency and failed to preserve the service defense, but found no abuse of discretion as to the remaining requests and directed that discovery be reopened on remand in light of newly provided eyewitness evidence.",
+        "why": "It illustrates that withdrawal of deemed admissions under OCGA section 9-11-36(b) cannot be used to undo a binding pleading admission that controls a dispositive jurisdictional issue."
+      }
+    ]
+  },
+  {
+    "cluster_id": 10878111,
+    "name": "Yamaha Motor Manufacturing Corporation of America v. Hall",
+    "court": "ctapp",
+    "division": "Fourth Division",
+    "date": "2026-06-22",
+    "dockets": [
+      "A26A0228"
+    ],
+    "disposition": "reversed",
+    "areas": [
+      "damages",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10878111/yamaha-motor-manufacturing-coporation-of-america-v-elizabeth-hall/",
+    "synopsis": "In a products-liability action arising from a golf cart rollover, the trial court excluded the specific contents of the manufacturer's warning labels and operator's manual, allowing only evidence that warnings existed and how they were delivered. The Court of Appeals held that the contents of the warnings were relevant and admissible to the risk-utility analysis on the design-defect claim under the Banks 'efficacy of warnings' factor, even though those contents were inadmissible on the communication-based failure-to-warn claim because the operator never read them. The court reasoned that evidence inadmissible for one purpose may be admissible for another and that the error was not harmless, and it rejected the contention that the manufacturer waived the argument by not using the phrase 'risk-utility analysis' below.",
+    "why": "It clarifies that the contents of a manufacturer's warnings are admissible on the design-defect risk-utility analysis under Banks even when those contents are inadmissible on a failure-to-warn claim, and confirms that no magic words are required to preserve a relevance argument.",
+    "precedential": "published",
+    "first_seen": "2026-06-23",
+    "additional_holdings": [
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "The manufacturer argued for the first time on appeal that it owed no duty to ensure its warning labels and operator's manual remained with the golf cart through the product's life cycle. The court held the argument was not preserved because, under OCGA section 9-11-50 (a), a directed-verdict motion must state its specific grounds, and the manufacturer never raised the absence of a duty when it moved for a directed verdict below, having instead argued only the adequacy of communication and proximate cause.",
+        "why": "It reinforces that a ground for directed verdict not specifically stated in the trial court motion cannot be raised for the first time on appeal."
+      },
+      {
+        "areas": [
+          "damages"
+        ],
+        "synopsis": "The manufacturer invited the court to revisit AU Medical Center v. Dale, in which a plurality held that the term 'brought' in the former version of OCGA section 51-12-33 (b) refers to the number of named defendants remaining at the time of trial, which had led the trial court to enter the full judgment against the manufacturer despite the jury allocating fault to dismissed non-parties. The court declined the invitation to revisit that holding.",
+        "why": "It signals that the court will not reconsider its apportionment construction in AU Medical Center v. Dale regarding allocation of fault to dismissed non-parties under the former statute."
+      }
+    ]
   }
 ]

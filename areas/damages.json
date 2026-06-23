@@ -1,8 +1,26 @@
 {
   "area": "damages",
   "label": "damages",
-  "count": 22,
+  "count": 23,
   "opinions": [
+    {
+      "cluster_id": 10878111,
+      "name": "Yamaha Motor Manufacturing Corporation of America v. Hall",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-22",
+      "disposition": "reversed",
+      "areas": [
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10878111/yamaha-motor-manufacturing-coporation-of-america-v-elizabeth-hall/",
+      "synopsis": "In a products-liability action arising from a golf cart rollover, the trial court excluded the specific contents of the manufacturer's warning labels and operator's manual, allowing only evidence that warnings existed and how they were delivered. The Court of Appeals held that the contents of the warnings were relevant and admissible to the risk-utility analysis on the design-defect claim under the Banks 'efficacy of warnings' factor, even though those contents were inadmissible on the communication-based failure-to-warn claim because the operator never read them. The court reasoned that evidence inadmissible for one purpose may be admissible for another and that the error was not harmless, and it rejected the contention that the manufacturer waived the argument by not using the phrase 'risk-utility analysis' below.",
+      "why": "It clarifies that the contents of a manufacturer's warnings are admissible on the design-defect risk-utility analysis under Banks even when those contents are inadmissible on a failure-to-warn claim, and confirms that no magic words are required to preserve a relevance argument.",
+      "dockets": [
+        "A26A0228"
+      ]
+    },
     {
       "cluster_id": 10875860,
       "name": "Lloyd v. City of Atlanta",

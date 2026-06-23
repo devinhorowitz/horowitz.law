@@ -1,8 +1,26 @@
 {
   "area": "auto",
   "label": "auto",
-  "count": 19,
+  "count": 20,
   "opinions": [
+    {
+      "cluster_id": 10878114,
+      "name": "Douglas v. Bhakta",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-22",
+      "disposition": "affirmed in part, reversed in part, and remanded",
+      "areas": [
+        "auto",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10878114/jovan-douglas-v-chirag-bhakta/",
+      "synopsis": "In an auto-accident suit, defendant admitted in his answer that he was a Kansas resident at the time of the accident and at the time of suit but did not assert insufficiency of service of process by motion filed before or simultaneously with the answer. The Court of Appeals held that a defendant waives the defense of insufficiency of service of process under OCGA section 9-11-12(h)(1)(B) by failing to raise it in the original answer or a contemporaneously filed motion, and that a general reference to lack of personal jurisdiction does not preserve the service defense. The court further held that, because defendant admitted out-of-state residency in his answer, he was subject to service under the Nonresident Motorist Act, and his later conclusory affidavit asserting Georgia residency could not overcome that binding judicial admission, which he never moved to withdraw. The court also clarified that a nonresident defendant involved in a Georgia accident is subject to jurisdiction under the NRMA when nonresident at both the time of accident and time of suit, while the Long Arm Statute applies when the defendant was a Georgia resident at the time of the accident and later became a nonresident. The dismissal was reversed.",
+      "why": "It clarifies that the service-of-process defense in NRMA auto cases must be raised in the original answer or a simultaneously filed motion or it is waived, and that an answer admission of residency is a binding judicial admission that a later self-serving affidavit cannot overcome absent a motion to withdraw.",
+      "dockets": [
+        "A26A0189"
+      ]
+    },
     {
       "cluster_id": 10873711,
       "name": "Waddle Trucking of Mississippi, Inc. v. Johnson",
