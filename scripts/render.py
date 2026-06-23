@@ -354,14 +354,19 @@ def card_html(e, permalink_link=True):
     # holding is never crowded out and stays reachable under its own area filter.
     additional = e.get("additional_holdings") or []
     if additional:
-        def _holding(h_areas, syn, why):
+        def _holding(h_areas, syn, why, show_areas=True):
             ht = "".join(f'<span class="tag">{_esc(AREA_LABELS[c])}</span>' for c in h_areas)
+            areas_row = f'            <div class="op-holding-areas">{ht}</div>\n' if show_areas else ""
             return (f'          <div class="op-holding">\n'
-                    f'            <div class="op-holding-areas">{ht}</div>\n'
+                    f'{areas_row}'
                     f'            <p class="op-synopsis">{_esc(syn)}</p>\n'
                     f'            <p class="op-why"><strong>Why it matters:</strong> {_esc(why)}</p>\n'
                     f'          </div>\n')
-        blocks = _holding(e["areas"], e["synopsis"], e["why"])
+        # The first holding is the card's primary; its areas already appear in the
+        # card tag row just above, so labeling it again stacks a duplicate chip line
+        # directly above it. Additional holdings keep their own area labels, so each
+        # stays distinguishable and reachable under its own area filter.
+        blocks = _holding(e["areas"], e["synopsis"], e["why"], show_areas=False)
         for h in additional:
             blocks += _holding(h.get("areas") or [], h.get("synopsis") or "", h.get("why") or "")
         body = f'        <div class="op-holdings">\n{blocks}        </div>\n'
