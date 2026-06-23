@@ -164,6 +164,8 @@
   h1.page-title { font-size: clamp(28px, 4.5vw, 38px); font-weight: 500; letter-spacing: -0.025em; line-height: 1.15; margin-bottom: 12px; }
   .subtitle { color: var(--accent); font-size: 13px; margin-bottom: 26px; letter-spacing: 0.03em; }
   .intro { color: var(--fg-muted); font-size: 13px; margin-bottom: 26px; max-width: 64ch; }
+  .intro a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--fg-muted); transition: color .2s, border-color .2s; }
+  .intro a:hover { color: var(--accent); border-bottom-color: var(--accent); }
   .intro strong { color: var(--fg); font-weight: 600; }
   .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
   .filters.search { margin-bottom: 12px; }
@@ -251,7 +253,7 @@
 <div class="container">
 
   <div class="topbar">
-    <span class="path"><span class="prompt-char" aria-hidden="true">$</span><a href="/">cd ~</a> · ~/opinions</span>
+    <span class="path"><span class="prompt-char" aria-hidden="true">$</span><a href="/">cd ~</a> · ~/archive</span>
     <div class="topbar-actions">
       <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light or dark theme" aria-pressed="false">[ light ]</button>
     </div>
