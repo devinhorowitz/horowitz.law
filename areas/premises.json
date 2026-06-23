@@ -1,8 +1,27 @@
 {
   "area": "premises",
   "label": "premises",
-  "count": 9,
+  "count": 10,
   "opinions": [
+    {
+      "cluster_id": 10878584,
+      "name": "QuikTrip Corporation v. Robinson",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-23",
+      "disposition": "affirmed",
+      "areas": [
+        "premises",
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10878584/quiktrip-corporation-v-patricia-robinson/",
+      "synopsis": "Plaintiff sued for injuries from a sidewalk trip and fall at defendant's store. The defendant removed the case on diversity grounds, plaintiff obtained a remand by arguing the amount in controversy was unclear, and after remand a doctor issued a permanent impairment rating. The Court of Appeals held that the trial court did not abuse its discretion in declining to apply judicial estoppel to cap damages at $75,000, because the post-remand permanent impairment rating constituted a change in circumstances under Wal-Mart Stores E., LP v. Howell, and because it was not conclusively established that plaintiff had taken a clearly inconsistent position in federal court.",
+      "why": "The decision applies and reinforces the rule that a post-remand change in circumstances affecting damages, such as a later permanent impairment rating, defeats judicial estoppel even where a plaintiff obtained remand by minimizing the amount in controversy.",
+      "dockets": [
+        "A26A0087"
+      ]
+    },
     {
       "cluster_id": 10815924,
       "name": "Loveless v. GSH Investments, LLC",

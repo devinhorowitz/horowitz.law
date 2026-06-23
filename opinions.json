@@ -1797,5 +1797,44 @@
         "why": "It signals that the court will not reconsider its apportionment construction in AU Medical Center v. Dale regarding allocation of fault to dismissed non-parties under the former statute."
       }
     ]
+  },
+  {
+    "cluster_id": 10878584,
+    "name": "QuikTrip Corporation v. Robinson",
+    "court": "ctapp",
+    "division": "Fifth Division",
+    "date": "2026-06-23",
+    "dockets": [
+      "A26A0087"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "premises",
+      "damages",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10878584/quiktrip-corporation-v-patricia-robinson/",
+    "synopsis": "Plaintiff sued for injuries from a sidewalk trip and fall at defendant's store. The defendant removed the case on diversity grounds, plaintiff obtained a remand by arguing the amount in controversy was unclear, and after remand a doctor issued a permanent impairment rating. The Court of Appeals held that the trial court did not abuse its discretion in declining to apply judicial estoppel to cap damages at $75,000, because the post-remand permanent impairment rating constituted a change in circumstances under Wal-Mart Stores E., LP v. Howell, and because it was not conclusively established that plaintiff had taken a clearly inconsistent position in federal court.",
+    "why": "The decision applies and reinforces the rule that a post-remand change in circumstances affecting damages, such as a later permanent impairment rating, defeats judicial estoppel even where a plaintiff obtained remand by minimizing the amount in controversy.",
+    "precedential": "published",
+    "first_seen": "2026-06-23",
+    "additional_holdings": [
+      {
+        "areas": [
+          "damages",
+          "premises"
+        ],
+        "synopsis": "The defendant argued the $1.8 million award was arbitrary and excessive for what it characterized as a broken pinky finger. The court held the award was not so excessive as to be inconsistent with the preponderance of the evidence under OCGA section 51-12-12 (a), citing evidence of a permanent hand fracture at the base of the joint on the dominant hand, surgery, lasting limited range of motion, scarring, and impairment of life activities. The court noted that pain and suffering damages are governed by the enlightened conscience of the jury, are not confined to a multiple of special damages, and may compensate future as well as past suffering.",
+        "why": "It confirms the heavy burden on a party challenging a pain and suffering award as excessive and that such awards need not be tied to medical specials, even for an injury characterized as minor."
+      },
+      {
+        "areas": [
+          "damages",
+          "procedure"
+        ],
+        "synopsis": "The defendant contended the verdict was tainted by closing arguments portraying it as a bad actor that fought responsibility for ten years. The court held the challenge was not preserved because the defendant did not object contemporaneously, and added that the arguments fell within legitimate comment and did not constitute an improper request for the jury to punish the defendant.",
+        "why": "It reiterates that unobjected-to closing argument is not preserved for review and that comment on a party's resistance to responsibility can be legitimate argument rather than an improper call to punish."
+      }
+    ]
   }
 ]
