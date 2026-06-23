@@ -6,8 +6,19 @@
     <atom:link href="https://horowitz.law/opinions.xml" rel="self" type="application/rss+xml" />
     <description>AI-assisted synopses of new Georgia appellate, Eleventh Circuit, and U.S. Supreme Court opinions, filtered for civil litigation and insurance practice. Each synopsis is AI-drafted; the linked opinion is the authority. A curated core, not a complete docket. This feed covers the most recent two years; older opinions are archived by year at https://horowitz.law/archive.</description>
     <language>en-us</language>
-    <lastBuildDate>Mon, 22 Jun 2026 12:00:00 -0400</lastBuildDate>
+    <lastBuildDate>Tue, 23 Jun 2026 12:00:00 -0400</lastBuildDate>
     <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>
+    <item>
+      <title>QuikTrip Corporation v. Robinson (Ga. Ct. App.)</title>
+      <link>https://www.courtlistener.com/opinion/10878584/quiktrip-corporation-v-patricia-robinson/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10878584/quiktrip-corporation-v-patricia-robinson/</guid>
+      <pubDate>Tue, 23 Jun 2026 12:00:00 -0400</pubDate>
+      <category>Court of Appeals of Georgia</category>
+      <category>premises</category>
+      <category>damages</category>
+      <category>procedure</category>
+      <description><![CDATA[Plaintiff sued for injuries from a sidewalk trip and fall at defendant's store. The defendant removed the case on diversity grounds, plaintiff obtained a remand by arguing the amount in controversy was unclear, and after remand a doctor issued a permanent impairment rating. The Court of Appeals held that the trial court did not abuse its discretion in declining to apply judicial estoppel to cap damages at $75,000, because the post-remand permanent impairment rating constituted a change in circumstances under Wal-Mart Stores E., LP v. Howell, and because it was not conclusively established that plaintiff had taken a clearly inconsistent position in federal court. Why it matters: The decision applies and reinforces the rule that a post-remand change in circumstances affecting damages, such as a later permanent impairment rating, defeats judicial estoppel even where a plaintiff obtained remand by minimizing the amount in controversy. Also: The defendant argued the $1.8 million award was arbitrary and excessive for what it characterized as a broken pinky finger. The court held the award was not so excessive as to be inconsistent with the preponderance of the evidence under OCGA section 51-12-12 (a), citing evidence of a permanent hand fracture at the base of the joint on the dominant hand, surgery, lasting limited range of motion, scarring, and impairment of life activities. The court noted that pain and suffering damages are governed by the enlightened conscience of the jury, are not confined to a multiple of special damages, and may compensate future as well as past suffering. Why it matters: It confirms the heavy burden on a party challenging a pain and suffering award as excessive and that such awards need not be tied to medical specials, even for an injury characterized as minor. Also: The defendant contended the verdict was tainted by closing arguments portraying it as a bad actor that fought responsibility for ten years. The court held the challenge was not preserved because the defendant did not object contemporaneously, and added that the arguments fell within legitimate comment and did not constitute an improper request for the jury to punish the defendant. Why it matters: It reiterates that unobjected-to closing argument is not preserved for review and that comment on a party's resistance to responsibility can be legitimate argument rather than an improper call to punish. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10878584/quiktrip-corporation-v-patricia-robinson/]]></description>
+    </item>
     <item>
       <title>Douglas v. Bhakta (Ga. Ct. App.)</title>
       <link>https://www.courtlistener.com/opinion/10878114/jovan-douglas-v-chirag-bhakta/</link>
