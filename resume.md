@@ -25,7 +25,7 @@ Partner · Feb 2026 – Present
 
 - Defend insureds in personal injury, premises liability, and trucking matters at trial and on appeal
 - Draft dispositive motions, discovery responses, and appellate briefs in Georgia state and federal courts
-- Advise carriers on coverage, settlement strategy, and case valuation
+- Advise carriers on strategy and case valuation
 
 ### Hall & Lampros, LLP (Civil Rights & Personal Injury) · Atlanta, GA
 Partner · Jun 2025 – Jan 2026
