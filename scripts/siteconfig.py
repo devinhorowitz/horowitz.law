@@ -21,14 +21,30 @@ and the resume role entries in one move.
 SITE_URL    = "https://horowitz.law"          # canonical origin, no trailing slash
 ARCHIVE_URL = SITE_URL + "/archive"
 
-# ---- Author / identity (a promotion is a one-line change here) ----------
-NAME       = "Devin R. Horowitz"
+# ---- Author / identity (a promotion, or a hand-off to a new owner, is an edit here) ----
+# Name kept as parts so a re-user changes three obvious fields, not a full string, and so
+# the granular forms (givenName/familyName, the app title, the monogram) derive from one
+# place. Composed NAME adds the period after the middle initial.
+NAME_FIRST  = "Devin"
+NAME_MIDDLE = "R"          # middle initial, no period; composed forms add the dot
+NAME_LAST   = "Horowitz"
+NAME        = f"{NAME_FIRST} {NAME_MIDDLE}. {NAME_LAST}"
+INITIALS    = NAME_FIRST[:1] + NAME_LAST[:1]           # "DH" -- QR monogram
 ROLE       = "Partner"                                 # current title
 ROLE_LINE  = "Partner, Civil Litigation Attorney"      # title-tag / OG card form
 ROLE_SHORT = "Partner \u00b7 Civil Litigation"         # hero-byline form (middle dot)
-EMAIL      = "devin@horowitz.law"
+EMAIL      = "devin@horowitz.law"                      # personal / site
+EMAIL_FIRM = "devin.horowitz@qpwblaw.com"              # firm
+# Phone kept as parts so the three surface forms (E.164 for JSON-LD, the tel: href with the
+# DTMF extension, and the human display) stay in lockstep from one edit. Ext "" if none.
+_PH_AREA = "770"; _PH_PRE = "650"; _PH_LINE = "8737"; _PH_EXT = "1983"
+PHONE_E164    = f"+1-{_PH_AREA}-{_PH_PRE}-{_PH_LINE}"
+PHONE_TEL     = f"+1{_PH_AREA}{_PH_PRE}{_PH_LINE}" + (f",{_PH_EXT}" if _PH_EXT else "")
+PHONE_DISPLAY = f"({_PH_AREA}) {_PH_PRE}-{_PH_LINE}" + (f" ext. {_PH_EXT}" if _PH_EXT else "")
 FIRM       = "Quintairos, Prieto, Wood & Boyer, P.A."  # raw &; render escapes on inject
 FIRM_URL   = "https://qpwblaw.com/"
+FIRM_PROFILE_URL = "https://qpwblaw.com/attorney/devin-r-horowitz/"
+LINKEDIN_URL     = "https://www.linkedin.com/in/devinhorowitz/"
 
 _DASH = "\u2014"  # em dash used as the title separator, kept to match existing copy
 
@@ -47,6 +63,18 @@ IDENTITY = {
     "role_line":      ROLE_LINE,
     "role_short":     ROLE_SHORT,
     "email":          EMAIL,
+    "name_first":     NAME_FIRST,
+    "name_last":      NAME_LAST,
+    "initials":       INITIALS,
+    "email_firm":     EMAIL_FIRM,
+    "phone_display":  PHONE_DISPLAY,
+    "phone_e164":     PHONE_E164,
+    "href_email":        "mailto:" + EMAIL,
+    "href_email_firm":   "mailto:" + EMAIL_FIRM,
+    "href_tel":          "tel:" + PHONE_TEL,
+    "href_firm_profile": FIRM_PROFILE_URL,
+    "href_linkedin":     LINKEDIN_URL,
+    "qr_label":          f"Scan to save {NAME} contact card",
     "name_role_line": f"{NAME} {_DASH} {ROLE_LINE}",
     "desc_index":     (f"{NAME} {_DASH} {ROLE} and civil litigation attorney with Georgia trial "
                        "experience since 2017. Personal injury, complex liability. Based in metro Atlanta."),

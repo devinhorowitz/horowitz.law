@@ -149,9 +149,11 @@ def _stamp_identity(doc):
     again next time: change a value in siteconfig (a promotion, say) and it
     propagates on the next render. Idempotent -- refilling with the same value is
     a no-op, which is why a static page stays byte-stable until the config moves.
-      data-cfg-text="KEY"      rewrites the element's inner text
-      data-cfg-content="KEY"   rewrites a meta tag's content="" value
-      data-cfg-jsonld          rewrites distinctive JSON-LD fields in this <script>
+      data-cfg-text="KEY"        rewrites the element's inner text
+      data-cfg-lead="KEY"        rewrites leading text only, leaving trailing child markup
+      data-cfg-content="KEY"     rewrites a meta tag's content="" value
+      data-cfg-attr="a=KEY,..."  rewrites named attribute(s) from IDENTITY
+      data-cfg-jsonld            rewrites distinctive JSON-LD fields in this <script>
     """
     I = siteconfig.IDENTITY
 
@@ -171,15 +173,51 @@ def _stamp_identity(doc):
                       lambda mm: mm.group(1) + _attr(val) + mm.group(2), tag, count=1)
     doc = re.sub(r'<meta\b[^>]*\bdata-cfg-content="\w+"[^>]*>', _content, doc)
 
+    def _lead(m):
+        # leading text only (up to the first child tag), leaving trailing markup. The hero
+        # <h1> uses it: the name must stay a leading text node so the cursor <span> and the
+        # app.js typing animation survive; data-cfg-text would swallow the whole inner.
+        val = I.get(m.group("key"))
+        return (m.group("open") + _esc(val)) if val is not None else m.group(0)
+    doc = re.sub(r'(?P<open><(?P<tag>\w+)\b[^>]*\bdata-cfg-lead="(?P<key>\w+)"[^>]*>)[^<]*',
+                 _lead, doc)
+
+    def _attrs(m):
+        # set named attribute(s) from IDENTITY: data-cfg-attr="alt=name,href=href_tel". For
+        # the portrait alt, the mailto/tel hrefs, and the QR aria-label, where the value is
+        # an attribute, not text or a meta content.
+        tag = m.group(0)
+        spec = re.search(r'\bdata-cfg-attr="([^"]*)"', tag).group(1)
+        for pair in spec.split(","):
+            an, _, ck = pair.strip().partition("=")
+            an, ck = an.strip(), ck.strip()
+            val = I.get(ck)
+            if not an or val is None:
+                continue
+            if re.search(r'\b%s="' % re.escape(an), tag):
+                tag = re.sub(r'(\b%s=")[^"]*(")' % re.escape(an),
+                             lambda mm, v=val: mm.group(1) + _attr(v) + mm.group(2), tag, count=1)
+            else:
+                tag = re.sub(r'(<\w+\b)',
+                             lambda mm, a=an, v=val: mm.group(1) + ' %s="%s"' % (a, _attr(v)),
+                             tag, count=1)
+        return tag
+    doc = re.sub(r'<\w+\b[^>]*\bdata-cfg-attr="[^"]*"[^>]*?/?>', _attrs, doc)
+
     def _jsonld(m):
         block = m.group(0)
-        for jkey, ckey in (("jobTitle", "role"), ("email", "email")):
+        # (json key, IDENTITY key, count): name/givenName/familyName/jobTitle/email hit the
+        # first (Person) match; telephone is rewritten at every occurrence (the Person and the
+        # worksFor block carry the same number), count=0 meaning all.
+        for jkey, ckey, n in (("name", "name", 1), ("givenName", "name_first", 1),
+                              ("familyName", "name_last", 1), ("jobTitle", "role", 1),
+                              ("email", "email", 1), ("telephone", "phone_e164", 0)):
             val = I.get(ckey)
             if val is None:
                 continue
             block = re.sub(r'("%s":\s*")[^"]*(")' % jkey,
                            lambda mm, v=val: mm.group(1) + v.replace('"', '\\"') + mm.group(2),
-                           block, count=1)
+                           block, count=n)
         firm = I.get("firm")
         if firm is not None:
             block = re.sub(r'("worksFor"\s*:\s*\{[^{}]*?"name"\s*:\s*")[^"]*(")',
@@ -759,7 +797,7 @@ f'{flagged_line}    <div class="perma-nav">\n'
 "  </main>\n"
 "\n"
 "  <footer>\n"
-"    <span>\u00a9 2026 \u00b7 Hand-coded by Devin R. Horowitz</span>\n"
+f"    <span>\u00a9 2026 \u00b7 Hand-coded by {siteconfig.NAME}</span>\n"
 '    <span><a href="/opinions">\u2190 back to the watch</a></span>\n'
 "  </footer>\n"
 "\n"
@@ -915,6 +953,26 @@ def _stamp_vcard():
     new_doc = re.sub(r"(?m)^(ORG:)([^\r\n]*)(\r?)$",
                      lambda m: m.group(1) + _vcard_escape(siteconfig.FIRM) + m.group(3),
                      new_doc, count=1)
+    # Name (N is structured last;first;middle.;;, FN is the composed display name), both emails
+    # (the PREF line is personal, the plain WORK line is the firm), and the phone. Raw values,
+    # not _vcard_escape: the N semicolons are structural and the TEL comma is the DTMF extension
+    # separator, both of which escaping would corrupt.
+    new_doc = re.sub(r"(?m)^(N:)([^\r\n]*)(\r?)$",
+                     lambda m: m.group(1) + "%s;%s;%s.;;" % (
+                         siteconfig.NAME_LAST, siteconfig.NAME_FIRST, siteconfig.NAME_MIDDLE) + m.group(3),
+                     new_doc, count=1)
+    new_doc = re.sub(r"(?m)^(FN:)([^\r\n]*)(\r?)$",
+                     lambda m: m.group(1) + siteconfig.NAME + m.group(3), new_doc, count=1)
+    new_doc = re.sub(r"(?m)^(EMAIL;TYPE=WORK,PREF:)([^\r\n]*)(\r?)$",
+                     lambda m: m.group(1) + siteconfig.EMAIL + m.group(3), new_doc, count=1)
+    new_doc = re.sub(r"(?m)^(EMAIL;TYPE=WORK:)([^\r\n]*)(\r?)$",
+                     lambda m: m.group(1) + siteconfig.EMAIL_FIRM + m.group(3), new_doc, count=1)
+    new_doc = re.sub(r"(?m)^(TEL;TYPE=WORK,VOICE:)([^\r\n]*)(\r?)$",
+                     lambda m: m.group(1) + siteconfig.PHONE_TEL + m.group(3), new_doc, count=1)
+    new_doc = re.sub(r"(?m)^(URL;TYPE=LinkedIn:)([^\r\n]*)(\r?)$",
+                     lambda m: m.group(1) + siteconfig.LINKEDIN_URL + m.group(3), new_doc, count=1)
+    new_doc = re.sub(r"(?m)^(URL;TYPE=Firm:)([^\r\n]*)(\r?)$",
+                     lambda m: m.group(1) + siteconfig.FIRM_PROFILE_URL + m.group(3), new_doc, count=1)
     if new_doc != doc:
         safeio.atomic_write_text(VCARD_PATH, new_doc)
 
@@ -1278,6 +1336,18 @@ def render(entries=None):
         if os.path.exists(p):
             doc = open(p, encoding="utf-8").read()
             stamped = _stamp_tokens(_stamp_year(_stamp_identity(doc)))
+            if stamped != doc:
+                safeio.atomic_write_text(p, stamped)
+
+    # The generated pages (opinions/archive/stats/changes/digests) are injected rather than
+    # listed in STATIC_PAGES, but their committed shell still carries the footer name (and,
+    # on opinions/archive, identity meta), so run the identity stamp on them too. This
+    # rewrites only the data-cfg hooks, never the injected body between the markers.
+    for p in (os.path.join(REPO, f) for f in
+              ("opinions.html", "archive.html", "stats.html", "changes.html", "digests.html")):
+        if os.path.exists(p):
+            doc = open(p, encoding="utf-8").read()
+            stamped = _stamp_identity(doc)
             if stamped != doc:
                 safeio.atomic_write_text(p, stamped)
 
