@@ -1,8 +1,25 @@
 {
   "area": "premises",
   "label": "premises",
-  "count": 10,
+  "count": 11,
   "opinions": [
+    {
+      "cluster_id": 10879406,
+      "name": "Wal-Mart Stores East, LP v. Johnson",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-06-24",
+      "disposition": "affirmed",
+      "areas": [
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10879406/wal-mart-stores-east-lp-v-johnson/",
+      "synopsis": "An independent contractor's service technician was injured when he touched an ungrounded, non-NEC-compliant metal junction box in a Wal-Mart store and was shocked, causing him to fall from a ladder. Wal-Mart asserted the independent contractor defense, arguing it owed no duty because it did not control the means and methods of the work and lacked knowledge of any dangerous condition. The Second DCA affirmed the denial of Wal-Mart's motions for summary judgment and directed verdict, holding that the second exception to the no-liability rule applied because the evidence supported that Wal-Mart had constructive knowledge of a concealed dangerous condition it negligently created or approved. The court emphasized that the box was in a locked, key-card-restricted area accessible only to Wal-Mart personnel, that the breakers were unlabeled, that the danger was concealed and not inherent in the door-installation work, and that the technician reasonably expected the box to be safe to touch.",
+      "why": "The decision clarifies that a property owner cannot invoke the independent contractor defense where the owner had actual or constructive knowledge of a concealed dangerous condition it negligently created, even absent control over the contractor's work methods, and applies the constructive-knowledge-of-concealed-danger exception in detail.",
+      "dockets": [
+        "2D2025-0567"
+      ]
+    },
     {
       "cluster_id": 10878584,
       "name": "QuikTrip Corporation v. Robinson",
