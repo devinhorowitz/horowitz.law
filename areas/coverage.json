@@ -1,8 +1,29 @@
 {
   "area": "coverage",
   "label": "coverage",
-  "count": 13,
+  "count": 14,
   "opinions": [
+    {
+      "cluster_id": 10879663,
+      "name": "Onsite Communication Services, LLC v. Gooch",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-24",
+      "disposition": "affirmed",
+      "areas": [
+        "auto",
+        "coverage",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10879663/onsite-communication-services-llc-v-tammy-gooch/",
+      "synopsis": "After a head-on collision, the defendant driver, his employer, and the employer's insurer each moved for summary judgment on negligence per se, direct negligence, punitive damages, attorney fees, and the propriety of a direct action against the insurer. The Court of Appeals held that the driver's admitted habitual methamphetamine use, his unexplained crossing of the centerline, and a positive drug test the day after the collision created a jury question on whether he was impaired at the time of the collision, even where other opinion evidence suggested he was not impaired. The court affirmed denial of summary judgment.",
+      "why": "The decision confirms that a positive post-collision drug test, habitual drug use, and an unexplained traffic violation can together create a jury question on driver impairment notwithstanding contrary opinion testimony.",
+      "dockets": [
+        "A26A0423",
+        "A26A0424",
+        "A26A0425"
+      ]
+    },
     {
       "cluster_id": 10873765,
       "name": "Allied Property & Casualty Insurance Company v. Bloodworth Wholesale Drugs Inc.",
