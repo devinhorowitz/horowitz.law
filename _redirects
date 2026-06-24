@@ -9,4 +9,4 @@
 # code (it encodes the canonical /devin-horowitz.vcf); useful only if a
 # smaller V3-Q symbol is ever wanted.
 # /dh.vcf /devin-horowitz.vcf 301
-/C /contact.vcf 302
+/C /contact.vcf 301
