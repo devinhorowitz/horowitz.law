@@ -1,8 +1,25 @@
 {
   "area": "damages",
   "label": "damages",
-  "count": 27,
+  "count": 28,
   "opinions": [
+    {
+      "cluster_id": 10880244,
+      "name": "Monsanto Co. v. Durnell",
+      "court": "Supreme Court of the United States",
+      "date": "2026-06-25",
+      "disposition": "reversed and remanded",
+      "areas": [
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10880244/monsanto-v-durnell/",
+      "synopsis": "Plaintiff brought a state-law failure-to-warn tort claim alleging that the manufacturer of a glyphosate-based herbicide should have included a cancer warning on its label, and a jury awarded damages. The Court held that FIFRA's preemption clause, 7 U.S.C. section 136v(b), expressly preempts that claim because EPA approved the product's label without a cancer warning and federal law requires the manufacturer to use the EPA-approved label, so a state tort duty to add a cancer warning would impose a labeling requirement 'in addition to or different from' the federal requirement. The Court reasoned that EPA's registration and labeling determinations impose 'requirements' under FIFRA, relying on Riegel v. Medtronic, and rejected arguments that 7 U.S.C. section 136a(f)(2) preserved parallel state misbranding-based claims.",
+      "why": "It resolves a circuit split, including the Eleventh Circuit's contrary decision in Carson v. Monsanto, by holding that FIFRA expressly preempts state-law failure-to-warn claims premised on a missing cancer warning where EPA approved the label without one, directly affecting glyphosate products-liability litigation in Georgia and the Eleventh Circuit.",
+      "dockets": [
+        "24-1068"
+      ]
+    },
     {
       "cluster_id": 10879664,
       "name": "Scott v. Evans Delivery Company, Inc.",
