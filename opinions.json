@@ -1856,5 +1856,130 @@
     "precedential": "published",
     "first_seen": "2026-06-24",
     "jurisdiction": "fl"
+  },
+  {
+    "cluster_id": 10879664,
+    "name": "Scott v. Evans Delivery Company, Inc.",
+    "court": "ctapp",
+    "division": "First Division",
+    "date": "2026-06-24",
+    "dockets": [
+      "A26A0421"
+    ],
+    "disposition": "reversed",
+    "areas": [
+      "auto",
+      "procedure",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10879664/lanea-scott-v-evans-delivery-company-inc/",
+    "synopsis": "In a wrongful death action arising from a tractor-trailer collision, the trial court granted summary judgment to the defendant trucking company and driver, holding that the avoidable consequences doctrine under OCGA section 51-11-7 barred recovery because dashcam video conclusively showed the decedent failed to exercise ordinary care for his own safety. The Court of Appeals reversed, holding that the grainy and disjointed dashcam video did not clearly and unambiguously depict what the decedent should have perceived, so it could not be given conclusive weight under the Scott v. Harris standard. The court held that ambiguities in video evidence, like any other material fact, must be construed in the nonmoving party's favor, and that whether a plaintiff exercised ordinary care for his own safety and to avoid the consequences of another's negligence is ordinarily a jury question except in plain, palpable, and undisputed cases.",
+    "why": "It clarifies that video evidence can be given conclusive weight at summary judgment only when it clearly and unambiguously depicts the event, and that ambiguous or low-quality footage must be construed in favor of the nonmovant rather than treated as dispositive.",
+    "precedential": "published",
+    "first_seen": "2026-06-24"
+  },
+  {
+    "cluster_id": 10879663,
+    "name": "Onsite Communication Services, LLC v. Gooch",
+    "court": "ctapp",
+    "division": "Fourth Division",
+    "date": "2026-06-24",
+    "dockets": [
+      "A26A0423",
+      "A26A0424",
+      "A26A0425"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "auto",
+      "coverage",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10879663/onsite-communication-services-llc-v-tammy-gooch/",
+    "synopsis": "After a head-on collision, the defendant driver, his employer, and the employer's insurer each moved for summary judgment on negligence per se, direct negligence, punitive damages, attorney fees, and the propriety of a direct action against the insurer. The Court of Appeals held that the driver's admitted habitual methamphetamine use, his unexplained crossing of the centerline, and a positive drug test the day after the collision created a jury question on whether he was impaired at the time of the collision, even where other opinion evidence suggested he was not impaired. The court affirmed denial of summary judgment.",
+    "why": "The decision confirms that a positive post-collision drug test, habitual drug use, and an unexplained traffic violation can together create a jury question on driver impairment notwithstanding contrary opinion testimony.",
+    "precedential": "published",
+    "first_seen": "2026-06-24",
+    "additional_holdings": [
+      {
+        "areas": [
+          "auto"
+        ],
+        "synopsis": "The driver and employer argued the negligence per se claims based on the Federal Motor Carrier Safety Regulations failed because the driver operated entirely intrastate. The court held that at the time of the collision Georgia had adopted the FMCSR as its own safety regulations applicable to intrastate commerce under Ga. Comp. R. & Regs. 515-16-4-.01, interpreting references to interstate commerce as intrastate commerce in Georgia, and that the complaint's substance encompassed that adoption even though it cited only the FMCSR.",
+        "why": "The opinion clarifies that Georgia's adoption of the FMCSR extends those regulations to intrastate drivers, allowing negligence per se claims to proceed without an interstate nexus."
+      },
+      {
+        "areas": [
+          "auto",
+          "damages"
+        ],
+        "synopsis": "The employer challenged the direct negligence claims and the punitive damages and attorney fees claims. The court held that evidence the employer had actual or constructive knowledge of the driver's drug use and multiple speeding tickets while driving company trucks yet took no action created jury questions on negligent training, supervision, and retention, and that the same evidence, combined with the impairment issue, supported submission of punitive damages under OCGA § 51-12-5.1 (b) and attorney fees under OCGA § 13-6-11.",
+        "why": "The decision confirms that an employer's inaction despite knowledge of a driver's drug use and traffic violations can support direct negligence, punitive damages, and attorney fees claims beyond a mere rule-of-the-road violation."
+      },
+      {
+        "areas": [
+          "coverage"
+        ],
+        "synopsis": "The insurer argued the direct action against it was unauthorized because its insured was not a for-hire motor carrier. The court held that the plain language of OCGA § 40-2-140 (d) (4) (2021) authorizes a direct action against the insurer of any motor carrier and is not limited to for-hire motor carriers, rejecting the insurer's attempt to import the for-hire intrastate motor carrier language from a separate subsection.",
+        "why": "The opinion construes the pre-2024 version of Georgia's direct-action statute to permit suit against the insurer of any motor carrier, not only for-hire carriers."
+      }
+    ]
+  },
+  {
+    "cluster_id": 10879661,
+    "name": "Ortho Sport & Spine Physicians, LLC v. Snowden",
+    "court": "ctapp",
+    "division": "Fifth Division",
+    "date": "2026-06-24",
+    "dockets": [
+      "A26A0295"
+    ],
+    "disposition": "affirmed in part, vacated in part, and remanded",
+    "areas": [
+      "damages",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10879661/ortho-sport-and-spine-physicians-llc-v-john-ernest-snowden/",
+    "synopsis": "In a personal injury suit arising from an automobile collision, a non-party medical provider challenged trial court orders compelling production of database reports and other materials related to its billing for other patients, sought to test the reasonableness of the plaintiff's medical charges. The Court of Appeals held that the trial court did not abuse its discretion in ordering three eClinicalWorks reports rather than one, because the provider's billing system necessitated multiple reports to obtain the information permitted by the court's prior opinion. The court vacated the order to the extent it inconsistently addressed whether patient identification or account numbers and payor names could be redacted, and remanded for clarification.",
+    "why": "It clarifies the permissible scope of third-party discovery into a medical provider's billing data (charges, write-offs, adjustments, and payments accepted from other patients) used to assess the reasonableness of a plaintiff's medical charges and confirms a trial court may order multiple database reports when the provider's system makes a single report impractical.",
+    "precedential": "published",
+    "first_seen": "2026-06-24",
+    "additional_holdings": [
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "The court addressed whether the provider could be compelled to hand-review emails or files to compile lists of patients meeting certain criteria. It reaffirmed that a non-party cannot be required to create a document that does not exist simply for discovery purposes, though it may be tasked with extracting and translating data from an existing electronic database into reasonably usable form. The court vacated the show cause order's hand-review requirement to the extent it imposed a duty to create a non-existent document and remanded for the trial court to clarify the scope of that requirement.",
+        "why": "It draws a line under OCGA section 9-11-34(a) between compelling a non-party to extract data from an existing database, which is permissible, and compelling it to create a new document that does not exist, which is not."
+      }
+    ]
+  },
+  {
+    "cluster_id": 10879556,
+    "name": "Cook v. SMG Construction Services, LLC",
+    "court": "ctapp",
+    "division": "Fifth Division",
+    "date": "2026-06-24",
+    "dockets": [
+      "A24A0886"
+    ],
+    "disposition": "reversed",
+    "areas": [
+      "premises"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10879556/daniel-cook-v-smg-construction-services-llc/",
+    "synopsis": "On remand from the Supreme Court of Georgia, which held that plaintiff had actual knowledge as a matter of law of an unguarded balcony ledge in a house under construction, the Court of Appeals addressed the remaining elements of the landowner's affirmative defenses of assumption of the risk and voluntary negligence. The court held that although the actual-knowledge and appreciation-of-risk elements of assumption of the risk were established, a genuine issue of material fact existed on the voluntary-exposure element, because the standard is subjective and there was evidence that environmental conditions such as drywall dust, overspray, poor lighting, and lack of visual contrast impaired plaintiff's perception of the ledge's exact location. The court reasoned that perception before plaintiff turned away and walked backward was material to whether he deliberately chose to expose himself to the risk.",
+    "why": "The decision clarifies that the voluntary-exposure element of assumption of the risk is a subjective, fact-specific inquiry that can present a jury question even where actual knowledge of the hazard is established as a matter of law, and that conditions impairing perception of a hazard's exact location are material to that inquiry.",
+    "precedential": "published",
+    "first_seen": "2026-06-24",
+    "additional_holdings": [
+      {
+        "areas": [
+          "premises"
+        ],
+        "synopsis": "The court separately held that the landowner was not entitled to summary judgment on its affirmative defense of voluntary negligence. Voluntary negligence requires that the plaintiff purposefully place himself within reach of the danger, and a failure to exercise reasonable attention to surroundings is not enough. A genuine issue of material fact existed as to whether plaintiff purposefully put himself within reach of the unguarded ledge, given evidence that the bathroom where he was working was not near the ledge and that he could not accurately perceive its proximity.",
+        "why": "It clarifies that voluntary negligence requires a purposeful exposure to the known danger and is not established merely by inattention, leaving the question for the jury on these facts."
+      }
+    ]
   }
 ]

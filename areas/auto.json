@@ -1,8 +1,48 @@
 {
   "area": "auto",
   "label": "auto",
-  "count": 20,
+  "count": 22,
   "opinions": [
+    {
+      "cluster_id": 10879664,
+      "name": "Scott v. Evans Delivery Company, Inc.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-24",
+      "disposition": "reversed",
+      "areas": [
+        "auto",
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10879664/lanea-scott-v-evans-delivery-company-inc/",
+      "synopsis": "In a wrongful death action arising from a tractor-trailer collision, the trial court granted summary judgment to the defendant trucking company and driver, holding that the avoidable consequences doctrine under OCGA section 51-11-7 barred recovery because dashcam video conclusively showed the decedent failed to exercise ordinary care for his own safety. The Court of Appeals reversed, holding that the grainy and disjointed dashcam video did not clearly and unambiguously depict what the decedent should have perceived, so it could not be given conclusive weight under the Scott v. Harris standard. The court held that ambiguities in video evidence, like any other material fact, must be construed in the nonmoving party's favor, and that whether a plaintiff exercised ordinary care for his own safety and to avoid the consequences of another's negligence is ordinarily a jury question except in plain, palpable, and undisputed cases.",
+      "why": "It clarifies that video evidence can be given conclusive weight at summary judgment only when it clearly and unambiguously depicts the event, and that ambiguous or low-quality footage must be construed in favor of the nonmovant rather than treated as dispositive.",
+      "dockets": [
+        "A26A0421"
+      ]
+    },
+    {
+      "cluster_id": 10879663,
+      "name": "Onsite Communication Services, LLC v. Gooch",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-24",
+      "disposition": "affirmed",
+      "areas": [
+        "auto",
+        "coverage",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10879663/onsite-communication-services-llc-v-tammy-gooch/",
+      "synopsis": "After a head-on collision, the defendant driver, his employer, and the employer's insurer each moved for summary judgment on negligence per se, direct negligence, punitive damages, attorney fees, and the propriety of a direct action against the insurer. The Court of Appeals held that the driver's admitted habitual methamphetamine use, his unexplained crossing of the centerline, and a positive drug test the day after the collision created a jury question on whether he was impaired at the time of the collision, even where other opinion evidence suggested he was not impaired. The court affirmed denial of summary judgment.",
+      "why": "The decision confirms that a positive post-collision drug test, habitual drug use, and an unexplained traffic violation can together create a jury question on driver impairment notwithstanding contrary opinion testimony.",
+      "dockets": [
+        "A26A0423",
+        "A26A0424",
+        "A26A0425"
+      ]
+    },
     {
       "cluster_id": 10878114,
       "name": "Douglas v. Bhakta",

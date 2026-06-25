@@ -1,8 +1,25 @@
 {
   "area": "premises",
   "label": "premises",
-  "count": 11,
+  "count": 12,
   "opinions": [
+    {
+      "cluster_id": 10879556,
+      "name": "Cook v. SMG Construction Services, LLC",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-24",
+      "disposition": "reversed",
+      "areas": [
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10879556/daniel-cook-v-smg-construction-services-llc/",
+      "synopsis": "On remand from the Supreme Court of Georgia, which held that plaintiff had actual knowledge as a matter of law of an unguarded balcony ledge in a house under construction, the Court of Appeals addressed the remaining elements of the landowner's affirmative defenses of assumption of the risk and voluntary negligence. The court held that although the actual-knowledge and appreciation-of-risk elements of assumption of the risk were established, a genuine issue of material fact existed on the voluntary-exposure element, because the standard is subjective and there was evidence that environmental conditions such as drywall dust, overspray, poor lighting, and lack of visual contrast impaired plaintiff's perception of the ledge's exact location. The court reasoned that perception before plaintiff turned away and walked backward was material to whether he deliberately chose to expose himself to the risk.",
+      "why": "The decision clarifies that the voluntary-exposure element of assumption of the risk is a subjective, fact-specific inquiry that can present a jury question even where actual knowledge of the hazard is established as a matter of law, and that conditions impairing perception of a hazard's exact location are material to that inquiry.",
+      "dockets": [
+        "A24A0886"
+      ]
+    },
     {
       "cluster_id": 10879406,
       "name": "Wal-Mart Stores East, LP v. Johnson",
