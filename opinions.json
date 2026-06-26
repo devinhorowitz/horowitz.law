@@ -2002,5 +2002,45 @@
     "first_seen": "2026-06-25",
     "law_applied": "federal",
     "official_url": "https://www.supremecourt.gov/opinions/25pdf/24-1068_n7ip.pdf"
+  },
+  {
+    "cluster_id": 10880884,
+    "name": "Sangphim v. Warcup",
+    "court": "ctapp",
+    "division": "Second Division",
+    "date": "2026-06-26",
+    "dockets": [
+      "A26A0739"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "procedure",
+      "auto",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10880884/brenda-g-sangphim-v-lisa-warcup/",
+    "synopsis": "In an auto negligence case where the jury awarded the plaintiff $250,000, the trial court awarded the plaintiff attorney fees and expenses under OCGA § 9-11-68 after the plaintiff beat her rejected settlement offer. The Court of Appeals affirmed, holding that whether a settlement offer was made in good faith is determined solely by the offeror's own subjective motivations and beliefs, and the burden rests on the offeree to show that the offer was not made in good faith. The court found the offeree failed to carry that burden where she pointed only to a modest discrepancy between alleged and proven medical damages and an unspecified denial of medical records.",
+    "why": "The decision reaffirms that the good-faith inquiry under the offer-of-settlement statute turns on the offeror's subjective beliefs and places the burden on the offeree to disprove good faith.",
+    "precedential": "published",
+    "first_seen": "2026-06-26",
+    "tort_reform": true,
+    "additional_holdings": [
+      {
+        "areas": [
+          "procedure",
+          "damages"
+        ],
+        "synopsis": "The court held that a contingency fee agreement may be considered as evidence of usual and customary fees, but an award cannot rest on the contingency agreement alone; the party seeking fees must also introduce evidence of hours, rates, or some other indication of the value of services rendered. The award was properly supported here because counsel testified about his experience, hourly rate, and the work performed, and submitted detailed work logs, and the court awarded less than the amount requested.",
+        "why": "It clarifies that a contingency fee agreement is admissible but insufficient by itself to support a fee award under OCGA § 9-11-68 absent additional evidence of hours and rates."
+      },
+      {
+        "areas": [
+          "procedure",
+          "damages"
+        ],
+        "synopsis": "The court held that an award under OCGA § 9-11-68(b)(2) is limited to reasonable attorney fees and expenses incurred from the date the offer of settlement was rejected through entry of judgment. The record showed the fees awarded were limited to work performed after the offer's expiration, as reflected in counsel's affidavit, work logs, and the trial court's express limitation to post-expiration work.",
+        "why": "It confirms that recoverable fees under the offer-of-settlement statute are confined to work performed after rejection of the offer."
+      }
+    ]
   }
 ]
