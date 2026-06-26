@@ -1,8 +1,27 @@
 {
   "area": "auto",
   "label": "auto",
-  "count": 22,
+  "count": 23,
   "opinions": [
+    {
+      "cluster_id": 10880884,
+      "name": "Sangphim v. Warcup",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-06-26",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure",
+        "auto",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10880884/brenda-g-sangphim-v-lisa-warcup/",
+      "synopsis": "In an auto negligence case where the jury awarded the plaintiff $250,000, the trial court awarded the plaintiff attorney fees and expenses under OCGA § 9-11-68 after the plaintiff beat her rejected settlement offer. The Court of Appeals affirmed, holding that whether a settlement offer was made in good faith is determined solely by the offeror's own subjective motivations and beliefs, and the burden rests on the offeree to show that the offer was not made in good faith. The court found the offeree failed to carry that burden where she pointed only to a modest discrepancy between alleged and proven medical damages and an unspecified denial of medical records.",
+      "why": "The decision reaffirms that the good-faith inquiry under the offer-of-settlement statute turns on the offeror's subjective beliefs and places the burden on the offeree to disprove good faith.",
+      "dockets": [
+        "A26A0739"
+      ]
+    },
     {
       "cluster_id": 10879664,
       "name": "Scott v. Evans Delivery Company, Inc.",
