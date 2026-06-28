@@ -44,7 +44,10 @@ touches confirmed keepers:
 
 Each drafted card is then checked twice more: a fidelity crosscheck (does the card match the
 opinion) and a completeness check (does the card omit a material holding in a covered area).
-Both default to the Sonnet triage model, so the summarizer is not grading its own work. Screen
+Both default to the Sonnet triage model, so the summarizer is not grading its own work. The
+crosscheck is hardened against a false flag: it must quote the verbatim span of the card it
+faults, so a flag whose quoted premise is not in the card is dismissed, and on a flag it re-asks
+and stands only on a majority of attempts (`OPINIONS_CROSSCHECK_TRIES`). Screen
 and triage drops are appended to `opinions_rejections.jsonl` for periodic recall review.
 
 ## Catching law that moves
@@ -223,6 +226,9 @@ running locally:
   golden-set recall check passes. `""` disables it.
 - `OPINIONS_CROSSCHECK_MODEL`, `OPINIONS_COMPLETENESS_MODEL` (default: the triage model): the
   per-card fidelity and completeness checks. `""` disables either.
+- `OPINIONS_CROSSCHECK_TRIES` (default `3`): how many times the fidelity crosscheck re-asks on a
+  flag, standing only on a majority, so a one-roll false flag is damped. `1` keeps the
+  verbatim-quote grounding but disables the re-ask.
 - `OPINIONS_AUDIT_MODEL` (default: the summarizer model): confirms a flagged adverse-treatment event,
   for both a carded case and a watched authority, before anything is flagged. Not disablable.
 
