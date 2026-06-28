@@ -94,6 +94,7 @@ TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-4-6")
 SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5-20251001")
 PRETRIAGE_MODEL = os.environ.get("OPINIONS_PRETRIAGE_MODEL", "claude-haiku-4-5-20251001")  # tier 1.5: cheap full-read screen before the Sonnet triage; "" disables
 CROSSCHECK_MODEL = os.environ.get("OPINIONS_CROSSCHECK_MODEL", TRIAGE_MODEL)  # fidelity check on each card; a different model than the Opus summarizer so it is not grading its own work; "" disables
+CROSSCHECK_TRIES = int(os.environ.get("OPINIONS_CROSSCHECK_TRIES", "3"))  # on a substantiated flag, re-ask up to this many times; a flag stands only on a majority, damping one-roll noise at temperature 1. 1 keeps grounding but disables consensus
 COMPLETENESS_MODEL = os.environ.get("OPINIONS_COMPLETENESS_MODEL", TRIAGE_MODEL)  # completeness check on each card: flags a material holding in a covered area the card omits; a different model than the Opus summarizer; "" disables
 VERSION      = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
 COURTS       = jurisdictions.COURTS         # CL ids the feed iterates (OPINIONS_COURTS narrows it)
@@ -1013,20 +1014,55 @@ CROSSCHECK_SYSTEM = (
     "overstates how broadly the court ruled, attributes a holding or reasoning the court did not "
     "reach, gets the disposition or who prevailed backwards, or asserts a fact the opinion does not "
     "support. Do NOT flag a summary for omitting detail, for word choice, or for emphasis, so long as "
-    "what it does say is correct. If you are genuinely unsure whether the holding is stated "
-    "correctly, FLAG it, because every flag is reviewed by a person and a wrong summary costs more "
-    "than a second look. Output ONLY a JSON object: {\"verdict\": \"match\" or \"flag\", \"reason\": "
-    "\"one sentence; for a flag, name the specific discrepancy\"}."
+    "what it does say is correct. "
+    "This check is only about statements that are PRESENT in the drafted summary and wrong. To flag, "
+    "you MUST copy, verbatim, the exact span of the DRAFTED SUMMARY that is the misstatement into the "
+    "\"quote\" field, character for character from the drafted-summary text shown to you. Quote from "
+    "the DRAFTED SUMMARY, never from the opinion; do not paraphrase it and do not invent a sentence "
+    "the summary does not contain. If you cannot point to a specific verbatim span of the drafted "
+    "summary that is wrong or unsupported, return \"match\": there is nothing for this check to flag. "
+    "If you are unsure about a specific statement that is in the drafted summary, flag it and quote "
+    "that statement. "
+    "Output ONLY a JSON object: {\"verdict\": \"match\" or \"flag\", \"quote\": \"for a flag, the exact "
+    "verbatim text copied from the drafted summary that is wrong; empty string for a match\", "
+    "\"reason\": \"one sentence; for a flag, name the specific discrepancy\"}."
 )
+
+
+def _normalize_for_match(s):
+    """Lowercase, unwrap surrounding quotes/ellipses, and collapse whitespace, so a model's
+    copied span matches the drafted summary despite trivial reformatting."""
+    s = (s or "").strip().strip("'\"\u201c\u201d\u2018\u2019").strip()
+    s = s.replace("\u2026", " ")
+    s = re.sub(r"^\.\.\.|\.\.\.$", " ", s)
+    return re.sub(r"\s+", " ", s).strip().lower()
+
+
+def _quote_substantiated(quote, drafted):
+    """True only if the model's quoted span actually appears in the drafted summary it was shown.
+    A fidelity flag must point at a real statement in the summary; a quote that is absent (the
+    premise was invented) or trivially short does not substantiate a flag."""
+    q = _normalize_for_match(quote)
+    if len(q) < 4:
+        return False
+    return q in _normalize_for_match(drafted)
 
 
 def crosscheck(name, text, entry):
     """Independent fidelity check on a drafted card: a model other than the Opus summarizer reads the
     opinion against the drafted holding and flags a summary that misstates it. Flag-and-surface, so it
-    never drops a card; the verdict rides the PR for the editor to judge. Conservative: only an explicit
-    'match' clears, anything else is treated as a flag. Fail-open: any error returns an 'unavailable'
-    verdict so the card still surfaces, marked for a manual look. Reuses the opinion text already in
-    hand, so it costs one model call and no CourtListener calls."""
+    never drops a card; the verdict rides the PR for the editor to judge. Fail-open: if no attempt
+    returns a usable answer, the verdict is 'unavailable' so the card still surfaces for a manual look.
+    Reuses the opinion text already in hand, so it costs no CourtListener calls.
+
+    Two guardrails against a false flag, the dominant failure mode for a single temperature-1 read:
+      1. Grounding. A flag must quote, verbatim, the span of the DRAFTED SUMMARY it claims is wrong. A
+         flag whose quote is not actually in the drafted summary (an invented premise) is dismissed,
+         not surfaced. The quote is folded into the reason so the editor sees exactly what was faulted.
+      2. Consensus. On a substantiated flag, the check re-asks up to OPINIONS_CROSSCHECK_TRIES times and
+         a flag stands only on a majority of the attempts made, so one noisy roll does not flag a sound
+         card. Re-asking happens only after a flag, so a clean card still costs about one call.
+    Set OPINIONS_CROSSCHECK_TRIES=1 to keep grounding but disable consensus."""
     if not CROSSCHECK_MODEL:
         return None
     holdings = [{"areas": entry["areas"], "synopsis": entry["synopsis"], "why": entry["why"]}]
@@ -1037,14 +1073,47 @@ def crosscheck(name, text, entry):
         for i, h in enumerate(holdings))
     user = ("Case name: %s\nDisposition as drafted: %s\n\nDRAFTED SUMMARY:\n%s\n\nFULL OPINION:\n%s"
             % (name, entry.get("disposition") or "(none stated)", drafted, clip(text)))
-    try:
-        r = anthropic_json({"model": CROSSCHECK_MODEL, "max_tokens": 400, "system": CROSSCHECK_SYSTEM,
-                            "messages": [{"role": "user", "content": user}]}, "crosscheck")
-        verdict = "match" if (r.get("verdict") or "").strip().lower() == "match" else "flag"
-        return {"verdict": verdict, "reason": (r.get("reason") or "").strip()}
-    except Exception as e:
-        print("  ! cross-check unavailable for %s: %s" % (name[:40], e))
-        return {"verdict": "unavailable", "reason": str(e)[:160]}
+    body = {"model": CROSSCHECK_MODEL, "max_tokens": 400, "system": CROSSCHECK_SYSTEM,
+            "messages": [{"role": "user", "content": user}]}
+
+    tries = max(1, CROSSCHECK_TRIES)
+    flags, clears, made, last_error = [], 0, 0, None
+    for attempt in range(tries):
+        try:
+            r = anthropic_json(body, "crosscheck")
+        except Exception as e:
+            last_error = str(e)[:160]
+            print("  ! cross-check attempt %d unavailable for %s: %s" % (attempt + 1, name[:40], last_error))
+            continue
+        made += 1
+        verdict = (r.get("verdict") or "").strip().lower()
+        reason = (r.get("reason") or "").strip()
+        quote = (r.get("quote") or "").strip()
+        if verdict != "match" and _quote_substantiated(quote, drafted):
+            flags.append((reason, quote))
+        else:
+            clears += 1
+            if verdict != "match":
+                print("  . cross-check flag DISMISSED (quoted span not found in the drafted summary) "
+                      "for %s: reason=%r quote=%r" % (name[:40], reason[:160], quote[:120]))
+        # Stop once a majority of the budget is locked either way; no need to keep paying.
+        if len(flags) > tries // 2 or clears > tries // 2:
+            break
+
+    if made == 0:
+        print("  ! cross-check unavailable for %s: %s" % (name[:40], last_error or "no response"))
+        return {"verdict": "unavailable", "reason": last_error or "no response"}
+
+    if len(flags) > made // 2:
+        reason, quote = flags[-1]
+        reason = ('%s (drafted text at issue: "%s")' % (reason, quote)) if reason else \
+                 ('the drafted summary misstates the holding (drafted text at issue: "%s")' % quote)
+        return {"verdict": "flag", "reason": reason, "quote": quote, "tries": made, "flag_count": len(flags)}
+
+    if flags:
+        print("  . cross-check flag NOT CONFIRMED for %s (%d of %d attempts flagged); clearing as noise"
+              % (name[:40], len(flags), made))
+    return {"verdict": "match", "reason": "holding matches the opinion", "tries": made, "flag_count": len(flags)}
 
 
 COMPLETENESS_SYSTEM = (
