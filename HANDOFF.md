@@ -35,7 +35,9 @@ was omitted, and each re-asks on a flag so a single noisy roll does not stand
 (`OPINIONS_CROSSCHECK_TRIES`, `OPINIONS_COMPLETENESS_TRIES`, both default 3). `scripts/test_update.py`
 is the repo's first unit test and pins both; the CI smoke job runs it. This followed the 2026-06-28
 maintenance false positive (issue #94, a cross-check flag whose premise the model invented, now
-closed).
+closed). Maintenance now re-validates its rotating slice with both guards on one fetched text, and
+the funnel carries a docket-aware duplicate guard so a CourtListener twin or corrected republish
+does not double-card; `scripts/test_maintain.py` joins `test_update.py` in the CI smoke job.
 
 Official court links ship for every Eleventh Circuit and SCOTUS card and for the post-2017
 Supreme Court of Georgia cards: the case name links to the court's own PDF, with CourtListener
@@ -62,17 +64,20 @@ the editorial content, not repeated there:
 
 Pipeline and correctness:
 
-1. Docket-aware duplicate guard. The funnel dedups on `cluster_id` alone, so it cards both halves
-   when CourtListener issues twin clusters for one consolidated appeal (the 10873764/10873765 pair
-   is the fixture) or republishes a revised opinion under a new cluster (a SCOTUS revision was
-   caught and removed by hand this session). Guard at the queue or update stage: same court, same
-   date, identical docket list or party-token set means one case; keep the consolidated or
-   authoritative cluster.
-2. Completeness check on the back catalog. `completeness_check` runs only on new cards in the
-   funnel; the older cards predate it. `maintain.py` already re-validates a rotating slice with
-   `crosscheck`; add `completeness_check` to that slice and surface its flags the same way. Now
-   unblocked: `completeness_check` carries the same grounding-and-consensus guard as `crosscheck`,
-   so adding it to the slice will not reproduce the #94-style false maintenance failure.
+1. Docket-aware duplicate guard (done). The funnel deduped on `cluster_id` alone, so it carded
+   both halves when CourtListener issued twin clusters for one consolidated appeal, or republished
+   a corrected opinion under a new cluster. The candidate loop now also skips a new cluster that is
+   the same case as one already carded or added this run, keyed on the same court and either a
+   shared docket (unique within a court, so it catches a revision refiled on a later date) or, the
+   same day, two or more distinctive party tokens; the skip is marked seen and surfaced in the PR
+   for the editor to reconcile. A repeat appearance at a higher court is untouched, since the court
+   differs. `scripts/test_update.py` pins it (six dedup cases).
+2. Completeness check on the back catalog (done). `maintain.py` re-validates a rotating slice; it
+   now runs the hardened `completeness_check` alongside `crosscheck` on the same fetched opinion
+   text (so no extra CourtListener calls), and surfaces both, each flag labeled by the guard that
+   raised it (`fidelity:` or `completeness:`). The slice runs if either guard is enabled, and a
+   completeness flag exits the job nonzero the same way a fidelity flag does. `scripts/test_maintain.py`
+   (new, run in the CI smoke job) pins the wiring (six cases).
 3. Failure-alert parity (resolved). Every scheduled workflow now surfaces a failure: render-sync,
    digest, treatment, lighthouse, and the funnel and maintenance all open or update a tracking issue
    on failure, and `links.yml` reports broken links through its own `create-issue-from-file` step

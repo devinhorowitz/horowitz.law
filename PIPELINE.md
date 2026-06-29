@@ -86,7 +86,9 @@ drafting skill to read its area slice at draft time.
 ## How the pieces fit
 
 - `opinions.json` is the single source of truth: a list of opinion entries.
-- `scripts/update.py` is the pipeline: it fetches candidates, runs the funnel and the per-card
+- `scripts/update.py` is the pipeline: it fetches candidates, drops any that duplicate a carded
+  case (a CourtListener twin or corrected republish, matched on court and a shared docket or
+  same-day parties), runs the funnel and the per-card
   checks, appends keepers to `opinions.json`, updates `opinions_state.json`, runs the forward
   escalation and the authority watch, calls the renderer, logs the run to
   `opinions_pipeline_log.jsonl` and drops to `opinions_rejections.jsonl`, and writes a PR summary
@@ -128,8 +130,9 @@ Thirteen workflows under `.github/workflows/`:
   by hand").
 - `ci.yml`, `ruff.yml`, `links.yml`, and `lighthouse.yml` are the guards: a compile-and-import
   smoke test with a render-idempotency check, the linter, link-rot, and a performance budget.
-- `maintain.yml` is the daily housekeeping: a keepalive commit, court-registry validation, and the
-  golden cross-check.
+- `maintain.yml` is the daily housekeeping: a keepalive commit, court-registry validation, the
+  golden regression check, and a budget-gated re-validation of a rotating slice of published cards
+  that re-runs both per-card guards (fidelity and completeness) against each card's own opinion.
 
 Every workflow that touches the network runs under Harden-Runner in block mode: each job declares
 the exact hosts it may reach and the runner blocks the rest, so a compromised dependency cannot
