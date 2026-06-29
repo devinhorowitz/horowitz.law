@@ -185,6 +185,47 @@ def run_comp_case(label, seq, tries, verdict, calls, flag_count, reason_has):
     print("  ok  %-32s verdict=%-11s calls=%s flag_count=%s" % (label, r["verdict"], made, r.get("flag_count")))
 
 
+# --- docket-aware duplicate guard (pure functions; no model or network calls) ---
+CASES_DEDUP = [
+    # (label, courtA, dateA, docketsA, nameA, courtB, dateB, docketsB, nameB, same_case?)
+    # A corrected opinion republished under a new cluster: same court, same docket, later date.
+    ("revision_shared_docket_diff_date", "ctapp", "2026-03-01", ["A26A0526"], "Smith v. Jones",
+     "ctapp", "2026-04-15", "A26A0526", "Smith v. Jones", True),
+    # A split-docket twin of one consolidated appeal: same court and day, dockets differ, parties match.
+    ("split_docket_twin_same_day", "ctapp", "2026-03-01", ["A26A0526"], "Barnor-Cooper v. Acme Roofing",
+     "ctapp", "2026-03-01", "A26A0550", "Acme Roofing v. Barnor-Cooper", True),
+    # A genuine repeat appearance at a higher court is NOT a duplicate: the court differs.
+    ("higher_court_repeat_diff_court", "ctapp", "2026-03-01", ["A26A0526"], "Smith v. Jones",
+     "scotga", "2026-06-01", "S26G0010", "Smith v. Jones", False),
+    # Same court and day but only one shared distinctive token: not enough to merge.
+    ("one_shared_token_same_day", "ctapp", "2026-03-01", ["X100"], "Washington v. Lincoln Apartments",
+     "ctapp", "2026-03-01", ["X200"], "Washington v. Jefferson Holdings", False),
+    # Same parties, no docket signal, different day: too little to merge, kept separate.
+    ("same_parties_diff_day_no_docket", "ctapp", "2026-03-01", [], "Barnor-Cooper v. Acme Roofing",
+     "ctapp", "2026-05-01", [], "Barnor-Cooper v. Acme Roofing", False),
+    # Unrelated cases decided the same day: no shared docket or parties.
+    ("unrelated_same_day", "ctapp", "2026-03-01", ["A1234"], "Alpha v. Beta",
+     "ctapp", "2026-03-01", ["C5678"], "Gamma v. Delta", False),
+]
+
+
+def run_dedup_case(label, ca, da, ka, na, cb, db, kb, nb, expected):
+    a = update._dup_sig(ca, da, ka, na)
+    b = update._dup_sig(cb, db, kb, nb)
+    got = update._same_case(a, b)
+    assert got == expected, "%s: _same_case=%r expected %r" % (label, got, expected)
+    assert update._same_case(b, a) == expected, "%s: relation is not symmetric" % label
+    print("  ok  %-34s same_case=%s" % (label, got))
+
+
+def test_docket_set():
+    assert update._docket_set("A26A0526, A26A0550") == {"A26A0526", "A26A0550"}, "comma split"
+    assert update._docket_set(["No. 21-1234"]) == {"21-1234"}, "list and No. prefix dropped"
+    assert update._docket_set("") == set(), "empty string"
+    assert update._docket_set(["A1", "and", "S24G0123"]) == {"S24G0123"}, "short token and noise dropped"
+    print("  ok  docket-set normalization (split, noise, empties)")
+
+
 def main():
     print("crosscheck guardrails:")
     for c in CASES:
@@ -192,9 +233,13 @@ def main():
     print("completeness guardrails:")
     for c in CASES_COMP:
         run_comp_case(*c)
+    print("duplicate guard:")
+    for c in CASES_DEDUP:
+        run_dedup_case(*c)
     print("helpers:")
     test_substantiation_helper()
-    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + 1))
+    test_docket_set()
+    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 2))
     return 0
 
 

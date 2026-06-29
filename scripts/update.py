@@ -1293,6 +1293,49 @@ def party_match(name, card_token_sets):
     return any(len(t & cs) >= 2 for cs in card_token_sets)
 
 
+# Docket-aware duplicate guard. CourtListener can issue two cluster ids for one
+# consolidated appeal (twin clusters), or republish a corrected opinion under a new
+# cluster id; the cluster-id dedup in the candidate pre-pass catches neither, so a
+# second card would publish for one case. Two records are the same case when they
+# share a court and either a docket number (unique within a court, so a shared docket
+# also catches a revision refiled on a later date) or, filed the same day, at least
+# two distinctive party tokens (the split-docket twin, whose dockets differ). A match
+# must clear one of those bars; mere caption similarity is not enough. A repeat
+# appearance at a higher court is not caught, because the court differs, so the
+# screen-override treatment path still sees it.
+_DOCKET_SPLIT = re.compile(r"[^A-Za-z0-9-]+")
+
+
+def _docket_set(d):
+    """Normalized docket tokens from a card's `dockets` list or a feed `docketNumber`
+    string: uppercased, punctuation-trimmed, with noise words and short fragments dropped."""
+    parts = []
+    for piece in (d if isinstance(d, (list, tuple)) else [d]):
+        parts += _DOCKET_SPLIT.split(str(piece or ""))
+    out = set()
+    for p in parts:
+        p = p.upper().strip("-")
+        if len(p) >= 4 and p not in ("CASE", "NOS", "AND"):
+            out.add(p)
+    return out
+
+
+def _dup_sig(court_key, date, dockets, name):
+    """A comparison signature for the duplicate guard: (court key, YYYY-MM-DD,
+    docket-token set, party-token set)."""
+    return (court_key or "", (date or "")[:10], _docket_set(dockets), party_tokens(name or ""))
+
+
+def _same_case(a, b):
+    """True if two `_dup_sig` signatures denote one case: the same court and either a
+    shared docket token, or the same filing date with two or more shared party tokens."""
+    if not a[0] or a[0] != b[0]:
+        return False
+    if a[2] & b[2]:
+        return True
+    return bool(a[1]) and a[1] == b[1] and len(a[3] & b[3]) >= 2
+
+
 def _drop_counts(skipped):
     """Break the run's dropped candidates down by the tier that dropped them, read
     from the reason prefix. The screen and triage counts are the recall signal: how
@@ -1580,6 +1623,10 @@ def main():
     # fewer than two distinctive tokens can never reach the two-token threshold, so
     # drop them here.
     card_token_sets = [s for s in (party_tokens(e.get("name", "")) for e in entries) if len(s) >= 2]
+    # Signatures of every carded case for the docket-aware duplicate guard in the loop;
+    # each card added this run is appended as it is carded, so an in-run twin is caught too.
+    dedup_index = [(_dup_sig(e.get("court"), e.get("date"), e.get("dockets"), e.get("name")),
+                    e.get("name", "?")) for e in entries]
     for r in cand:
         if time.time() - run_start > BUDGET_SEC:
             print("  ! time budget reached (%ds) after %d evaluated; finalizing with what is collected"
@@ -1591,6 +1638,19 @@ def main():
         docket = r.get("docketNumber") or ""
         date_filed = (r.get("dateFiled") or "")[:10]
         url = "https://www.courtlistener.com" + (r.get("absolute_url") or "")
+        # Docket-aware duplicate guard: a new cluster id that is the same case as one
+        # already carded, or already added this run, is a CourtListener twin or a corrected
+        # republish. Skip it, mark it seen so it does not return, and surface the skip for the
+        # editor to reconcile by hand. Costs no model or CourtListener calls.
+        csig = _dup_sig(COURT_MAP.get(court_id) or court_id, date_filed, docket, name)
+        dup = next((nm for sig, nm in dedup_index if _same_case(csig, sig)), None)
+        if dup:
+            skipped.append((name, "duplicate of carded case %r (same court and shared docket or "
+                                  "same-day parties; cluster %s is a twin or a corrected republish)"
+                                  % (dup[:60], cid)))
+            print("  ~ duplicate skip: %s  ==  %s  (cluster %s)" % (name[:50], dup[:50], cid))
+            evaluated.add(cid); consec = 0
+            continue
         try:
             # Tier 1: cheap excerpt screen
             if SCREEN_MODEL:
@@ -1835,6 +1895,8 @@ def main():
         if cp:
             completeness[cid] = cp
         added.append(entry)
+        dedup_index.append((_dup_sig(entry["court"], entry["date"], entry["dockets"], entry["name"]),
+                            entry["name"]))
         hold_note = (", %d holdings" % (1 + len(additional_holdings))) if additional_holdings else ""
         print("  + %s [%s] %s (sig=%s%s)" % (entry["name"], ",".join(areas), disp, v.get("significance"), hold_note))
 

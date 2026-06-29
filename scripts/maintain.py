@@ -10,10 +10,11 @@ self-healing work. Ingestion always wins. Two pieces:
      so it runs every time, as a standing tripwire for a prompt or model change.
 
   2. A rotating re-validation of already-published cards (the budget-gated trickle):
-     re-runs the independent cross-check on a small, date-rotated slice of cards in
-     opinions.json, to catch a card whose drafted holding reads wrong against its own
-     opinion. It re-fetches each card's opinion text, so it is the only part that
-     spends CourtListener calls, and it runs only when there is comfortable headroom.
+     re-runs the independent cross-check and completeness check on a small, date-rotated
+     slice of cards in opinions.json, to catch a card whose drafted holding reads wrong
+     against its own opinion or that omits a separate material holding. It re-fetches each
+     card's opinion text once and reuses it for both, so it is the only part that spends
+     CourtListener calls, and it runs only when there is comfortable headroom.
 
 Yielding to ingestion, two layers:
   * Soft gate: sum the funnel's cl_calls over the trailing 24h from the pipeline log
@@ -24,12 +25,12 @@ Yielding to ingestion, two layers:
     window or a 429 raises RateBudgetExceeded and the slice defers the rest to the next
     run. Maintenance defers, it never fails the run, and it never runs the funnel.
 
-Findings surface, they do not self-edit. A cross-check flag on a published card, or a
-golden regression, goes to the run summary, and the process exits nonzero so the
+Findings surface, they do not self-edit. A cross-check or completeness flag on a published
+card, or a golden regression, goes to the run summary, and the process exits nonzero so the
 workflow opens or updates a tracking issue for a person. Nothing here writes opinions.json.
 
-Imports update, so the cross-check, text fetch, rate budget, and paths are the
-production ones, reused exactly: what runs here is what the funnel runs.
+Imports update, so the cross-check, completeness check, text fetch, rate budget, and paths
+are the production ones, reused exactly: what runs here is what the funnel runs.
 """
 import os
 import sys
@@ -118,11 +119,16 @@ def rotating_slice(cards):
 
 
 def revalidate(cards):
-    """Re-run the cross-check on the rotating slice. Returns (flags, checked, deferred),
-    where flags is a list of (name, reason). Defers cleanly on a rate-budget stop."""
+    """Re-run the per-card guards on the rotating slice. Returns (flags, checked, deferred),
+    where flags is a list of (name, reason) and each reason is prefixed with the guard that
+    raised it ("fidelity: ..." for the cross-check, "completeness: ..." for the completeness
+    check). The opinion text is fetched once per card and reused by both guards, so adding the
+    completeness guard costs model calls but no extra CourtListener calls. Defers cleanly on a
+    rate-budget stop."""
     flags, checked, deferred = [], 0, 0
-    if not update.CROSSCHECK_MODEL:
-        print("  . cross-check disabled (OPINIONS_CROSSCHECK_MODEL empty); skipping re-validation")
+    if not update.CROSSCHECK_MODEL and not update.COMPLETENESS_MODEL:
+        print("  . both per-card guards disabled (OPINIONS_CROSSCHECK_MODEL and "
+              "OPINIONS_COMPLETENESS_MODEL empty); skipping re-validation")
         return flags, checked, deferred
     deadline = time.time() + FETCH_SEC
     for card in rotating_slice(cards):
@@ -136,14 +142,23 @@ def revalidate(cards):
         if not text:
             print("  . no opinion text fetched for %s; skipping" % name[:50])
             continue
-        cc = update.crosscheck(name, text, card)
         checked += 1
-        if cc and cc.get("verdict") == "flag":
-            flags.append((name, cc.get("reason") or ""))
-            print("  FLAG %s: %s" % (name[:50], cc.get("reason") or ""))
-        elif cc and cc.get("verdict") == "unavailable":
-            print("  . cross-check unavailable for %s" % name[:50])
-        else:
+        raised = False
+        if update.CROSSCHECK_MODEL:
+            cc = update.crosscheck(name, text, card)
+            if cc and cc.get("verdict") == "flag":
+                flags.append((name, "fidelity: " + (cc.get("reason") or "")))
+                print("  FLAG (fidelity) %s: %s" % (name[:50], cc.get("reason") or "")); raised = True
+            elif cc and cc.get("verdict") == "unavailable":
+                print("  . cross-check unavailable for %s" % name[:50])
+        if update.COMPLETENESS_MODEL:
+            cp = update.completeness_check(name, text, card)
+            if cp and cp.get("verdict") == "flag":
+                flags.append((name, "completeness: " + (cp.get("reason") or "")))
+                print("  FLAG (completeness) %s: %s" % (name[:50], cp.get("reason") or "")); raised = True
+            elif cp and cp.get("verdict") == "unavailable":
+                print("  . completeness check unavailable for %s" % name[:50])
+        if not raised:
             print("  ok   %s" % name[:50])
     return flags, checked, deferred
 
