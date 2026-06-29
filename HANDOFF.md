@@ -1,6 +1,6 @@
 # HANDOFF.md
 
-Updated 2026-06-21. The session-to-session working reference: where the site stands, what is
+Updated 2026-06-28. The session-to-session working reference: where the site stands, what is
 open, and the external loose ends. The durable how-to lives in the docs below; shipped history
 lives in ROADMAP.md.
 
@@ -22,12 +22,20 @@ Read these before changing anything:
 
 This file carries the current working state; those carry the durable how-to.
 
-## Where the site stands (verified 2026-06-21)
+## Where the site stands (verified 2026-06-28)
 
-70 cards across the four monitored courts (Court of Appeals of Georgia, Supreme Court of Georgia,
-Eleventh Circuit, SCOTUS). The Florida and Alabama supplementary feeds are wired but not yet
-carding. CI is green and the tree is render-idempotent. The documentation set above is complete
-and cross-linked.
+80 cards. The feed polls all eight registry courts; five have carded so far: Court of Appeals of
+Georgia, Supreme Court of Georgia, Eleventh Circuit, SCOTUS, and the Florida District Court of Appeal
+(one card). The Alabama supplementary feed is wired but has not carded yet. CI is green and the tree
+is render-idempotent. The documentation set above is complete and cross-linked.
+
+The two per-card model guards are hardened against a false flag: `crosscheck` (fidelity) must quote
+the verbatim card span it faults, `completeness_check` (omission) the verbatim opinion span it says
+was omitted, and each re-asks on a flag so a single noisy roll does not stand
+(`OPINIONS_CROSSCHECK_TRIES`, `OPINIONS_COMPLETENESS_TRIES`, both default 3). `scripts/test_update.py`
+is the repo's first unit test and pins both; the CI smoke job runs it. This followed the 2026-06-28
+maintenance false positive (issue #94, a cross-check flag whose premise the model invented, now
+closed).
 
 Official court links ship for every Eleventh Circuit and SCOTUS card and for the post-2017
 Supreme Court of Georgia cards: the case name links to the court's own PDF, with CourtListener
@@ -62,10 +70,13 @@ Pipeline and correctness:
    authoritative cluster.
 2. Completeness check on the back catalog. `completeness_check` runs only on new cards in the
    funnel; the older cards predate it. `maintain.py` already re-validates a rotating slice with
-   `crosscheck`; add `completeness_check` to that slice and surface its flags the same way.
-3. Failure-alert parity. The find-or-create issue-on-failure step exists on the funnel and
-   maintenance workflows but not on every scheduled one (render-sync among them). Audit
-   `.github/workflows` for the missing `if: failure()` step, or factor it into a reusable step.
+   `crosscheck`; add `completeness_check` to that slice and surface its flags the same way. Now
+   unblocked: `completeness_check` carries the same grounding-and-consensus guard as `crosscheck`,
+   so adding it to the slice will not reproduce the #94-style false maintenance failure.
+3. Failure-alert parity (resolved). Every scheduled workflow now surfaces a failure: render-sync,
+   digest, treatment, lighthouse, and the funnel and maintenance all open or update a tracking issue
+   on failure, and `links.yml` reports broken links through its own `create-issue-from-file` step
+   (with `fail: false` by design, so transient external blips do not red-X the run).
 4. Periodic log digest. `opinions_pipeline_log.jsonl` accumulates one record per run but nothing
    summarizes it. A small reader plus a weekly job could post rolling stats to the run summary or
    a digest issue.

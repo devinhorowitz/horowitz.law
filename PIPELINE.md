@@ -44,10 +44,11 @@ touches confirmed keepers:
 
 Each drafted card is then checked twice more: a fidelity crosscheck (does the card match the
 opinion) and a completeness check (does the card omit a material holding in a covered area).
-Both default to the Sonnet triage model, so the summarizer is not grading its own work. The
-crosscheck is hardened against a false flag: it must quote the verbatim span of the card it
-faults, so a flag whose quoted premise is not in the card is dismissed, and on a flag it re-asks
-and stands only on a majority of attempts (`OPINIONS_CROSSCHECK_TRIES`). Screen
+Both default to the Sonnet triage model, so the summarizer is not grading its own work. Both are
+hardened against a false flag: each must quote the verbatim text it faults (the crosscheck the card
+span it says is wrong, the completeness check the opinion span it says was omitted), so a flag whose
+quote is not present is dismissed, and on a flag each re-asks and stands only on a majority of
+attempts (`OPINIONS_CROSSCHECK_TRIES`, `OPINIONS_COMPLETENESS_TRIES`). Screen
 and triage drops are appended to `opinions_rejections.jsonl` for periodic recall review.
 
 ## Catching law that moves
@@ -107,8 +108,9 @@ drafting skill to read its area slice at draft time.
 - `scripts/digest.py` and `scripts/alert.py` build the weekly and ad-hoc emails (Resend).
 - `scripts/backfill.py` and `scripts/queue_cases.py` fill historical gaps and resolve specific
   cases on demand.
-- `scripts/safeio.py` is crash-safe atomic writes; `scripts/check_refs.py` and
-  `scripts/check_site.py` are the CI guards.
+- `scripts/safeio.py` is crash-safe atomic writes; `scripts/check_refs.py`,
+  `scripts/check_site.py`, and `scripts/test_update.py` (hermetic unit tests for the per-card
+  guards) are the CI guards.
 - The state files (`opinions_state.json`, `treatment_state.json`, `skill_alert_state.json`) record
   what has already been processed so nothing is redone; each is capped to bound growth.
 
@@ -229,6 +231,8 @@ running locally:
 - `OPINIONS_CROSSCHECK_TRIES` (default `3`): how many times the fidelity crosscheck re-asks on a
   flag, standing only on a majority, so a one-roll false flag is damped. `1` keeps the
   verbatim-quote grounding but disables the re-ask.
+- `OPINIONS_COMPLETENESS_TRIES` (default `3`): the same re-ask consensus for the completeness check.
+  `1` keeps the grounding but disables the re-ask.
 - `OPINIONS_AUDIT_MODEL` (default: the summarizer model): confirms a flagged adverse-treatment event,
   for both a carded case and a watched authority, before anything is flagged. Not disablable.
 
