@@ -84,10 +84,13 @@ jobs:
         run: python scripts/check_refs.py
 
       # Hermetic unit tests for the pipeline's own logic (no network, no API key): they stub
-      # update.anthropic_json, so they add no allowed-endpoints. Currently pin crosscheck()'s
-      # false-flag guardrails against the 2026-06-28 regression.
+      # update.anthropic_json (and the maintenance text fetch), so they add no allowed-endpoints.
+      # They pin the funnel's false-flag guardrails and docket-aware dedup (test_update.py) and the
+      # maintenance dual-guard re-validation wiring (test_maintain.py).
       - name: Self-tests
-        run: python scripts/test_update.py
+        run: |
+          python scripts/test_update.py
+          python scripts/test_maintain.py
 
       - name: Validate workflow YAML
         run: python -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml')]; print('workflow YAML parses')"
