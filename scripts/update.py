@@ -96,6 +96,7 @@ PRETRIAGE_MODEL = os.environ.get("OPINIONS_PRETRIAGE_MODEL", "claude-haiku-4-5-2
 CROSSCHECK_MODEL = os.environ.get("OPINIONS_CROSSCHECK_MODEL", TRIAGE_MODEL)  # fidelity check on each card; a different model than the Opus summarizer so it is not grading its own work; "" disables
 CROSSCHECK_TRIES = int(os.environ.get("OPINIONS_CROSSCHECK_TRIES", "3"))  # on a substantiated flag, re-ask up to this many times; a flag stands only on a majority, damping one-roll noise at temperature 1. 1 keeps grounding but disables consensus
 COMPLETENESS_MODEL = os.environ.get("OPINIONS_COMPLETENESS_MODEL", TRIAGE_MODEL)  # completeness check on each card: flags a material holding in a covered area the card omits; a different model than the Opus summarizer; "" disables
+COMPLETENESS_TRIES = int(os.environ.get("OPINIONS_COMPLETENESS_TRIES", "3"))  # like OPINIONS_CROSSCHECK_TRIES, for the completeness check: on a substantiated flag, re-ask up to this many times; a flag stands only on a majority. 1 keeps grounding but disables consensus
 VERSION      = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
 COURTS       = jurisdictions.COURTS         # CL ids the feed iterates (OPINIONS_COURTS narrows it)
 LOOKBACK     = int(os.environ.get("OPINIONS_LOOKBACK", "21"))
@@ -1038,14 +1039,15 @@ def _normalize_for_match(s):
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
-def _quote_substantiated(quote, drafted):
-    """True only if the model's quoted span actually appears in the drafted summary it was shown.
-    A fidelity flag must point at a real statement in the summary; a quote that is absent (the
-    premise was invented) or trivially short does not substantiate a flag."""
+def _quote_substantiated(quote, source):
+    """True only if the model's quoted span actually appears in the source text it was shown (the
+    drafted card for a fidelity flag, the opinion for a completeness flag). A flag must point at a
+    real span of that source; a quote that is absent (the premise was invented) or trivially short
+    does not substantiate a flag."""
     q = _normalize_for_match(quote)
     if len(q) < 4:
         return False
-    return q in _normalize_for_match(drafted)
+    return q in _normalize_for_match(source)
 
 
 def crosscheck(name, text, entry):
@@ -1130,20 +1132,34 @@ COMPLETENESS_SYSTEM = (
     "a point outside the covered areas; a standard of review, a subsidiary step, or procedural "
     "recitation that is not itself a holding; dicta; or mere detail, emphasis, or wording, so long "
     "as what the summary captures is itself a correct holding. When you are unsure the omitted "
-    "point rises to a separate material holding, do NOT flag, because a false flag costs review "
-    "time. Output ONLY a JSON object: {\"verdict\": \"complete\" or \"flag\", \"reason\": \"one "
-    "sentence; for a flag, name the omitted holding and its covered area\"}."
+    "point rises to a separate material holding, do NOT flag, because a false flag costs review time. "
+    "To flag, you MUST copy, verbatim, the exact span of the FULL OPINION that states the omitted "
+    "holding into the \"quote\" field, character for character from the opinion text shown to you. "
+    "Quote from the FULL OPINION, never from the drafted summary; do not paraphrase it and do not "
+    "invent a holding the opinion does not contain. If you cannot point to a specific verbatim span "
+    "of the opinion that decides a separate material holding in a covered area the summary omits, "
+    "return \"complete\". "
+    "Output ONLY a JSON object: {\"verdict\": \"complete\" or \"flag\", \"quote\": \"for a flag, the exact "
+    "verbatim opinion text that states the omitted holding; empty string for complete\", \"reason\": "
+    "\"one sentence; for a flag, name the omitted holding and its covered area\"}."
 )
 
 
 def completeness_check(name, text, entry):
-    """Independent completeness check on a drafted card: a model other than the Opus summarizer
-    reads the opinion against the drafted holding(s) and flags a separate, material holding in a
-    covered area that the card leaves out. Flag-and-surface, so it never drops a card; the verdict
-    rides the PR for the editor to judge. Conservative: only an explicit 'complete' clears, anything
-    else is treated as a flag. Fail-open: any error returns an 'unavailable' verdict so the card
-    still surfaces, marked for a manual look. Reuses the opinion text already in hand, so it costs
-    one model call and no CourtListener calls."""
+    """Independent completeness check on a drafted card: a model other than the Opus summarizer reads
+    the opinion against the drafted holding(s) and flags a separate, material holding in a covered area
+    that the card leaves out. Flag-and-surface, so it never drops a card; the verdict rides the PR for
+    the editor to judge. Fail-open: if no attempt returns a usable answer, the verdict is 'unavailable'
+    so the card still surfaces for a manual look. Reuses the opinion text already in hand, so it costs
+    no CourtListener calls.
+
+    The same two guardrails as crosscheck against a false flag, with the grounding source flipped:
+    because a completeness flag asserts the OPINION decides a holding the card omits, a flag must quote
+    the verbatim span of the OPINION that states that holding. A flag whose quote is not in the opinion
+    (a hallucinated holding) is dismissed, not surfaced; the quote is folded into the reason. On a
+    substantiated flag the check re-asks up to OPINIONS_COMPLETENESS_TRIES times and a flag stands only
+    on a majority of the attempts made. Set OPINIONS_COMPLETENESS_TRIES=1 to keep grounding but disable
+    consensus."""
     if not COMPLETENESS_MODEL:
         return None
     holdings = [{"areas": entry["areas"], "synopsis": entry["synopsis"], "why": entry["why"]}]
@@ -1152,16 +1168,50 @@ def completeness_check(name, text, entry):
         "Holding %d (areas: %s)\nSynopsis: %s\nWhy it matters: %s"
         % (i + 1, ", ".join(h["areas"]), h["synopsis"], h["why"])
         for i, h in enumerate(holdings))
+    opinion = clip(text)
     user = ("Case name: %s\nDisposition as drafted: %s\n\nDRAFTED SUMMARY:\n%s\n\nFULL OPINION:\n%s"
-            % (name, entry.get("disposition") or "(none stated)", drafted, clip(text)))
-    try:
-        r = anthropic_json({"model": COMPLETENESS_MODEL, "max_tokens": 400, "system": COMPLETENESS_SYSTEM,
-                            "messages": [{"role": "user", "content": user}]}, "completeness")
-        verdict = "complete" if (r.get("verdict") or "").strip().lower() == "complete" else "flag"
-        return {"verdict": verdict, "reason": (r.get("reason") or "").strip()}
-    except Exception as e:
-        print("  ! completeness check unavailable for %s: %s" % (name[:40], e))
-        return {"verdict": "unavailable", "reason": str(e)[:160]}
+            % (name, entry.get("disposition") or "(none stated)", drafted, opinion))
+    body = {"model": COMPLETENESS_MODEL, "max_tokens": 400, "system": COMPLETENESS_SYSTEM,
+            "messages": [{"role": "user", "content": user}]}
+
+    tries = max(1, COMPLETENESS_TRIES)
+    flags, clears, made, last_error = [], 0, 0, None
+    for attempt in range(tries):
+        try:
+            r = anthropic_json(body, "completeness")
+        except Exception as e:
+            last_error = str(e)[:160]
+            print("  ! completeness attempt %d unavailable for %s: %s" % (attempt + 1, name[:40], last_error))
+            continue
+        made += 1
+        verdict = (r.get("verdict") or "").strip().lower()
+        reason = (r.get("reason") or "").strip()
+        quote = (r.get("quote") or "").strip()
+        if verdict != "complete" and _quote_substantiated(quote, opinion):
+            flags.append((reason, quote))
+        else:
+            clears += 1
+            if verdict != "complete":
+                print("  . completeness flag DISMISSED (quoted holding not found in the opinion) "
+                      "for %s: reason=%r quote=%r" % (name[:40], reason[:160], quote[:120]))
+        # Stop once a majority of the budget is locked either way; no need to keep paying.
+        if len(flags) > tries // 2 or clears > tries // 2:
+            break
+
+    if made == 0:
+        print("  ! completeness check unavailable for %s: %s" % (name[:40], last_error or "no response"))
+        return {"verdict": "unavailable", "reason": last_error or "no response"}
+
+    if len(flags) > made // 2:
+        reason, quote = flags[-1]
+        reason = ('%s (opinion text omitted: "%s")' % (reason, quote)) if reason else \
+                 ('the opinion decides a material holding the card omits (opinion text omitted: "%s")' % quote)
+        return {"verdict": "flag", "reason": reason, "quote": quote, "tries": made, "flag_count": len(flags)}
+
+    if flags:
+        print("  . completeness flag NOT CONFIRMED for %s (%d of %d attempts flagged); clearing as noise"
+              % (name[:40], len(flags), made))
+    return {"verdict": "complete", "reason": "no material holding omitted", "tries": made, "flag_count": len(flags)}
 
 
 # Party-name matching for the screen override in the candidate loop. A case can

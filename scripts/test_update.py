@@ -128,13 +128,73 @@ def test_substantiation_helper():
     print("  ok  substantiation helper (presence, normalization, empties)")
 
 
+# --- completeness_check: the same guardrails, with the grounding source flipped to the opinion ---
+# The opinion fixture states a separate material holding verbatim; a completeness flag must quote it.
+COMP_OPINION = (
+    "The trial court granted summary judgment to the defendant and we affirm. The record does not "
+    "show the premises were in a hazardous condition. The court further held that the plaintiff's "
+    "claim was independently barred because the statute of limitations had run before suit was filed."
+)
+COMP_REAL = "the plaintiff's claim was independently barred because the statute of limitations had run before suit was filed"
+COMP_FAB = "the court awarded treble damages and attorney fees under the civil RICO count"
+
+
+def complete():
+    return {"verdict": "complete", "quote": "", "reason": "ok"}
+
+
+def cflag(quote, reason="omits a material holding"):
+    return {"verdict": "flag", "quote": quote, "reason": reason}
+
+
+CASES_COMP = [
+    # Clean card: every roll says complete. Verdict complete; early-exit once a majority has cleared.
+    ("comp_clean_complete", [complete()] * 5, 3, "complete", 2, 0, None),
+    # An invented omission whose quoted holding is not in the opinion is dismissed.
+    ("comp_fabricated_omission_dismissed", [cflag(COMP_FAB)] * 3, 3, "complete", 2, 0, None),
+    # A real omission quoting the opinion, confirmed by consensus: verdict flag, quote folded into reason.
+    ("comp_substantiated_unanimous", [cflag(COMP_REAL)] * 3, 3, "flag", 2, 2, COMP_REAL),
+    # A substantiated flag on only a minority of rolls is noise: cleared.
+    ("comp_substantiated_minority", [cflag(COMP_REAL), complete(), complete()], 3, "complete", 3, 1, None),
+    # A substantiated flag on a majority of rolls stands.
+    ("comp_substantiated_majority", [cflag(COMP_REAL), complete(), cflag(COMP_REAL)], 3, "flag", 3, 2, None),
+    # Every attempt errors: fail-open to unavailable so the card still surfaces.
+    ("comp_all_errors_unavailable", [RuntimeError("boom")] * 3, 3, "unavailable", 3, None, None),
+    # Consensus off (tries=1) but grounding on: a substantiated flag stands.
+    ("comp_tries1_substantiated_flag", [cflag(COMP_REAL)], 1, "flag", 1, 1, COMP_REAL),
+    # Consensus off, invented omission: still dismissed by grounding.
+    ("comp_tries1_fabricated_dismissed", [cflag(COMP_FAB)], 1, "complete", 1, 0, None),
+]
+
+
+def run_comp_case(label, seq, tries, verdict, calls, flag_count, reason_has):
+    update.anthropic_json = Stub(seq)
+    update.COMPLETENESS_TRIES = tries
+    r = update.completeness_check(CARD["name"], COMP_OPINION, CARD)
+    made = update.anthropic_json.calls
+    assert isinstance(r, dict), "%s: result is not a dict" % label
+    assert r["verdict"] in ("complete", "flag", "unavailable"), "%s: bad verdict %r" % (label, r["verdict"])
+    assert isinstance(r.get("reason", ""), str), "%s: reason is not a string" % label
+    assert r["verdict"] == verdict, "%s: verdict %r != %r (%r)" % (label, r["verdict"], verdict, r)
+    if calls is not None:
+        assert made == calls, "%s: made %d calls, expected %d" % (label, made, calls)
+    if flag_count is not None:
+        assert r.get("flag_count") == flag_count, "%s: flag_count %r != %r" % (label, r.get("flag_count"), flag_count)
+    if reason_has is not None:
+        assert reason_has in r.get("reason", ""), "%s: reason lacks %r (%r)" % (label, reason_has, r.get("reason"))
+    print("  ok  %-32s verdict=%-11s calls=%s flag_count=%s" % (label, r["verdict"], made, r.get("flag_count")))
+
+
 def main():
     print("crosscheck guardrails:")
     for c in CASES:
         run_case(*c)
+    print("completeness guardrails:")
+    for c in CASES_COMP:
+        run_comp_case(*c)
     print("helpers:")
     test_substantiation_helper()
-    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + 1))
+    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + 1))
     return 0
 
 
