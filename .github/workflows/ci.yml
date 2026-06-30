@@ -74,7 +74,7 @@ jobs:
       - name: Compile and import every script
         run: |
           python -m py_compile scripts/*.py
-          cd scripts && python -c "import cl_rate, safeio, jurisdictions, render, treatment_core, update, treatment, backfill, digest, queue_cases, courts, golden_check, check_site, alert, official_ga; print('all imports resolve')"
+          cd scripts && python -c "import cl_rate, safeio, jurisdictions, render, treatment_core, update, treatment, backfill, digest, queue_cases, courts, golden_check, check_site, alert, official_ga, maintain, skill_authorities, skill_alert; print('all imports resolve')"
 
       # Imports resolving is not enough: a script can import fine yet call a sibling
       # function that was dropped or renamed (a stale upload that reverts
