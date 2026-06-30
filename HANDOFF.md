@@ -88,12 +88,16 @@ Pipeline and correctness:
 5. Late-ingestion recall. CourtListener can publish a cluster weeks after its dateFiled and the
    since-window then skips it. The feeds are now wired; the remaining piece is a detector for feed
    items whose dateFiled sits well behind the window, routing them to the seed.
-6. backfill.py assembly. Its summarizer prompt and assembly are frozen pre-Phase 4, so seeded
-   cards can arrive without `first_impression`, `tort_reform`, and `law_applied`. Sync it with
-   update.py, or have backfill import update's summarize and assembly directly.
-7. treated_by hyperlinks. The permalink treatment block renders `treated_by` names as plain text;
-   when the citing cluster is itself carded, render the name as a link to its permalink. About
-   five lines in render.py.
+6. backfill.py assembly (done). It carded through a frozen pre-Phase-4 summarizer, so a seeded
+   card could arrive without `first_impression`, `tort_reform`, and `law_applied`. `backfill.py`
+   now imports `update` and routes both the single-case path and the window path through
+   `update.summarize` and `update.assemble_entry`, so a seeded card carries the same taxonomy as a
+   daily-feed card. CI's import smoke exercises `backfill` alongside the rest.
+7. treated_by hyperlinks (done). The treatment block rendered `treated_by` names as plain text;
+   `render._cited_by_html` now links any citer that is itself carded to its permalink (`/o/<id>`)
+   and leaves the rest plain, so a link never 404s. It runs in the card banner (recent feed,
+   archive, and permalink) and the `/changes` ledger; the changes RSS stays plain text by design.
+   The one currently flagged card, Aspen American v. Landstar Ranger, links Montgomery and Hodge.
 
 Feature candidates:
 

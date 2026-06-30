@@ -254,6 +254,27 @@ _TREAT_LABEL = {"caution": "Possible negative treatment", "negative": "Negative 
 _TREAT_TAIL  = {"caution": " Verify on Shepard\u2019s before relying.",
                 "negative": " Verify on Shepard\u2019s.", "superseded": " Retained for the record."}
 
+# cluster_ids that have a permalink page this render, so a treated_by citer that
+# is itself carded can link to it. Populated at the top of render() from the same
+# entries the permalinks are written from; empty otherwise, so a direct call (a
+# test, say) degrades to plain-text names exactly as before.
+_CARDED_IDS = set()
+
+def _cited_by_html(e):
+    """The 'Cited by: ...' clause for a treated card: the later case(s) found to
+    treat it adversely. Each citer that is itself carded links to its permalink
+    (/o/<id>); the rest stay plain text, so a link never 404s. Up to three, to
+    match the note's own brevity. Empty when there are no named citers."""
+    by = [b for b in (e.get("treated_by") or []) if b.get("name")]
+    if not by:
+        return ""
+    parts = []
+    for b in by[:3]:
+        nm = _esc(b["name"])
+        cid = b.get("cluster_id")
+        parts.append(f'<a href="/o/{cid}">{nm}</a>' if cid in _CARDED_IDS else nm)
+    return " Cited by: " + "; ".join(parts) + "."
+
 def _treatment_banner(e):
     """A caution banner for a card treated adversely. Empty for untreated ('ok')
     cards, so their markup is unchanged. Renders wherever the card renders, the
@@ -262,8 +283,7 @@ def _treatment_banner(e):
     if t == "ok":
         return ""
     note = (e.get("treatment_note") or e.get("treatment_auto_note") or "").strip()
-    by = [b.get("name") for b in (e.get("treated_by") or []) if b.get("name")]
-    cited = (" Cited by: " + "; ".join(_esc(n) for n in by[:3]) + ".") if by else ""
+    cited = _cited_by_html(e)
     body = (_esc(note) + cited).strip()
     return (f'        <div class="op-treatment op-treatment-{t}" role="note">'
             f'<span class="op-treat-label">{_TREAT_LABEL.get(t, "Flagged")}</span> '
@@ -463,8 +483,7 @@ def changes_block(entries):
     for e in flagged:
         t = e["treatment"]
         note = (e.get("treatment_note") or e.get("treatment_auto_note") or "").strip()
-        by = [b.get("name") for b in (e.get("treated_by") or []) if b.get("name")]
-        cited = (" Cited by: " + "; ".join(_esc(n) for n in by[:3]) + ".") if by else ""
+        cited = _cited_by_html(e)
         rows.append(
             f'      <article class="change" id="ch-{e["cluster_id"]}">\n'
             f'        <div class="change-date">{_esc(e.get("treatment_date") or e["date"])}</div>\n'
@@ -1252,6 +1271,12 @@ def render(entries=None):
                   % (e.get("date"), (e.get("name") or "?")[:50]))
     entries = [e for e in entries if _valid_date(e.get("date"))]
     entries = _sorted(entries)
+
+    # Every entry gets a permalink, so a treated_by citer that is itself carded
+    # can link to its /o/<id>. Set from the post-filter entry set the permalinks
+    # are written from, so a link target always exists.
+    global _CARDED_IDS
+    _CARDED_IDS = {e["cluster_id"] for e in entries}
 
     # Per-area slices for drip-in (and per-area readers): /areas/<area>.json,
     # deterministic from opinions.json so the idempotency guard covers them.

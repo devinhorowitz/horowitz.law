@@ -821,7 +821,8 @@
     "why": "The decision resolves a circuit split and establishes that state-law negligent-hiring claims against freight brokers who select unsafe motor carriers are not preempted by the FAAAA, abrogating the contrary Eleventh Circuit rule that had governed in Georgia.",
     "precedential": "published",
     "first_seen": "2026-05-14",
-    "official_url": "https://www.supremecourt.gov/opinions/25pdf/24-1238_1b7d.pdf"
+    "official_url": "https://www.supremecourt.gov/opinions/25pdf/24-1238_1b7d.pdf",
+    "editor_note": "The Supreme Court's resolution of the broker-preemption split, and the decision that abrogated the Eleventh Circuit's contrary rule in Aspen American v. Landstar Ranger. Assuming without deciding that the FAAAA's § 14501(c)(1) reaches a negligent-selection claim against a freight broker, the Court held the § 14501(c)(2)(A) safety exception saves it. The practical effect in Georgia federal court: the preemption defense that had foreclosed these claims against brokers is gone, and the Eleventh Circuit is already vacating judgments that relied on the old rule (the Hodge remand)."
   },
   {
     "cluster_id": 10680446,
@@ -2040,57 +2041,6 @@
         ],
         "synopsis": "The court held that an award under OCGA § 9-11-68(b)(2) is limited to reasonable attorney fees and expenses incurred from the date the offer of settlement was rejected through entry of judgment. The record showed the fees awarded were limited to work performed after the offer's expiration, as reflected in counsel's affidavit, work logs, and the trial court's express limitation to post-expiration work.",
         "why": "It confirms that recoverable fees under the offer-of-settlement statute are confined to work performed after rejection of the offer."
-      }
-    ]
-  },
-  {
-    "cluster_id": 10881721,
-    "name": "Georgia Kenworth, LLC v. Smith",
-    "court": "ctapp",
-    "division": "Second Division",
-    "date": "2026-06-29",
-    "dockets": [
-      "A26A0645"
-    ],
-    "disposition": "reversed",
-    "areas": [
-      "procedure"
-    ],
-    "url": "https://www.courtlistener.com/opinion/10881721/georgia-kenworth-llc-v-rocky-smith/",
-    "synopsis": "A truck owner sued a repair dealership for negligence, inadequate security, and failure to safekeep his dump truck after it was stolen while on the dealership's premises following completed repairs. The dealership moved to compel arbitration under a clause in the signed repair-authorization order covering any controversy or claim arising out of or relating to the order. The Court of Appeals held that even if the parties formed a separate implied bailment agreement, that bailment itself arose out of and related to the repair order, because the dealership only possessed the truck due to the repair order and the incorporated terms expressly contemplated theft claims. Applying the principle that only a slight causal connection is needed and that doubts about arbitrability are resolved in favor of arbitration, the court found the claims covered.",
-    "why": "The decision clarifies that tort and bailment claims tied to the relationship created by a contract fall within a broad arbitration clause covering disputes arising out of or relating to that contract, requiring only a slight causal connection rather than proximate cause.",
-    "precedential": "published",
-    "first_seen": "2026-06-29"
-  },
-  {
-    "cluster_id": 10881685,
-    "name": "McGovern v. Rowland",
-    "court": "ctapp",
-    "division": "Fifth Division",
-    "date": "2026-06-29",
-    "dockets": [
-      "A26A0116",
-      "A26A0117"
-    ],
-    "disposition": "affirmed",
-    "areas": [
-      "auto",
-      "coverage",
-      "procedure"
-    ],
-    "url": "https://www.courtlistener.com/opinion/10881685/kyle-zachary-rowland-v-kyle-trevor-mcgovern/",
-    "synopsis": "After a motor-vehicle collision, the injured party's counsel sent a pre-suit policy-limits settlement offer under the 2021 version of OCGA section 9-11-67.1 that set out the statutory material terms and added non-statutory conditions, including that any settlement check be made payable to counsel in trust for the claimant without variance. The insurer accepted the demand without limitation but issued a check naming an additional payee and requiring endorsement by all payees. The court held that by accepting the offer without limitation the insurer agreed to be bound by the non-statutory conditions as well as the statutory material terms, and that its non-conforming check constituted a rejection rather than acceptance, so no binding settlement formed. The trial court's denial of the motion to enforce the settlement was affirmed.",
-    "why": "The decision clarifies that under the 2021 version of OCGA section 9-11-67.1 an insurer that accepts a settlement demand without limitation, rather than expressly accepting only the statutory material terms, is bound by the offer's additional non-statutory conditions, and a check inconsistent with those conditions is a rejection.",
-    "precedential": "published",
-    "first_seen": "2026-06-29",
-    "additional_holdings": [
-      {
-        "areas": [
-          "procedure",
-          "damages"
-        ],
-        "synopsis": "On cross-appeal, the claimant argued the trial court erred by failing to enter judgment on the verdict nunc pro tunc to the verdict date, which cost him about four months of post-judgment interest. The court held that a trial court has discretion, not a duty, to enter judgment nunc pro tunc to the date a verdict is rendered, and that no time limit requires entry of judgment by any particular date. Finding no abuse of discretion, the court affirmed and disapproved City of Milton v. Chang to the extent it stated that Taylor v. Devereux Foundation dictates that a trial court must enter judgment nunc pro tunc to the verdict date.",
-        "why": "The decision establishes that entry of judgment nunc pro tunc to the verdict date is discretionary rather than mandatory, which directly affects the accrual of post-judgment interest under OCGA section 7-4-12, and disapproves contrary language in Chang."
       }
     ]
   }
