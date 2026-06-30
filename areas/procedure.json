@@ -1,46 +1,8 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 52,
+  "count": 50,
   "opinions": [
-    {
-      "cluster_id": 10881721,
-      "name": "Georgia Kenworth, LLC v. Smith",
-      "court": "Court of Appeals of Georgia",
-      "date": "2026-06-29",
-      "disposition": "reversed",
-      "areas": [
-        "procedure"
-      ],
-      "precedential": "published",
-      "url": "https://www.courtlistener.com/opinion/10881721/georgia-kenworth-llc-v-rocky-smith/",
-      "synopsis": "A truck owner sued a repair dealership for negligence, inadequate security, and failure to safekeep his dump truck after it was stolen while on the dealership's premises following completed repairs. The dealership moved to compel arbitration under a clause in the signed repair-authorization order covering any controversy or claim arising out of or relating to the order. The Court of Appeals held that even if the parties formed a separate implied bailment agreement, that bailment itself arose out of and related to the repair order, because the dealership only possessed the truck due to the repair order and the incorporated terms expressly contemplated theft claims. Applying the principle that only a slight causal connection is needed and that doubts about arbitrability are resolved in favor of arbitration, the court found the claims covered.",
-      "why": "The decision clarifies that tort and bailment claims tied to the relationship created by a contract fall within a broad arbitration clause covering disputes arising out of or relating to that contract, requiring only a slight causal connection rather than proximate cause.",
-      "dockets": [
-        "A26A0645"
-      ]
-    },
-    {
-      "cluster_id": 10881685,
-      "name": "McGovern v. Rowland",
-      "court": "Court of Appeals of Georgia",
-      "date": "2026-06-29",
-      "disposition": "affirmed",
-      "areas": [
-        "auto",
-        "coverage",
-        "procedure",
-        "damages"
-      ],
-      "precedential": "published",
-      "url": "https://www.courtlistener.com/opinion/10881685/kyle-zachary-rowland-v-kyle-trevor-mcgovern/",
-      "synopsis": "After a motor-vehicle collision, the injured party's counsel sent a pre-suit policy-limits settlement offer under the 2021 version of OCGA section 9-11-67.1 that set out the statutory material terms and added non-statutory conditions, including that any settlement check be made payable to counsel in trust for the claimant without variance. The insurer accepted the demand without limitation but issued a check naming an additional payee and requiring endorsement by all payees. The court held that by accepting the offer without limitation the insurer agreed to be bound by the non-statutory conditions as well as the statutory material terms, and that its non-conforming check constituted a rejection rather than acceptance, so no binding settlement formed. The trial court's denial of the motion to enforce the settlement was affirmed.",
-      "why": "The decision clarifies that under the 2021 version of OCGA section 9-11-67.1 an insurer that accepts a settlement demand without limitation, rather than expressly accepting only the statutory material terms, is bound by the offer's additional non-statutory conditions, and a check inconsistent with those conditions is a rejection.",
-      "dockets": [
-        "A26A0116",
-        "A26A0117"
-      ]
-    },
     {
       "cluster_id": 10880884,
       "name": "Sangphim v. Warcup",
