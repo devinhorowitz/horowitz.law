@@ -2094,5 +2094,34 @@
         "why": "The decision establishes that entry of judgment nunc pro tunc to the verdict date is discretionary rather than mandatory, which directly affects the accrual of post-judgment interest under OCGA section 7-4-12, and disapproves contrary language in Chang."
       }
     ]
+  },
+  {
+    "cluster_id": 10882493,
+    "name": "Stubbs v. Home Depot U.S.A., Inc.",
+    "court": "ctapp",
+    "division": "Second Division",
+    "date": "2026-06-30",
+    "dockets": [
+      "A26A0824"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "expert",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10882493/victoria-w-stubbs-v-home-depot-usa-inc/",
+    "synopsis": "After a lawnmower blade severed portions of a plaintiff's fingers, plaintiffs sued the manufacturer, the engine maker, and the retail seller, and the trial court excluded one of plaintiffs' experts under OCGA § 24-7-702. The expert was a certified master automobile mechanic with decades of experience on internal combustion engines, but had no professional experience designing or evaluating lawnmower engines and only occasional incidental work on lawnmowers. The Court of Appeals held that the trial court did not abuse its discretion in finding the expert unqualified to testify about lawnmower engines, emphasizing that general internal-combustion-engine expertise does not supply the foundation needed for the specialized subcategory and that the abuse-of-discretion standard places a heavy thumb on the trial court's side of the scale.",
+    "why": "It clarifies that under Georgia's Daubert standard a witness with general engine expertise may be excluded for lack of experience in a specialized subcategory, and reinforces the deferential review of expert-qualification rulings.",
+    "precedential": "published",
+    "first_seen": "2026-06-30",
+    "additional_holdings": [
+      {
+        "areas": [
+          "damages"
+        ],
+        "synopsis": "The Court affirmed summary judgment for the retail seller on plaintiffs' implied-warranty-of-merchantability claim, holding that about two years of trouble-free use of the lawnmower for its intended purpose inherently negates a claim that it was unmerchantable at the time of sale, because the warranty addresses defects existing at sale and does not guarantee continuing serviceability. The Court separately affirmed summary judgment on the negligent misrepresentation, fraud, and Fair Business Practices Act claims, finding insufficient evidence of causation, of intent to induce reliance, and of culpable knowledge, respectively, and on the derivative loss-of-consortium, attorney-fee, and punitive-damages claims.",
+        "why": "It applies the rule that extended ordinary use negates an implied-warranty-of-merchantability claim against a seller and confirms the proof required for negligent misrepresentation, fraud, and FBPA claims against a non-manufacturing retailer."
+      }
+    ]
   }
 ]
