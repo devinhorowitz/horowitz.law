@@ -125,7 +125,7 @@ bodies a workflow produces and consumes; they are never committed.
 
 ## The workflows
 
-Thirteen workflows. Most run themselves; a few you trigger by hand from the Actions tab.
+Fourteen workflows. Most run themselves; a few you trigger by hand from the Actions tab.
 
 Automatic, on a schedule:
 
@@ -135,6 +135,7 @@ Automatic, on a schedule:
 | treatment | Saturdays | reverse citation sweep for adverse treatment of published cards |
 | maintain | daily | budget-gated upkeep: golden check, court check, repo keepalive |
 | render-sync | daily | re-renders pages from `opinions.json`; opens a PR if they drifted |
+| model-watch | daily | checks the Models API for a newer Claude model in a pinned tier; opens a bump PR gated by the golden set |
 | digest | Mondays | the weekly email digest, sent last in the cycle |
 | lighthouse | Mondays | performance scores of the deployed site |
 | links | Mondays | link-rot check, gentle on CourtListener |
@@ -179,3 +180,16 @@ Run by hand, from the Actions tab:
   HTML and inject scripts that break the hash-based Content Security Policy. The apex and
   `www` records stay proxied for certificate issuance, and the CAA record must include
   `pki.goog`.
+- Model pins do not drift. From the 4.6 generation on, a Claude model id is a fixed
+  snapshot: a newer model ships under a new id (`claude-sonnet-5`), and the pinned id keeps
+  serving the same weights. The pins live as the `|| 'id'` fallback in the funnel workflows
+  (and the matching defaults in `update.py` / `treatment.py`); a repo Variable overrides a
+  pin without editing a file. `model-watch` proposes upgrades, but a pin only changes when
+  a PR merges (or you set a Variable).
+- `model-watch` needs a `MODEL_WATCH_TOKEN` secret to open its PR, because a bump edits the
+  workflow files and the default token cannot push to `.github/workflows/`. Use a
+  fine-grained PAT scoped to this repo with Contents, Pull requests, and Workflows set to
+  write. Without it the daily check and the golden-set eval still run and report on the
+  Actions summary; only the auto-PR is skipped. If a bump PR touches a tier whose pin is
+  also set as a repo Variable, update that Variable to match, or the Variable will keep
+  overriding the merged default.
