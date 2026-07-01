@@ -6,8 +6,29 @@
     <atom:link href="https://horowitz.law/opinions.xml" rel="self" type="application/rss+xml" />
     <description>AI-assisted synopses of new Georgia appellate, Eleventh Circuit, and U.S. Supreme Court opinions, filtered for civil litigation and insurance practice. Each synopsis is AI-drafted; the linked opinion is the authority. A curated core, not a complete docket. This feed covers the most recent two years; older opinions are archived by year at https://horowitz.law/archive.</description>
     <language>en-us</language>
-    <lastBuildDate>Fri, 26 Jun 2026 12:00:00 -0400</lastBuildDate>
+    <lastBuildDate>Mon, 29 Jun 2026 12:00:00 -0400</lastBuildDate>
     <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>
+    <item>
+      <title>Georgia Kenworth, LLC v. Smith (Ga. Ct. App.)</title>
+      <link>https://www.courtlistener.com/opinion/10881721/georgia-kenworth-llc-v-rocky-smith/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10881721/georgia-kenworth-llc-v-rocky-smith/</guid>
+      <pubDate>Mon, 29 Jun 2026 12:00:00 -0400</pubDate>
+      <category>Court of Appeals of Georgia</category>
+      <category>procedure</category>
+      <description><![CDATA[A truck owner sued a repair dealership for negligence, inadequate security, and failure to safekeep his dump truck after it was stolen while on the dealership's premises following completed repairs. The dealership moved to compel arbitration under a clause in the signed repair-authorization order covering any controversy or claim arising out of or relating to the order. The Court of Appeals held that even if the parties formed a separate implied bailment agreement, that bailment itself arose out of and related to the repair order, because the dealership only possessed the truck due to the repair order and the incorporated terms expressly contemplated theft claims. Applying the principle that only a slight causal connection is needed and that doubts about arbitrability are resolved in favor of arbitration, the court found the claims covered. Why it matters: The decision clarifies that tort and bailment claims tied to the relationship created by a contract fall within a broad arbitration clause covering disputes arising out of or relating to that contract, requiring only a slight causal connection rather than proximate cause. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10881721/georgia-kenworth-llc-v-rocky-smith/]]></description>
+    </item>
+    <item>
+      <title>McGovern v. Rowland (Ga. Ct. App.)</title>
+      <link>https://www.courtlistener.com/opinion/10881685/kyle-zachary-rowland-v-kyle-trevor-mcgovern/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10881685/kyle-zachary-rowland-v-kyle-trevor-mcgovern/</guid>
+      <pubDate>Mon, 29 Jun 2026 12:00:00 -0400</pubDate>
+      <category>Court of Appeals of Georgia</category>
+      <category>auto</category>
+      <category>coverage</category>
+      <category>procedure</category>
+      <category>damages</category>
+      <description><![CDATA[After a motor-vehicle collision, the injured party's counsel sent a pre-suit policy-limits settlement offer under the 2021 version of OCGA section 9-11-67.1 that set out the statutory material terms and added non-statutory conditions, including that any settlement check be made payable to counsel in trust for the claimant without variance. The insurer accepted the demand without limitation but issued a check naming an additional payee and requiring endorsement by all payees. The court held that by accepting the offer without limitation the insurer agreed to be bound by the non-statutory conditions as well as the statutory material terms, and that its non-conforming check constituted a rejection rather than acceptance, so no binding settlement formed. The trial court's denial of the motion to enforce the settlement was affirmed. Why it matters: The decision clarifies that under the 2021 version of OCGA section 9-11-67.1 an insurer that accepts a settlement demand without limitation, rather than expressly accepting only the statutory material terms, is bound by the offer's additional non-statutory conditions, and a check inconsistent with those conditions is a rejection. Also: On cross-appeal, the claimant argued the trial court erred by failing to enter judgment on the verdict nunc pro tunc to the verdict date, which cost him about four months of post-judgment interest. The court held that a trial court has discretion, not a duty, to enter judgment nunc pro tunc to the date a verdict is rendered, and that no time limit requires entry of judgment by any particular date. Finding no abuse of discretion, the court affirmed and disapproved City of Milton v. Chang to the extent it stated that Taylor v. Devereux Foundation dictates that a trial court must enter judgment nunc pro tunc to the verdict date. Why it matters: The decision establishes that entry of judgment nunc pro tunc to the verdict date is discretionary rather than mandatory, which directly affects the accrual of post-judgment interest under OCGA section 7-4-12, and disapproves contrary language in Chang. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10881685/kyle-zachary-rowland-v-kyle-trevor-mcgovern/]]></description>
+    </item>
     <item>
       <title>Sangphim v. Warcup (Ga. Ct. App.)</title>
       <link>https://www.courtlistener.com/opinion/10880884/brenda-g-sangphim-v-lisa-warcup/</link>
