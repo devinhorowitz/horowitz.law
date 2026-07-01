@@ -1,0 +1,173 @@
+name: Model watch (Claude model pins)
+
+# A Dependabot for the funnel's Claude model pins. From the 4.6 generation onward an
+# Anthropic model id is a fixed snapshot: a newer model ships under a new id and the old
+# id never changes, so a pin neither drifts nor upgrades on its own. This checks the
+# Models API daily for a newer model in each tier's own family (Opus summarizer, Sonnet
+# triage, Haiku screen) and, when one appears, rewrites the pin, runs the golden set
+# against the candidate, and opens a review PR. It proposes; a human merges. A tier above
+# Opus (Fable/Mythos) is reported, never auto-proposed.
+#
+# TOKEN: a bump rewrites the `|| 'id'` fallback in the funnel workflows, and GitHub
+# forbids the default GITHUB_TOKEN from pushing changes to .github/workflows/. So the PR
+# step uses a PAT in the MODEL_WATCH_TOKEN secret: a fine-grained token scoped to this repo
+# with Contents, Pull requests, and Workflows set to write. Without it, detection and the
+# golden-set eval still run and report on the Actions summary, but no PR opens (the run
+# says so). This is the one elevated credential here, and it is the same scope Dependabot
+# needs to bump action versions in workflow files.
+
+on:
+  schedule:
+    - cron: '23 6 * * *'   # daily, offset from the funnel and render-sync. Detection is a single
+                           # Models-API GET; the model-spend golden eval runs only on an upgrade.
+  workflow_dispatch: {}    # run by hand from the Actions tab any time
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write          # the failure-alert step opens or comments on a tracking issue
+
+env:
+  PYTHONUNBUFFERED: '1'
+
+concurrency:
+  group: model-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Block egress to all but: api.anthropic.com (the Models API and the golden eval's
+      # model calls), github.com / api.github.com (checkout, the PR push, and the gh
+      # failure-alert step), and the pip endpoints (pypdf, pulled because golden_check
+      # imports update). Actions cache/infra endpoints are auto-allowed.
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.anthropic.com:443
+            github.com:443
+            api.github.com:443
+            pypi.org:443
+            files.pythonhosted.org:443
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install --upgrade "pypdf>=5,<6"   # golden_check imports update, which imports pypdf
+
+      # Map the PAT secret to an output so later steps gate on a plain value (secrets are
+      # awkward to reference inside an `if:`). Prints nothing about the secret itself.
+      - name: Detect PAT
+        id: pat
+        env:
+          TOK: ${{ secrets.MODEL_WATCH_TOKEN }}
+        run: echo "has=$([ -n "$TOK" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      # Detect a newer model per tier and, if any, rewrite the pins in place (source
+      # defaults + the workflow fallbacks) so the eval below tests the candidate and a
+      # merged PR takes effect. No edits when nothing is newer.
+      - name: Check the Models API and stage any bump
+        id: watch
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/model_watch.py --apply
+
+      # Golden-set gate, only when a bump was staged. update.py reads the model from its
+      # now-edited default, so this runs the new model. `check` covers the screen/triage
+      # tiers; `summarize` covers the Opus summarizer. Captured, not fatal here, so the PR
+      # still opens with the result; the final step fails the run if it regressed.
+      - name: Golden-set check against the candidate
+        id: eval
+        if: steps.watch.outputs.upgrade == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BODY: ${{ steps.watch.outputs.body_path }}
+        run: |
+          rc=0
+          { echo ""; echo "### Golden-set result (candidate model)"; echo ""; } >> "$BODY"
+          if [ "${{ steps.watch.outputs.run_check }}" = "true" ]; then
+            if python scripts/golden_check.py check; then
+              echo "- \`check\` (screen/triage): no regression" >> "$BODY"
+            else
+              rc=1; echo "- \`check\` (screen/triage): **REGRESSION**, do not merge as-is" >> "$BODY"
+            fi
+          fi
+          if [ "${{ steps.watch.outputs.run_summarize }}" = "true" ]; then
+            if python scripts/golden_check.py summarize; then
+              echo "- \`summarize\` (Opus): no dropped area" >> "$BODY"
+            else
+              rc=1; echo "- \`summarize\` (Opus): **REGRESSION**, a covered area was dropped" >> "$BODY"
+            fi
+          fi
+          if [ "$rc" -eq 0 ]; then echo "regressed=false" >> "$GITHUB_OUTPUT"; else echo "regressed=true" >> "$GITHUB_OUTPUT"; fi
+
+      # Open (or update) the review PR with the staged bump. Needs the workflow-scope PAT
+      # because the diff touches .github/workflows/*. Skipped cleanly when the PAT is unset.
+      - name: Open the bump PR
+        id: pr
+        if: steps.watch.outputs.upgrade == 'true' && steps.pat.outputs.has == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          token: ${{ secrets.MODEL_WATCH_TOKEN }}
+          branch: bot/model-watch
+          title: 'Funnel: a newer Claude model is available'
+          commit-message: 'models: bump funnel model pin(s) to the newest in-tier release'
+          body-path: ${{ steps.watch.outputs.body_path }}
+          labels: models, automated
+          delete-branch: true
+          # Only the files where a model id is pinned. opinions.json and the generated
+          # pages are never touched here.
+          add-paths: |
+            scripts/update.py
+            scripts/treatment.py
+            .github/workflows/opinions.yml
+            .github/workflows/backfill.yml
+            .github/workflows/queue.yml
+            .github/workflows/golden-check.yml
+            .github/workflows/treatment.yml
+            .github/workflows/maintain.yml
+
+      # If an upgrade exists but no PAT is configured, say so on the run summary rather
+      # than failing or going silent: the bump and eval ran, but no PR could be opened.
+      - name: Note when no PAT is configured
+        if: steps.watch.outputs.upgrade == 'true' && steps.pat.outputs.has != 'true'
+        run: |
+          {
+            echo "## Model watch"
+            echo ""
+            echo "A newer model is available and was validated against the golden set, but"
+            echo "MODEL_WATCH_TOKEN is not set, so no PR was opened. Add a workflow-scope PAT in"
+            echo "that secret to enable the auto-PR, or apply the bump by hand from the run log."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Fail the run if the golden set regressed on the candidate, so the PR is clearly
+      # flagged. The PR still opened above with the regression noted in its body.
+      - name: Fail on regression
+        if: steps.eval.outputs.regressed == 'true'
+        run: |
+          echo "Golden-set regression on the candidate model; review the PR before merging."
+          exit 1
+
+      # Surface a genuinely broken run on the one tracking issue. A clean golden-set
+      # regression is expected signal, not a broken run, so it is excluded here (the
+      # Fail step above already makes it visibly red and the PR carries the detail).
+      - name: Report a failed run
+        if: failure() && steps.eval.outputs.regressed != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="A scheduled model-watch run failed. ${run_url}"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Model-watch run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Model-watch run failures" --body "$body"
+          fi
