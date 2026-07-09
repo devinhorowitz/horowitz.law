@@ -97,6 +97,15 @@ def request(custom_id, model, system, messages, max_tokens, **extra):
     return {"custom_id": custom_id, "params": params}
 
 
+def from_body(custom_id, body):
+    """Adapt a Messages-API body (as update.guard_request / update.anthropic_json build:
+    a dict with model/system/messages/max_tokens and optional extras) into a batch request
+    line, applying the same system-prompt cache wrap as request()."""
+    b = dict(body)
+    return request(custom_id, b.pop("model"), b.pop("system", None),
+                   b.pop("messages"), b.pop("max_tokens"), **b)
+
+
 def submit(requests, label="batch"):
     """POST a list of {custom_id, params} request lines. Returns the batch id."""
     if not requests:

@@ -104,6 +104,16 @@ def main():
     check("request() leaves a list system unwrapped", req["params"]["system"] == [{"type": "text", "text": "s"}])
     check("request() passes extra params through", req["params"]["output_config"] == {"effort": "low"})
 
+    # 3b. from_body(): adapt an update-style body dict, wrapping its system and keeping extras.
+    fb = batch.from_body("d", {"model": "m2", "system": "SYS", "max_tokens": 400,
+                               "messages": [{"role": "user", "content": "u"}], "output_config": {"effort": "high"}})
+    check("from_body wraps the body system with cache_control",
+          fb["params"]["system"][0]["cache_control"] == {"type": "ephemeral"}
+          and fb["params"]["system"][0]["text"] == "SYS")
+    check("from_body keeps model/max_tokens/extras",
+          fb["custom_id"] == "d" and fb["params"]["model"] == "m2"
+          and fb["params"]["max_tokens"] == 400 and fb["params"]["output_config"] == {"effort": "high"})
+
     # 4. collect() rejects a batch that has not ended.
     try:
         batch.collect({"id": "b", "processing_status": "in_progress"})
@@ -149,7 +159,7 @@ def main():
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (15 cases)")
+    print("\nALL TESTS PASSED (17 cases)")
     return 0
 
 

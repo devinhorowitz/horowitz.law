@@ -41,12 +41,15 @@ import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import update          # production cross-check, text fetch, paths, model config
 import cl_rate         # shared CourtListener REST budget (same singleton update uses)
+import batch           # Message Batches transport (used only when MAINTAIN_BATCH is set)
 import golden_check    # the regression guard; reused so it tests what the funnel runs
 
 # Knobs, all repo-variable overridable; the defaults are conservative.
 RESERVE   = int(os.environ.get("OPINIONS_MAINT_RESERVE", "50"))     # trailing-24h funnel cl_calls at or above which the CL re-validation is skipped
 SLICE     = int(os.environ.get("OPINIONS_MAINT_SLICE", "3"))        # published cards to re-validate per run
 FETCH_SEC = int(os.environ.get("OPINIONS_MAINT_FETCH_SEC", "180"))  # per-run wall-clock budget for the slice's fetches; a full window or 429 defers the rest
+BATCH     = os.environ.get("MAINTAIN_BATCH", "").strip().lower() in ("1", "true", "yes", "on")  # route the slice's guards through the 50%-priced Batch API
+BATCH_SEC = int(os.environ.get("OPINIONS_MAINT_BATCH_SEC", "3300"))  # wall-clock budget to wait on the guard batch before deferring the slice (must fit the workflow timeout)
 REQUIRED_FIELDS = ("cluster_id", "name", "court", "date", "dockets", "disposition",
                    "areas", "url", "synopsis", "why", "first_seen", "precedential")
 
@@ -130,6 +133,8 @@ def revalidate(cards):
         print("  . both per-card guards disabled (OPINIONS_CROSSCHECK_MODEL and "
               "OPINIONS_COMPLETENESS_MODEL empty); skipping re-validation")
         return flags, checked, deferred
+    if BATCH:
+        return _revalidate_batch(cards)
     deadline = time.time() + FETCH_SEC
     for card in rotating_slice(cards):
         name = card.get("name", "(unnamed)")
@@ -169,6 +174,72 @@ def revalidate(cards):
             continue
         if not raised:
             print("  ok   %s" % name[:50])
+    return flags, checked, deferred
+
+
+def _revalidate_batch(cards):
+    """Batch variant of revalidate (MAINTAIN_BATCH=1). Same (flags, checked, deferred)
+    contract and the same rotating slice, text fetch, defer-on-rate-budget, and per-guard
+    labeling -- only the model calls change: instead of a synchronous cross-check and
+    completeness per card, it fetches all the slice's texts, submits every guard as one
+    Batch API job (billed at 50%), and interprets each result with update.guard_verdict.
+    A batch that does not finish within BATCH_SEC defers the whole slice: the job keeps
+    running server-side and the next run re-selects and re-submits, so nothing is lost but
+    the (already-billed) tokens of that run. The batch path applies the grounding guardrail
+    but a single attempt per guard (no consensus) -- see update.guard_verdict."""
+    flags, checked, deferred = [], 0, 0
+    deadline = time.time() + FETCH_SEC
+    reqs, meta, picked = [], {}, []      # meta: custom_id -> (kind, name, ground_text)
+    for card in rotating_slice(cards):
+        name = card.get("name", "(unnamed)")
+        try:
+            text = update.opinion_text_full({"cluster_id": card["cluster_id"]}, deadline=deadline)
+        except cl_rate.RateBudgetExceeded as e:
+            deferred += 1
+            print("  . rate budget reached; deferring the rest of the slice (%s)" % e)
+            break
+        if not text:
+            print("  . no opinion text fetched for %s; skipping" % name[:50])
+            continue
+        picked.append(name)
+        for kind, enabled in (("fidelity", update.CROSSCHECK_MODEL),
+                              ("completeness", update.COMPLETENESS_MODEL)):
+            if not enabled:
+                continue
+            body, ground = update.guard_request(kind, name, text, card)
+            cid = "%s:%s" % (card["cluster_id"], kind)
+            reqs.append(batch.from_body(cid, body))
+            meta[cid] = (kind, name, ground)
+    if not reqs:
+        return flags, checked, deferred
+
+    # One job for the whole slice. The CL fetches above already spent FETCH_SEC of wall clock,
+    # so give the batch its own window; on timeout or transport failure, defer the slice.
+    try:
+        results = batch.run(reqs, deadline=time.time() + BATCH_SEC, label="maintain-batch")
+    except batch.BatchTimeout as e:
+        print("  . maintenance guard batch %s not finished within the budget; deferring the slice"
+              % e.batch_id)
+        return flags, checked, deferred + len(picked)
+    except batch.BatchError as e:
+        print("  . maintenance guard batch failed (%s); deferring the slice" % e)
+        return flags, checked, deferred + len(picked)
+
+    checked = len(picked)
+    for cid, res in results.items():
+        kind, name, ground = meta[cid]
+        if not res.get("ok"):
+            print("  . %s guard unavailable for %s (batch: %s)" % (kind, name[:50], res.get("type")))
+            continue
+        try:
+            r = update.parse_json(res["text"])
+        except Exception as pe:
+            print("  . %s guard returned unparseable JSON for %s (%s)" % (kind, name[:50], pe))
+            continue
+        v = update.guard_verdict(kind, r, ground)
+        if v.get("verdict") == "flag":
+            flags.append((name, "%s: %s" % (kind, v.get("reason") or "")))
+            print("  FLAG (%s) %s: %s" % (kind, name[:50], v.get("reason") or ""))
     return flags, checked, deferred
 
 
