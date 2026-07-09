@@ -1,8 +1,26 @@
 {
   "area": "auto",
   "label": "auto",
-  "count": 24,
+  "count": 25,
   "opinions": [
+    {
+      "cluster_id": 10918352,
+      "name": "Clayton v. Essentia Insurance Company",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2026-07-08",
+      "disposition": "reversed and remanded",
+      "areas": [
+        "auto",
+        "coverage"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10918352/bobby-clayton-v-essentia-insurance-company/",
+      "synopsis": "An insured injured by an uninsured motorist while riding his motorcycle collected the statutory minimum uninsured motorist coverage under a standard GEICO policy and then sought additional UM benefits under an adjunctive specialty policy covering his antique vehicle. The specialty policy limited UM coverage to the listed antique vehicle and conditioned issuance on the insured's maintaining a separate policy meeting Alabama's minimum requirements. Applying Alabama substantive law under Erie and predicting how the Alabama Supreme Court would rule, the Eleventh Circuit held that Ala. Code section 32-7-22(j) allows the portable UM requirement to be satisfied through the combined effect of multiple policies, so the specialty policy's UM limitation is enforceable where the insured in fact maintains other insurance providing the statutory minimum. The court reversed the $25,000 judgment against the specialty insurer.",
+      "why": "It predicts that Alabama law permits an adjunctive specialty auto policy to exclude portable UM/UIM coverage when the insured separately maintains a standard policy that independently satisfies the state minimum, clarifying how the statutory portability mandate operates across multiple policies.",
+      "dockets": [
+        "24-13873"
+      ]
+    },
     {
       "cluster_id": 10881685,
       "name": "McGovern v. Rowland",

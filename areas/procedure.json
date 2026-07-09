@@ -1,8 +1,26 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 52,
+  "count": 53,
   "opinions": [
+    {
+      "cluster_id": 10925105,
+      "name": "Publix Supermarkets, Inc. v. Goga",
+      "court": "Supreme Court of Florida",
+      "date": "2026-07-09",
+      "disposition": "quashed and remanded",
+      "areas": [
+        "procedure",
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10925105/publix-supermarkets-inc-v-jonida-goga/",
+      "synopsis": "The Florida Supreme Court resolved a conflict among the district courts of appeal over the standard for reviewing a trial court's dismissal of an action for fraud on the court. The court rejected the \"more stringent\" or \"narrowed\" abuse of discretion standard used by several district courts and held that traditional standards apply: factual findings are reviewed for competent, substantial evidence, legal conclusions on whether conduct amounts to fraud are reviewed de novo, and the choice of sanction is reviewed for ordinary abuse of discretion. Applying that framework to a slip-and-fall plaintiff who repeatedly misrepresented her physical limitations, the court concluded the trial court acted within its discretion in dismissing the entire complaint with prejudice.",
+      "why": "The decision establishes the controlling appellate standard of review for fraud-on-the-court dismissals throughout Florida, disaggregating the inquiry into factual, legal, and discretionary components and eliminating the heightened abuse of discretion standard that district courts had applied.",
+      "dockets": [
+        "SC2024-0669"
+      ]
+    },
     {
       "cluster_id": 10881721,
       "name": "Georgia Kenworth, LLC v. Smith",

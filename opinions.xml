@@ -6,8 +6,28 @@
     <atom:link href="https://horowitz.law/opinions.xml" rel="self" type="application/rss+xml" />
     <description>AI-assisted synopses of new Georgia appellate, Eleventh Circuit, and U.S. Supreme Court opinions, filtered for civil litigation and insurance practice. Each synopsis is AI-drafted; the linked opinion is the authority. A curated core, not a complete docket. This feed covers the most recent two years; older opinions are archived by year at https://horowitz.law/archive.</description>
     <language>en-us</language>
-    <lastBuildDate>Mon, 29 Jun 2026 12:00:00 -0400</lastBuildDate>
+    <lastBuildDate>Thu, 09 Jul 2026 12:00:00 -0400</lastBuildDate>
     <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>
+    <item>
+      <title>Publix Supermarkets, Inc. v. Goga (Fla.)</title>
+      <link>https://www.courtlistener.com/opinion/10925105/publix-supermarkets-inc-v-jonida-goga/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10925105/publix-supermarkets-inc-v-jonida-goga/</guid>
+      <pubDate>Thu, 09 Jul 2026 12:00:00 -0400</pubDate>
+      <category>Supreme Court of Florida</category>
+      <category>procedure</category>
+      <category>premises</category>
+      <description><![CDATA[The Florida Supreme Court resolved a conflict among the district courts of appeal over the standard for reviewing a trial court's dismissal of an action for fraud on the court. The court rejected the "more stringent" or "narrowed" abuse of discretion standard used by several district courts and held that traditional standards apply: factual findings are reviewed for competent, substantial evidence, legal conclusions on whether conduct amounts to fraud are reviewed de novo, and the choice of sanction is reviewed for ordinary abuse of discretion. Applying that framework to a slip-and-fall plaintiff who repeatedly misrepresented her physical limitations, the court concluded the trial court acted within its discretion in dismissing the entire complaint with prejudice. Why it matters: The decision establishes the controlling appellate standard of review for fraud-on-the-court dismissals throughout Florida, disaggregating the inquiry into factual, legal, and discretionary components and eliminating the heightened abuse of discretion standard that district courts had applied. Also: Applying the newly clarified standards, the court held that competent, substantial evidence supported the trial court's findings that the plaintiff repeatedly lied about her physical limitations, that de novo review confirmed her conduct constituted a fraud that permeated the entire proceeding, and that dismissal of the whole complaint with prejudice, including the claim for medical expenses, was within the trial court's discretion. The court rejected the district court's conclusion that the medical-expense claim could proceed on purely objective evidence. Why it matters: It applies the clarified framework to reinstate a full dismissal and rejects the notion that a claim resting on ostensibly objective evidence must be preserved when the plaintiff's fraud permeated the action. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10925105/publix-supermarkets-inc-v-jonida-goga/]]></description>
+    </item>
+    <item>
+      <title>Clayton v. Essentia Insurance Company (11th Cir.)</title>
+      <link>https://www.courtlistener.com/opinion/10918352/bobby-clayton-v-essentia-insurance-company/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10918352/bobby-clayton-v-essentia-insurance-company/</guid>
+      <pubDate>Wed, 08 Jul 2026 12:00:00 -0400</pubDate>
+      <category>U.S. Court of Appeals for the Eleventh Circuit</category>
+      <category>auto</category>
+      <category>coverage</category>
+      <description><![CDATA[An insured injured by an uninsured motorist while riding his motorcycle collected the statutory minimum uninsured motorist coverage under a standard GEICO policy and then sought additional UM benefits under an adjunctive specialty policy covering his antique vehicle. The specialty policy limited UM coverage to the listed antique vehicle and conditioned issuance on the insured's maintaining a separate policy meeting Alabama's minimum requirements. Applying Alabama substantive law under Erie and predicting how the Alabama Supreme Court would rule, the Eleventh Circuit held that Ala. Code section 32-7-22(j) allows the portable UM requirement to be satisfied through the combined effect of multiple policies, so the specialty policy's UM limitation is enforceable where the insured in fact maintains other insurance providing the statutory minimum. The court reversed the $25,000 judgment against the specialty insurer. Why it matters: It predicts that Alabama law permits an adjunctive specialty auto policy to exclude portable UM/UIM coverage when the insured separately maintains a standard policy that independently satisfies the state minimum, clarifying how the statutory portability mandate operates across multiple policies. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10918352/bobby-clayton-v-essentia-insurance-company/]]></description>
+    </item>
     <item>
       <title>Georgia Kenworth, LLC v. Smith (Ga. Ct. App.)</title>
       <link>https://www.courtlistener.com/opinion/10881721/georgia-kenworth-llc-v-rocky-smith/</link>
