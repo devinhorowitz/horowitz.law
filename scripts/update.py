@@ -751,10 +751,16 @@ RETRY_STATUS = {429, 500, 502, 503, 529}
 def anthropic_json(body, label="call"):
     """POST to the Messages API. Retries 429 and 5xx with backoff, and on a final
     failure raises with the API's own error body so the cause names itself."""
-    # Cache the static system prompt so repeated calls in one 5-minute window bill
-    # it at the cache-read rate. Behavior-neutral: the model sees identical content.
-    # Systems under the cache minimum are ignored at no cost, so today only the
-    # summarize SYSTEM actually caches.
+    # Cache the static system prompt so repeated same-model calls in one 5-minute
+    # window can bill it at the cache-read rate. Behavior-neutral: the model sees
+    # identical content, and a system below the model's minimum cacheable prefix is
+    # a silent no-op (no cache write, no cost). Kept because it is free and self-
+    # activates if a prompt ever grows past the floor -- but note that today every
+    # tier's system sits UNDER its floor (Haiku 4.5 and Opus 4.8 = 4096 tokens,
+    # Sonnet 5 ~ 2048; the summarize SYSTEM is only ~2.6k), so nothing actually
+    # caches right now. Caching is a weak lever here regardless: the large per-
+    # opinion text is unique to each call and lives after the breakpoint, so it is
+    # never cacheable, and the tiers run on different models (separate caches).
     if isinstance(body.get("system"), str):
         body["system"] = [{"type": "text", "text": body["system"],
                            "cache_control": {"type": "ephemeral"}}]
