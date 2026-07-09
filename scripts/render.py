@@ -98,7 +98,7 @@ _WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 _MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 def _date_label(iso):
-    d = datetime.date.fromisoformat(iso)
+    d = datetime.date.fromisoformat(iso[:10])   # [:10] to match _valid_date's guard
     return f"{_MO[d.month - 1]} {d.day}, {d.year}"
 
 def _no_label(dockets):
@@ -117,7 +117,7 @@ def _slip_cite(e):
     confirm on Shepard's before filing, per the house rule. The court inside
     the parenthetical reuses the registry's TITLE_SUFFIX so a second
     jurisdiction needs no edit here."""
-    d = datetime.date.fromisoformat(e["date"])
+    d = datetime.date.fromisoformat(e["date"][:10])   # [:10] to match _valid_date's guard
     court = TITLE_SUFFIX.get(e["court"], "").strip().strip("()")
     when = "%s %d, %d" % (_BB_MO[d.month - 1], d.day, d.year)
     return "%s, %s (%s %s)" % (e["name"], _no_label(e["dockets"]), court, when)
@@ -133,7 +133,7 @@ def _eastern_offset(d):
     return "-0400" if dst_start <= d < dst_end else "-0500"
 
 def _rfc822(iso):
-    d = datetime.date.fromisoformat(iso)
+    d = datetime.date.fromisoformat(iso[:10])   # [:10] to match _valid_date's guard
     return f"{_WD[d.weekday()]}, {d.day:02d} {_MO[d.month - 1]} {d.year} 12:00:00 {_eastern_offset(d)}"
 
 def _esc(t):  # HTML text content (leave quotes alone)
@@ -688,24 +688,34 @@ def _perma_core():
         _PERMA_CORE_CACHE = m.group(1)
     return _PERMA_CORE_CACHE
 
+_INLINE_SCRIPT_CACHE = None
 def _inline_script():
     """The CSP hash-pinned pre-paint script, read verbatim from the live feed
     page so a generated permalink can never carry a stale copy. Fails loud if
-    the script shape ever changes (check_site is the second net)."""
-    doc = open(HTML_PATH, encoding="utf-8").read()
-    m = re.search(r"<script>\(function\(\)\{.*?\}\)\(\);</script>", doc, re.S)
-    if not m:
-        raise RuntimeError("render: pre-paint inline script not found in %s" % HTML_PATH)
-    return m.group(0)
+    the script shape ever changes (check_site is the second net). Memoized per
+    render like _perma_core: permalink_html calls it once per entry."""
+    global _INLINE_SCRIPT_CACHE
+    if _INLINE_SCRIPT_CACHE is None:
+        doc = open(HTML_PATH, encoding="utf-8").read()
+        m = re.search(r"<script>\(function\(\)\{.*?\}\)\(\);</script>", doc, re.S)
+        if not m:
+            raise RuntimeError("render: pre-paint inline script not found in %s" % HTML_PATH)
+        _INLINE_SCRIPT_CACHE = m.group(0)
+    return _INLINE_SCRIPT_CACHE
 
+_CARD_STYLES_CACHE = None
 def _card_styles():
     """The opinion-card CSS, read verbatim from the live feed page's stylesheet
-    so a permalink card renders pixel-identical and cannot drift."""
-    doc = open(HTML_PATH, encoding="utf-8").read()
-    m = re.search(r"\n(  \.opinion \{.*?)\n\n  \.empty", doc, re.S)
-    if not m:
-        raise RuntimeError("render: card style block not found in %s" % HTML_PATH)
-    return m.group(1)
+    so a permalink card renders pixel-identical and cannot drift. Memoized per
+    render like _perma_core: permalink_html calls it once per entry."""
+    global _CARD_STYLES_CACHE
+    if _CARD_STYLES_CACHE is None:
+        doc = open(HTML_PATH, encoding="utf-8").read()
+        m = re.search(r"\n(  \.opinion \{.*?)\n\n  \.empty", doc, re.S)
+        if not m:
+            raise RuntimeError("render: card style block not found in %s" % HTML_PATH)
+        _CARD_STYLES_CACHE = m.group(1)
+    return _CARD_STYLES_CACHE
 
 def permalink_html(e):
     name = _esc(e["name"])
@@ -1270,6 +1280,24 @@ def render(entries=None):
             print("render: skipping a card with an unparseable date %r (%s)"
                   % (e.get("date"), (e.get("name") or "?")[:50]))
     entries = [e for e in entries if _valid_date(e.get("date"))]
+
+    # Taxonomy guard, symmetric with the date filter above: a card whose court or any
+    # practice-area code is outside the registry has no label/suffix and would KeyError
+    # mid-render, zeroing every page. Drop it with a warning instead so one malformed
+    # card can't take the whole site down. All current cards pass, so this is inert today.
+    def _known_taxonomy(e):
+        if e.get("court") not in COURT_LABELS:
+            print("render: skipping a card with an unknown court %r (%s)"
+                  % (e.get("court"), (e.get("name") or "?")[:50]))
+            return False
+        unknown = [a for a in all_areas(e) if a not in AREA_LABELS]
+        if unknown:
+            print("render: skipping a card with unknown area code(s) %r (%s)"
+                  % (unknown, (e.get("name") or "?")[:50]))
+            return False
+        return True
+    entries = [e for e in entries if _known_taxonomy(e)]
+
     entries = _sorted(entries)
 
     # Every entry gets a permalink, so a treated_by citer that is itself carded

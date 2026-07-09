@@ -380,22 +380,6 @@ def cl_get(path, deadline=None):
         raise last
 
 
-def search_court(court, since, deadline=None):
-    params = {"type": "o", "court": court, "filed_after": since,
-              "stat_Published": "on", "order_by": "dateFiled desc", "page_size": "50"}
-    url = "https://www.courtlistener.com/api/rest/v4/search/?" + urllib.parse.urlencode(params)
-    out, pages = [], 0
-    while url and pages < 6:
-        if deadline and time.time() > deadline:
-            break
-        data = cl_get(url, deadline)
-        out += data.get("results", [])
-        url = data.get("next")
-        pages += 1
-        time.sleep(1)
-    return out
-
-
 # CourtListener stores opinion PDFs as static files here; fetching one costs no REST
 # quota and needs no token, the same Phase-2 path the daily pipeline reads PDFs from.
 STORAGE = "https://storage.courtlistener.com/"
@@ -541,23 +525,6 @@ def feed_court(court, deadline=None):
 
 def snippet_of(r):
     return r.get("snippet") or ""
-
-
-def opinion_id_of(r, deadline=None):
-    ops = r.get("opinions") or []
-    if ops and isinstance(ops[0], dict) and ops[0].get("id"):
-        return ops[0]["id"]
-    sib = r.get("sibling_ids") or []
-    if sib:
-        return sib[0]
-    cid = cluster_id_of(r)
-    if cid:
-        cl = cl_get("/api/rest/v4/clusters/%d/" % cid, deadline)
-        for s in (cl.get("sub_opinions") or []):
-            m = re.search(r"/opinions/(\d+)/", s) if isinstance(s, str) else None
-            if m:
-                return int(m.group(1))
-    return None
 
 
 def opinion_ids_of(r, deadline=None):
@@ -1742,6 +1709,8 @@ def main():
                 # with an Opus audit (which also re-checks the existing card), whether
                 # or not this opinion itself earns a place in the feed.
                 for tr in (t.get("treats") or []):
+                    if not isinstance(tr, dict):
+                        continue          # a malformed list element must not drop the whole candidate
                     tid = tr.get("id")
                     if skill_alert.is_authority_id(tid):
                         # Skill-authority hit: not a feed card, so a dedicated general audit
@@ -1787,11 +1756,13 @@ def main():
                             and akind in treatment_core.NEGATIVE_KINDS:
                         citer = {"cluster_id": cid, "name": name, "court": COURT_MAP.get(court_id),
                                  "date": date_filed, "kind": akind, "note": (a.get("note") or "").strip()}
-                        treatment_core.flag_caution(card, citer)
-                        treatment_changed = True
-                        treat_flags.append((card.get("name", ""), name, akind))
-                        print("  ~ adverse: %s treated by %s (%s)"
-                              % (card.get("name", "")[:40], name[:40], akind))
+                        # flag_caution returns False when the citer is already recorded or the card
+                        # was human-set; only a newly raised caution is a real change to commit/report.
+                        if treatment_core.flag_caution(card, citer):
+                            treatment_changed = True
+                            treat_flags.append((card.get("name", ""), name, akind))
+                            print("  ~ adverse: %s treated by %s (%s)"
+                                  % (card.get("name", "")[:40], name[:40], akind))
                     if a.get("card_review"):
                         audit_notes.append((card.get("name", ""), name, (a.get("card_review_note") or "").strip()))
                 if not t.get("relevant") or (t.get("significance") or "").lower() == "low":
