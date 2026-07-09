@@ -383,28 +383,21 @@ def _norm_https(u):
     return u if u.lower().startswith("https://") else ""
 
 
-def _norm_docket(d):
-    """Trim and drop a leading 'No. ' so the same docket compares equal across
-    clusters regardless of how CourtListener formatted the docketNumber."""
-    d = (d or "").strip()
-    if d[:4].lower() == "no. ":
-        d = d[4:].strip()
-    return d
-
-
 def _ident_keys(card):
     """Case-identity keys for cross-cluster dedup. CourtListener files one opinion
     under more than one cluster (an older ingestion and a newer one sharing the
     docket and filing date), so the cluster_id is not a reliable case identity.
-    Key on (court, docket) for each docket on the card; fall back to (court, name,
-    date) only when the card carries no usable docket. Same court is required, so
-    a docket number reused at a different court never collides."""
+    Key on (court, docket-token) for each token on the card, reusing the daily
+    funnel's canonical tokenizer (update._docket_set) so a consolidated appeal whose
+    clusters format the docket differently -- "A24A0001" vs "A24A0001, A24A0002" --
+    still collides on the shared token (the exact-string form used to miss this, and
+    twin clusters like Waetzig / Royal Canin carded twice). Fall back to (court, name,
+    date) only when the card carries no usable docket token. Same court is required,
+    so a docket token reused at a different court never collides."""
     court = (card.get("court") or "").strip()
     keys = set()
-    for d in (card.get("dockets") or []):
-        nd = _norm_docket(d)
-        if nd:
-            keys.add(("d", court, nd))
+    for tok in update._docket_set(card.get("dockets")):
+        keys.add(("d", court, tok))
     if not keys:
         nm = (card.get("name") or "").strip().lower()
         dt = (card.get("date") or "").strip()
