@@ -92,6 +92,8 @@ jobs:
           python scripts/test_update.py
           python scripts/test_maintain.py
           python scripts/test_model_watch.py
+          python scripts/test_batch.py
+          python scripts/test_backfill.py
 
       - name: Validate workflow YAML
         run: python -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml')]; print('workflow YAML parses')"

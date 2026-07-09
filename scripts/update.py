@@ -751,10 +751,16 @@ RETRY_STATUS = {429, 500, 502, 503, 529}
 def anthropic_json(body, label="call"):
     """POST to the Messages API. Retries 429 and 5xx with backoff, and on a final
     failure raises with the API's own error body so the cause names itself."""
-    # Cache the static system prompt so repeated calls in one 5-minute window bill
-    # it at the cache-read rate. Behavior-neutral: the model sees identical content.
-    # Systems under the cache minimum are ignored at no cost, so today only the
-    # summarize SYSTEM actually caches.
+    # Cache the static system prompt so repeated same-model calls in one 5-minute
+    # window can bill it at the cache-read rate. Behavior-neutral: the model sees
+    # identical content, and a system below the model's minimum cacheable prefix is
+    # a silent no-op (no cache write, no cost). Kept because it is free and self-
+    # activates if a prompt ever grows past the floor -- but note that today every
+    # tier's system sits UNDER its floor (Haiku 4.5 and Opus 4.8 = 4096 tokens,
+    # Sonnet 5 ~ 2048; the summarize SYSTEM is only ~2.6k), so nothing actually
+    # caches right now. Caching is a weak lever here regardless: the large per-
+    # opinion text is unique to each call and lives after the breakpoint, so it is
+    # never cacheable, and the tiers run on different models (separate caches).
     if isinstance(body.get("system"), str):
         body["system"] = [{"type": "text", "text": body["system"],
                            "cache_control": {"type": "ephemeral"}}]
@@ -901,15 +907,22 @@ def triage(name, docket, text, feed_index=""):
                            "messages": [{"role": "user", "content": user}]}, "triage")
 
 
-def summarize(court_id, name, docket, date_filed, text, note, cl_status=""):
+def summarize_request(court_id, name, docket, date_filed, text, note, cl_status=""):
+    """The Messages body for the Tier-3 public summary. One source of truth for the prompt,
+    shared by the synchronous summarize() and the batch path (which submits many of these as
+    one 50%-priced job and parses each result with parse_json, exactly as anthropic_json does)."""
     user = ("Court (CourtListener id): %s\nCase name: %s\nDocket: %s\nDate filed: %s\n\n"
             "Publication status (CourtListener metadata, may be blank): %s\n\n"
             "Triage note (what a prior reviewer flagged as relevant): %s\n\n"
             "OPINION TEXT (the middle may be omitted for length):\n%s"
             % (court_id, name, docket, date_filed, cl_status or "(unknown)", note or "(none)", clip(text)))
-    body = {"model": MODEL, "max_tokens": OUT_TOKENS, "system": SYSTEM,
+    return {"model": MODEL, "max_tokens": OUT_TOKENS, "system": SYSTEM,
             "messages": [{"role": "user", "content": user}]}
-    return anthropic_json(body, "summarize")
+
+
+def summarize(court_id, name, docket, date_filed, text, note, cl_status=""):
+    return anthropic_json(summarize_request(court_id, name, docket, date_filed, text, note, cl_status),
+                          "summarize")
 
 
 AUDIT_SYSTEM = (
@@ -1034,16 +1047,7 @@ def crosscheck(name, text, entry):
     Set OPINIONS_CROSSCHECK_TRIES=1 to keep grounding but disable consensus."""
     if not CROSSCHECK_MODEL:
         return None
-    holdings = [{"areas": entry["areas"], "synopsis": entry["synopsis"], "why": entry["why"]}]
-    holdings += entry.get("additional_holdings", [])
-    drafted = "\n\n".join(
-        "Holding %d (areas: %s)\nSynopsis: %s\nWhy it matters: %s"
-        % (i + 1, ", ".join(h["areas"]), h["synopsis"], h["why"])
-        for i, h in enumerate(holdings))
-    user = ("Case name: %s\nDisposition as drafted: %s\n\nDRAFTED SUMMARY:\n%s\n\nFULL OPINION:\n%s"
-            % (name, entry.get("disposition") or "(none stated)", drafted, clip(text)))
-    body = {"model": CROSSCHECK_MODEL, "max_tokens": 400, "system": CROSSCHECK_SYSTEM,
-            "messages": [{"role": "user", "content": user}]}
+    body, drafted = guard_request("fidelity", name, text, entry)
 
     tries = max(1, CROSSCHECK_TRIES)
     flags, clears, made, last_error = [], 0, 0, None
@@ -1129,17 +1133,7 @@ def completeness_check(name, text, entry):
     consensus."""
     if not COMPLETENESS_MODEL:
         return None
-    holdings = [{"areas": entry["areas"], "synopsis": entry["synopsis"], "why": entry["why"]}]
-    holdings += entry.get("additional_holdings", [])
-    drafted = "\n\n".join(
-        "Holding %d (areas: %s)\nSynopsis: %s\nWhy it matters: %s"
-        % (i + 1, ", ".join(h["areas"]), h["synopsis"], h["why"])
-        for i, h in enumerate(holdings))
-    opinion = clip(text)
-    user = ("Case name: %s\nDisposition as drafted: %s\n\nDRAFTED SUMMARY:\n%s\n\nFULL OPINION:\n%s"
-            % (name, entry.get("disposition") or "(none stated)", drafted, opinion))
-    body = {"model": COMPLETENESS_MODEL, "max_tokens": 400, "system": COMPLETENESS_SYSTEM,
-            "messages": [{"role": "user", "content": user}]}
+    body, opinion = guard_request("completeness", name, text, entry)
 
     tries = max(1, COMPLETENESS_TRIES)
     flags, clears, made, last_error = [], 0, 0, None
@@ -1179,6 +1173,62 @@ def completeness_check(name, text, entry):
         print("  . completeness flag NOT CONFIRMED for %s (%d of %d attempts flagged); clearing as noise"
               % (name[:40], len(flags), made))
     return {"verdict": "complete", "reason": "no material holding omitted", "tries": made, "flag_count": len(flags)}
+
+
+# --- shared guard request/verdict, so the sync guards above and the batch path build the
+#     one prompt and apply the one grounding rule. `kind` is "fidelity" (cross-check) or
+#     "completeness". Splitting build from parse is what lets a batch submit many guard
+#     requests as one 50%-priced job and interpret each result the same way. ---
+def _guard_spec(kind):
+    """(model, system, clear-verdict word, fold template, bare-flag reason, clear reason)
+    for a guard kind. Reads the model/system globals live so a repo-Variable override or a
+    test reassignment takes effect."""
+    if kind == "fidelity":
+        return (CROSSCHECK_MODEL, CROSSCHECK_SYSTEM, "match",
+                'drafted text at issue: "%s"', "the drafted summary misstates the holding",
+                "holding matches the opinion")
+    if kind == "completeness":
+        return (COMPLETENESS_MODEL, COMPLETENESS_SYSTEM, "complete",
+                'opinion text omitted: "%s"', "the opinion decides a material holding the card omits",
+                "no material holding omitted")
+    raise ValueError("unknown guard kind %r" % kind)
+
+
+def guard_request(kind, name, text, entry):
+    """Build one guard's Messages body plus the text a flag must quote to be grounded (the
+    DRAFTED summary for fidelity, the FULL OPINION for completeness). One source of truth for
+    the prompt: crosscheck()/completeness_check() and the batch path all build it here."""
+    model, system = _guard_spec(kind)[:2]
+    holdings = [{"areas": entry["areas"], "synopsis": entry["synopsis"], "why": entry["why"]}]
+    holdings += entry.get("additional_holdings", [])
+    drafted = "\n\n".join(
+        "Holding %d (areas: %s)\nSynopsis: %s\nWhy it matters: %s"
+        % (i + 1, ", ".join(h["areas"]), h["synopsis"], h["why"])
+        for i, h in enumerate(holdings))
+    opinion = clip(text)
+    user = ("Case name: %s\nDisposition as drafted: %s\n\nDRAFTED SUMMARY:\n%s\n\nFULL OPINION:\n%s"
+            % (name, entry.get("disposition") or "(none stated)", drafted, opinion))
+    body = {"model": model, "max_tokens": 400, "system": system,
+            "messages": [{"role": "user", "content": user}]}
+    return body, (drafted if kind == "fidelity" else opinion)
+
+
+def guard_verdict(kind, r, ground):
+    """Interpret ONE guard response into the same verdict shape the sync guards return.
+    Applies the grounding guardrail (a flag must quote the grounding text verbatim, else it
+    is cleared as an invented premise) but not the multi-attempt consensus: each batch line
+    is a single attempt, so the batch path keeps the primary defense (grounding) and trades
+    the secondary one (majority-of-N) for the 50% batch price -- and the sweep re-runs on its
+    rotating schedule anyway. Equivalent to the sync guard run with TRIES=1."""
+    _, _, clear, fold, bare, clear_reason = _guard_spec(kind)
+    verdict = (r.get("verdict") or "").strip().lower()
+    reason = (r.get("reason") or "").strip()
+    quote = (r.get("quote") or "").strip()
+    if verdict != clear and _quote_substantiated(quote, ground):
+        folded = fold % quote
+        reason = ("%s (%s)" % (reason, folded)) if reason else ("%s (%s)" % (bare, folded))
+        return {"verdict": "flag", "reason": reason, "quote": quote, "tries": 1, "flag_count": 1}
+    return {"verdict": clear, "reason": clear_reason, "tries": 1, "flag_count": 0}
 
 
 # Party-name matching for the screen override in the candidate loop. A case can
