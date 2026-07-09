@@ -72,17 +72,27 @@ async function sendConfirmEmail(env, email, link) {
   const text =
     `Confirm your subscription to the Georgia Appellate Watch weekly digest:\n\n${link}\n\n` +
     `If you did not request this, ignore this email and you will not be subscribed. This link expires in 7 days.`;
-  const r = await fetch(`${RESEND}/emails`, {
-    method: "POST",
-    headers: resendHeaders(env),
-    body: JSON.stringify({
-      from,
-      to: [email],
-      subject: "Confirm your Georgia Appellate Watch subscription",
-      html,
-      text,
-    }),
-  });
+  // Bound the send with a timeout so a stalled api.resend.com cannot hang the
+  // Worker; the abort rejects and onRequestPost turns it into a 500 for the form.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+  let r;
+  try {
+    r = await fetch(`${RESEND}/emails`, {
+      method: "POST",
+      headers: resendHeaders(env),
+      body: JSON.stringify({
+        from,
+        to: [email],
+        subject: "Confirm your Georgia Appellate Watch subscription",
+        html,
+        text,
+      }),
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!r.ok) throw new Error(`send confirm: ${r.status}`);
 }
 

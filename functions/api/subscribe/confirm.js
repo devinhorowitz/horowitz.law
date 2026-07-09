@@ -64,11 +64,16 @@ function resendHeaders(env) {
   };
 }
 
-// Thin fetch wrapper: JSON-encodes the body when one is given.
+// Thin fetch wrapper: JSON-encodes the body when one is given, and bounds every
+// Resend call with a timeout so a stalled api.resend.com cannot hang the Worker
+// mid-mutation (the abort rejects, which the callers surface as a 500 page).
 function rfetch(env, method, path, body) {
   const init = { method, headers: resendHeaders(env) };
   if (body !== null && body !== undefined) init.body = JSON.stringify(body);
-  return fetch(RESEND + path, init);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+  init.signal = ctrl.signal;
+  return fetch(RESEND + path, init).finally(() => clearTimeout(timer));
 }
 
 // Practice-area choices ride the confirm link as a sanitized CSV (covered by the
