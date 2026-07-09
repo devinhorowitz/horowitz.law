@@ -907,15 +907,22 @@ def triage(name, docket, text, feed_index=""):
                            "messages": [{"role": "user", "content": user}]}, "triage")
 
 
-def summarize(court_id, name, docket, date_filed, text, note, cl_status=""):
+def summarize_request(court_id, name, docket, date_filed, text, note, cl_status=""):
+    """The Messages body for the Tier-3 public summary. One source of truth for the prompt,
+    shared by the synchronous summarize() and the batch path (which submits many of these as
+    one 50%-priced job and parses each result with parse_json, exactly as anthropic_json does)."""
     user = ("Court (CourtListener id): %s\nCase name: %s\nDocket: %s\nDate filed: %s\n\n"
             "Publication status (CourtListener metadata, may be blank): %s\n\n"
             "Triage note (what a prior reviewer flagged as relevant): %s\n\n"
             "OPINION TEXT (the middle may be omitted for length):\n%s"
             % (court_id, name, docket, date_filed, cl_status or "(unknown)", note or "(none)", clip(text)))
-    body = {"model": MODEL, "max_tokens": OUT_TOKENS, "system": SYSTEM,
+    return {"model": MODEL, "max_tokens": OUT_TOKENS, "system": SYSTEM,
             "messages": [{"role": "user", "content": user}]}
-    return anthropic_json(body, "summarize")
+
+
+def summarize(court_id, name, docket, date_filed, text, note, cl_status=""):
+    return anthropic_json(summarize_request(court_id, name, docket, date_filed, text, note, cl_status),
+                          "summarize")
 
 
 AUDIT_SYSTEM = (

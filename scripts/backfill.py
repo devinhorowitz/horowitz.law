@@ -37,9 +37,14 @@ import update
 import render
 import cl_rate           # shared CourtListener REST budget (limits, pacing, defer)
 import safeio            # crash-safe atomic writes
+import batch             # Message Batches transport (used only when BACKFILL_BATCH is set)
 
 STORAGE = "https://storage.courtlistener.com/"
 DRY_RUN = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
+# Draft the seed's Tier-3 summaries through the 50%-priced Batch API instead of one
+# synchronous Opus call per cluster. Off by default; the sync path is unchanged.
+BATCH   = os.environ.get("BACKFILL_BATCH", "").strip().lower() in ("1", "true", "yes", "on")
+BATCH_SEC = int(os.environ.get("OPINIONS_BACKFILL_BATCH_SEC", "3300"))  # wall-clock budget to wait on the summarize batch before deferring
 PR_PATH = os.path.join(update.REPO, "scripts", "backfill_pr_body.md")
 # Cap how long one cluster's metadata lookups may take. cl_get honors a 429
 # Retry-After header literally, and CourtListener sets it to the full daily-reset
@@ -201,6 +206,109 @@ def _write_pr_body(report):
     open(PR_PATH, "w", encoding="utf-8").write(report)
 
 
+def _assemble_card_row(v, p):
+    """Build the recall row and, when the renderer's required fields are present, the card
+    from a Tier-3 summary `v` for pending cluster `p`. SEED is pre-vetted, so relevance and
+    significance never gate -- a card is built whenever areas/court/synopsis/why are present.
+    Returns (row, card_or_None). Shared by the synchronous and batch draft paths."""
+    cid, court_id, name, docket = p["cid"], p["court_id"], p["name"], p["docket"]
+    date_filed, url, src, s, t = p["date_filed"], p["url"], p["src"], p["s"], p["t"]
+    areas = [a for a in (v.get("areas") or []) if a in update.VALID_AREAS]
+    court = update.COURT_MAP.get(court_id) or (
+        v.get("court") if v.get("court") in update.VALID_KEYS else None)
+    dockets = [str(d).strip() for d in (v.get("dockets") or []) if str(d).strip()] or ([docket] if docket else [])
+    synopsis = (v.get("synopsis") or "").strip()
+    why = (v.get("why") or "").strip()
+
+    problems = []
+    if not areas: problems.append("no valid practice area")
+    if not court: problems.append("unrecognized court id %s" % court_id)
+    if not dockets: problems.append("no docket number")
+    if not (synopsis and why): problems.append("empty synopsis or why")
+    if update.CITE_RE.search(synopsis) or update.CITE_RE.search(why):
+        problems.append("reporter-style citation in summary")
+
+    row = {"cid": cid, "name": (v.get("name") or name).strip(), "date": date_filed, "court": court,
+           "src": src, "screen_pass": s.get("pass"), "screen_reason": s.get("reason", ""),
+           "triage_relevant": t.get("relevant"), "triage_sig": (t.get("significance") or ""),
+           "summ_relevant": v.get("relevant"), "summ_sig": (v.get("significance") or ""),
+           "areas": areas, "problems": problems}
+
+    if not (areas and court and synopsis and why):
+        row["status"] = "no-card"
+        print("  x %s: no card (%s)" % (name, "; ".join(problems) or "missing fields"))
+        return row, None
+
+    # Phase-4 parity (HANDOFF item 7): build the card through update.assemble_entry so seeded
+    # cards carry the same taxonomy as the daily feed (first_impression, tort_reform,
+    # law_applied, additional_holdings). first_seen is the filing date, so the digest never
+    # treats a backfilled card as new this week.
+    card = update.assemble_entry(v, cid, name, court, areas, docket, date_filed, url, date_filed)
+    row["status"] = "card"
+    print("  + %s [%s] screen=%s triage=%s/%s areas=%s%s"
+          % (name, date_filed, _flag(s.get("pass")), _flag(t.get("relevant")),
+             (t.get("significance") or "-"), ",".join(areas),
+             ("  REVIEW: " + "; ".join(problems)) if problems else ""))
+    return row, card
+
+
+def _draft_cards(pending):
+    """Draft each pending cluster's card. With BACKFILL_BATCH set, one Batch API job drafts
+    the whole seed at 50% price; otherwise each is summarized synchronously (the unchanged
+    path). A batch timeout or transport failure defers the whole set -- nothing is drafted
+    this run, the job runs on server-side, and the next dispatch re-seeds. Returns
+    (rows, cards, deferred)."""
+    rows, cards, deferred = [], [], 0
+    if not pending:
+        return rows, cards, deferred
+
+    def _err(p, detail):
+        print("  ! %s (%d)" % (detail, p["cid"]))
+        rows.append({"cid": p["cid"], "name": p["name"], "status": "error", "detail": detail[:160]})
+
+    if BATCH:
+        reqs = [batch.from_body("%d" % p["cid"],
+                update.summarize_request(p["court_id"], p["name"], p["docket"], p["date_filed"],
+                                         p["text"], p["note"], p["cl_status"])) for p in pending]
+        try:
+            results = batch.run(reqs, deadline=time.time() + BATCH_SEC, label="backfill-batch")
+        except batch.BatchTimeout as e:
+            print("  . summarize batch %s not finished within the budget; deferring %d cluster(s)"
+                  % (e.batch_id, len(pending)))
+            return rows, cards, len(pending)
+        except batch.BatchError as e:
+            print("  . summarize batch failed (%s); deferring %d cluster(s)" % (e, len(pending)))
+            return rows, cards, len(pending)
+        for p in pending:
+            res = results.get("%d" % p["cid"])
+            if not res or not res.get("ok"):
+                _err(p, "summarize batch: %s" % (res.get("type") if res else "no result"))
+                continue
+            try:
+                v = update.parse_json(res["text"])
+            except Exception as e:
+                _err(p, "summarize parse: %s" % str(e)[:120])
+                continue
+            row, card = _assemble_card_row(v, p)
+            rows.append(row)
+            if card:
+                cards.append(card)
+        return rows, cards, deferred
+
+    for p in pending:
+        try:
+            v = update.summarize(p["court_id"], p["name"], p["docket"], p["date_filed"],
+                                 p["text"], p["note"], p["cl_status"])
+        except Exception as e:
+            _err(p, "summarize: %s" % str(e)[:120])
+            continue
+        row, card = _assemble_card_row(v, p)
+        rows.append(row)
+        if card:
+            cards.append(card)
+    return rows, cards, deferred
+
+
 def run():
     if not update.KEY:
         print("ERROR: ANTHROPIC_API_KEY is not set."); sys.exit(1)
@@ -219,7 +327,7 @@ def run():
     print("seed: %d cluster(s) | archive has %d card(s) | screen=%s triage=%s summarize=%s"
           % (len(seed), len(have), update.SCREEN_MODEL or "off", update.TRIAGE_MODEL or "off", update.MODEL))
 
-    rows, new_cards, aborted = [], [], False
+    rows, new_cards, pending, aborted = [], [], [], False
     for cid, court_id in seed:
         if cid in have:
             print("  - %d already in archive; skipping" % cid)
@@ -298,56 +406,16 @@ def run():
         note = t.get("note") or ""
         time.sleep(0.4)
 
-        # Tier 3 -- summarize (drafts the card)
-        try:
-            v = update.summarize(court_id, name, docket, date_filed, text, note,
-                                 cl_status=r.get("precedential_status", ""))
-        except Exception as e:
-            print("  ! summarize failed for %s (%d): %s" % (name, cid, e))
-            rows.append({"cid": cid, "name": name, "status": "error", "detail": "summarize: %s" % str(e)[:140]})
-            continue
+        # Tier 3 is deferred: collect this cluster's summarize inputs and draft after the
+        # loop, so BACKFILL_BATCH can draft the whole seed as one 50%-priced job.
+        pending.append({"cid": cid, "court_id": court_id, "name": name, "docket": docket,
+                        "date_filed": date_filed, "url": url, "text": text, "note": note,
+                        "cl_status": r.get("precedential_status", ""), "src": src, "s": s, "t": t})
 
-        areas = [a for a in (v.get("areas") or []) if a in update.VALID_AREAS]
-        court = update.COURT_MAP.get(court_id) or (
-            v.get("court") if v.get("court") in update.VALID_KEYS else None)
-        dockets = [str(d).strip() for d in (v.get("dockets") or []) if str(d).strip()] or ([docket] if docket else [])
-        synopsis = (v.get("synopsis") or "").strip()
-        why = (v.get("why") or "").strip()
-
-        problems = []
-        if not areas: problems.append("no valid practice area")
-        if not court: problems.append("unrecognized court id %s" % court_id)
-        if not dockets: problems.append("no docket number")
-        if not (synopsis and why): problems.append("empty synopsis or why")
-        if update.CITE_RE.search(synopsis) or update.CITE_RE.search(why):
-            problems.append("reporter-style citation in summary")
-
-        row = {"cid": cid, "name": (v.get("name") or name).strip(), "date": date_filed, "court": court,
-               "src": src, "screen_pass": s.get("pass"), "screen_reason": s.get("reason", ""),
-               "triage_relevant": t.get("relevant"), "triage_sig": (t.get("significance") or ""),
-               "summ_relevant": v.get("relevant"), "summ_sig": (v.get("significance") or ""),
-               "areas": areas, "problems": problems}
-
-        # SEED is pre-vetted, so relevant/significance are NOT gated; a card is
-        # built whenever the renderer's required fields are present.
-        if not (areas and court and synopsis and why):
-            row["status"] = "no-card"
-            rows.append(row)
-            print("  x %s: no card (%s)" % (name, "; ".join(problems) or "missing fields"))
-            continue
-
-        # Phase-4 parity (HANDOFF item 7): build the card through update.assemble_entry
-        # so seeded cards carry the same taxonomy as the daily feed (first_impression,
-        # tort_reform, law_applied, additional_holdings). first_seen is the filing date,
-        # so the digest never treats a backfilled card as new this week.
-        card = update.assemble_entry(v, cid, name, court, areas, docket, date_filed, url, date_filed)
-        new_cards.append(card)
-        row["status"] = "card"
-        rows.append(row)
-        print("  + %s [%s] screen=%s triage=%s/%s areas=%s%s"
-              % (name, date_filed, _flag(s.get("pass")), _flag(t.get("relevant")),
-                 (t.get("significance") or "-"), ",".join(areas),
-                 ("  REVIEW: " + "; ".join(problems)) if problems else ""))
+    # Tier 3 -- summarize (drafts the cards), synchronously or as one batch.
+    draft_rows, draft_cards, _deferred = _draft_cards(pending)
+    rows.extend(draft_rows)
+    new_cards.extend(draft_cards)
 
     report = render_recall(rows, new_cards)
     if aborted:
