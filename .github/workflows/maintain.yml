@@ -133,8 +133,8 @@ jobs:
           # Same models the funnel uses, so the golden check and the cross-check test
           # what production actually runs.
           OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}
-          OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-4-6' }}
-          OPINIONS_CROSSCHECK_MODEL: ${{ vars.OPINIONS_CROSSCHECK_MODEL || 'claude-sonnet-4-6' }}
+          OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-5' }}
+          OPINIONS_CROSSCHECK_MODEL: ${{ vars.OPINIONS_CROSSCHECK_MODEL || 'claude-sonnet-5' }}
           # Reserve and slice are repo-variable tunable; defaults are conservative.
           OPINIONS_MAINT_RESERVE: ${{ vars.OPINIONS_MAINT_RESERVE || '50' }}
           OPINIONS_MAINT_SLICE: ${{ vars.OPINIONS_MAINT_SLICE || '3' }}
