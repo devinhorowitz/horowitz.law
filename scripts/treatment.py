@@ -48,7 +48,7 @@ treatment_core.py (the shared flag model), and cl_rate.py (the REST budget).
 Env:
   ANTHROPIC_API_KEY        required
   COURTLISTENER_TOKEN      recommended (citation search; raises the REST limit)
-  TREATMENT_MODEL          classifier (default claude-sonnet-4-6)
+  TREATMENT_MODEL          classifier (default claude-sonnet-5)
   TREATMENT_LOOKBACK_DAYS  recent-citer window for already-swept cards (default 200)
   TREATMENT_PER_CARD       max new citers classified per card per run (default 6)
   TREATMENT_PER_RUN        max new citers classified per run, all cards (default 25)
@@ -77,7 +77,7 @@ STATE_PATH = os.path.join(update.REPO, "treatment_state.json")
 PR_PATH    = os.path.join(update.REPO, "scripts", "treatment_pr_body.md")
 
 KEY           = update.KEY
-MODEL         = os.environ.get("TREATMENT_MODEL", "claude-sonnet-4-6")
+MODEL         = os.environ.get("TREATMENT_MODEL", "claude-sonnet-5")
 LOOKBACK_DAYS = int(os.environ.get("TREATMENT_LOOKBACK_DAYS", "200"))
 PER_CARD      = int(os.environ.get("TREATMENT_PER_CARD", "6"))
 PER_RUN       = int(os.environ.get("TREATMENT_PER_RUN", "25"))

@@ -30,7 +30,7 @@ Environment:
   ANTHROPIC_API_KEY        required
   COURTLISTENER_TOKEN      optional (raises CourtListener rate limits)
   OPINIONS_MODEL           Tier 3 summarizer (default claude-opus-4-8)
-  OPINIONS_TRIAGE_MODEL    Tier 2 full-read gate (default claude-sonnet-4-6). "" disables it.
+  OPINIONS_TRIAGE_MODEL    Tier 2 full-read gate (default claude-sonnet-5). "" disables it.
   OPINIONS_SCREEN_MODEL    Tier 1 excerpt screen (default claude-haiku-4-5-20251001). "" disables it.
   OPINIONS_PRETRIAGE_MODEL Tier 1.5 full-read screen (default claude-haiku-4-5-20251001); a cheap full read before triage. "" disables it.
   OPINIONS_CROSSCHECK_MODEL  fidelity check on each drafted card (default = the triage model). "" disables it.
@@ -90,7 +90,7 @@ KEY          = os.environ.get("ANTHROPIC_API_KEY", "")
 CL_TOKEN     = os.environ.get("COURTLISTENER_TOKEN", "")
 MODEL        = os.environ.get("OPINIONS_MODEL", "claude-opus-4-8")
 AUDIT_MODEL  = os.environ.get("OPINIONS_AUDIT_MODEL", MODEL)  # escalated treatment audit; Opus by default
-TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-4-6")
+TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-5")
 SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5-20251001")
 PRETRIAGE_MODEL = os.environ.get("OPINIONS_PRETRIAGE_MODEL", "claude-haiku-4-5-20251001")  # tier 1.5: cheap full-read screen before the Sonnet triage; "" disables
 CROSSCHECK_MODEL = os.environ.get("OPINIONS_CROSSCHECK_MODEL", TRIAGE_MODEL)  # fidelity check on each card; a different model than the Opus summarizer so it is not grading its own work; "" disables

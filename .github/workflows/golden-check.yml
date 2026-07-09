@@ -65,7 +65,7 @@ jobs:
           # the guard's job is to test it before it is enabled in production.
           OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}
           OPINIONS_PRETRIAGE_MODEL: ${{ vars.OPINIONS_PRETRIAGE_MODEL || 'claude-haiku-4-5-20251001' }}
-          OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-4-6' }}
+          OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-5' }}
           OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-4-8' }}
         run: python scripts/golden_check.py ${{ inputs.mode }}
 

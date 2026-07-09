@@ -78,7 +78,7 @@ jobs:
           # steady-state weeks have little to do. A dry-run preview keeps the small defaults. Override via repo Variables.
           TREATMENT_PER_RUN: ${{ inputs.dry_run && '25' || (vars.TREATMENT_PER_RUN || '300') }}
           TREATMENT_PER_CARD: ${{ inputs.dry_run && '6' || (vars.TREATMENT_PER_CARD || '50') }}
-          TREATMENT_MODEL: ${{ vars.TREATMENT_MODEL || 'claude-sonnet-4-6' }}     # full-read classifier; set the repo Variable to update without editing this file
+          TREATMENT_MODEL: ${{ vars.TREATMENT_MODEL || 'claude-sonnet-5' }}     # full-read classifier; set the repo Variable to update without editing this file
         run: |
           set -o pipefail
           python scripts/treatment.py 2>&1 | tee "$RUNNER_TEMP/run.log"
