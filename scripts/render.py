@@ -688,24 +688,34 @@ def _perma_core():
         _PERMA_CORE_CACHE = m.group(1)
     return _PERMA_CORE_CACHE
 
+_INLINE_SCRIPT_CACHE = None
 def _inline_script():
     """The CSP hash-pinned pre-paint script, read verbatim from the live feed
     page so a generated permalink can never carry a stale copy. Fails loud if
-    the script shape ever changes (check_site is the second net)."""
-    doc = open(HTML_PATH, encoding="utf-8").read()
-    m = re.search(r"<script>\(function\(\)\{.*?\}\)\(\);</script>", doc, re.S)
-    if not m:
-        raise RuntimeError("render: pre-paint inline script not found in %s" % HTML_PATH)
-    return m.group(0)
+    the script shape ever changes (check_site is the second net). Memoized per
+    render like _perma_core: permalink_html calls it once per entry."""
+    global _INLINE_SCRIPT_CACHE
+    if _INLINE_SCRIPT_CACHE is None:
+        doc = open(HTML_PATH, encoding="utf-8").read()
+        m = re.search(r"<script>\(function\(\)\{.*?\}\)\(\);</script>", doc, re.S)
+        if not m:
+            raise RuntimeError("render: pre-paint inline script not found in %s" % HTML_PATH)
+        _INLINE_SCRIPT_CACHE = m.group(0)
+    return _INLINE_SCRIPT_CACHE
 
+_CARD_STYLES_CACHE = None
 def _card_styles():
     """The opinion-card CSS, read verbatim from the live feed page's stylesheet
-    so a permalink card renders pixel-identical and cannot drift."""
-    doc = open(HTML_PATH, encoding="utf-8").read()
-    m = re.search(r"\n(  \.opinion \{.*?)\n\n  \.empty", doc, re.S)
-    if not m:
-        raise RuntimeError("render: card style block not found in %s" % HTML_PATH)
-    return m.group(1)
+    so a permalink card renders pixel-identical and cannot drift. Memoized per
+    render like _perma_core: permalink_html calls it once per entry."""
+    global _CARD_STYLES_CACHE
+    if _CARD_STYLES_CACHE is None:
+        doc = open(HTML_PATH, encoding="utf-8").read()
+        m = re.search(r"\n(  \.opinion \{.*?)\n\n  \.empty", doc, re.S)
+        if not m:
+            raise RuntimeError("render: card style block not found in %s" % HTML_PATH)
+        _CARD_STYLES_CACHE = m.group(1)
+    return _CARD_STYLES_CACHE
 
 def permalink_html(e):
     name = _esc(e["name"])

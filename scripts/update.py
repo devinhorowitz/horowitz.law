@@ -1742,6 +1742,8 @@ def main():
                 # with an Opus audit (which also re-checks the existing card), whether
                 # or not this opinion itself earns a place in the feed.
                 for tr in (t.get("treats") or []):
+                    if not isinstance(tr, dict):
+                        continue          # a malformed list element must not drop the whole candidate
                     tid = tr.get("id")
                     if skill_alert.is_authority_id(tid):
                         # Skill-authority hit: not a feed card, so a dedicated general audit
@@ -1787,11 +1789,13 @@ def main():
                             and akind in treatment_core.NEGATIVE_KINDS:
                         citer = {"cluster_id": cid, "name": name, "court": COURT_MAP.get(court_id),
                                  "date": date_filed, "kind": akind, "note": (a.get("note") or "").strip()}
-                        treatment_core.flag_caution(card, citer)
-                        treatment_changed = True
-                        treat_flags.append((card.get("name", ""), name, akind))
-                        print("  ~ adverse: %s treated by %s (%s)"
-                              % (card.get("name", "")[:40], name[:40], akind))
+                        # flag_caution returns False when the citer is already recorded or the card
+                        # was human-set; only a newly raised caution is a real change to commit/report.
+                        if treatment_core.flag_caution(card, citer):
+                            treatment_changed = True
+                            treat_flags.append((card.get("name", ""), name, akind))
+                            print("  ~ adverse: %s treated by %s (%s)"
+                                  % (card.get("name", "")[:40], name[:40], akind))
                     if a.get("card_review"):
                         audit_notes.append((card.get("name", ""), name, (a.get("card_review_note") or "").strip()))
                 if not t.get("relevant") or (t.get("significance") or "").lower() == "low":

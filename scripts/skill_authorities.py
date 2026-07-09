@@ -20,6 +20,7 @@ Usage:
     --prev    manifest to inherit curated edits from (default: --out if present)
 """
 import argparse, json, os, re, time, glob
+import safeio
 
 AREA_VOCAB = ["procedure", "damages", "auto", "coverage", "premises", "expert", "negsec", "badfaith"]
 
@@ -180,7 +181,10 @@ def main():
         "by_authority": by_auth,
         "curated": curated,   # preserved across runs; hand-edit per skill: areas, add_statutes, drop_statutes
     }
-    json.dump(out, open(args.out, "w"), indent=2, ensure_ascii=False)
+    # Atomic write: a crash mid-write would leave a truncated manifest, and
+    # skill_alert.load_manifest fails open to {} on a parse error, silently
+    # disabling the whole authority watch. Match the rest of the pipeline.
+    safeio.atomic_write_text(args.out, json.dumps(out, indent=2, ensure_ascii=False))
     print("wrote", args.out)
     print("skills %d | statutes %d | cases %d | authorities indexed %d" % (
         len(skills),

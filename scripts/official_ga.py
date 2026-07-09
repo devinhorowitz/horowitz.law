@@ -65,8 +65,13 @@ def _year_map(year, *, html=None):
         for href, base in _PDF_HREF_RE.findall(doc):
             url = href if href.lower().startswith("http") else HOST + href
             m[base.lower()[:-4]] = url  # key by docket = basename without .pdf
+    except urllib.error.HTTPError:
+        # A 404 is definitive (the pre-2017 years have no page): cache the empty miss.
+        pass
     except Exception:
-        m = {}
+        # A transport error (timeout, DNS, reset) is transient: do NOT cache it, so a
+        # later same-year card retries the fetch instead of inheriting a poisoned {}.
+        return {}
     _year_cache[year] = m
     return m
 

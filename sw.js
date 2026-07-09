@@ -5,7 +5,7 @@
    `?v=` content hashes make them immutable; the feeds and the subscribe API
    are never intercepted. Bump CACHE when the strategy changes. */
 
-var CACHE = "gaw-v1";
+var CACHE = "gaw-v2";
 var SHELL = ["/", "/opinions", "/archive", "/changes", "/stats", "/digests",
              "/subscribe", "/colophon", "/resume"];
 
@@ -38,8 +38,10 @@ self.addEventListener("fetch", function (e) {
     e.respondWith(
       caches.match(req).then(function (hit) {
         return hit || fetch(req).then(function (res) {
-          var copy = res.clone();
-          caches.open(CACHE).then(function (c) { c.put(req, copy); });
+          if (res.ok) {                                  // never cache a 404/5xx: a deploy-race
+            var copy = res.clone();                      // miss would otherwise be served forever
+            caches.open(CACHE).then(function (c) { c.put(req, copy); });
+          }
           return res;
         });
       })
@@ -51,8 +53,10 @@ self.addEventListener("fetch", function (e) {
   // and the Watch itself as the last-resort offline landing.
   e.respondWith(
     fetch(req).then(function (res) {
-      var copy = res.clone();
-      caches.open(CACHE).then(function (c) { c.put(req, copy); });
+      if (res.ok) {                                      // only cache a good response
+        var copy = res.clone();
+        caches.open(CACHE).then(function (c) { c.put(req, copy); });
+      }
       return res;
     }).catch(function () {
       return caches.match(req).then(function (hit) {

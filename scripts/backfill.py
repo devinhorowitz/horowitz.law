@@ -264,6 +264,7 @@ def run():
         text = update.pdf_text(r.get("pdf_url"), deadline=tdl)
         src = "pdf"
         if not update._pdf_ok(text):
+            text = ""    # blank sub-quality PDF junk so it can't reach triage (see update.main)
             try:
                 rest = update.opinion_text_full(r, deadline=tdl)
             except cl_rate.RateBudgetExceeded:
@@ -274,7 +275,7 @@ def run():
                              "detail": "CourtListener throttled: %s" % (note or "budget exhausted")})
                 aborted = True
                 break
-            if rest:
+            if update._pdf_ok(rest):
                 text, src = rest, "rest"
         if not text:
             print("  ! no opinion text for %s (%d)" % (name, cid))

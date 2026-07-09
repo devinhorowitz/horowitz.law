@@ -357,7 +357,7 @@
 // pages need; the strategy lives in /sw.js.
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {
-    navigator.serviceWorker.register("/sw.js");
+    navigator.serviceWorker.register("/sw.js").catch(function () {});
   });
 }
 

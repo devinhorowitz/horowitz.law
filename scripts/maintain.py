@@ -144,20 +144,29 @@ def revalidate(cards):
             continue
         checked += 1
         raised = False
-        if update.CROSSCHECK_MODEL:
-            cc = update.crosscheck(name, text, card)
-            if cc and cc.get("verdict") == "flag":
-                flags.append((name, "fidelity: " + (cc.get("reason") or "")))
-                print("  FLAG (fidelity) %s: %s" % (name[:50], cc.get("reason") or "")); raised = True
-            elif cc and cc.get("verdict") == "unavailable":
-                print("  . cross-check unavailable for %s" % name[:50])
-        if update.COMPLETENESS_MODEL:
-            cp = update.completeness_check(name, text, card)
-            if cp and cp.get("verdict") == "flag":
-                flags.append((name, "completeness: " + (cp.get("reason") or "")))
-                print("  FLAG (completeness) %s: %s" % (name[:50], cp.get("reason") or "")); raised = True
-            elif cp and cp.get("verdict") == "unavailable":
-                print("  . completeness check unavailable for %s" % name[:50])
+        try:
+            if update.CROSSCHECK_MODEL:
+                cc = update.crosscheck(name, text, card)
+                if cc and cc.get("verdict") == "flag":
+                    flags.append((name, "fidelity: " + (cc.get("reason") or "")))
+                    print("  FLAG (fidelity) %s: %s" % (name[:50], cc.get("reason") or "")); raised = True
+                elif cc and cc.get("verdict") == "unavailable":
+                    print("  . cross-check unavailable for %s" % name[:50])
+            if update.COMPLETENESS_MODEL:
+                cp = update.completeness_check(name, text, card)
+                if cp and cp.get("verdict") == "flag":
+                    flags.append((name, "completeness: " + (cp.get("reason") or "")))
+                    print("  FLAG (completeness) %s: %s" % (name[:50], cp.get("reason") or "")); raised = True
+                elif cp and cp.get("verdict") == "unavailable":
+                    print("  . completeness check unavailable for %s" % name[:50])
+        except update.ConfigError:
+            raise                     # a real misconfig must surface, not be swallowed
+        except Exception as e:
+            # A transient model/network error on one card must not crash the sweep:
+            # maintenance defers, it never fails the run. Skip this card, keep going.
+            checked -= 1
+            print("  . guard error on %s; skipping card (%s)" % (name[:50], e))
+            continue
         if not raised:
             print("  ok   %s" % name[:50])
     return flags, checked, deferred

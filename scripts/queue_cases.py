@@ -275,9 +275,10 @@ def run():
         tdl = time.time() + CL_DEADLINE
         text = update.pdf_text(r.get("pdf_url"), deadline=tdl)
         if not update._pdf_ok(text):
+            text = ""    # blank sub-quality PDF junk so it can't reach triage (see update.main)
             try:
                 rest = update.opinion_text_full(r, deadline=tdl)
-                if rest:
+                if update._pdf_ok(rest):
                     text = rest
             except cl_rate.RateBudgetExceeded:
                 line_outcome[idx] = ("keep", None)
