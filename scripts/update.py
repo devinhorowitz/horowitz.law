@@ -1582,7 +1582,12 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
     if auto_cards:
         auto_entries = clean_entries + [e for e, _ in auto_cards]
         safeio.atomic_write_json(JSON_PATH, auto_entries)
-        state["last_filed"] = max(e["date"] for e in auto_entries if e.get("date"))
+        # Clamp the watermark to today: a card carrying a typo'd future dateFiled (bad
+        # CourtListener metadata, or a hand-edit) must never push last_filed into the
+        # future, which would make every later run compute a future `since` and silently
+        # filter out all real opinions until wall-clock time caught up.
+        _lf = max(e["date"] for e in auto_entries if e.get("date"))
+        state["last_filed"] = min(_lf, datetime.date.today().isoformat())
         render.render(auto_entries)
         ab = ["## Georgia Appellate Watch: %d new opinion(s) (auto-published)" % len(auto_cards), ""]
         for i, (e, _r) in enumerate(auto_cards, 1):
@@ -1686,10 +1691,14 @@ def main():
     # clears the case from this ledger, so it is rediscovered and redrafted on a later run.
     pending_review = review_store.load_pending()
     last = state.get("last_filed")
+    today = datetime.date.today().isoformat()
     if last:
         since = (datetime.date.fromisoformat(last) - datetime.timedelta(days=2)).isoformat()
     else:
         since = (datetime.date.today() - datetime.timedelta(days=LOOKBACK)).isoformat()
+    # Never search from later than today: recovers gracefully if last_filed was ever
+    # poisoned by a future-dated filing, so `since` can't filter out every real opinion.
+    since = min(since, today)
 
     run_start = time.time()
     search_deadline = run_start + SEARCH_BUDGET
@@ -1715,6 +1724,8 @@ def main():
             continue
         if (r.get("dateFiled") or "") and r["dateFiled"] < since:
             continue
+        if (r.get("dateFiled") or "") and r["dateFiled"][:10] > today:
+            continue        # future-dated filing (typo'd CL metadata): never card it, never let it advance the watermark
         ids.add(cid)
         cand.append(r)
     cand.sort(key=lambda r: (r.get("dateFiled") or "", cluster_id_of(r)), reverse=True)

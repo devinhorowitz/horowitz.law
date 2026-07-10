@@ -133,8 +133,10 @@ jobs:
           git fetch origin main
           git checkout -B bot/opinions-review origin/main
           # Restore cases already staged on the existing review branch (vetoed files stay gone).
+          branch_existed=0
           if git fetch origin bot/opinions-review 2>/dev/null; then
             git checkout origin/bot/opinions-review -- review 2>/dev/null || true
+            branch_existed=1
           fi
           # Union in this run's new files. Commit ONLY review/ so the branch's sole diff from
           # main is the staged cases -- merging it can never revert an auto card, and the PR
@@ -146,7 +148,15 @@ jobs:
             exit 0
           fi
           git commit -m "opinions: stage case(s) for review"
-          git push -f origin bot/opinions-review
+          # --force-with-lease (not plain -f) so this cannot silently clobber a /veto that landed
+          # on the branch since the fetch above: if a veto raced in, the lease is stale and the push
+          # is rejected -- this run fails and alerts, and the next scan rebuilds cleanly with the veto
+          # intact. Plain -f only for the first-ever push, when there is no remote branch to lease on.
+          if [ "$branch_existed" = "1" ]; then
+            git push --force-with-lease origin bot/opinions-review
+          else
+            git push -f origin bot/opinions-review
+          fi
           BODY="$RUNNER_TEMP/pr_body_review.md"
           [ -f "$BODY" ] || echo "Cases held for review." > "$BODY"
           num=$(gh pr list --repo "$GITHUB_REPOSITORY" --head bot/opinions-review --state open --json number --jq '.[0].number // empty' 2>/dev/null || echo "")

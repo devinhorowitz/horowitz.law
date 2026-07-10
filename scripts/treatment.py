@@ -338,6 +338,17 @@ def main():
             ccourt = r.get("court_id") or ""
             try:
                 ctext = citer_text(r, deadline)
+            except cl_rate.RateBudgetExceeded:
+                stopped = "rest budget"; defer = cl_rate.PACER.defer_note(); break
+            # CourtListener's text ingestion lags cluster creation by days to weeks. If the
+            # citer's text is not available yet, skip it WITHOUT marking it seen, so it is
+            # re-examined on a later run once its text -- possibly the very passage that
+            # overrules the card -- lands, rather than classifying an empty body as "neutral"
+            # and never revisiting it. (Mirrors citer_text's own PDF min-alpha gate.)
+            if sum(c.isalpha() for c in ctext) < 100:
+                print("  . citing=%s text not ingested yet; will retry next run" % ccid)
+                continue
+            try:
                 v = classify(card, cname, ctext)
                 api_fail = 0
             except cl_rate.RateBudgetExceeded:
