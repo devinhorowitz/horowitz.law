@@ -33,6 +33,8 @@ jobs:
       #   files.pythonhosted.org    the pypdf wheel download.
       #   github.com                checkout, the branch pushes to main and bot/opinions-review.
       #   api.github.com            the review-PR open and the failure-alert gh steps.
+      #   *.githubusercontent.com   only reached if a future runner image drops 3.12 from the
+      #                             toolcache and setup-python must download it; harmless otherwise.
       # Actions cache/infra endpoints are auto-allowed.
       - name: Harden the runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -46,6 +48,8 @@ jobs:
             pypi.org:443
             files.pythonhosted.org:443
             github.com:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
             api.github.com:443
 
       # Full history + all branches, so the review-lane step can rebase bot/opinions-review
@@ -97,7 +101,7 @@ jobs:
             echo "auto=true" >> "$GITHUB_OUTPUT"
             git add $CONTENT $BOOK 2>/dev/null || true
             git commit -m "opinions: publish new appellate decisions" || echo "nothing to commit"
-            git push origin HEAD:main
+            bash scripts/push_main.sh
           else
             echo "auto=false" >> "$GITHUB_OUTPUT"
             git add $BOOK 2>/dev/null || true
@@ -105,7 +109,7 @@ jobs:
               echo "No bookkeeping changes."
             else
               git commit -m "opinions: record run state [skip ci]"
-              git push origin HEAD:main
+              bash scripts/push_main.sh
             fi
           fi
 
@@ -177,7 +181,7 @@ jobs:
             echo "status.json unchanged; nothing to commit."
           else
             git commit -m "opinions: scan status [skip ci]"
-            git push origin HEAD:main
+            bash scripts/push_main.sh
           fi
 
       - name: Report a failed run

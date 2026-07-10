@@ -51,6 +51,8 @@ jobs:
             pypi.org:443
             files.pythonhosted.org:443
             github.com:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
             api.github.com:443
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
