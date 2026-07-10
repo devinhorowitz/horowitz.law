@@ -272,17 +272,26 @@ def main():
         key = str(int(cid))
         st = state.get(key) or {}
         seen = set(st.get("seen", []))
-        first_time = key not in state
+        full_done = bool(st.get("full"))
+        # first_time == run a full-history citation search (since the card's own date),
+        # vs. the cheap LOOKBACK_DAYS incremental window. Gate it on whether a full pass
+        # has actually COMPLETED, not on mere presence in state: a run that resolves the
+        # oid then defers on the rate/time budget before (or during) the citer search must
+        # not leave the card marked done -- otherwise the next run drops to the 200-day
+        # window and the card's older history is never searched, silently missing an
+        # overruling decision filed before that window. Entries predating this flag have no
+        # "full" key, so they each get one corrective full-history pass.
+        first_time = not full_done
 
         try:
             oid = st.get("oid")
             if oid is None:
                 oid = lead_opinion_id(int(cid), deadline)
                 if oid:
-                    state[key] = {"oid": oid, "seen": sorted(seen)}   # cache id immediately
+                    state[key] = {"oid": oid, "seen": sorted(seen), "full": full_done}   # cache id immediately
                     changed = True
             if not oid:
-                state[key] = {"oid": None, "seen": sorted(seen)}      # do not refetch weekly
+                state[key] = {"oid": None, "seen": sorted(seen), "full": full_done}      # do not refetch weekly
                 changed = True
                 continue
             since = (card["date"] if first_time
@@ -345,7 +354,14 @@ def main():
                     new_flags.append(card)
 
         if first_time or seen != before:
-            state[key] = {"oid": oid, "seen": sorted(seen)}
+            # Mark the card fully swept only when this run actually completed a full-history
+            # pass without a global stop (rate/time budget, breaker, config error) cutting it
+            # short; `stopped` is set only by those global conditions, not by the per-card /
+            # per-run classification caps. An incremental run keeps the existing flag. A stop
+            # leaves `full` unset so the next run redoes the full-history search (skipping the
+            # citers already in `seen`, so it resumes rather than restarts).
+            new_full = full_done or (first_time and not stopped)
+            state[key] = {"oid": oid, "seen": sorted(seen), "full": new_full}
             changed = True
         if stopped:
             break

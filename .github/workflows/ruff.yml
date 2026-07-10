@@ -2,6 +2,11 @@ name: Ruff lint
 
 on:
   pull_request: {}
+  # Also lint commits pushed straight to main (bots, the golden build, review-apply):
+  # ruff otherwise runs on PRs only, so a direct-to-main push skipped it entirely.
+  push:
+    paths:
+      - 'scripts/**'
   workflow_dispatch: {}
 
 permissions:

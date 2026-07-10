@@ -87,6 +87,7 @@ REJECT_PATH = os.path.join(REPO, "opinions_rejections.jsonl")  # append-only log
 SA_MANIFEST_PATH = os.path.join(REPO, "skill-authorities.json")   # skill-authority manifest (alert-out join key; absent = watch inactive)
 SA_STATE_PATH    = os.path.join(REPO, "skill_alert_state.json")   # per-authority adverse-treatment record (state; rides the PR / straight to main like opinions_state.json)
 REJECT_CAP  = int(os.environ.get("OPINIONS_REJECT_CAP", "5000"))  # keep only the most recent N rejection records so the committed log stays bounded
+LOG_CAP     = int(os.environ.get("OPINIONS_LOG_CAP", "3650"))  # keep only the most recent N per-run log lines (~a decade at 1/day) so the committed log stays bounded, same discipline as REJECT_CAP
 PR_PATH    = os.path.join(REPO, "scripts", "pr_body.md")            # combined run body (DRY_RUN log)
 AUTO_PR_PATH   = os.path.join(REPO, "scripts", "pr_body_auto.md")   # auto-lane PR body (additive, auto-merged)
 REVIEW_PR_PATH = os.path.join(REPO, "scripts", "pr_body_review.md") # review-lane PR body (held cases, per-case /veto)
@@ -1380,10 +1381,16 @@ def _drop_counts(skipped):
 def _log_run(rec):
     """Append one JSON line of per-run stats to LOG_PATH for observability, and, when
     running under Actions, also write a readable summary to the run page. Best-effort:
-    a logging failure must never fail the run."""
+    a logging failure must never fail the run. Kept to the most recent LOG_CAP lines so the
+    committed log stays bounded (it is re-read in full by the daily maintenance run), the same
+    discipline REJECT_PATH and seen_clusters use. Atomic, because the workflow commits it."""
     try:
-        with open(LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+        old = []
+        if os.path.exists(LOG_PATH):
+            with open(LOG_PATH, "r", encoding="utf-8") as f:
+                old = [ln for ln in f.read().splitlines() if ln.strip()]
+        new = old + [json.dumps(rec, separators=(",", ":"))]
+        safeio.atomic_write_text(LOG_PATH, "\n".join(new[-LOG_CAP:]) + "\n")
     except Exception as e:
         print("  . run-log append skipped: %s" % e)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")

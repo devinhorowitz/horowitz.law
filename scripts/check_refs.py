@@ -22,9 +22,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 # First-party pipeline modules other scripts call into. Stdlib and third-party
 # (os, json, time, pypdf, urllib, ...) are out of scope: this guards our own surface.
+# Keep this in sync with the importable first-party modules; a module omitted here is
+# a blind spot (a dropped/renamed attr it exposes goes unchecked). All listed modules
+# are imported cleanly by the CI import step, so importing them here is side-effect-free.
 TARGETS = ["update", "render", "cl_rate", "safeio", "jurisdictions",
            "treatment_core", "official_ga", "backfill", "batch",
-           "review_store", "review_apply", "skill_alert"]
+           "review_store", "review_apply", "skill_alert",
+           "digest", "queue_cases", "treatment", "maintain", "siteconfig",
+           "courts", "alert", "model_watch", "golden_check", "skill_authorities"]
 
 
 def main():
@@ -43,6 +48,21 @@ def main():
         if base == os.path.basename(__file__):
             continue
         tree = ast.parse(open(path, encoding="utf-8").read(), path)
+        seen = set()
+        # `from x import y` -- verify y exists on x. Catches the lazy in-function
+        # from-import that the CI import step never executes (so it would surface only
+        # at the next scheduled run), and the module-level one belt-and-suspenders.
+        for n in ast.walk(tree):
+            if isinstance(n, ast.ImportFrom) and n.level == 0 and n.module in mods:
+                for a in n.names:
+                    if a.name == "*":
+                        continue
+                    key = (n.module, a.name)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    if not hasattr(mods[n.module], a.name):
+                        problems.append((base, n.module, a.name))
         # Local name bound to each target module in this file (honors `import x as y`).
         local = {}
         for n in ast.walk(tree):
@@ -52,7 +72,6 @@ def main():
                         local[a.asname or a.name] = a.name
         if not local:
             continue
-        seen = set()
         for n in ast.walk(tree):
             if (isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)
                     and n.value.id in local):

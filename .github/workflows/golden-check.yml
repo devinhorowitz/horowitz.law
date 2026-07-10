@@ -48,6 +48,8 @@ jobs:
           allowed-endpoints: >
             api.anthropic.com:443
             github.com:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
             api.github.com:443
             www.courtlistener.com:443
             storage.courtlistener.com:443
@@ -79,7 +81,7 @@ jobs:
           if [ -n "$(git status --porcelain -- scripts/golden_set.json)" ]; then
             git add scripts/golden_set.json
             git commit -m "golden: cache opinion text for the regression set [skip ci]"
-            git push origin HEAD:main
+            bash scripts/push_main.sh
           else
             echo "no golden-set changes to commit"
           fi

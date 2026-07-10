@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: write
+  issues: write          # the failure-alert step opens or comments on a tracking issue
 
 concurrency:
   group: opinions-review-apply
@@ -32,6 +33,8 @@ jobs:
           egress-policy: block
           allowed-endpoints: >
             github.com:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
             api.github.com:443
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -63,7 +66,7 @@ jobs:
             echo "Nothing to commit."
           else
             git commit -m "$msg"
-            git push origin HEAD:main
+            bash scripts/push_main.sh
           fi
 
       - name: Delete the resolved review branch
@@ -71,3 +74,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           git push origin --delete bot/opinions-review 2>/dev/null || echo "branch already gone"
+
+      # This workflow is the one human-decision-to-publish path: a person merged the review PR
+      # and these accepted cases must land on main. If the apply or push fails (e.g. a push
+      # race the retry loop still could not win, or a review_apply error), surface it loudly on
+      # a tracking issue -- otherwise a merged batch silently fails to publish with no signal.
+      - name: Report a failed apply
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          pr_url="${{ github.event.pull_request.html_url }}"
+          body=$(printf 'Applying a resolved review batch failed -- accepted cases may not have reached main.\n\nReview PR: %s\nRun: %s\n' "$pr_url" "$run_url")
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Review-apply failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Review-apply failures" --body "$body"
+          fi
