@@ -22,7 +22,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 45     # watchdog: a hung daily run fails fast instead of running to the 6h cap
+    timeout-minutes: 45     # watchdog: a hung run fails fast instead of running to the 6h cap
     steps:
       # Supply-chain hardening (block mode): only the endpoints below are reachable.
       #   api.anthropic.com         the screen/triage/summarize model calls (update.py).

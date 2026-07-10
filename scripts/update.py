@@ -21,8 +21,10 @@ expensive model only ever touches confirmed keepers:
                             still decline. Opus 4.8 takes no extended-thinking budget and
                             no "effort" parameter; the summarizer runs at the model default.
 
-Keepers are appended to opinions.json, opinions_state.json is updated, opinions.html
-and opinions.xml are re-rendered, and scripts/pr_body.md is written for the pull request.
+Auto-lane keepers are appended to opinions.json, opinions_state.json is updated, and
+opinions.html/opinions.xml are re-rendered for a straight-to-main publish; guard-flagged
+keepers and treatment changes are staged under review/ for a bundled review PR
+(scripts/pr_body_review.md). scripts/pr_body.md holds the combined run / DRY_RUN log.
 
 Run from the repo root: `python scripts/update.py`. No third-party packages.
 
@@ -1615,7 +1617,7 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
 
 
 # Console log prefixes, so a raw job log reads at a glance: "+" an opinion added
-# or a routing override, "~" an adverse-treatment flag raised on an existing card,
+# or a routing override, "~" an adverse-treatment flag on an existing card or a duplicate skip,
 # "!" a warning or error, "." a minor or best-effort step that was skipped. The
 # same run also writes a rendered summary to the Actions run page (safeio.step_summary).
 def main():
@@ -1624,8 +1626,9 @@ def main():
     if not CL_TOKEN:
         print("  ! warning: COURTLISTENER_TOKEN not set; CourtListener REST limits will be tighter.")
 
-    # The PR step reads PR_PATH as its body. Guarantee the file exists on every exit
-    # path, including the no-candidates early return, so it never fails on a missing file.
+    # PR_PATH holds the combined run body (DRY_RUN log / human-readable record); the two
+    # lanes write their own bodies (AUTO_PR_PATH, REVIEW_PR_PATH). Guarantee the file exists
+    # on every exit path, including the no-candidates early return, so nothing fails on it.
     # It is gitignored and not in the PR add-paths, so a no-op run writes it and opens no PR.
     os.makedirs(os.path.dirname(PR_PATH), exist_ok=True)
     open(PR_PATH, "w", encoding="utf-8").write("No update this run.\n")
@@ -2020,10 +2023,11 @@ def main():
         print("  + %s [%s] %s (sig=%s%s)" % (entry["name"], ",".join(areas), disp, v.get("significance"), hold_note))
 
     lines = ["## Georgia Appellate Watch: %d new opinion(s)" % len(added), ""]
+    flagged_map = dict(flagged)
     for i, e in enumerate(added, 1):
         lines += _pr_card(e, i)
         checks = []
-        fr = dict(flagged).get(e["name"])
+        fr = flagged_map.get(e["name"])
         if fr:
             checks.append("review: %s" % "; ".join(fr))
         cc = crosschecks.get(e["cluster_id"])
@@ -2056,9 +2060,9 @@ def main():
     if noms:
         lines += ["", "Golden-set nominations (the set never adopts on its own; to adopt one, paste the "
                       "object into scripts/golden_set.json, merge, and run golden-check in build mode):"]
-        for thin, cand in noms:
-            lines.append("- **%s** would anchor thin area(s): %s" % (cand["name"], ", ".join(thin)))
-            lines.append("```json\n%s\n```" % json.dumps(cand, ensure_ascii=False, indent=2))
+        for thin, nom in noms:
+            lines.append("- **%s** would anchor thin area(s): %s" % (nom["name"], ", ".join(thin)))
+            lines.append("```json\n%s\n```" % json.dumps(nom, ensure_ascii=False, indent=2))
     if skipped:
         lines += ["", "Screened or dropped this run (not added):"]
         lines += ["- %s: %s" % (n, why) for n, why in skipped]

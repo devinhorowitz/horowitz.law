@@ -3,8 +3,8 @@ name: opinions-review-veto
 # Per-case veto for the bundled review PR. Comment `/veto <cluster_id>` on the review PR and
 # this drops that case's staged file(s) from the bot/opinions-review branch, so merging the PR
 # applies only the cases that remain. The vetoed case is left un-seen (recorded for redraft when
-# the batch is applied), so a later funnel run rediscovers and redrafts it. Only the repo owner
-# or a collaborator can veto; comments on any other PR are ignored.
+# the batch is applied), so a later funnel run rediscovers and redrafts it. Only the repo owner,
+# an org member, or a collaborator can veto; comments on any other PR are ignored.
 
 on:
   issue_comment:

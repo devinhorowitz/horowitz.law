@@ -34,8 +34,9 @@ backlog larger than a day's limit defers its tail to the next run. Built to run 
 a weekend, when the daily updater is idle and the budget is free.
 
 Scope. Only citers from the feed's own courts (Supreme Court of Georgia, Court of
-Appeals of Georgia, Eleventh Circuit, U.S. Supreme Court) count: only a court in
-the case's own hierarchy can treat it adversely. A card is swept across its full
+Appeals of Georgia, Eleventh Circuit, U.S. Supreme Court, plus the supplementary
+Florida and Alabama appellate courts) count: only a court in the case's own
+hierarchy can treat it adversely. A card is swept across its full
 citation history the first time, and only for recent citers thereafter.
 
 State (treatment_state.json) holds, per card, the resolved lead opinion id and the
@@ -89,7 +90,7 @@ BREAKER       = int(os.environ.get("TREATMENT_BREAKER", "4"))   # stop after thi
 DRY_RUN       = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 
 # CourtListener court ids whose decisions can bind or treat a card in our feed.
-SCOPE_COURTS = update.COURTS_ALL   # full CL id set for the active jurisdiction
+SCOPE_COURTS = update.COURTS_ALL   # full CL id set across all registered jurisdictions (ignores the OPINIONS_COURTS override)
 COURT_MAP    = update.COURT_MAP    # CL court id -> our internal code
 
 TREATMENT_SYSTEM = (
@@ -171,7 +172,7 @@ def citer_text(r, deadline):
     op0 = ops[0] if ops and isinstance(ops[0], dict) else {}
     pdf_url = op0.get("download_url") or ""
     text = update.pdf_text(pdf_url, deadline=deadline) if pdf_url else ""
-    if bool(text) and len(text) >= PDF_MIN_CHARS and sum(c.isalpha() for c in text) >= 100:
+    if len(text) >= PDF_MIN_CHARS and sum(c.isalpha() for c in text) >= 100:
         return text
     try:
         return update.opinion_text_full(r, deadline)

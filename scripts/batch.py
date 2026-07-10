@@ -53,9 +53,10 @@ class BatchTimeout(RuntimeError):
 
 
 def _send(method, url, body=None, label="batch"):
-    """One HTTP round trip, returning the response body as text. Retries 429/5xx
-    with capped exponential backoff, exactly like update.anthropic_json. This is
-    the only place the module touches the network; tests stub it."""
+    """One HTTP round trip, returning the response body as text. Retries 429/5xx with
+    capped exponential backoff -- the same retry set and backoff shape as
+    update.anthropic_json, except it does not read the Retry-After header (it caps at 30s).
+    This is the only place the module touches the network; tests stub it."""
     data = json.dumps(body).encode("utf-8") if body is not None else None
     last = None
     for attempt in range(5):
@@ -157,9 +158,10 @@ def collect(batch_obj, label="batch"):
 
 
 def poll(batch_id, deadline=None, interval=20.0, label="batch"):
-    """Block until the batch ends, returning the ended batch object. Never sleeps
-    past `deadline`; if the batch is still running when the deadline passes, raise
-    BatchTimeout(batch_id) so the caller can defer collection to a later run."""
+    """Block until the batch ends, returning the ended batch object. Sleeps at most
+    `interval`, and at most ~1s past `deadline` (a 1s floor avoids a busy-spin as the
+    deadline nears); once the deadline has passed it raises BatchTimeout(batch_id) so the
+    caller can defer collection to a later run."""
     while True:
         obj = status(batch_id, label)
         if obj.get("processing_status") == "ended":

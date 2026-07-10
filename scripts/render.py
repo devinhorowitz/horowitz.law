@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Render opinions.json into opinions.html, archive.html, and opinions.xml.
+"""Render opinions.json into opinions.html, archive.html, and opinions.xml, plus the
+derived pages and feeds (sitemap.xml, o/ permalinks, areas/ slices, stats.html, changes.*,
+digests.html).
 
 opinions.json is the single source of truth: a list of entry objects. Run from
 anywhere with `python scripts/render.py`. Pure standard library, no dependencies.
@@ -8,8 +10,9 @@ The public feed (opinions.html and opinions.xml) shows a rolling window of the
 most recent WINDOW_YEARS years by decision date, recomputed every run, so it
 never grows without bound and nothing drops on a calendar boundary. The full
 record lives in archive.html, grouped by decision year; nothing is removed
-there. Cards are written between the start/end markers in each file; nothing
-else in those files is touched.
+there. Cards are written between the start/end markers in each file; nothing else
+between the markers is touched, though the footer year, asset ?v= tokens, and
+data-cfg identity hooks are re-stamped in place on the shared pages (see below).
 """
 import os, re, json, hashlib, html, datetime
 from xml.sax.saxutils import escape as xml_escape
@@ -643,10 +646,11 @@ def digests_block(entries):
 # ========================= subscribe area choices ===========================
 
 def jurisdiction_choices():
-    """The which-states checkboxes on /subscribe -- DORMANT until the registry
-    holds a second jurisdiction, then they appear on the next render with every
-    covered state checked. Gated on the registry on purpose: the same Phase 5
-    commit that adds Florida to jurisdictions.py is the one that must also teach
+    """The which-states checkboxes on /subscribe -- DORMANT until a second
+    fully-covered jurisdiction joins the registry (only Georgia is 'full' today;
+    Florida and Alabama are supplementary overlay), then they appear on the next
+    render with every covered state checked. Gated on the registry on purpose: the
+    commit that promotes a state to full coverage is the one that must also teach
     the subscribe wire and the digest about states (see ROADMAP.md Phase 5), so
     the form can never offer a choice the backend does not yet honor."""
     full = [(k, l) for k, l in jurisdictions.ALL_JURISDICTIONS

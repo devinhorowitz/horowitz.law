@@ -24,7 +24,7 @@ What it guards, and why each exists:
      a space in its name; py_compile happily compiles such a file, so the smoke
      test alone cannot see the class. Any whitespace-named file here fails.
 
-  4. opinions.xml and sitemap.xml are well-formed XML.
+  4. opinions.xml, sitemap.xml, and changes.xml are well-formed XML.
 
   5. External link rot (--links only, off by default). The hand-authored pages
      link out to the firm, the bar, the courts, the schools, and LinkedIn, and
@@ -64,7 +64,7 @@ def _all_pages():
     """The hand-maintained pages plus every generated permalink, so the CSP and
     token guards cover the /o/ pages too."""
     import glob as _g
-    return PAGES + sorted(_g.glob(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "o", "*.html")))
+    return PAGES + sorted(_g.glob(os.path.join(REPO, "o", "*.html")))
 
 def _read(path):
     return open(os.path.join(REPO, path), encoding="utf-8").read()
