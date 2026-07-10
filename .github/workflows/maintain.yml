@@ -138,6 +138,12 @@ jobs:
           # Reserve and slice are repo-variable tunable; defaults are conservative.
           OPINIONS_MAINT_RESERVE: ${{ vars.OPINIONS_MAINT_RESERVE || '50' }}
           OPINIONS_MAINT_SLICE: ${{ vars.OPINIONS_MAINT_SLICE || '3' }}
+          # Route the slice's guards through the 50%-priced Batch API. Off by default; set the
+          # repo Variable MAINTAIN_BATCH=1 to enable. The wait budget is capped at 1200s so the
+          # in-run poll finishes well inside this job's 30-minute timeout; on a longer batch the
+          # slice defers and the next daily run collects it, so nothing is lost.
+          MAINTAIN_BATCH: ${{ vars.MAINTAIN_BATCH || '' }}
+          OPINIONS_MAINT_BATCH_SEC: ${{ vars.OPINIONS_MAINT_BATCH_SEC || '1200' }}
         run: python scripts/maintain.py
 
       # A one-glance record of the daily chore on the run page: keepalive, the court-registry
