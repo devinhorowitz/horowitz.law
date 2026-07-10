@@ -190,6 +190,19 @@ footer a:hover {
   text-decoration-thickness: 1px;
 }
 
+/* ---------------------------------------------------------------
+   Reading measure for card prose. The synopsis and its "why it
+   matters" are the main content; cap them to a comfortable ~68-
+   character line so dense legal text tracks cleanly line to line,
+   rather than running the full card width (~96 chars on desktop).
+   The card's metadata, tags, and footer keep the full width. Lives
+   here so it applies wherever card_html renders -- the feed, the
+   archive, and the /o/ permalink pages -- without a per-page edit.
+   ch is exact in a monospace face, and on narrow screens the cap
+   exceeds the column, so it is a no-op there.
+   --------------------------------------------------------------- */
+.op-synopsis, .op-why, .op-editornote { max-width: 68ch; }
+
 /* ---- Arrival cue for deep-linked opinion cards. Mirrors the landing
    page's section:target wash: following /opinions#op-XXXXXXX (or an
    archive anchor) briefly washes the card so you can see where you
