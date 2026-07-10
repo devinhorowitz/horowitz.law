@@ -26,6 +26,11 @@ What it guards, and why each exists:
 
   4. opinions.xml, sitemap.xml, and changes.xml are well-formed XML.
 
+  4b. The two PWA manifests (manifest.json for the personal site, manifest.webmanifest
+     for Georgia Appellate Watch -- intentionally separate installable apps) are valid
+     JSON and every icon they reference exists on disk, so a renamed icon fails here
+     rather than silently breaking install in production.
+
   5. External link rot (--links only, off by default). The hand-authored pages
      link out to the firm, the bar, the courts, the schools, and LinkedIn, and
      those URLs drift as institutions reorganize. With --links the external
@@ -159,6 +164,33 @@ def check_xml(errors):
             errors.append("%s: not well-formed XML (%s)" % (f, e))
 
 
+def check_manifests(errors):
+    """The site ships two intentional PWA manifests -- manifest.json (the personal
+    site, id "/") and manifest.webmanifest (Georgia Appellate Watch, id "/opinions")
+    -- each installable with its own identity. This guards them against silent rot:
+    both must be valid JSON, and every icon they reference must be a real file, so a
+    renamed or deleted icon fails here at push time instead of breaking install and
+    the home-screen icon in production (where nothing else would catch it)."""
+    import json as _json
+    for name in ("manifest.json", "manifest.webmanifest"):
+        path = os.path.join(REPO, name)
+        if not os.path.exists(path):
+            errors.append("%s: missing" % name)
+            continue
+        try:
+            data = _json.loads(_read(name))
+        except ValueError as e:
+            errors.append("%s: not valid JSON (%s)" % (name, e))
+            continue
+        for icon in data.get("icons", []):
+            src = (icon.get("src") or "").split("?", 1)[0]
+            if not src.startswith("/"):
+                errors.append("%s: icon src %r is not a root-relative path" % (name, src))
+                continue
+            if not os.path.exists(os.path.join(REPO, src.lstrip("/"))):
+                errors.append("%s: icon %s does not exist on disk" % (name, src))
+
+
 # ---- External link rot (opt-in, --links) --------------------------------
 LINK_PAGES = ("index.html", "resume.html")   # hand-authored pages only
 _LINK_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -240,12 +272,13 @@ def main(argv):
     check_csp(errors)
     check_tokens(errors, fix=False)
     check_xml(errors)
+    check_manifests(errors)
     if errors:
         print("check_site: %d problem(s)" % len(errors))
         for e in errors:
             print("  ! " + e)
         return 1
-    print("check_site: CSP hash, asset tokens, scripts/ names, and XML all check out")
+    print("check_site: CSP hash, asset tokens, scripts/ names, XML, and manifests all check out")
     return 0
 
 
