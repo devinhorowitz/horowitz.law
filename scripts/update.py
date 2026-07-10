@@ -53,7 +53,7 @@ Environment:
   ANTHROPIC_STATUS_URL     status summary endpoint (default https://status.claude.com/api/v2/summary.json)
   CL_PER_MINUTE / CL_PER_HOUR / CL_PER_DAY / CL_RATE_MARGIN  CourtListener REST budget (see cl_rate.py)
 """
-import os, re, sys, json, time, html, datetime, io
+import os, re, sys, json, time, html, datetime, io, copy
 import cl_rate           # shared CourtListener REST budget (limits, pacing, defer)
 import urllib.request, urllib.parse, urllib.error
 import xml.etree.ElementTree as ET
@@ -69,6 +69,7 @@ import skill_alert     # alert-out: extend the treats watch-list to skill-relied
 import safeio          # crash-safe atomic writes
 import jurisdictions   # per-jurisdiction court config (court map, labels, patterns)
 import official_ga     # resolves a scotga card's official gasupreme.us opinion PDF (fail-open)
+import review_store     # two-lane routing: stages held cases, tracks the pending-review ledger
 
 
 class ConfigError(RuntimeError):
@@ -84,7 +85,9 @@ REJECT_PATH = os.path.join(REPO, "opinions_rejections.jsonl")  # append-only log
 SA_MANIFEST_PATH = os.path.join(REPO, "skill-authorities.json")   # skill-authority manifest (alert-out join key; absent = watch inactive)
 SA_STATE_PATH    = os.path.join(REPO, "skill_alert_state.json")   # per-authority adverse-treatment record (state; rides the PR / straight to main like opinions_state.json)
 REJECT_CAP  = int(os.environ.get("OPINIONS_REJECT_CAP", "5000"))  # keep only the most recent N rejection records so the committed log stays bounded
-PR_PATH    = os.path.join(REPO, "scripts", "pr_body.md")
+PR_PATH    = os.path.join(REPO, "scripts", "pr_body.md")            # combined run body (DRY_RUN log)
+AUTO_PR_PATH   = os.path.join(REPO, "scripts", "pr_body_auto.md")   # auto-lane PR body (additive, auto-merged)
+REVIEW_PR_PATH = os.path.join(REPO, "scripts", "pr_body_review.md") # review-lane PR body (held cases, per-case /veto)
 
 KEY          = os.environ.get("ANTHROPIC_API_KEY", "")
 CL_TOKEN     = os.environ.get("COURTLISTENER_TOKEN", "")
@@ -1535,6 +1538,82 @@ def _pr_card(e, i):
     return out
 
 
+def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, completeness,
+                      overruling_cids, pending_review, state, seen, evaluated, have, now_iso,
+                      treat_flags):
+    """Route this run's carded output into the two lanes and write each. Returns a counts dict
+    {auto, held, treatments, wrote_auto, noop}.
+
+      AUTO   -- a new card that is additive, unflagged, and touches no existing card. Written to
+                opinions.json (from clean_entries, the pre-treatment snapshot) and rendered, for
+                a straight-to-main publish.
+      REVIEW -- a new card that a guard flagged or that overrules/modifies an existing card, and
+                every adverse-treatment change. Staged under review/ and added to the pending
+                ledger; held clusters are kept OUT of seen so a veto lets a later run redraft them.
+
+    Pure of network. Isolated from main() so the routing is unit-tested (test_review.py)."""
+    flagged_map = dict(flagged)
+    auto_cards, held_items = [], []
+    for e in added:
+        reasons = review_store.hold_reasons(e, flagged_map, crosschecks, completeness, overruling_cids)
+        (held_items if reasons else auto_cards).append((e, reasons))
+    held_cids = ({int(e["cluster_id"]) for e, _ in held_items}
+                 | {int(ev["citer"]["cluster_id"]) for ev in treat_events})
+
+    if not added and not treat_events:
+        seen_all = seen | evaluated | have
+        if seen_all != seen:
+            state["seen_clusters"] = sorted(seen_all)[-SEEN_CAP:]
+            state["updated"] = now_iso
+            safeio.atomic_write_json(STATE_PATH, state)
+        return {"auto": 0, "held": 0, "treatments": 0, "wrote_auto": False, "noop": True}
+
+    # AUTO lane: write + render only when there is additive content. Held treatment changes are
+    # absent from clean_entries, so an auto write can never publish a held change.
+    if auto_cards:
+        auto_entries = clean_entries + [e for e, _ in auto_cards]
+        safeio.atomic_write_json(JSON_PATH, auto_entries)
+        state["last_filed"] = max(e["date"] for e in auto_entries if e.get("date"))
+        render.render(auto_entries)
+        ab = ["## Georgia Appellate Watch: %d new opinion(s) (auto-published)" % len(auto_cards), ""]
+        for i, (e, _r) in enumerate(auto_cards, 1):
+            ab += _pr_card(e, i) + [""]
+        safeio.atomic_write_text(AUTO_PR_PATH, "\n".join(ab) + "\n")
+
+    # REVIEW lane: stage each held card and each treatment change; extend the pending ledger and
+    # write the review PR body, which tells the reviewer how to veto a single case.
+    for e, reasons in held_items:
+        review_store.stage_card(e, reasons)
+    for ev in treat_events:
+        review_store.stage_treatment(ev["card_cid"], ev["citer"],
+                                     "adverse treatment of an already-published card")
+    if held_items or treat_events:
+        review_store.save_pending(pending_review | held_cids, stamp=now_iso)
+        rb = ["## Georgia Appellate Watch: %d case(s) held for review" % (len(held_items) + len(treat_events)),
+              "",
+              "Accept a case by leaving it in this PR and merging. Veto one by commenting "
+              "`/veto <cluster_id>` (or deleting its file under `review/`); a vetoed case is left "
+              "eligible for a later run to redraft. Merging applies only the cases still present.", ""]
+        for i, (e, reasons) in enumerate(held_items, 1):
+            rb += _pr_card(e, i)
+            rb += ["", "**Held because:** " + "; ".join(reasons),
+                   "**To veto this case:** `/veto %d`" % int(e["cluster_id"]), ""]
+        for cardnm, newnm, kind in treat_flags:
+            rb.append("- treatment: **%s** may be %s by the new decision %s." % (cardnm, kind, newnm))
+        if treat_events:
+            rb += ["", "To veto a treatment change, `/veto <citing cluster id>`.", ""]
+        safeio.atomic_write_text(REVIEW_PR_PATH, "\n".join(rb) + "\n")
+
+    # Seen-state: advance for everything evaluated EXCEPT held cases. A held case stays out of
+    # seen so a veto lets a later run rediscover it; the pending ledger suppresses it meanwhile.
+    seen_all = (seen | evaluated | have | {int(e["cluster_id"]) for e, _ in auto_cards}) - held_cids
+    state["seen_clusters"] = sorted(seen_all)[-SEEN_CAP:]
+    state["updated"] = now_iso
+    safeio.atomic_write_json(STATE_PATH, state)
+    return {"auto": len(auto_cards), "held": len(held_items), "treatments": len(treat_events),
+            "wrote_auto": bool(auto_cards), "noop": False}
+
+
 # Console log prefixes, so a raw job log reads at a glance: "+" an opinion added
 # or a routing override, "~" an adverse-treatment flag raised on an existing card,
 # "!" a warning or error, "." a minor or best-effort step that was skipped. The
@@ -1565,6 +1644,11 @@ def main():
     entries = json.load(open(JSON_PATH, encoding="utf-8")) if os.path.exists(JSON_PATH) else []
     have = {int(e["cluster_id"]) for e in entries if e.get("cluster_id")}
     by_id = {int(e["cluster_id"]): e for e in entries if e.get("cluster_id")}
+    # Pre-treatment snapshot for the AUTO lane. The forward-escalation path below mutates
+    # existing cards in place (treatment_core.flag_caution). Those changes modify an
+    # already-published card, so they belong to the REVIEW lane; the auto lane writes from
+    # this pristine copy so a held treatment change is never baked into an auto-merged page.
+    clean_entries = copy.deepcopy(entries)
     # Feed index for the triage adverse-treatment check: id and name of each live
     # card (superseded ones excluded). Small next to an opinion; grows slowly.
     feed_index = "\n".join("%d: %s" % (int(e["cluster_id"]), e.get("name", ""))
@@ -1587,6 +1671,10 @@ def main():
     if os.path.exists(STATE_PATH):
         state = json.load(open(STATE_PATH, encoding="utf-8"))
     seen = set(int(x) for x in state.get("seen_clusters", []))
+    # Cases already staged in an open review PR: skip them so the funnel does not re-summarize
+    # (and re-stage) a case every four hours while it is awaiting a human decision. A veto
+    # clears the case from this ledger, so it is rediscovered and redrafted on a later run.
+    pending_review = review_store.load_pending()
     last = state.get("last_filed")
     if last:
         since = (datetime.date.fromisoformat(last) - datetime.timedelta(days=2)).isoformat()
@@ -1613,7 +1701,7 @@ def main():
     cand, ids = [], set()
     for r in results:
         cid = cluster_id_of(r)
-        if not cid or cid in have or cid in seen or cid in ids:
+        if not cid or cid in have or cid in seen or cid in ids or cid in pending_review:
             continue
         if (r.get("dateFiled") or "") and r["dateFiled"] < since:
             continue
@@ -1630,9 +1718,10 @@ def main():
     crosschecks = {}   # cluster_id -> {"verdict", "reason"} from the fidelity guard; surfaced in the PR, not written to opinions.json
     completeness = {}  # cluster_id -> {"verdict", "reason"} from the completeness guard; surfaced in the PR, not written to opinions.json
     treat_flags, audit_notes = [], []          # adverse treatment of existing cards (forward escalation)
+    treat_events = []      # every new-citer treatment change, staged to the REVIEW lane (existing-card change)
+    overruling_cids = set()  # candidates whose opinion caused a treatment change; held with that change if they card
     evaluated, n_screen, n_triage, n_opus, n_audit = set(), 0, 0, 0, 0
     n_pretriage = 0
-    treatment_changed = False
     cl_deferred = 0                                # candidates deferred this run on the CourtListener budget
     consec = 0
     cfg_error = False                              # set on a ConfigError (auth/model/credit); forces a non-zero exit
@@ -1806,12 +1895,21 @@ def main():
                             and akind in treatment_core.NEGATIVE_KINDS:
                         citer = {"cluster_id": cid, "name": name, "court": COURT_MAP.get(court_id),
                                  "date": date_filed, "kind": akind, "note": (a.get("note") or "").strip()}
-                        # flag_caution returns False when the citer is already recorded or the card
-                        # was human-set; only a newly raised caution is a real change to commit/report.
-                        if treatment_core.flag_caution(card, citer):
-                            treatment_changed = True
-                            treat_flags.append((card.get("name", ""), name, akind))
-                            print("  ~ adverse: %s treated by %s (%s)"
+                        # A new adverse citer is a change to an already-published card, so it is
+                        # routed to the REVIEW lane and applied to the live card only when the
+                        # review PR merges. Stage every genuinely new citer (not one already
+                        # recorded); flag_caution here is called on the in-memory card only to
+                        # decide "already recorded?" and to build the PR-body display -- the auto
+                        # lane writes from clean_entries, so this mutation never reaches main
+                        # except through review_apply re-running flag_caution on merge.
+                        already = any(x.get("cluster_id") == cid for x in (card.get("treated_by") or []))
+                        raised = treatment_core.flag_caution(card, citer)
+                        if not already:
+                            overruling_cids.add(cid)
+                            treat_events.append({"card_cid": int(card["cluster_id"]), "citer": citer})
+                            if raised:
+                                treat_flags.append((card.get("name", ""), name, akind))
+                            print("  ~ adverse (held for review): %s treated by %s (%s)"
                                   % (card.get("name", "")[:40], name[:40], akind))
                     if a.get("card_review"):
                         audit_notes.append((card.get("name", ""), name, (a.get("card_review_note") or "").strip()))
@@ -2014,42 +2112,27 @@ def main():
     if sa_events:
         skill_alert.save_state(SA_STATE_PATH, sa_state)
 
-    if not added and not treatment_changed:
-        _summary("No new opinions this run.", "%s \u00b7 since %s" % (cl_line, since))
-        # Nothing to card, but persist the clusters fully evaluated this run as seen, so the
-        # next scheduled run does not re-screen and re-triage the same recent opinions during
-        # a no-card stretch. Deferred or rolled-over candidates are deliberately not in
-        # `evaluated`, so they still retry. seen_clusters is bookkeeping, not editorial
-        # content, so the workflow commits this straight to main rather than through the PR.
-        seen_all = seen | evaluated | have
-        if seen_all != seen:
-            state["seen_clusters"] = sorted(seen_all)[-SEEN_CAP:]
-            state["updated"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            safeio.atomic_write_json(STATE_PATH, state)
-            print("no new opinions; marked %d cluster(s) seen so they are not re-screened (%s, dropped %d)"
-                  % (len(seen_all - seen), funnel, len(skipped)))
-        else:
-            print("no new opinions; files unchanged (%s, dropped %d)" % (funnel, len(skipped)))
-        print(cl_line); return
+    now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    entries += added
-    safeio.atomic_write_json(JSON_PATH, entries)
-    state["last_filed"] = max(e["date"] for e in entries)
-    # Bound seen_clusters so opinions_state.json (committed in every opinions PR) cannot grow
-    # without limit. Cluster ids rise over time, so the newest SEEN_CAP always covers anything
-    # the rolling feed can surface; carded ids are re-added each run from `have` regardless, so
-    # trimming older ids here costs no dedup coverage.
-    seen_all = seen | evaluated | have | {e["cluster_id"] for e in added}
-    state["seen_clusters"] = sorted(seen_all)[-SEEN_CAP:]
-    state["updated"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    safeio.atomic_write_json(STATE_PATH, state)
-    n, _total = render.render(entries)   # render returns (recent_shown, total); n is the rolling-window count
-    print("rendered %d entries; added %d, flagged %d, treatment %d (%s, dropped %d)"
-          % (n, len(added), len(flagged), len(treat_flags), funnel, len(skipped)))
+    # ---- Two-lane routing (see route_and_publish) --------------------------------------
+    # Each carded opinion is AUTO (additive, unflagged, touches no existing card) -> written and
+    # rendered for a straight-to-main publish -- or HELD (guard-flagged, or it overrules/modifies
+    # an existing card) -> staged under review/ for a bundled review PR a person accepts by merging
+    # or vetoes case by case with `/veto <cluster_id>`. Every treatment change is held.
+    routed = route_and_publish(added, treat_events, clean_entries, flagged, crosschecks,
+                               completeness, overruling_cids, pending_review, state, seen,
+                               evaluated, have, now_iso, treat_flags)
     print(cl_line)
-    _summary("**%d new opinion(s)** proposed in a review PR." % len(added),
-             "flagged for review: %d \u00b7 treatment flags: %d \u00b7 %s \u00b7 since %s"
-             % (len(flagged), len(treat_flags), cl_line, since))
+    if routed["noop"]:
+        _summary("No new opinions this run.", "%s \u00b7 since %s" % (cl_line, since))
+        print("no new opinions (%s, dropped %d)" % (funnel, len(skipped)))
+    else:
+        _summary("**%d auto-published \u00b7 %d held for review**"
+                 % (routed["auto"], routed["held"] + routed["treatments"]),
+                 "auto cards: %d \u00b7 held cards: %d \u00b7 treatment changes: %d \u00b7 %s \u00b7 since %s"
+                 % (routed["auto"], routed["held"], routed["treatments"], cl_line, since))
+        print("auto %d \u00b7 held %d \u00b7 treatment %d (%s, dropped %d)"
+              % (routed["auto"], routed["held"], routed["treatments"], funnel, len(skipped)))
 
 
 if __name__ == "__main__":

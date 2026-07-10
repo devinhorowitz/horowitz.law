@@ -3,8 +3,8 @@ name: Georgia Appellate Watch update
 on:
   schedule:
     - cron: '17 */4 * * *'   # every 4 hours. A slot lost to an outage retries at the next slot
-                             # instead of waiting a full day. The guard step below keeps the
-                             # extra slots from reprocessing the same opinions. Adjust freely.
+                             # instead of waiting a full day. Held cases are tracked in the
+                             # pending-review ledger so a slot never re-summarizes an open case.
   workflow_dispatch: {}      # lets you run it by hand from the Actions tab
 
 permissions:
@@ -12,8 +12,6 @@ permissions:
   pull-requests: write
   issues: write          # the failure-alert step opens or comments on a tracking issue
 
-# Workflow-wide environment. PYTHONUNBUFFERED makes the script stream its log live
-# instead of in one burst at the end.
 env:
   PYTHONUNBUFFERED: '1'
 
@@ -33,11 +31,8 @@ jobs:
       #   storage.courtlistener.com the opinion PDFs (update.py).
       #   pypi.org                  the pip index for the pypdf install.
       #   files.pythonhosted.org    the pypdf wheel download.
-      #   github.com                checkout, the branch pushes, create-pull-request's push.
-      #   api.github.com            four gated gh steps: the schedule-only PR guard, the
-      #                             content-only PR open, the scan-status pr-list on every
-      #                             non-skip run, and the failure-only alert. No single run
-      #                             hits them all, so the allowlist covers every path.
+      #   github.com                checkout, the branch pushes to main and bot/opinions-review.
+      #   api.github.com            the review-PR open and the failure-alert gh steps.
       # Actions cache/infra endpoints are auto-allowed.
       - name: Harden the runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -52,35 +47,12 @@ jobs:
             files.pythonhosted.org:443
             github.com:443
             api.github.com:443
-      # Faster cadence is only safe if a slot does not redo work that is already
-      # waiting in an open PR. opinions_state.json advances only when that PR merges,
-      # so on a scheduled run, if an opinions PR is already open, skip: a later slot
-      # will run once it is merged. Manual runs never skip, so you can always force one.
-      # Fail-open: if the PR check itself errors, the run proceeds.
-      - name: Skip scheduled run if an opinions PR is already open
-        id: guard
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            open=$(gh pr list --repo "$GITHUB_REPOSITORY" --head bot/opinions-update --state open --json number --jq 'length' 2>/dev/null || echo 0)
-            if [ "${open:-0}" != "0" ]; then
-              echo "An opinions PR is already open and awaiting merge; skipping this slot to avoid reprocessing."
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              {
-                echo "## Georgia Appellate Watch · funnel"
-                echo ""
-                echo "Skipped this slot: an opinions PR is already open and awaiting merge."
-              } >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo "skip=false" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "Manual run; not skipping."
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
 
+      # Full history + all branches, so the review-lane step can rebase bot/opinions-review
+      # onto the current main and restore the cases already staged there.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
@@ -90,105 +62,103 @@ jobs:
         run: pip install --upgrade "pypdf>=5,<6"
 
       - name: Fetch, screen, triage, summarize, render
-        if: steps.guard.outputs.skip != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
-          # CourtListener REST budget. Set these repo Variables on a tier change; unset = free-tier defaults in cl_rate.py.
           CL_PER_MINUTE: ${{ vars.CL_PER_MINUTE }}
           CL_PER_HOUR: ${{ vars.CL_PER_HOUR }}
           CL_PER_DAY: ${{ vars.CL_PER_DAY }}
           CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
-          # Three-tier funnel, cheapest first. Model ids per the Anthropic models docs.
-          # Model ids. Set the matching repo Variable (Settings > Secrets and variables >
-          # Actions > Variables) to change a model without editing this file; the value
-          # after || is the fallback default. Update the Variable if a model is retired.
-          OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}   # tier 1: excerpt screen
-          OPINIONS_PRETRIAGE_MODEL: ${{ vars.OPINIONS_PRETRIAGE_MODEL || '' }}                       # tier 1.5: Haiku full-read screen; set repo Variable to claude-haiku-4-5-20251001 to enable after the recall check passes
-          OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-5' }}           # tier 2: full-read gate
-          OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-4-8' }}                            # tier 3: public summary
-          OPINIONS_MAX: ${{ vars.OPINIONS_MAX || '80' }}     # candidates per run; override via repo Variable (headroom for heavy filing days)
+          OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}
+          OPINIONS_PRETRIAGE_MODEL: ${{ vars.OPINIONS_PRETRIAGE_MODEL || '' }}
+          OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-5' }}
+          OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-4-8' }}
+          OPINIONS_MAX: ${{ vars.OPINIONS_MAX || '80' }}
         run: |
           set -o pipefail
           python scripts/update.py 2>&1 | tee "$RUNNER_TEMP/run.log"
 
-      # Decide whether this run changed site content (which goes through a review PR) or
-      # only the seen-state bookkeeping on a no-op (which is committed straight to main).
-      - name: Classify what changed
-        id: classify
-        if: steps.guard.outputs.skip != 'true'
-        run: |
-          if [ -n "$(git status --porcelain -- opinions.json opinions.xml opinions.html archive.html)" ]; then
-            echo "kind=content" >> "$GITHUB_OUTPUT"
-          elif [ -n "$(git status --porcelain -- opinions_state.json opinions_pipeline_log.jsonl opinions_rejections.jsonl skill_alert_state.json)" ]; then
-            echo "kind=state" >> "$GITHUB_OUTPUT"
-          else
-            echo "kind=none" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Opens or updates a pull request only when the run changed tracked files.
-      # Pinned to a commit SHA below; the trailing # v8 is the readable version. Bump both together when updating.
-      - name: Open pull request
-        id: pr
-        if: steps.guard.outputs.skip != 'true' && steps.classify.outputs.kind == 'content'
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
-        with:
-          branch: bot/opinions-update
-          title: 'Georgia Appellate Watch: new opinions'
-          commit-message: 'opinions: add new Georgia appellate decisions'
-          body-path: scripts/pr_body.md
-          labels: opinions, automated
-          delete-branch: true
-          add-paths: |
-            opinions.json
-            opinions.xml
-            opinions_state.json
-            skill_alert_state.json
-            opinions.html
-            archive.html
-            sitemap.xml
-            opinions_rejections.jsonl
-            changes.html
-            changes.xml
-            stats.html
-            digests.html
-            o
-            areas
-
-      # Tap-through from the run summary straight to the review PR, so the funnel result and
-      # the PR it opened are reachable in one place from a phone.
-      - name: Link the PR in the run summary
-        if: steps.guard.outputs.skip != 'true' && steps.classify.outputs.kind == 'content' && steps.pr.outputs.pull-request-number
-        run: echo "Review PR [#${{ steps.pr.outputs.pull-request-number }}](${{ steps.pr.outputs.pull-request-url }}) opened." >> "$GITHUB_STEP_SUMMARY"
-
-      # No-op run: the funnel carded nothing, so there is no review PR. It still records this
-      # run's health stats, and marks the clusters it screened as seen so the next run does not
-      # re-evaluate them. Both are bookkeeping, not editorial content, so they go straight to
-      # main with no PR. [skip ci] keeps the push from triggering other workflows. (On a content
-      # run the stats line is not persisted here; that run is documented by its PR and opinions.json.)
-      - name: Commit run stats and seen-state on a no-op run
-        if: steps.guard.outputs.skip != 'true' && steps.classify.outputs.kind == 'state'
+      # AUTO lane. Additive, unflagged cards that touch no existing card were written to
+      # opinions.json and re-rendered by update.py; they publish straight to main with the
+      # run's bookkeeping (seen-state, the pending-review ledger, logs). Held cases are NOT
+      # here -- they live under review/, handled by the next step. If auto content changed,
+      # the commit is left to trigger CI (render/site invariants); a bookkeeping-only run
+      # uses [skip ci].
+      - name: Publish auto cards and bookkeeping to main
+        id: automain
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add opinions_state.json opinions_pipeline_log.jsonl
-          git add opinions_rejections.jsonl 2>/dev/null || true
-          git add skill_alert_state.json 2>/dev/null || true
-          if git diff --cached --quiet; then
-            echo "No changes to record."
-          else
-            git commit -m "opinions: record run stats; mark screened cases seen [skip ci]"
+          CONTENT="opinions.json opinions.xml opinions.html archive.html sitemap.xml changes.html changes.xml stats.html digests.html o areas"
+          BOOK="opinions_state.json opinions_pending_review.json opinions_redraft.jsonl opinions_pipeline_log.jsonl opinions_rejections.jsonl skill_alert_state.json"
+          # -N surfaces never-committed generated files (a new o/ permalink) to add/diff.
+          git add -N $CONTENT 2>/dev/null || true
+          if [ -n "$(git status --porcelain -- $CONTENT)" ]; then
+            echo "auto=true" >> "$GITHUB_OUTPUT"
+            git add $CONTENT $BOOK 2>/dev/null || true
+            git commit -m "opinions: publish new appellate decisions" || echo "nothing to commit"
             git push origin HEAD:main
+          else
+            echo "auto=false" >> "$GITHUB_OUTPUT"
+            git add $BOOK 2>/dev/null || true
+            if git diff --cached --quiet; then
+              echo "No bookkeeping changes."
+            else
+              git commit -m "opinions: record run state [skip ci]"
+              git push origin HEAD:main
+            fi
           fi
 
-      # Writes a tiny status.json (last-scanned time, whether a review batch is pending,
-      # when content last landed on main) straight to main -- the same no-review lane the
-      # no-op commit above uses. The opinions page reads it client-side for its freshness
-      # indicator. Pure metadata, so [skip ci] and no PR. Runs on any successful, non-skipped
-      # run (content, state, or none); a guard-skip means no scan happened, so nothing to
-      # refresh. Best-effort: continue-on-error keeps a status hiccup from failing the funnel.
+      # REVIEW lane. Any case that overrules/modifies an existing card, a new card that causes
+      # such a change, or a guard-flagged card was staged by update.py under review/. Rebase the
+      # bot/opinions-review branch onto the just-updated main and restore the cases already
+      # staged there, so the branch's ONLY diff from main is the review/ files -- merging it can
+      # never revert an auto card that landed on main meanwhile. Open the bundled review PR if
+      # one is not already open; a person accepts by merging and vetoes a case with `/veto <id>`.
+      - name: Stage held cases in the review PR
+        if: ${{ hashFiles('review/**') != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Keep this run's freshly staged files aside; they are untracked on main.
+          rm -rf "$RUNNER_TEMP/review-new"
+          cp -r review "$RUNNER_TEMP/review-new"
+          [ -f scripts/pr_body_review.md ] && cp scripts/pr_body_review.md "$RUNNER_TEMP/pr_body_review.md"
+          git fetch origin main
+          git checkout -B bot/opinions-review origin/main
+          # Restore cases already staged on the existing review branch (vetoed files stay gone).
+          if git fetch origin bot/opinions-review 2>/dev/null; then
+            git checkout origin/bot/opinions-review -- review 2>/dev/null || true
+          fi
+          # Union in this run's new files. Commit ONLY review/ so the branch's sole diff from
+          # main is the staged cases -- merging it can never revert an auto card, and the PR
+          # body file never leaks onto main. The body is passed to gh from the working tree.
+          cp -r "$RUNNER_TEMP/review-new/." review/
+          git add review
+          if git diff --cached --quiet; then
+            echo "No new review-lane changes to push."
+            exit 0
+          fi
+          git commit -m "opinions: stage case(s) for review"
+          git push -f origin bot/opinions-review
+          BODY="$RUNNER_TEMP/pr_body_review.md"
+          [ -f "$BODY" ] || echo "Cases held for review." > "$BODY"
+          num=$(gh pr list --repo "$GITHUB_REPOSITORY" --head bot/opinions-review --state open --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -z "$num" ]; then
+            gh pr create --repo "$GITHUB_REPOSITORY" --head bot/opinions-review --base main \
+              --title 'Georgia Appellate Watch: cases held for review' \
+              --body-file "$BODY" \
+              --label opinions --label review || echo "PR create skipped"
+          else
+            gh pr edit "$num" --repo "$GITHUB_REPOSITORY" --body-file "$BODY" || echo "PR body refresh skipped"
+          fi
+          echo "Review PR carries the held cases; accept by merging, veto a case with /veto <cluster_id>." >> "$GITHUB_STEP_SUMMARY"
+
+      # Freshness indicator for the opinions page: last-scanned time and whether a review batch
+      # is pending. Pure metadata straight to main, [skip ci]. Best-effort.
       - name: Publish scan status
-        if: steps.guard.outputs.skip != 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -197,7 +167,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git checkout -f -B bot/scan-status origin/main
-          pending=$(gh pr list --repo "$GITHUB_REPOSITORY" --head bot/opinions-update --state open --json number --jq 'length' 2>/dev/null || echo 0)
+          pending=$(gh pr list --repo "$GITHUB_REPOSITORY" --head bot/opinions-review --state open --json number --jq 'length' 2>/dev/null || echo 0)
           scanned_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           content_updated_at=$(git log -1 --format=%cI -- opinions.json 2>/dev/null || true)
           printf '{\n  "scanned_at": "%s",\n  "pending": %s,\n  "content_updated_at": "%s"\n}\n' \
@@ -210,9 +180,6 @@ jobs:
             git push origin HEAD:main
           fi
 
-      # Surfaces a broken run instead of letting it fail silently. Runs only on failure,
-      # finds the one open tracking issue and comments, or opens it the first time, so
-      # repeated failures collect on a single issue rather than spamming new ones.
       - name: Report a failed run
         if: failure()
         env:

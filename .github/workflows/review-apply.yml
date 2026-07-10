@@ -1,0 +1,73 @@
+name: opinions-review-apply
+
+# Resolves a review batch when its PR closes. On MERGE, scripts/review_apply.py applies the
+# surviving staged cases to opinions.json (append cards, apply treatment changes via the
+# production treatment_core), advances seen-state for the accepted clusters, logs the vetoed
+# ones (pending but no longer staged) for redraft, re-renders, and empties the staging tree --
+# all straight to main, the mechanical apply of a decision a person already made. On CLOSE
+# WITHOUT MERGE, the whole batch is discarded: every pending case is redraft-logged and the
+# ledger cleared. Either way the review branch is deleted so the next funnel run starts fresh.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: opinions-review-apply
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    # Only the funnel's review PR; ignore every other PR that closes in the repo.
+    if: ${{ github.event.pull_request.head.ref == 'bot/opinions-review' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Apply the resolved review batch
+        env:
+          MERGED: ${{ github.event.pull_request.merged }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          if [ "$MERGED" = "true" ]; then
+            python scripts/review_apply.py
+            msg="opinions: apply reviewed cases"
+          else
+            python scripts/review_apply.py --closed-unmerged
+            msg="opinions: discard closed review batch [skip ci]"
+          fi
+          git add -N o 2>/dev/null || true
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+          else
+            git commit -m "$msg"
+            git push origin HEAD:main
+          fi
+
+      - name: Delete the resolved review branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git push origin --delete bot/opinions-review 2>/dev/null || echo "branch already gone"
