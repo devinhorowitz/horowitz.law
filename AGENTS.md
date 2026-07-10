@@ -2,10 +2,17 @@
 
 Operating notes for anyone maintaining this site from a cold start, an AI agent or a
 person who has not seen it before. The rest is covered elsewhere: README.md is what the
-site is, PIPELINE.md is how the opinions pipeline works and how to tune it, MAINTENANCE.md
-is what to edit and what is generated, ROADMAP.md is what is planned, and HANDOFF.md is the
-current working state and the open tasks. Read HANDOFF.md first; read this before changing
+site is, docs/PIPELINE.md is how the opinions pipeline works and how to tune it, docs/MAINTENANCE.md
+is what to edit and what is generated, docs/ROADMAP.md is what is planned, and docs/HANDOFF.md is the
+current working state and the open tasks. Read docs/HANDOFF.md first; read this before changing
 anything.
+
+**Layout.** The deployed site lives in `public/` (Cloudflare's `pages_build_output_dir`): every
+served page, asset, feed, icon, font, `_headers`/`_redirects`, and the `o/` permalinks and
+`areas/` slices are under `public/`. The repo root holds only tooling and pipeline data:
+`scripts/`, `functions/` (which Cloudflare requires at the root, **not** in `public/`), the
+workflows, `opinions.json` and the other state/log files, `README.md`, and config. These docs
+live in `docs/`.
 
 ## Seeing the true state of main
 
@@ -28,7 +35,7 @@ first job is reading what is actually deployed.
 ## How a change reaches production
 
 opinions.json is the source of truth, render.py generates the derived pages, and the
-render-sync workflow reconciles them. MAINTENANCE.md has the full source-to-generated map.
+render-sync workflow reconciles them. docs/MAINTENANCE.md has the full source-to-generated map.
 The doctrine: the generated pages belong to the render-sync bot, never to a hand upload.
 Two safe ways to ship a change that touches rendered output:
 
@@ -61,7 +68,7 @@ Run the offline checks before handing over any deliverable:
 
 ## If you are an AI agent in a session
 
-- Read HANDOFF.md from `main` first. It carries the current state and the open tasks.
+- Read docs/HANDOFF.md from `main` first. It carries the current state and the open tasks.
 - A probe session is read-only: establish ground truth from the actual code, report the
   findings, change nothing.
 - A build session stages deliverables to `/mnt/user-data/outputs`, mirroring the repo
@@ -79,12 +86,12 @@ Run the offline checks before handing over any deliverable:
   handler can mislabel as a retired model. It is a parameter error, not a retirement, and
   there is intentionally no global temperature override: set a temperature on one model only,
   after confirming that model accepts it. The model ids live in repository Variables with
-  fallback defaults (PIPELINE.md, Tuning).
+  fallback defaults (docs/PIPELINE.md, Tuning).
 - CourtListener feeds carry more than the published-only REST filter: `stat_Published=True`
   drops unpublished orders and dispositions that appear in the `/feed/` output. The free-tier
-  rate limits are documented at the top of `scripts/cl_rate.py` and in PIPELINE.md.
+  rate limits are documented at the top of `scripts/cl_rate.py` and in docs/PIPELINE.md.
 - The CourtListener MCP connector times out when a court filter (`docket__court`) is combined
   with a date range. Use single-dimension filters.
 - Cloudflare Pages has its own settings that must not change (Rocket Loader and Email Address
-  Obfuscation off, proxied apex and `www`, a CAA record including `pki.goog`). MAINTENANCE.md
+  Obfuscation off, proxied apex and `www`, a CAA record including `pki.goog`). docs/MAINTENANCE.md
   carries them.

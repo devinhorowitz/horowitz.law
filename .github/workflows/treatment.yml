@@ -100,10 +100,10 @@ jobs:
           delete-branch: true
           add-paths: |
             opinions.json
-            opinions.xml
-            opinions.html
-            archive.html
-            sitemap.xml
+            public/opinions.xml
+            public/opinions.html
+            public/archive.html
+            public/sitemap.xml
             treatment_state.json
 
       # Surfaces a broken run instead of letting it fail silently: comments on the one

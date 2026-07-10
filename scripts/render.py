@@ -21,10 +21,13 @@ import jurisdictions   # per-jurisdiction court labels and citation suffixes
 import siteconfig      # site-wide config: domain, identity, window, area taxonomy
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WEB  = os.path.join(REPO, "public")   # deployed web root (Cloudflare pages_build_output_dir)
+# Inputs (opinions.json, README.md, resume.md) are pipeline data and live at the
+# repo root; every generated or served file is read/written under WEB.
 JSON_PATH    = os.path.join(REPO, "opinions.json")
-HTML_PATH    = os.path.join(REPO, "opinions.html")
-ARCHIVE_PATH = os.path.join(REPO, "archive.html")
-XML_PATH     = os.path.join(REPO, "opinions.xml")
+HTML_PATH    = os.path.join(WEB, "opinions.html")
+ARCHIVE_PATH = os.path.join(WEB, "archive.html")
+XML_PATH     = os.path.join(WEB, "opinions.xml")
 
 # Rolling public-feed window and canonical origin, both sourced from siteconfig
 # so a change is one edit there. The RSS description and the feed intros derive
@@ -34,26 +37,26 @@ WINDOW_YEARS = siteconfig.WINDOW_YEARS
 SITE         = siteconfig.SITE_URL
 ARCHIVE_URL  = siteconfig.ARCHIVE_URL
 
-SITEMAP_PATH = os.path.join(REPO, "sitemap.xml")
-CHANGES_PATH = os.path.join(REPO, "changes.html")
-STATS_PATH = os.path.join(REPO, "stats.html")
-CHANGES_XML_PATH = os.path.join(REPO, "changes.xml")
-PERMA_DIR = os.path.join(REPO, "o")
-DIGESTS_PATH = os.path.join(REPO, "digests.html")
-SUBSCRIBE_PATH = os.path.join(REPO, "subscribe.html")
-AREAS_DIR    = os.path.join(REPO, "areas")
-COLOPHON_PATH = os.path.join(REPO, "colophon.html")
+SITEMAP_PATH = os.path.join(WEB, "sitemap.xml")
+CHANGES_PATH = os.path.join(WEB, "changes.html")
+STATS_PATH = os.path.join(WEB, "stats.html")
+CHANGES_XML_PATH = os.path.join(WEB, "changes.xml")
+PERMA_DIR = os.path.join(WEB, "o")
+DIGESTS_PATH = os.path.join(WEB, "digests.html")
+SUBSCRIBE_PATH = os.path.join(WEB, "subscribe.html")
+AREAS_DIR    = os.path.join(WEB, "areas")
+COLOPHON_PATH = os.path.join(WEB, "colophon.html")
 README_PATH  = os.path.join(REPO, "README.md")
-RESUME_PATH  = os.path.join(REPO, "resume.html")
+RESUME_PATH  = os.path.join(WEB, "resume.html")
 RESUME_MD_PATH = os.path.join(REPO, "resume.md")
-SECURITY_TXT_PATH = os.path.join(REPO, ".well-known", "security.txt")
-VCARD_PATH = os.path.join(REPO, "devin-horowitz.vcf")
-NOTFOUND_PATH = os.path.join(REPO, "404.html")
+SECURITY_TXT_PATH = os.path.join(WEB, ".well-known", "security.txt")
+VCARD_PATH = os.path.join(WEB, "devin-horowitz.vcf")
+NOTFOUND_PATH = os.path.join(WEB, "404.html")
 # Pages outside the marker-injection set whose footer year would otherwise rot on
 # Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
 # place, writing only when the year actually changed, so it is a no-op all year;
 # render-sync's add-paths carries the rollover PR.
-STATIC_PAGES = [os.path.join(REPO, p) for p in
+STATIC_PAGES = [os.path.join(WEB, p) for p in
                 ("index.html", "resume.html", "colophon.html", "subscribe.html", "404.html")]
 
 _YEAR_RE = re.compile(r'(&copy;|\u00a9)\s*\d{4}')
@@ -70,16 +73,16 @@ _YEAR_RE = re.compile(r'(&copy;|\u00a9)\s*\d{4}')
 # cache-busted without editing this file; sw.js is excluded deliberately (it is
 # served no-cache and never ?v=-stamped). Sorted for a stable order -- stamping
 # is per-asset, so order does not affect output.
-_ASSETS = tuple(sorted(f for f in os.listdir(REPO)
+_ASSETS = tuple(sorted(f for f in os.listdir(WEB)
                        if f.endswith((".css", ".js")) and f != "sw.js"))
 
 def _asset_token(name):
-    with open(os.path.join(REPO, name), "rb") as f:
+    with open(os.path.join(WEB, name), "rb") as f:
         return hashlib.sha256(f.read()).hexdigest()[:10]
 
 def _stamp_tokens(doc):
     for a in _ASSETS:
-        path = os.path.join(REPO, a)
+        path = os.path.join(WEB, a)
         if not os.path.exists(path):
             continue        # never let a missing optional asset break a render
         tok = _asset_token(a)
@@ -1400,7 +1403,7 @@ def render(entries=None):
     # listed in STATIC_PAGES, but their committed shell still carries the footer name (and,
     # on opinions/archive, identity meta), so run the identity stamp on them too. This
     # rewrites only the data-cfg hooks, never the injected body between the markers.
-    for p in (os.path.join(REPO, f) for f in
+    for p in (os.path.join(WEB, f) for f in
               ("opinions.html", "archive.html", "stats.html", "changes.html", "digests.html")):
         if os.path.exists(p):
             doc = open(p, encoding="utf-8").read()

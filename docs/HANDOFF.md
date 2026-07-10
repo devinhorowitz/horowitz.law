@@ -5,19 +5,19 @@ open, and the external loose ends. The durable how-to lives in the docs below; s
 lives in ROADMAP.md.
 
 To brief a new session: "Fetch and read the codeload tarball of main,
-<https://codeload.github.com/devinhorowitz/horowitz.law/tar.gz/refs/heads/main>, read AGENTS.md,
+<https://codeload.github.com/devinhorowitz/horowitz.law/tar.gz/refs/heads/main>, read ../AGENTS.md,
 then <task>." Use codeload, not raw.githubusercontent, which lags by minutes.
 
 ## The docs
 
 Read these before changing anything:
 
-- AGENTS.md: how to operate the repo, verifying state, deploying, validating, the session
+- ../AGENTS.md: how to operate the repo, verifying state, deploying, validating, the session
   protocol, and the landmines.
 - MAINTENANCE.md: what to edit and what is generated, the workflow catalog, and the common tasks.
 - PIPELINE.md: how the opinions pipeline works and how to tune it, and the opinions.json card
   schema.
-- README.md: what the site is.
+- ../README.md: what the site is.
 - ROADMAP.md: what has shipped and what is planned.
 
 This file carries the current working state; those carry the durable how-to.
@@ -46,7 +46,7 @@ The PWA is live: manifest, service worker, and the install affordance on /opinio
 
 ## Operating doctrine
 
-The general doctrine now lives in AGENTS.md (state verification, the render-sync deploy flow, the
+The general doctrine now lives in ../AGENTS.md (state verification, the render-sync deploy flow, the
 validation bar, the temperature gotcha, the CourtListener constraints) and MAINTENANCE.md (the
 source-to-generated map, the CSP-hash invariant, the Cloudflare settings). A few rules specific to
 the editorial content, not repeated there:

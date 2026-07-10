@@ -94,23 +94,23 @@ jobs:
           # on the static pages (which only ever changes on the Jan 1 rollover,
           # so this daily net carries that PR).
           add-paths: |
-            opinions.html
-            archive.html
-            opinions.xml
-            sitemap.xml
-            index.html
-            resume.html
-            colophon.html
-            subscribe.html
-            404.html
-            changes.html
-            stats.html
-            digests.html
-            changes.xml
-            o
-            .well-known/security.txt
-            devin-horowitz.vcf
-            areas
+            public/opinions.html
+            public/archive.html
+            public/opinions.xml
+            public/sitemap.xml
+            public/index.html
+            public/resume.html
+            public/colophon.html
+            public/subscribe.html
+            public/404.html
+            public/changes.html
+            public/stats.html
+            public/digests.html
+            public/changes.xml
+            public/o
+            public/.well-known/security.txt
+            public/devin-horowitz.vcf
+            public/areas
 
       # One-glance record on the run page: whether the pages had drifted (a PR opened to
       # reconcile) or already matched opinions.json (nothing to do).

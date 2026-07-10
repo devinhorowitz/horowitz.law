@@ -8,7 +8,7 @@
 # committed to the repo).
 
 name = "horowitz-law"            # must match your Pages project name exactly (the name in your *.pages.dev URL)
-pages_build_output_dir = "."     # static site served from the repo root; no build step
+pages_build_output_dir = "public"  # static site served from public/; root holds tooling/data. functions/ stays at the project root (Cloudflare requirement), NOT inside public/.
 compatibility_date = "2025-05-01"
 
 [vars]

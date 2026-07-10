@@ -3,9 +3,9 @@
 The source for [horowitz.law](https://horowitz.law), the hand-coded personal site of Devin R.
 Horowitz, a civil-litigation attorney in Marietta, Georgia. It also runs Georgia Appellate
 Watch, an automated feed of new appellate opinions for an insurance-defense and civil-litigation
-practice. The pipeline's architecture and setup are in [PIPELINE.md](./PIPELINE.md); how the site
-is maintained is in [MAINTENANCE.md](./MAINTENANCE.md); how to work on the repo is in
-[AGENTS.md](./AGENTS.md); what's planned is in [ROADMAP.md](./ROADMAP.md).
+practice. The pipeline's architecture and setup are in [docs/PIPELINE.md](./docs/PIPELINE.md); how the site
+is maintained is in [docs/MAINTENANCE.md](./docs/MAINTENANCE.md); how to work on the repo is in
+[AGENTS.md](./AGENTS.md); what's planned is in [docs/ROADMAP.md](./docs/ROADMAP.md).
 
 ## stack
 

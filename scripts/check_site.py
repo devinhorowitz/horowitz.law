@@ -53,12 +53,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import safeio  # crash-safe atomic writes for --fix
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WEB = os.path.join(REPO, "public")   # deployed web root; served files live here, scripts/ stays at REPO
 
 PAGES = ["index.html", "resume.html", "colophon.html", "opinions.html",
          "archive.html", "subscribe.html", "404.html",
          "changes.html", "stats.html", "digests.html"]
 ASSETS = ["base.css", "app.js", "opinions.js", "subscribe.js"]
-HEADERS_PATH = os.path.join(REPO, "_headers")
+HEADERS_PATH = os.path.join(WEB, "_headers")
 TOKEN_LEN = 10  # hex chars of sha256 in the ?v= token; plenty against collision here
 
 _INLINE_RE = re.compile(r"<script>(.*?)</script>", re.S | re.I)
@@ -69,14 +70,14 @@ def _all_pages():
     """The hand-maintained pages plus every generated permalink, so the CSP and
     token guards cover the /o/ pages too."""
     import glob as _g
-    return PAGES + sorted(_g.glob(os.path.join(REPO, "o", "*.html")))
+    return PAGES + sorted(_g.glob(os.path.join(WEB, "o", "*.html")))
 
 def _read(path):
-    return open(os.path.join(REPO, path), encoding="utf-8").read()
+    return open(os.path.join(WEB, path), encoding="utf-8").read()
 
 
 def asset_token(name):
-    data = open(os.path.join(REPO, name), "rb").read()
+    data = open(os.path.join(WEB, name), "rb").read()
     return hashlib.sha256(data).hexdigest()[:TOKEN_LEN]
 
 
@@ -140,7 +141,7 @@ def check_tokens(errors, fix=False):
                     errors.append("%s: /%s?v=%s is stale; the file's content hash is %s "
                                   "(run scripts/check_site.py --fix)" % (p, a, tok, expected[a]))
         if fix and new != doc:
-            safeio.atomic_write_text(os.path.join(REPO, p), new)
+            safeio.atomic_write_text(os.path.join(WEB, p), new)
             print("stamped current asset tokens into %s" % p)
 
 
@@ -154,7 +155,7 @@ def check_scripts_dir(errors):
 def check_xml(errors):
     import xml.etree.ElementTree as ET
     for f in ("opinions.xml", "sitemap.xml", "changes.xml"):
-        path = os.path.join(REPO, f)
+        path = os.path.join(WEB, f)
         if not os.path.exists(path):
             errors.append("%s: missing" % f)
             continue
@@ -173,7 +174,7 @@ def check_manifests(errors):
     the home-screen icon in production (where nothing else would catch it)."""
     import json as _json
     for name in ("manifest.json", "manifest.webmanifest"):
-        path = os.path.join(REPO, name)
+        path = os.path.join(WEB, name)
         if not os.path.exists(path):
             errors.append("%s: missing" % name)
             continue
@@ -187,7 +188,7 @@ def check_manifests(errors):
             if not src.startswith("/"):
                 errors.append("%s: icon src %r is not a root-relative path" % (name, src))
                 continue
-            if not os.path.exists(os.path.join(REPO, src.lstrip("/"))):
+            if not os.path.exists(os.path.join(WEB, src.lstrip("/"))):
                 errors.append("%s: icon %s does not exist on disk" % (name, src))
 
 
