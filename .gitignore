@@ -7,6 +7,8 @@ __pycache__/
 # scripts/backfill.py as the pull-request body, never committed.
 # (CI also gates commits with an explicit add-paths list.)
 scripts/pr_body.md
+scripts/pr_body_auto.md
+scripts/pr_body_review.md
 scripts/court_drift.md
 scripts/link_rot.md
 scripts/backfill_pr_body.md

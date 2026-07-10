@@ -1,0 +1,79 @@
+name: opinions-review-veto
+
+# Per-case veto for the bundled review PR. Comment `/veto <cluster_id>` on the review PR and
+# this drops that case's staged file(s) from the bot/opinions-review branch, so merging the PR
+# applies only the cases that remain. The vetoed case is left un-seen (recorded for redraft when
+# the batch is applied), so a later funnel run rediscovers and redrafts it. Only the repo owner
+# or a collaborator can veto; comments on any other PR are ignored.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: opinions-review-veto
+  cancel-in-progress: false
+
+jobs:
+  veto:
+    if: >-
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/veto') &&
+      (github.event.comment.author_association == 'OWNER' ||
+       github.event.comment.author_association == 'MEMBER' ||
+       github.event.comment.author_association == 'COLLABORATOR')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Drop the vetoed case from the review branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -e
+          # Confirm the comment is on the review PR, not some other PR.
+          head=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefName --jq .headRefName 2>/dev/null || echo "")
+          if [ "$head" != "bot/opinions-review" ]; then
+            echo "Comment is not on the review PR (head=$head); ignoring."
+            exit 0
+          fi
+          # Parse the cluster id from `/veto <id>` (first integer after the command).
+          id=$(printf '%s' "$COMMENT_BODY" | grep -oE '/veto[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+          if [ -z "$id" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Could not read a cluster id from that comment. Use \`/veto <cluster_id>\`." || true
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin bot/opinions-review
+          git checkout -B bot/opinions-review origin/bot/opinions-review
+          removed=0
+          if git rm -f "review/cards/${id}.json" 2>/dev/null; then removed=1; fi
+          # Treatment files are named <cardcid>__<citercid>.json; a case vetoed by its citing id.
+          for f in review/treatments/*__${id}.json; do
+            [ -e "$f" ] || continue
+            git rm -f "$f" 2>/dev/null && removed=1
+          done
+          if [ "$removed" = "0" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "No staged case with cluster id ${id} was found in this batch." || true
+            exit 0
+          fi
+          git commit -m "review: veto case ${id}"
+          git push origin bot/opinions-review
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Vetoed case ${id}: dropped from this batch and left eligible for a later run to redraft. Merging now applies only the remaining cases." || true
