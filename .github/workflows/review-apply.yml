@@ -60,7 +60,7 @@ jobs:
             python scripts/review_apply.py --closed-unmerged
             msg="opinions: discard closed review batch [skip ci]"
           fi
-          git add -N o 2>/dev/null || true
+          git add -N public/o 2>/dev/null || true
           git add -A
           if git diff --cached --quiet; then
             echo "Nothing to commit."

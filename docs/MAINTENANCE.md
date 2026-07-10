@@ -46,13 +46,21 @@ folder drag, so upload `.gitignore`, `.well-known/`, and `.github/` files indivi
 
 ## What to edit, and what to leave alone
 
+> **Layout.** The deployed site lives in `public/` (Cloudflare's `pages_build_output_dir`).
+> Where this section names a served file by basename, it means the file under `public/` --
+> e.g. `base.css` is `public/base.css`, `_headers` is `public/_headers`, `o/*.html` is
+> `public/o/*.html`. Pipeline data and state (`opinions.json`, `opinions_state.json`, the
+> logs, `queue.txt`) plus all tooling (`scripts/`, `functions/`, the workflows, `README.md`,
+> config) stay at the repo root; these docs live in `docs/`. `functions/` must stay at the
+> root, **not** inside `public/`, per Cloudflare's Pages Functions requirement.
+
 ### Hand-edit (the sources)
 
 - `opinions.json`: the Georgia Appellate Watch data, and the source of truth for every
   opinion page, feed, and permalink. The pipeline writes it, but you hand-edit it to fix
   or remove a card.
-- `resume.md`: résumé content, rendered to `resume.html`.
-- `README.md`: the readme, and the source of the colophon's shared prose.
+- `../resume.md`: résumé content, rendered to `resume.html`.
+- `../README.md`: the readme, and the source of the colophon's shared prose.
 - `PIPELINE.md`, `ROADMAP.md`, `MAINTENANCE.md`: standalone docs, rendered into nothing.
   (`HANDOFF.md` is a development scratchpad, not part of the published site.)
 - `siteconfig.py`: site identity, the `COVERAGE` coverage line, page descriptions, the
@@ -77,8 +85,8 @@ folder drag, so upload `.gitignore`, `.well-known/`, and `.github/` files indivi
   `changes.xml`, `stats.html`, `digests.html`, `o/*.html` (the permalinks), and
   `areas/*.json` (the per-area slices). Also `sitemap.xml`'s permalink entries; its static
   URLs come from `siteconfig.PAGES` (below).
-- From `resume.md`: `resume.html` (the four `resume-*` marker regions).
-- From `README.md`: `colophon.html` (the five `col-*` marker regions). Colophon-only text
+- From `../resume.md`: `resume.html` (the four `resume-*` marker regions).
+- From `../README.md`: `colophon.html` (the five `col-*` marker regions). Colophon-only text
   outside those regions is edited in `colophon.html` directly.
 - From `siteconfig.py`: the meta, Open Graph, and Twitter descriptions and identity fields
   on the pages (the `data-cfg` hooks); the `/404` link list and `sitemap.xml`'s static URLs
@@ -99,13 +107,13 @@ bodies a workflow produces and consumes; they are never committed.
 
 ## Common tasks
 
-- **Change résumé content.** Edit `resume.md`, run render-sync. `resume.html` regenerates.
+- **Change résumé content.** Edit `../resume.md`, run render-sync. `resume.html` regenerates.
 - **Fix or remove an opinion card.** Edit the card object in `opinions.json`, run
   render-sync. It regenerates the page, archive, feed, sitemap, and area slices, and
   prunes the permalink. The pipeline will not re-add a removed card, because its cluster
   stays in `opinions_state.json` seen_clusters.
 - **Edit the colophon's shared prose** (stack, hosting, under the hood, what isn't here,
-  source). Edit `README.md`, run render-sync. The five `col-*` regions regenerate.
+  source). Edit `../README.md`, run render-sync. The five `col-*` regions regenerate.
 - **Change a page description, the site identity, or the coverage line.** Edit
   `siteconfig.py` (`IDENTITY`, `COVERAGE`), run render-sync. The pages pick it up through
   the `data-cfg` hooks.
