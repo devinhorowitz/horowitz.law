@@ -22,8 +22,15 @@
   Cache-Control: public, max-age=31536000, immutable
 /*.js
   Cache-Control: public, max-age=31536000, immutable
+
+# Subset fonts carry NO ?v= token (they are referenced bare from base.css's
+# @font-face and the preloads), so they must NOT be immutable: a re-subset that
+# adds a glyph reuses the same filename, and an immutable year-long cache would
+# hide it. Cache a day, then serve-stale-while-revalidating for a week, so a new
+# glyph reaches returning visitors within a day at a cheap background 304, with no
+# filename change or manual cache bust. The service worker mirrors this (SWR).
 /fonts/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 
 # Images: 30 days (matches current live behavior).
 /*.webp
