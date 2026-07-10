@@ -222,6 +222,25 @@ def classify(card, citing_name, citing_text):
          "messages": [{"role": "user", "content": user}]}, "treatment")
 
 
+def sweep_since(card, full_done, today=None):
+    """Lower bound for a card's citation search. Until a full-history pass has
+    completed (full_done), search from the card's own filing date so nothing older
+    is missed; after that, only the cheap LOOKBACK_DAYS incremental window. Pure so
+    the full-vs-incremental decision (the bug this guards) is unit-testable."""
+    if not full_done:
+        return card["date"]
+    today = today or datetime.date.today()
+    return (today - datetime.timedelta(days=LOOKBACK_DAYS)).isoformat()
+
+
+def swept_full(full_done, stopped):
+    """Whether a card is marked as having a completed full-history pass after this
+    run. Once true it stays true; otherwise it becomes true only if the pass ran to
+    completion -- `stopped` (a global rate/time/breaker/config stop) truncating it
+    leaves the flag unset so the next run redoes the full-history search."""
+    return bool(full_done or not stopped)
+
+
 def main():
     if not KEY:
         print("ERROR: ANTHROPIC_API_KEY is not set."); sys.exit(1)
@@ -294,8 +313,7 @@ def main():
                 state[key] = {"oid": None, "seen": sorted(seen), "full": full_done}      # do not refetch weekly
                 changed = True
                 continue
-            since = (card["date"] if first_time
-                     else (datetime.date.today() - datetime.timedelta(days=LOOKBACK_DAYS)).isoformat())
+            since = sweep_since(card, full_done)
             citers = citing_results(int(oid), since, deadline)
         except cl_rate.RateBudgetExceeded:
             stopped = "rest budget"; defer = cl_rate.PACER.defer_note(); break
@@ -360,7 +378,7 @@ def main():
             # per-run classification caps. An incremental run keeps the existing flag. A stop
             # leaves `full` unset so the next run redoes the full-history search (skipping the
             # citers already in `seen`, so it resumes rather than restarts).
-            new_full = full_done or (first_time and not stopped)
+            new_full = swept_full(full_done, stopped)
             state[key] = {"oid": oid, "seen": sorted(seen), "full": new_full}
             changed = True
         if stopped:
