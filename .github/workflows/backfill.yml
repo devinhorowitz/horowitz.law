@@ -17,6 +17,10 @@ on:
         description: 'Dry run (preview recall report + cards in the log; write nothing, open no PR)'
         type: boolean
         default: true
+      batch:
+        description: 'Draft the seed summaries through the 50%-priced Batch API (skill-seed mode only). Off = one synchronous Opus call per cluster.'
+        type: boolean
+        default: false
       seed:
         description: 'Seed override: comma-separated cluster:court_id pairs (court_id in ga, gactapp, ca11, scotus). Blank = built-in skill seed.'
         type: string
@@ -97,6 +101,11 @@ jobs:
           CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
           OPINIONS_SEED: ${{ inputs.seed }}
+          # Batch API for the seed's Tier-3 summaries (skill-seed mode only). Default off; the
+          # 60-min job timeout comfortably covers the 3300s wait budget. Combine batch=true with
+          # dry_run=true for a no-write proving run that still exercises submit/poll/collect.
+          BACKFILL_BATCH: ${{ inputs.batch && '1' || '' }}
+          OPINIONS_BACKFILL_BATCH_SEC: ${{ vars.OPINIONS_BACKFILL_BATCH_SEC || '3300' }}
           # Sweep mode (BACKFILL_SWEEP=1) and its window; ignored by the skill-seed path.
           BACKFILL_SWEEP: ${{ inputs.sweep && '1' || '' }}
           BACKFILL_FROM: ${{ inputs.date_from }}
