@@ -121,7 +121,7 @@ def apply_merged():
 
     # 4. Persist. Accepted clusters join seen_clusters; vetoed ones are deliberately left out
     #    so the funnel rediscovers and redrafts them. Then re-render and clear the batch.
-    if accepted_ids or added_names or applied_treats:
+    if accepted_ids:      # non-empty iff a card or a treatment was accepted (both add to it)
         safeio.atomic_write_json(update.JSON_PATH, entries)
         state = _load_state()
         seen = set(state.get("seen_clusters", [])) | accepted_ids

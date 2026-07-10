@@ -265,10 +265,11 @@ def run():
         url = "https://www.courtlistener.com" + (r.get("absolute_url") or ("/opinion/%d/" % cid))
         court = update.COURT_MAP.get(court_id)
         if not court:
+            supported = ", ".join(sorted(update.COURT_MAP))
             line_outcome[idx] = ("park",
-                "could not determine a supported court for cluster %d; if it is Ga., Ga. App., 11th Cir., "
-                "or SCOTUS, replace this line with \"%d:gactapp\" (or ga|ca11|scotus)" % (cid, cid))
-            report_rows.append((name, "out of scope", "court %r not in {ga,gactapp,ca11,scotus}" % (court_id or "?")))
+                "could not determine a supported court for cluster %d; if it maps to a supported court, "
+                "replace this line with \"%d:<court_id>\" (one of: %s)" % (cid, cid, supported))
+            report_rows.append((name, "out of scope", "court %r not in {%s}" % (court_id or "?", supported)))
             continue
 
         # ---- opinion text: PDF enclosure first (no REST quota), REST fallback ----

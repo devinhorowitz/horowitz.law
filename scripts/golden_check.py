@@ -6,7 +6,7 @@ model change that quietly starts dropping cases the funnel used to keep (or star
 controls it used to drop). It does not chase recall or measure how much the funnel misses;
 it only guards against silent regression on a fixed set.
 
-Three modes:
+Four modes:
   build      fetch and cache each case's opinion text once (the only CourtListener spend).
              Re-run only when adding cases; entries that already have text are left alone.
   check      re-run the real screen and triage tiers against the cached text and compare to
@@ -17,6 +17,9 @@ Three modes:
              that drops a material aspect. Makes no CourtListener calls but spends model budget
              (Opus), so run it on a summarizer change rather than daily. Exits nonzero on any
              dropped area.
+  recall     run the Tier 1.5 pretriage screen alone on each cached case and report whether it
+             would drop a known keeper before the Sonnet triage saw it. Gates enabling pretriage;
+             no CourtListener calls. Exits nonzero if any expected keeper is dropped.
 
 It reuses the funnel's own tiers and fetch path (imported from update.py), so it tests the
 actual pipeline rather than a copy. It cards nothing and never writes opinions.json.
@@ -24,6 +27,7 @@ actual pipeline rather than a copy. It cards nothing and never writes opinions.j
   python scripts/golden_check.py build       # needs COURTLISTENER_TOKEN
   python scripts/golden_check.py check       # needs ANTHROPIC_API_KEY
   python scripts/golden_check.py summarize   # needs ANTHROPIC_API_KEY
+  python scripts/golden_check.py recall      # needs ANTHROPIC_API_KEY (pretriage enabled)
 """
 import json
 import os

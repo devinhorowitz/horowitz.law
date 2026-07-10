@@ -23,7 +23,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # First-party pipeline modules other scripts call into. Stdlib and third-party
 # (os, json, time, pypdf, urllib, ...) are out of scope: this guards our own surface.
 TARGETS = ["update", "render", "cl_rate", "safeio", "jurisdictions",
-           "treatment_core", "official_ga"]
+           "treatment_core", "official_ga", "backfill", "batch",
+           "review_store", "review_apply", "skill_alert"]
 
 
 def main():

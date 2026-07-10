@@ -109,7 +109,7 @@ def validate():
 
     if drift:
         lines = ["## Court registry drift detected", "",
-                 "The monthly validation found configured court ids that no longer "
+                 "The daily validation found configured court ids that no longer "
                  "resolve cleanly in CourtListener. Update `scripts/jurisdictions.py`.",
                  "", "| court id | issue |", "|---|---|"]
         lines += ["| `%s` | %s |" % (cid, why) for cid, why in drift]

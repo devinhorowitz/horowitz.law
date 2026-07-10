@@ -31,8 +31,9 @@ The opinions feed is not hand-typed. Every four hours a pipeline wakes on GitHub
 CourtListener for new appellate decisions from Georgia and the federal courts above it, with
 Florida and Alabama alongside, and runs them through three models, cheapest first: one glances at
 case names and openings and discards the categorically unrelated, one reads the survivors in full
-against a narrow relevance bar, and one drafts the card — and may still decline. Nothing publishes
-without a human merge.
+against a narrow relevance bar, and one drafts the card — and may still decline. A clean new card
+publishes on its own; anything that would change or overrule a card already on the page, or that
+trips a guard, waits for a person to merge or veto.
 
 A second process is paid to distrust the first. Each Saturday a reverse sweep walks every
 published card's citation graph looking for later decisions that treat it adversely. It is a

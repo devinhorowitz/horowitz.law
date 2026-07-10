@@ -229,6 +229,11 @@ def _revalidate_batch(cards):
 
     checked = len(picked)
     for cid, res in results.items():
+        if cid not in meta:
+            # A custom_id we did not submit (should never happen); skip rather than crash --
+            # maintenance defers, it never fails the run.
+            print("  . batch returned an unknown custom_id %r; skipping" % cid)
+            continue
         kind, name, ground = meta[cid]
         if not res.get("ok"):
             print("  . %s guard unavailable for %s (batch: %s)" % (kind, name[:50], res.get("type")))

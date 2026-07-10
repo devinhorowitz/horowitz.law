@@ -1,5 +1,5 @@
 // functions/api/subscribe/confirm.js
-// GET  /api/subscribe/confirm?e=<email>&t=<ts>&s=<hmac>   -> verify the link, show a Confirm button
+// GET  /api/subscribe/confirm?e=<email>&t=<ts>&a=<areas>&s=<hmac>   -> verify the link, show a Confirm button
 // POST /api/subscribe/confirm                              -> perform the subscription
 //
 // Two steps on purpose. Mail-security link scanners (Outlook SafeLinks and friends)

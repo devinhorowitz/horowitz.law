@@ -86,13 +86,14 @@ def treatment_path(card_cid, citer_cid, root=None):
     return os.path.join(root or REVIEW_DIR, "treatments", "%d__%d.json" % (int(card_cid), int(citer_cid)))
 
 
-def stage_card(entry, hold_reasons, root=None):
+def stage_card(entry, reasons, root=None):
     """Stage one held new card. `entry` is the assembled card object exactly as it would
-    land in opinions.json; `hold_reasons` is the list of human-readable reasons it is held
-    (a guard flag, low confidence, or that it overrules an existing card). Returns the path."""
+    land in opinions.json; `reasons` is the list of human-readable reasons it is held
+    (a guard flag, low confidence, or that it overrules an existing card). Returns the path.
+    (Named `reasons`, not `hold_reasons`, so it does not shadow the module hold_reasons().)"""
     cid = int(entry["cluster_id"])
     obj = {"kind": "card", "cluster_id": cid, "name": entry.get("name", ""),
-           "hold_reasons": list(hold_reasons or []), "entry": entry}
+           "hold_reasons": list(reasons or []), "entry": entry}
     path = card_path(cid, root)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     safeio.atomic_write_json(path, obj)

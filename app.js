@@ -1,6 +1,6 @@
 // =============================================================
 // horowitz.law — app.js
-// Single shared script for both index.html and resume.html.
+// Single shared script linked by every page.
 // Feature-detects: only the bits relevant to the current page run.
 // =============================================================
 
