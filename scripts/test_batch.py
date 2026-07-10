@@ -104,6 +104,25 @@ def main():
     check("request() leaves a list system unwrapped", req["params"]["system"] == [{"type": "text", "text": "s"}])
     check("request() passes extra params through", req["params"]["output_config"] == {"effort": "low"})
 
+    # 3a. request()/from_body reject a custom_id the Batch API would 400 on (a colon), so a bad
+    # id fails at build time in a test rather than as an HTTP 400 on the live job.
+    ok = True
+    for bad in ("10918352:fidelity", "has space", "a" * 65, ""):
+        try:
+            batch.request(bad, "m", "s", [{"role": "user", "content": "u"}], 8)
+            ok = False
+        except batch.BatchError:
+            pass
+    check("request() rejects an invalid custom_id (colon/space/too-long/empty)", ok)
+    try:
+        batch.from_body("10918352:fidelity", {"model": "m", "system": "s", "max_tokens": 8,
+                                              "messages": [{"role": "user", "content": "u"}]})
+        check("from_body rejects an invalid custom_id", False)
+    except batch.BatchError:
+        check("from_body rejects an invalid custom_id", True)
+    check("request() accepts a hyphen custom_id", batch.request("10918352-fidelity", "m", "s",
+          [{"role": "user", "content": "u"}], 8)["custom_id"] == "10918352-fidelity")
+
     # 3b. from_body(): adapt an update-style body dict, wrapping its system and keeping extras.
     fb = batch.from_body("d", {"model": "m2", "system": "SYS", "max_tokens": 400,
                                "messages": [{"role": "user", "content": "u"}], "output_config": {"effort": "high"}})
@@ -159,7 +178,7 @@ def main():
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (17 cases)")
+    print("\nALL TESTS PASSED (20 cases)")
     return 0
 
 

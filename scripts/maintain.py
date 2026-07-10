@@ -207,7 +207,9 @@ def _revalidate_batch(cards):
             if not enabled:
                 continue
             body, ground = update.guard_request(kind, name, text, card)
-            cid = "%s:%s" % (card["cluster_id"], kind)
+            # custom_id must match ^[a-zA-Z0-9_-]{1,64}$ (the Batch API rejects a colon),
+            # so join the cluster id and guard kind with a hyphen.
+            cid = "%s-%s" % (card["cluster_id"], kind)
             reqs.append(batch.from_body(cid, body))
             meta[cid] = (kind, name, ground)
     if not reqs:
