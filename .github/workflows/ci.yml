@@ -92,9 +92,9 @@ jobs:
 
       - name: JS syntax
         run: |
-          node --check app.js
-          node --check opinions.js
-          node --check subscribe.js && node --check sw.js
+          node --check public/app.js
+          node --check public/opinions.js
+          node --check public/subscribe.js && node --check public/sw.js
           node --check functions/api/subscribe/index.js
           node --check functions/api/subscribe/confirm.js
           node --check functions/_middleware.js
