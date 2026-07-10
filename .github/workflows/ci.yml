@@ -86,6 +86,7 @@ jobs:
           python scripts/test_treatment.py
           python scripts/test_queue_cases.py
           python scripts/test_digest.py
+          python scripts/test_golden_check.py
 
       - name: Validate workflow YAML
         run: python -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml')]; print('workflow YAML parses')"

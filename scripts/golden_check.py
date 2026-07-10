@@ -132,7 +132,10 @@ def check():
         except Exception as e:
             print("  . summary write skipped: %s" % e)
 
-    return 1 if regressions else 0
+    # Fail closed: a run that verified nothing (every case uncached, or ok == 0) must not
+    # exit 0 -- exit 0 is the "safe to bump the model" signal in model-watch.yml, and
+    # greenlighting a change having screened zero cases is worse than a false red.
+    return 1 if (regressions or uncached or ok == 0) else 0
 
 
 def _produced_areas(v):
@@ -219,7 +222,10 @@ def summarize_check():
                     f.write("- FAIL %s: %s\n" % (nm, det))
         except Exception as e:
             print("  . summary write skipped: %s" % e)
-    return 1 if regressions else 0
+    # Fail closed: a run that verified nothing (every case uncached, or ok == 0) must not
+    # exit 0 -- exit 0 is the "safe to bump the model" signal in model-watch.yml, and
+    # greenlighting a change having screened zero cases is worse than a false red.
+    return 1 if (regressions or uncached or ok == 0) else 0
 
 
 def recall():
@@ -267,7 +273,9 @@ def recall():
                     f.write("- MISS %s: %s\n" % (nm, why))
         except Exception as e:
             print("  . summary write skipped: %s" % e)
-    return 1 if missed else 0
+    # Fail closed like check()/summarize_check(): if every keeper was uncached (n_keep == 0),
+    # the gate verified nothing and must not report success.
+    return 1 if (missed or uncached or n_keep == 0) else 0
 
 
 def main():

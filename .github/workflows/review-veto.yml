@@ -61,19 +61,37 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Is the case actually staged? Decide "not found" once, up front, against the current branch.
           git fetch origin bot/opinions-review
           git checkout -B bot/opinions-review origin/bot/opinions-review
-          removed=0
-          if git rm -f "review/cards/${id}.json" 2>/dev/null; then removed=1; fi
+          present=0
+          [ -e "review/cards/${id}.json" ] && present=1
           # Treatment files are named <cardcid>__<citercid>.json; a case vetoed by its citing id.
-          for f in review/treatments/*__${id}.json; do
-            [ -e "$f" ] || continue
-            git rm -f "$f" 2>/dev/null && removed=1
-          done
-          if [ "$removed" = "0" ]; then
+          for f in review/treatments/*__${id}.json; do [ -e "$f" ] && present=1; done
+          if [ "$present" = "0" ]; then
             gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "No staged case with cluster id ${id} was found in this batch." || true
             exit 0
           fi
-          git commit -m "review: veto case ${id}"
-          git push origin bot/opinions-review
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Vetoed case ${id}: dropped from this batch and left eligible for a later run to redraft. Merging now applies only the remaining cases." || true
+          # Remove the case and push, retrying against the 4-hourly funnel's force-pushes of this
+          # same branch: on a rejected push, re-fetch the (moved) branch and re-apply the removal --
+          # if the funnel restored the vetoed file, this drops it again -- so a veto is never
+          # silently clobbered. `git rm`/commit are guarded so an already-absent file (a prior
+          # attempt landed, or the funnel dropped it) still converges to a clean push.
+          ok=0
+          for attempt in 1 2 3 4 5; do
+            git rm -f "review/cards/${id}.json" 2>/dev/null || true
+            for f in review/treatments/*__${id}.json; do [ -e "$f" ] || continue; git rm -f "$f" 2>/dev/null || true; done
+            git commit -m "review: veto case ${id}" 2>/dev/null || true
+            if git push origin bot/opinions-review; then ok=1; break; fi
+            echo "veto push rejected (review branch moved under a scan); refetching and retrying ($attempt)"
+            sleep $((attempt * 3))
+            git fetch origin bot/opinions-review
+            git checkout -B bot/opinions-review origin/bot/opinions-review
+          done
+          if [ "$ok" = "1" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Vetoed case ${id}: dropped from this batch and left eligible for a later run to redraft. Merging now applies only the remaining cases." || true
+            exit 0
+          fi
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "⚠️ Could not apply the veto of case ${id} after several retries -- the review branch kept moving under a scan. Please re-run \`/veto ${id}\` in a minute, and do NOT merge this PR until the confirmation posts." || true
+          echo "::error::veto of ${id} could not be pushed after retries"
+          exit 1

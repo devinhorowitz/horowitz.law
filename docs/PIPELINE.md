@@ -8,6 +8,12 @@ additions. You review the PR and merge to publish. Cloudflare Pages deploys on m
 Nothing publishes without your merge. That is the gate, and it is the recommended posture
 while the feed matures.
 
+> **Layout.** The deployed site lives in `public/` (Cloudflare's `pages_build_output_dir`).
+> Where this doc names a rendered/served file by basename -- `opinions.html`, `archive.html`,
+> `sitemap.xml`, the `/o/` permalinks -- it means the file under `public/`. Pipeline data
+> (`opinions.json`, `opinions_state.json`, the logs), the scripts, and `functions/` stay at
+> the repo root; `functions/` must NOT move into `public/` (Cloudflare requirement).
+
 ## Coverage
 
 Eight courts across three jurisdictions, in three postures:
@@ -275,7 +281,7 @@ direct commit:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add opinions.json opinions.xml opinions_state.json opinions.html opinions_rejections.jsonl opinions_pipeline_log.jsonl
+          git add opinions.json public/opinions.xml opinions_state.json public/opinions.html opinions_rejections.jsonl opinions_pipeline_log.jsonl
           git diff --cached --quiet || git commit -m "opinions: add new appellate decisions"
           git push
 ```
