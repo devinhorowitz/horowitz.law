@@ -1722,7 +1722,6 @@ def main():
     overruling_cids = set()  # candidates whose opinion caused a treatment change; held with that change if they card
     evaluated, n_screen, n_triage, n_opus, n_audit = set(), 0, 0, 0, 0
     n_pretriage = 0
-    treatment_changed = False
     cl_deferred = 0                                # candidates deferred this run on the CourtListener budget
     consec = 0
     cfg_error = False                              # set on a ConfigError (auth/model/credit); forces a non-zero exit
@@ -1906,7 +1905,6 @@ def main():
                         already = any(x.get("cluster_id") == cid for x in (card.get("treated_by") or []))
                         raised = treatment_core.flag_caution(card, citer)
                         if not already:
-                            treatment_changed = True
                             overruling_cids.add(cid)
                             treat_events.append({"card_cid": int(card["cluster_id"]), "citer": citer})
                             if raised:
