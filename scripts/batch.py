@@ -26,6 +26,7 @@ which the tests stub, so the submit/poll/collect logic runs with no network.
 """
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -34,6 +35,7 @@ API = "https://api.anthropic.com/v1/messages/batches"
 KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 VERSION = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
 RETRY_STATUS = {429, 500, 502, 503, 529}   # same set update.anthropic_json retries
+CUSTOM_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")   # the Batch API's custom_id constraint (a colon 400s)
 
 
 class BatchError(RuntimeError):
@@ -86,7 +88,11 @@ def request(custom_id, model, system, messages, max_tokens, **extra):
     """Build one batch request line. Applies the same system-prompt cache wrap as
     update.anthropic_json, so a large static system prompt bills at the cache-read
     rate across the batch. `extra` passes through any other Messages params
-    (thinking, output_config, tools, ...)."""
+    (thinking, output_config, tools, ...). Rejects a custom_id the API would 400 on
+    (it must match ^[a-zA-Z0-9_-]{1,64}$), so a bad id fails at build time in a test
+    rather than as an HTTP 400 on the live job."""
+    if not CUSTOM_ID_RE.match(str(custom_id)):
+        raise BatchError("invalid custom_id %r: must match %s" % (custom_id, CUSTOM_ID_RE.pattern))
     params = {"model": model, "max_tokens": max_tokens, "messages": messages}
     if isinstance(system, str):
         params["system"] = [{"type": "text", "text": system,

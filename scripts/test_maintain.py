@@ -162,28 +162,28 @@ def main():
     print("\nmaintain.revalidate batch path (MAINTAIN_BATCH=1):")
     # All guards clean via one batch: no flags, both cards checked, 4 requests (2 cards x 2 guards).
     run_batch("batch_both_clean",
-              {"1:fidelity": {"verdict": "match"}, "1:completeness": {"verdict": "complete"},
-               "2:fidelity": {"verdict": "match"}, "2:completeness": {"verdict": "complete"}},
+              {"1-fidelity": {"verdict": "match"}, "1-completeness": {"verdict": "complete"},
+               "2-fidelity": {"verdict": "match"}, "2-completeness": {"verdict": "complete"}},
               exp_flags=[], exp_checked=2, exp_deferred=0, exp_fetches=2, exp_requests=4)
     # Grounded flags on both guards, one per card, are surfaced and labeled, with the quote folded in.
     run_batch("batch_grounded_flags",
-              {"1:fidelity": {"verdict": "flag", "reason": "misread", "quote": "Why it matters"},
-               "1:completeness": {"verdict": "complete"},
-               "2:fidelity": {"verdict": "match"},
-               "2:completeness": {"verdict": "flag", "reason": "omits X", "quote": "OPINION"}},
+              {"1-fidelity": {"verdict": "flag", "reason": "misread", "quote": "Why it matters"},
+               "1-completeness": {"verdict": "complete"},
+               "2-fidelity": {"verdict": "match"},
+               "2-completeness": {"verdict": "flag", "reason": "omits X", "quote": "OPINION"}},
               exp_flags=[("Alpha v. X", 'fidelity: misread (drafted text at issue: "Why it matters")'),
                          ("Beta v. Y", 'completeness: omits X (opinion text omitted: "OPINION")')],
               exp_checked=2)
     # An ungrounded flag (quote not in the grounding text) is dismissed, not surfaced.
     run_batch("batch_ungrounded_dismissed",
-              {"1:fidelity": {"verdict": "flag", "reason": "x", "quote": "not in the summary zzzzz"},
-               "1:completeness": {"verdict": "complete"},
-               "2:fidelity": {"verdict": "match"}, "2:completeness": {"verdict": "complete"}},
+              {"1-fidelity": {"verdict": "flag", "reason": "x", "quote": "not in the summary zzzzz"},
+               "1-completeness": {"verdict": "complete"},
+               "2-fidelity": {"verdict": "match"}, "2-completeness": {"verdict": "complete"}},
               exp_flags=[], exp_checked=2)
     # A per-request failure (ok=False) yields no flag and does not sink the rest of the batch.
     run_batch("batch_unavailable_line",
-              {"1:fidelity": "UNAVAIL", "1:completeness": {"verdict": "complete"},
-               "2:fidelity": {"verdict": "match"}, "2:completeness": {"verdict": "complete"}},
+              {"1-fidelity": "UNAVAIL", "1-completeness": {"verdict": "complete"},
+               "2-fidelity": {"verdict": "match"}, "2-completeness": {"verdict": "complete"}},
               exp_flags=[], exp_checked=2)
     # A batch that does not finish within the budget defers the whole (already-fetched) slice.
     run_batch("batch_timeout_defers", {}, raise_timeout=True,
