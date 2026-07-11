@@ -67,11 +67,11 @@ async function sendConfirmEmail(env, email, link) {
     `<div style="font:700 14px ui-monospace,Menlo,Consolas,monospace;color:#1a1a1a;">horowitz.law</div>` +
     `<p style="margin:16px 0 8px;font-size:15px;line-height:1.6;">Confirm your subscription to the <strong>Georgia Appellate Watch</strong> weekly digest.</p>` +
     `<p style="margin:0 0 20px;"><a href="${safeLink}" style="display:inline-block;background:#a4471a;color:#f5ede0;text-decoration:none;padding:12px 22px;border-radius:8px;font:600 14px -apple-system,Segoe UI,Roboto,sans-serif;">Confirm subscription</a></p>` +
-    `<p style="font:12px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#6a6560;margin:0;">If you did not request this, ignore this email and you will not be subscribed. This link expires in 7 days.</p>` +
+    `<p style="font:12px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#6a6560;margin:0;">If you did not request this, ignore this email and you will not be subscribed. This link expires in 48 hours.</p>` +
     `</div></body></html>`;
   const text =
     `Confirm your subscription to the Georgia Appellate Watch weekly digest:\n\n${link}\n\n` +
-    `If you did not request this, ignore this email and you will not be subscribed. This link expires in 7 days.`;
+    `If you did not request this, ignore this email and you will not be subscribed. This link expires in 48 hours.`;
   // Bound the send with a timeout so a stalled api.resend.com cannot hang the
   // Worker; the abort rejects and onRequestPost turns it into a 500 for the form.
   const ctrl = new AbortController();
@@ -124,13 +124,19 @@ async function verifyTurnstile(env, token, request) {
   }
   if (!data || data.success !== true) return false;
 
-  // Bind the token to this site and this form: reject one solved on another host or for
-  // another action, even if it is otherwise valid.
+  // Bind the token to THIS site and THIS form: reject one solved on another host or for
+  // another action. A genuine Turnstile verdict always carries hostname and action (the
+  // widget sets data-action="subscribe"), so a MISSING field is treated as a failure, not a
+  // pass -- the binding is enforced unconditionally. Compare against hostname (no port),
+  // which is the form Turnstile returns.
+  let expectedHost;
   try {
-    const host = new URL(request.url).host;
-    if (data.hostname && data.hostname !== host) return false;
-  } catch {}
-  if (data.action && data.action !== "subscribe") return false;
+    expectedHost = new URL(request.url).hostname;
+  } catch {
+    return false;
+  }
+  if (data.hostname !== expectedHost) return false;
+  if (data.action !== "subscribe") return false;
   return true;
 }
 
@@ -159,9 +165,16 @@ export async function onRequestPost(context) {
   if (!ctype.includes("application/json")) {
     return json({ ok: false, message: "Bad request." }, 415);
   }
-  // A Turnstile token can be up to ~2 KB on its own, plus the email and JSON overhead;
-  // 8 KB blocks absurd payloads while leaving ample room for a legitimate request.
-  if (Number(request.headers.get("Content-Length") || "0") > 8192) {
+  // Read the body once, under a hard size ceiling enforced on the bytes ACTUALLY read, not
+  // the Content-Length header (which a chunked or lying request can omit or understate). A
+  // Turnstile token is up to ~2 KB; 8 KB leaves ample room for a legitimate request.
+  let raw;
+  try {
+    raw = await request.text();
+  } catch {
+    return json({ ok: false, message: "Bad request." }, 400);
+  }
+  if (raw.length > 8192) {
     return json({ ok: false, message: "Request too large." }, 413);
   }
 
@@ -182,7 +195,7 @@ export async function onRequestPost(context) {
 
   let body;
   try {
-    body = await request.json();
+    body = JSON.parse(raw);
   } catch {
     return json({ ok: false, message: "Bad request." }, 400);
   }
@@ -212,6 +225,20 @@ export async function onRequestPost(context) {
 
   if (!validEmail(email)) {
     return json({ ok: false, message: "Please enter a valid email address." }, 422);
+  }
+
+  // Second rate-limit dimension, keyed on the DESTINATION email (the IP-keyed limit above
+  // does not stop a rotating IP pool from bombing one victim address with confirmation
+  // emails). Same binding, a different key. Inert unless SUBSCRIBE_RATELIMIT is configured --
+  // see the deploy notes: an always-on limiter (this binding or a WAF rule) is required, since
+  // Turnstile alone does not bound how many emails a solved-challenge farm can send.
+  if (env.SUBSCRIBE_RATELIMIT && typeof env.SUBSCRIBE_RATELIMIT.limit === "function") {
+    try {
+      const { success } = await env.SUBSCRIBE_RATELIMIT.limit({ key: "email:" + email });
+      if (!success) {
+        return json({ ok: false, message: "Too many attempts. Please wait a minute and try again." }, 429);
+      }
+    } catch { /* never block legitimate users if the limiter itself errors */ }
   }
 
   // Human-verification gate: confirm the Turnstile token with Cloudflare BEFORE sending any

@@ -2,17 +2,51 @@
 
 A GitHub Actions job runs every four hours, checks CourtListener for new appellate
 opinions across eight courts, filters them for an insurance-defense and civil-litigation
-audience, drafts a short synopsis in the house style, and opens a pull request with the
-additions. You review the PR and merge to publish. Cloudflare Pages deploys on merge.
+audience, drafts a short synopsis in the house style, and publishes. It runs in two lanes.
+A clean, additive card -- a new opinion that touches no existing card and trips no guard --
+is machine-verified and published straight to `main` with no human step. A card that would
+overrule or modify an existing card, or that a guard flags (low confidence, a check that
+could not run, a citation that should not be there), is held in a single bundled review PR
+for a person to merge or veto. Cloudflare Pages deploys on every push to `main`.
 
-Nothing publishes without your merge. That is the gate, and it is the recommended posture
-while the feed matures.
+Read the trust model below before assuming a card on the site was seen by a human. Most
+were not.
 
 > **Layout.** The deployed site lives in `public/` (Cloudflare's `pages_build_output_dir`).
 > Where this doc names a rendered/served file by basename -- `opinions.html`, `archive.html`,
 > `sitemap.xml`, the `/o/` permalinks -- it means the file under `public/`. Pipeline data
 > (`opinions.json`, `opinions_state.json`, the logs), the scripts, and `functions/` stay at
 > the repo root; `functions/` must NOT move into `public/` (Cloudflare requirement).
+
+## Trust model
+
+This is the single most important fact about the system, and it changed with the two-lane
+design: **a card published in the auto lane may never have passed human eyes.** The site once
+had one gate -- every card was human-verified before publish. Now the auto lane is
+*machine*-verified before publish, and only a flagged or unverifiable card reaches a person.
+
+What "machine-verified" means for an auto card: it cleared the Tier 1 screen, the Tier 2
+full-read triage, the Opus summarizer, and the post-summary guards (self-citation, a
+disposition it could actually state, a cross-check against the opinion text, completeness).
+Those guards **fail closed** -- anything they cannot verify (a check that errored, opinion
+text that would not load) is treated as a failure and routed to the review lane, not
+published -- and anything that would overrule or modify an existing card is held the same
+way. That is deliberate and correct.
+
+The residual exposure is narrow and specific: a fluent, confident, *wrong* card that clears
+both the screen and the guards and publishes with no human. For a tool consulted at drafting
+time, a card that looks right and is not is the worst failure mode -- worse than a late card
+or a missing one. Three things make it tolerable for a solo curator, and none removes it: the
+changes ledger (`/changes`) records every later correction, so a bad card leaves a trail; the
+daily maintenance job re-validates a rotating slice of already-published cards against their
+opinion text; and every card is hand-editable in `opinions.json` (see "Editing content by
+hand"). Every card also carries the prototype banner and the per-card "verify against the
+opinion before relying" line.
+
+If you maintain this: do not assume a card on the site was reviewed. Raise the bar -- disable
+the auto lane and route everything to review -- by making the guards stricter or by treating
+more cases as "held" in `scripts/review_store.py`; the two-lane machinery does not otherwise
+change.
 
 ## Coverage
 
@@ -186,11 +220,28 @@ and fall back to built-in defaults when unset, so a model id can be changed with
 
 ## Reviewing and publishing
 
-Each run opens or updates a pull request. The description lists every added opinion with its court,
-date, disposition, areas, and a link to the opinion, and calls out anything flagged for review (low
-model confidence, a disposition it could not state, a citation that should not be there, a
-cross-check or completeness flag, a treatment flag, or an authority-watch hit). Read the diff, fix
-anything off in `opinions.json` on the branch if needed, and merge.
+Only the review lane opens a pull request; the auto lane publishes straight to `main` (see the
+trust model above). When a run holds one or more cases, it opens or updates a single bundled
+review PR on the `bot/opinions-review` branch. The description lists every held case with its
+court, date, disposition, areas, and a link to the opinion, and says why it was held (low model
+confidence, a disposition it could not state, a citation that should not be there, a cross-check
+or completeness flag, an overrule/modify of an existing card, a treatment flag, or an
+authority-watch hit). Read the diff, fix anything off in `opinions.json` on the branch if needed,
+and **merge to accept the batch** -- or **veto a single case** by commenting `/veto <cluster_id>`,
+which drops that case so merging applies only the rest. A veto leaves the case un-seen, so a later
+run redrafts it; it is not a permanent decline.
+
+How the review branch is built, and why the push step looks the way it does -- do not
+"simplify" it. Every run **rebuilds** `bot/opinions-review` from current `main` and re-adds the
+staged `review/` files, so the branch's only diff from `main` is those data files. That is the
+load-bearing invariant: merging the PR can never revert an auto card that landed on `main`
+meanwhile, which is what fixed the old stuck-PR failure. Because the branch is rebuilt each run,
+the funnel force-pushes it -- but with `--force-with-lease`, not `-f`, so a `/veto` that landed
+since the run's fetch makes the lease stale and the push is **rejected** rather than silently
+clobbering the veto (the run then alerts, and the next scan rebuilds with the veto intact). The
+`/veto` workflow correspondingly retries against a moved branch and shouts "do not merge until
+confirmation posts" if it cannot converge. This reconciliation currently lives in workflow shell
+(`opinions.yml`, `review-veto.yml`) and is not under test; treat it as correctness-critical.
 
 ## Editing content by hand
 

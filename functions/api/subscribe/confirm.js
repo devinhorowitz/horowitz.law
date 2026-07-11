@@ -11,7 +11,7 @@
 //
 // Verifies the signed link from the confirmation email, then creates the contact in
 // Resend's global contacts: subscribed (unsubscribed: false), opted into the Topic,
-// and added to the Segment. Links are valid for 7 days and cannot be forged without
+// and added to the Segment. Links are valid for 48 hours and cannot be forged without
 // SUBSCRIBE_SECRET. Resend's model: Contacts are global; a Segment is for internal
 // targeting (broadcasts require a segment_id); a Topic carries the user-facing
 // unsubscribe preference.
@@ -27,7 +27,9 @@
 
 const RESEND = "https://api.resend.com";
 const UA = "horowitz.law-subscribe/1.0 (+https://horowitz.law)";
-const CONFIRM_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const CONFIRM_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours -- ample for opt-in, and it bounds how
+                                            // long a (stateless, non-single-use) confirm link
+                                            // stays replayable if it leaks or is forwarded.
 
 async function hmacHex(secret, msg) {
   const key = await crypto.subtle.importKey(

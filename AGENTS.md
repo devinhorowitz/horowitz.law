@@ -2,7 +2,8 @@
 
 Operating notes for anyone maintaining this site from a cold start, an AI agent or a
 person who has not seen it before. The rest is covered elsewhere: README.md is what the
-site is, docs/PIPELINE.md is how the opinions pipeline works and how to tune it, docs/MAINTENANCE.md
+site is, docs/PIPELINE.md is how the opinions pipeline works and how to tune it (and its **trust
+model** -- clean cards auto-publish machine-verified, without human review), docs/MAINTENANCE.md
 is what to edit and what is generated, docs/ROADMAP.md is what is planned, and docs/HANDOFF.md is the
 current working state and the open tasks. Read docs/HANDOFF.md first; read this before changing
 anything.
