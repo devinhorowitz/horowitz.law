@@ -90,7 +90,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install --upgrade "pypdf>=5,<6"
+        run: pip install -r requirements.txt
 
       - name: Seed the archive (screen as recall test, triage, summarize, render)
         env:

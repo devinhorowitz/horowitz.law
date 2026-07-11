@@ -1,0 +1,6 @@
+# CI-only dependencies: everything the runtime needs, plus the extras the checks use. pyyaml backs
+# ci.yml's workflow-YAML validation step; no runtime script imports it (it is only used by that one
+# `python -c "import yaml..."` step), so it stays OUT of requirements.txt to keep the funnel's
+# install surface minimal. Pinned and dependabot-managed for the same reason as the runtime deps.
+-r requirements.txt
+pyyaml==6.0.3
