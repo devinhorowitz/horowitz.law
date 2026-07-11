@@ -1305,6 +1305,30 @@ def render(entries=None):
         return True
     entries = [e for e in entries if _known_taxonomy(e)]
 
+    # Shape guard, symmetric with the date and taxonomy filters above: card_html / _slip_cite /
+    # _no_label hard-index required fields (dockets[0], name, synopsis, why, url, disposition,
+    # cluster_id), so a hand-edit to opinions.json that empties "dockets" or drops one of those
+    # keys would raise mid-render and zero every page. Drop such a card with a warning instead --
+    # the machine path always emits them, so this only guards human edits, exactly like the two
+    # filters above. All current cards pass, so it is inert today.
+    _REQUIRED_STR = ("name", "synopsis", "why", "url", "disposition")
+    def _valid_shape(e):
+        if e.get("cluster_id") is None:
+            print("render: skipping a card with no cluster_id (%s)" % (e.get("name") or "?")[:50])
+            return False
+        if not (isinstance(e.get("dockets"), list) and e["dockets"]):
+            print("render: skipping a card with empty/missing dockets (%s)" % (e.get("name") or "?")[:50])
+            return False
+        # Present and a string (empty is fine -- the crash is a missing key or a non-string, not
+        # an empty value; over-dropping a legitimately blank field would change the render).
+        missing = [k for k in _REQUIRED_STR if not isinstance(e.get(k), str)]
+        if missing:
+            print("render: skipping a card missing required string field(s) %r (%s)"
+                  % (missing, (e.get("name") or "?")[:50]))
+            return False
+        return True
+    entries = [e for e in entries if _valid_shape(e)]
+
     entries = _sorted(entries)
 
     # Every entry gets a permalink, so a treated_by citer that is itself carded

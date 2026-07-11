@@ -1,0 +1,143 @@
+name: Auto-merge self-healing PRs
+
+# The render-sync and dependabot bots open PRs that reconcile drift or bump action pins, but
+# nobody merges them when the project runs untended -- so the self-healing never reaches main and
+# the fix silently never ships. This merges those two, and ONLY those two, each after an
+# INDEPENDENT safety check:
+#
+#   * bot/opinions-render (render-sync): merged only when the PR is a faithful, exact re-render --
+#     it changes nothing outside public/, opinions.json is byte-identical to main (render-sync
+#     never touches the data), and re-running render.py on the PR head produces zero further diff
+#     (the same idempotency guarantee CI's render step gives). We recompute it here rather than
+#     trust a CI check because a PR opened with the default GITHUB_TOKEN triggers no CI at all --
+#     GitHub's anti-recursion rule -- so there is no check to gate on.
+#
+#   * dependabot/github_actions/* : merged only when authored by dependabot[bot] and every CI check
+#     is green. Dependabot PRs DO trigger CI, so gating on the check rollup is enough.
+#
+# model-watch (bot/model-watch) is deliberately NOT auto-merged: it swaps the Claude model that
+# writes the legal cards, and CI -- being hermetic -- never actually runs that model (the golden-set
+# gate lives in the model-watch run, not CI), so green CI does not mean the bump is safe. A human
+# merges it.
+#
+# A scheduled poll, not an event trigger, precisely because the GITHUB_TOKEN-created render-sync PR
+# emits no pull_request / workflow_run event to hook. It fails CLOSED throughout: any check that
+# does not clearly pass leaves the PR open for a human, never merges on doubt.
+
+on:
+  schedule:
+    - cron: '47 */6 * * *'   # every 6 hours, offset from the funnel (:17) and the daily bots
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: automerge
+  cancel-in-progress: false
+
+jobs:
+  render-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: block
+          # github.com/api.github.com for checkout + gh + the merge; the two *.githubusercontent
+          # hosts in case the runner image lacks Python 3.12 in the toolcache.
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Verify and merge a faithful render-sync PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R: ${{ github.repository }}
+        run: |
+          set -e
+          num=$(gh pr list --repo "$R" --head bot/opinions-render --state open \
+                  --json number --jq '.[0].number // empty')
+          if [ -z "$num" ]; then echo "No open render-sync PR."; exit 0; fi
+
+          # Only our own render-sync bot opens this branch; confirm before trusting its contents.
+          author=$(gh pr view "$num" --repo "$R" --json author --jq '.author.login')
+          if [ "$author" != "github-actions[bot]" ]; then
+            echo "render-sync PR #$num author is '$author', not the bot; leaving for a human."
+            exit 0
+          fi
+
+          git fetch origin main bot/opinions-render
+          git checkout -B _verify origin/bot/opinions-render
+
+          # (1) opinions.json is the source of truth and render-sync must never touch it.
+          if ! git diff --quiet origin/main -- opinions.json; then
+            echo "render-sync PR #$num changed opinions.json; refusing to auto-merge."
+            exit 0
+          fi
+
+          # (2) Nothing outside public/ (the generated output) may differ from main.
+          outside=$(git diff --name-only origin/main | grep -vE '^public/' || true)
+          if [ -n "$outside" ]; then
+            echo "render-sync PR #$num touches files outside public/:"; echo "$outside"
+            echo "Refusing to auto-merge."
+            exit 0
+          fi
+
+          # (3) The pages on the PR head must already equal what render.py produces from this
+          #     opinions.json -- i.e. re-rendering yields zero further diff. This is exactly CI's
+          #     idempotency gate, recomputed here. -N surfaces any never-committed output file.
+          python scripts/render.py
+          git add -N public
+          if ! git diff --quiet -- public; then
+            echo "render-sync PR #$num head is not a clean re-render (render.py produced a further"
+            echo "diff); refusing to auto-merge. Diff:"
+            git --no-pager diff --stat -- public
+            exit 0
+          fi
+
+          echo "render-sync PR #$num verified faithful (data untouched, only public/, idempotent); merging."
+          gh pr merge "$num" --repo "$R" --squash --delete-branch
+
+  dependabot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+      - name: Merge green dependabot action bumps
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R: ${{ github.repository }}
+        run: |
+          set -e
+          # Open PRs authored by dependabot on a github-actions bump branch. (The branch-prefix and
+          # author checks are belt-and-suspenders: only dependabot opens dependabot/* here.)
+          nums=$(gh pr list --repo "$R" --state open --json number,headRefName,author \
+                   --jq '.[] | select(.author.login=="dependabot[bot]" and (.headRefName|startswith("dependabot/github_actions/"))) | .number')
+          if [ -z "$nums" ]; then echo "No open dependabot action-bump PRs."; exit 0; fi
+          for num in $nums; do
+            # gh pr checks exits 0 only when every check succeeded; nonzero on any failure or while
+            # any check is still pending. Fail closed: merge on 0, otherwise leave it for next time.
+            if gh pr checks "$num" --repo "$R" >/dev/null 2>&1; then
+              echo "dependabot PR #$num: all checks green; merging."
+              gh pr merge "$num" --repo "$R" --squash --delete-branch || echo "  merge of #$num did not complete; will retry next run."
+            else
+              echo "dependabot PR #$num: checks not all green (failing or pending); leaving open."
+            fi
+          done

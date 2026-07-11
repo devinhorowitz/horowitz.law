@@ -144,6 +144,8 @@ Automatic, on a schedule:
 | maintain | daily | budget-gated upkeep: golden check, court check, repo keepalive |
 | render-sync | daily | re-renders pages from `opinions.json`; opens a PR if they drifted |
 | model-watch | daily | checks the Models API for a newer Claude model in a pinned tier; opens a bump PR gated by the golden set |
+| heartbeat | daily | dead-man's-switch: opens a tracking issue if the funnel stalls (no scan in 48h) or stops finding cards (30d); the one alert that fires when runs stop |
+| automerge | every 6 hours | merges the two verified-safe self-healing PRs (render-sync, dependabot action bumps) so they ship untended; leaves model-watch for a human |
 | digest | Mondays | the weekly email digest, sent last in the cycle |
 | lighthouse | Mondays | performance scores of the deployed site |
 | links | Mondays | link-rot check, gentle on CourtListener |
@@ -201,3 +203,19 @@ Run by hand, from the Actions tab:
   Actions summary; only the auto-PR is skipped. If a bump PR touches a tier whose pin is
   also set as a repo Variable, update that Variable to match, or the Variable will keep
   overriding the merged default.
+- Two of the self-healing PRs now merge themselves, so the fix ships without you. The
+  `automerge` workflow merges a **render-sync** PR only after re-verifying it is a faithful
+  re-render (data untouched, only `public/` changed, and re-rendering the PR head yields no
+  further diff), and a **dependabot** action bump only when its CI checks are all green. It
+  fails closed: anything it cannot verify stays open for you. **model-watch is deliberately
+  never auto-merged** — it changes the model that writes the legal cards, and CI never runs
+  that model, so you review and merge those by hand. To pause all auto-merging, disable the
+  `automerge` workflow in the Actions tab.
+- `heartbeat` is the backstop for silent stalls. Every other alert is an issue opened by a
+  workflow that *failed* — which only helps if that workflow still runs. Heartbeat instead
+  reads the committed freshness markers (`public/status.json` `scanned_at`, newest card
+  `first_seen`) and opens one tracking issue if the funnel stops scanning (48h) or stops
+  finding cards (30d). It cannot catch a *total* 60-day auto-disable (that takes its own cron
+  down too); for that, set a `HEARTBEAT_PING_URL` secret to an external cron-monitor ping URL
+  (e.g. a free healthchecks.io check) and add its host to the workflow's allowed-endpoints —
+  heartbeat pings it on healthy runs, so the monitor alerts you if the pings ever stop.
