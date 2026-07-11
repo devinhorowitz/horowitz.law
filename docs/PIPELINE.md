@@ -43,10 +43,36 @@ opinion text; and every card is hand-editable in `opinions.json` (see "Editing c
 hand"). Every card also carries the prototype banner and the per-card "verify against the
 opinion before relying" line.
 
-If you maintain this: do not assume a card on the site was reviewed. Raise the bar -- disable
-the auto lane and route everything to review -- by making the guards stricter or by treating
-more cases as "held" in `scripts/review_store.py`; the two-lane machinery does not otherwise
-change.
+### The Fable senior review of held cases
+
+There is a second machine layer, and it can *reduce* the human queue. When a card is held, the
+most capable model -- **Claude Fable 5** -- adjudicates the flag against the actual opinion text
+(`scripts/fable_review.py`). It runs in one of three modes (`OPINIONS_FABLE_REVIEW`):
+
+- `off` -- no Fable step.
+- `advisory` -- Fable assesses every held case and its verdict + recommendation (accept/veto/
+  decline) is attached to the review PR, but it clears nothing; every held card still waits for you.
+- `clear` (current default) -- in addition, Fable **auto-publishes** a held card it is highly
+  confident is a false positive, moving it from the review lane to the auto lane.
+
+This is a deliberate extension of the trust model: in `clear` mode, **a card that a guard held can
+be published without human eyes if Fable clears it.** It is fail-closed and narrow. A clear
+requires the full triple -- `is_false_positive` AND `high` confidence AND an `accept`
+recommendation -- on adequate opinion text; any error, thin text, lesser confidence, or a
+`veto`/`decline` recommendation leaves the card held. Fable can only ever *reduce* holds, never add
+a publish on doubt. Overrule/modify holds are effectively never cleared, because Fable is told not
+to clear one unless the text makes plain it does not change existing law -- a bar it rarely clears.
+
+Every Fable verdict is logged to `opinions_fable_review.jsonl` (bounded), and an auto-cleared card's
+publish PR records that it was Fable-cleared and why, so nothing clears invisibly. To watch Fable's
+judgment before trusting it, set the `OPINIONS_FABLE_REVIEW` repo Variable to `advisory`; to turn it
+off, `off`.
+
+If you maintain this: do not assume a card on the site was reviewed by a person -- most were not,
+and in `clear` mode even some *held* cards were resolved by Fable, not you. Raise the bar -- route
+everything to a human -- by setting `OPINIONS_FABLE_REVIEW=advisory` (Fable still advises, clears
+nothing) or `off`, by making the guards stricter, or by treating more cases as "held" in
+`scripts/review_store.py`.
 
 ## Coverage
 

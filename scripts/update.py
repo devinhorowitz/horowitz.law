@@ -72,6 +72,7 @@ import safeio          # crash-safe atomic writes
 import jurisdictions   # per-jurisdiction court config (court map, labels, patterns)
 import official_ga     # resolves a scotga card's official gasupreme.us opinion PDF (fail-open)
 import review_store     # two-lane routing: stages held cases, tracks the pending-review ledger
+import fable_review     # senior Fable review of held cases (advisory, or clears confident false positives)
 
 
 class ConfigError(RuntimeError):
@@ -83,6 +84,7 @@ class ConfigError(RuntimeError):
 JSON_PATH  = os.path.join(REPO, "opinions.json")
 STATE_PATH = os.path.join(REPO, "opinions_state.json")
 LOG_PATH   = os.path.join(REPO, "opinions_pipeline_log.jsonl")  # append-only per-run health log (observability)
+FABLE_LOG_PATH = os.path.join(REPO, "opinions_fable_review.jsonl")  # audit trail of every Fable held-case verdict (bounded, like the run log)
 REJECT_PATH = os.path.join(REPO, "opinions_rejections.jsonl")  # append-only log of candidates the screen or triage dropped, for periodic recall review
 SA_MANIFEST_PATH = os.path.join(REPO, "skill-authorities.json")   # skill-authority manifest (alert-out join key; absent = watch inactive)
 SA_STATE_PATH    = os.path.join(REPO, "skill_alert_state.json")   # per-authority adverse-treatment record (state; rides the PR / straight to main like opinions_state.json)
@@ -103,6 +105,12 @@ CROSSCHECK_MODEL = os.environ.get("OPINIONS_CROSSCHECK_MODEL", TRIAGE_MODEL)  # 
 CROSSCHECK_TRIES = int(os.environ.get("OPINIONS_CROSSCHECK_TRIES", "3"))  # on a substantiated flag, re-ask up to this many times; a flag stands only on a majority, damping one-roll noise at temperature 1. 1 keeps grounding but disables consensus
 COMPLETENESS_MODEL = os.environ.get("OPINIONS_COMPLETENESS_MODEL", TRIAGE_MODEL)  # completeness check on each card: flags a material holding in a covered area the card omits; a different model than the Opus summarizer; "" disables
 COMPLETENESS_TRIES = int(os.environ.get("OPINIONS_COMPLETENESS_TRIES", "3"))  # like OPINIONS_CROSSCHECK_TRIES, for the completeness check: on a substantiated flag, re-ask up to this many times; a flag stands only on a majority. 1 keeps grounding but disables consensus
+# Senior Fable review of held cases. off = no Fable; advisory = adjudicate every held case and
+# attach the verdict to the review PR, but clear nothing; clear = additionally auto-publish a case
+# Fable is highly confident is a false positive. Fail-closed (see fable_review.py): a clear needs
+# is_false_positive + high confidence + accept, on adequate opinion text.
+FABLE_MODE  = os.environ.get("OPINIONS_FABLE_REVIEW", "off").lower()
+FABLE_MODEL = os.environ.get("OPINIONS_FABLE_MODEL", "claude-fable-5")
 VERSION      = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
 COURTS       = jurisdictions.COURTS         # CL ids the feed iterates (OPINIONS_COURTS narrows it)
 LOOKBACK     = int(os.environ.get("OPINIONS_LOOKBACK", "21"))
@@ -1547,9 +1555,58 @@ def _pr_card(e, i):
     return out
 
 
+def _log_fable(records):
+    """Append this run's Fable held-case verdicts to FABLE_LOG_PATH, one JSON line each, so every
+    auto-clear (and every held-with-recommendation) is auditable. Kept to the most recent LOG_CAP
+    lines, atomic, like the run and rejection logs. Best-effort: never fatal."""
+    if not records:
+        return
+    try:
+        old = []
+        if os.path.exists(FABLE_LOG_PATH):
+            with open(FABLE_LOG_PATH, "r", encoding="utf-8") as f:
+                old = [ln for ln in f.read().splitlines() if ln.strip()]
+        new = old + [json.dumps(r, separators=(",", ":"), ensure_ascii=False) for r in records]
+        safeio.atomic_write_text(FABLE_LOG_PATH, "\n".join(new[-LOG_CAP:]) + "\n")
+    except Exception as e:
+        print("  . fable-review log write skipped: %s" % e)
+
+
+def fable_review_pass(added, flagged, crosschecks, completeness, overruling_cids, texts):
+    """Run the senior Fable review over this run's held cards (the only network here). Returns
+    (cleared_cids, verdicts): cleared_cids is the set the funnel may auto-publish -- only in
+    OPINIONS_FABLE_REVIEW=clear, and only high-confidence false positives on adequate opinion text;
+    verdicts maps cluster_id -> the verdict dict, for the review PR body. A no-op (empty, empty)
+    unless the mode is 'advisory' or 'clear'. Never raises: fable_review is fail-closed per case."""
+    if FABLE_MODE not in ("advisory", "clear"):
+        return set(), {}
+    flagged_map = dict(flagged)
+    cleared, verdicts, logs = set(), {}, []
+    for e in added:
+        reasons = review_store.hold_reasons(e, flagged_map, crosschecks, completeness, overruling_cids)
+        if not reasons:
+            continue
+        cid = int(e["cluster_id"])
+        v = fable_review.review_held(e, reasons, texts.get(cid), anthropic_json, model=FABLE_MODEL)
+        verdicts[cid] = v
+        did_clear = bool(v["clear"]) and FABLE_MODE == "clear"
+        if did_clear:
+            cleared.add(cid)
+        print("  . Fable review %s: %s (%s conf, rec %s) -- %s"
+              % ("CLEARED -> auto-publish" if did_clear else "held",
+                 e.get("name", "")[:48], v["confidence"], v["recommendation"], "; ".join(reasons)))
+        logs.append({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "cluster_id": cid, "name": e.get("name", ""),
+                     "reasons": reasons, "mode": FABLE_MODE, "action": "cleared" if did_clear else "held",
+                     "is_false_positive": v["is_false_positive"], "confidence": v["confidence"],
+                     "recommendation": v["recommendation"], "available": v["available"],
+                     "assessment": v["assessment"]})
+    _log_fable(logs)
+    return cleared, verdicts
+
+
 def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, completeness,
                       overruling_cids, pending_review, state, seen, evaluated, have, now_iso,
-                      treat_flags):
+                      treat_flags, fable_cleared=None, fable_verdicts=None):
     """Route this run's carded output into the two lanes and write each. Returns a counts dict
     {auto, held, treatments, wrote_auto, noop}.
 
@@ -1560,12 +1617,23 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
                 every adverse-treatment change. Staged under review/ and added to the pending
                 ledger; held clusters are kept OUT of seen so a veto lets a later run redraft them.
 
-    Pure of network. Isolated from main() so the routing is unit-tested (test_review.py)."""
+    A held card whose cluster is in `fable_cleared` (the senior Fable review judged its flag a
+    false positive, in OPINIONS_FABLE_REVIEW=clear) is routed to AUTO instead, carrying its hold
+    reasons so the auto commit records that it was Fable-cleared. `fable_verdicts` maps cluster_id
+    -> the verdict dict for the review PR body. The Fable network pass already ran in main(), so
+    this stays pure of network and unit-tested (test_review.py)."""
     flagged_map = dict(flagged)
-    auto_cards, held_items = [], []
+    fable_cleared = fable_cleared or set()
+    fable_verdicts = fable_verdicts or {}
+    auto_cards, held_items, cleared_items = [], [], []
     for e in added:
         reasons = review_store.hold_reasons(e, flagged_map, crosschecks, completeness, overruling_cids)
-        (held_items if reasons else auto_cards).append((e, reasons))
+        if reasons and int(e["cluster_id"]) in fable_cleared:
+            auto_cards.append((e, reasons)); cleared_items.append((e, reasons))   # Fable-cleared -> auto
+        elif reasons:
+            held_items.append((e, reasons))
+        else:
+            auto_cards.append((e, []))
     held_cids = ({int(e["cluster_id"]) for e, _ in held_items}
                  | {int(ev["citer"]["cluster_id"]) for ev in treat_events})
 
@@ -1590,8 +1658,16 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
         state["last_filed"] = min(_lf, datetime.date.today().isoformat())
         render.render(auto_entries)
         ab = ["## Georgia Appellate Watch: %d new opinion(s) (auto-published)" % len(auto_cards), ""]
-        for i, (e, _r) in enumerate(auto_cards, 1):
-            ab += _pr_card(e, i) + [""]
+        if cleared_items:
+            ab += ["_%d of these were held for review, then cleared by the Fable senior review as a "
+                   "false positive:_" % len(cleared_items), ""]
+        for i, (e, r) in enumerate(auto_cards, 1):
+            ab += _pr_card(e, i)
+            if r:   # a Fable-cleared card: record the flag it cleared and Fable's read
+                v = fable_verdicts.get(int(e["cluster_id"]), {})
+                ab += ["", "_Fable-cleared from review (was held: %s). Fable: %s_"
+                       % ("; ".join(r), v.get("assessment", ""))]
+            ab += [""]
         safeio.atomic_write_text(AUTO_PR_PATH, "\n".join(ab) + "\n")
 
     # REVIEW lane: stage each held card and each treatment change; extend the pending ledger and
@@ -1605,13 +1681,19 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
         review_store.save_pending(pending_review | held_cids, stamp=now_iso)
         rb = ["## Georgia Appellate Watch: %d case(s) held for review" % (len(held_items) + len(treat_events)),
               "",
-              "Accept a case by leaving it in this PR and merging. Veto one by commenting "
-              "`/veto <cluster_id>` (or deleting its file under `review/`); a vetoed case is left "
-              "eligible for a later run to redraft. Merging applies only the cases still present.", ""]
+              "Accept a case by leaving it in this PR and merging. Drop one by commenting "
+              "`/veto <cluster_id>` (redraft it later) or `/decline <cluster_id>` (a permanent no). "
+              "Merging applies only the cases still present.", ""]
         for i, (e, reasons) in enumerate(held_items, 1):
             rb += _pr_card(e, i)
-            rb += ["", "**Held because:** " + "; ".join(reasons),
-                   "**To veto this case:** `/veto %d`" % int(e["cluster_id"]), ""]
+            rb += ["", "**Held because:** " + "; ".join(reasons)]
+            v = fable_verdicts.get(int(e["cluster_id"]))
+            if v:
+                rb += ["**Fable review:** %s _(recommendation: %s; confidence: %s%s)_"
+                       % (v.get("assessment", ""), v.get("recommendation", "?"), v.get("confidence", "?"),
+                          "" if v.get("available") else "; unavailable")]
+            rb += ["**Drop this case:** `/veto %d` or `/decline %d`"
+                   % (int(e["cluster_id"]), int(e["cluster_id"])), ""]
         for cardnm, newnm, kind in treat_flags:
             rb.append("- treatment: **%s** may be %s by the new decision %s." % (cardnm, kind, newnm))
         if treat_events:
@@ -1738,6 +1820,7 @@ def main():
     run_ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     crosschecks = {}   # cluster_id -> {"verdict", "reason"} from the fidelity guard; surfaced in the PR, not written to opinions.json
     completeness = {}  # cluster_id -> {"verdict", "reason"} from the completeness guard; surfaced in the PR, not written to opinions.json
+    texts = {}         # cluster_id -> opinion text, kept so the Fable held-case review can verify a flag without re-fetching
     treat_flags, audit_notes = [], []          # adverse treatment of existing cards (forward escalation)
     treat_events = []      # every new-citer treatment change, staged to the REVIEW lane (existing-card change)
     overruling_cids = set()  # candidates whose opinion caused a treatment change; held with that change if they card
@@ -2035,6 +2118,7 @@ def main():
         if cp:
             completeness[cid] = cp
         added.append(entry)
+        texts[cid] = text
         dedup_index.append((_dup_sig(entry["court"], entry["date"], entry["dockets"], entry["name"]),
                             entry["name"]))
         hold_note = (", %d holdings" % (1 + len(additional_holdings))) if additional_holdings else ""
@@ -2141,9 +2225,15 @@ def main():
     # rendered for a straight-to-main publish -- or HELD (guard-flagged, or it overrules/modifies
     # an existing card) -> staged under review/ for a bundled review PR a person accepts by merging
     # or vetoes case by case with `/veto <cluster_id>`. Every treatment change is held.
+    # Senior Fable review of the held cases (network) BEFORE routing, so routing stays pure: it
+    # adjudicates every held card, and in OPINIONS_FABLE_REVIEW=clear moves a confident false
+    # positive back to the auto lane. Off (empty) unless the mode is advisory or clear.
+    fable_cleared, fable_verdicts = fable_review_pass(added, flagged, crosschecks, completeness,
+                                                      overruling_cids, texts)
     routed = route_and_publish(added, treat_events, clean_entries, flagged, crosschecks,
                                completeness, overruling_cids, pending_review, state, seen,
-                               evaluated, have, now_iso, treat_flags)
+                               evaluated, have, now_iso, treat_flags,
+                               fable_cleared=fable_cleared, fable_verdicts=fable_verdicts)
     print(cl_line)
     if routed["noop"]:
         _summary("No new opinions this run.", "%s \u00b7 since %s" % (cl_line, since))

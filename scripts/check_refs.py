@@ -29,7 +29,8 @@ TARGETS = ["update", "render", "cl_rate", "safeio", "jurisdictions",
            "treatment_core", "official_ga", "backfill", "batch",
            "review_store", "review_apply", "skill_alert",
            "digest", "queue_cases", "treatment", "maintain", "siteconfig",
-           "courts", "alert", "model_watch", "golden_check", "skill_authorities"]
+           "courts", "alert", "model_watch", "golden_check", "skill_authorities",
+           "fable_review", "review_stage"]
 
 
 def main():

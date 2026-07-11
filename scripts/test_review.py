@@ -91,6 +91,31 @@ def test_route_and_publish(tmp):
     check("route: seen advances for the auto card, not the held ones", seen == {1, 7})
 
 
+def test_route_fable_cleared(tmp):
+    # A held (flagged) card the Fable review cleared as a false positive is routed to AUTO --
+    # published, not staged, seen advances -- while a held card Fable did NOT clear stays held.
+    _point_store(tmp)
+    clean = [card(7, "Old Precedent")]
+    added = [card(1, "Clean New"), card(2, "Flagged but cleared"), card(3, "Flagged still held")]
+    routed = update.route_and_publish(
+        added=added, treat_events=[], clean_entries=clean,
+        flagged=[("Flagged but cleared", ["low confidence"]), ("Flagged still held", ["low confidence"])],
+        crosschecks={}, completeness={}, overruling_cids=set(), pending_review=set(),
+        state={"seen_clusters": [7]}, seen={7}, evaluated={1, 2, 3}, have={7}, now_iso="t",
+        treat_flags=[], fable_cleared={2},
+        fable_verdicts={2: {"clear": True, "recommendation": "accept", "confidence": "high",
+                            "assessment": "faithful to the opinion", "available": True, "is_false_positive": True}})
+    check("fable-clear: counts 2 auto, 1 held", routed["auto"] == 2 and routed["held"] == 1)
+    pub_ids = {e["cluster_id"] for e in json.load(open(update.JSON_PATH))}
+    check("fable-clear: the cleared card is auto-published", 2 in pub_ids)
+    check("fable-clear: the un-cleared held card is NOT published", 3 not in pub_ids)
+    staged = {c["cluster_id"] for c in review_store.read_staged()[0]}
+    check("fable-clear: only the un-cleared card is staged", staged == {3})
+    check("fable-clear: pending ledger holds only the un-cleared card", review_store.load_pending() == {3})
+    seen = set(json.load(open(update.STATE_PATH))["seen_clusters"])
+    check("fable-clear: seen advances for cleared+clean, not the held one", seen == {1, 2, 7})
+
+
 def test_route_noop(tmp):
     _point_store(tmp)
     routed = update.route_and_publish(
@@ -284,7 +309,7 @@ def test_merge_new_into_branch(tmp):
 def main():
     print("review routing + apply:")
     test_hold_reasons()
-    for t in (test_store_roundtrip, test_route_and_publish, test_route_noop,
+    for t in (test_store_roundtrip, test_route_and_publish, test_route_fable_cleared, test_route_noop,
               test_apply_merged, test_apply_idempotent_card, test_apply_closed_unmerged,
               test_apply_declined, test_apply_declined_only, test_apply_veto_backstop,
               test_merge_new_into_branch):
@@ -296,7 +321,7 @@ def main():
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (49 checks)")
+    print("\nALL TESTS PASSED (55 checks)")
     return 0
 
 
