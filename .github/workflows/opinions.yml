@@ -100,16 +100,30 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           CONTENT="opinions.json public/opinions.xml public/opinions.html public/archive.html public/sitemap.xml public/changes.html public/changes.xml public/stats.html public/digests.html public/o public/areas"
           BOOK="opinions_state.json opinions_pending_review.json opinions_redraft.jsonl opinions_pipeline_log.jsonl opinions_rejections.jsonl opinions_fable_review.jsonl skill_alert_state.json"
+          # Stage only paths that exist. Several BOOK files are written CONDITIONALLY -- no held
+          # cases means no pending_review/redraft, Fable review off (the default) means no fable
+          # log -- and `git add` is atomic: one missing pathspec makes it stage NOTHING and exit
+          # nonzero. The old `git add $CONTENT $BOOK 2>/dev/null || true` therefore staged nothing
+          # whenever any one bookkeeping file was absent, so the commit was empty ("nothing to
+          # commit") and push_main then rebased a still-dirty tree and failed the whole run -- a
+          # hard failure on any run that found new cards, silent loss of bookkeeping otherwise.
+          add()  { for p in "$@"; do [ -e "$p" ] && git add "$p"; done; return 0; }
+          addN() { for p in "$@"; do [ -e "$p" ] && git add -N "$p"; done; return 0; }
           # -N surfaces never-committed generated files (a new o/ permalink) to add/diff.
-          git add -N $CONTENT 2>/dev/null || true
+          addN $CONTENT
           if [ -n "$(git status --porcelain -- $CONTENT)" ]; then
             echo "auto=true" >> "$GITHUB_OUTPUT"
-            git add $CONTENT $BOOK 2>/dev/null || true
-            git commit -m "opinions: publish new appellate decisions" || echo "nothing to commit"
-            bash scripts/push_main.sh
+            add $CONTENT $BOOK
+            # Push only if the commit actually captured something: never hand push_main a dirty
+            # tree (its rebase aborts on unstaged changes), which is the exact failure this fixes.
+            if git commit -m "opinions: publish new appellate decisions"; then
+              bash scripts/push_main.sh
+            else
+              echo "::warning::auto lane saw content changes but nothing was committed; skipping push"
+            fi
           else
             echo "auto=false" >> "$GITHUB_OUTPUT"
-            git add $BOOK 2>/dev/null || true
+            add $BOOK
             if git diff --cached --quiet; then
               echo "No bookkeeping changes."
             else
