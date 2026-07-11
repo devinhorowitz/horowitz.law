@@ -18,16 +18,22 @@ RESEND_TOPIC_ID = "52b81509-0230-4d3d-b5ff-393409df3b2c"
 SITE_URL = "https://horowitz.law"
 
 # -------------------------------------------------------------------------
-# OPTIONAL: in-code rate limit (defense in depth) for POST /api/subscribe.
+# RECOMMENDED: an active rate limit for POST /api/subscribe. Turnstile alone
+# does NOT bound how many confirmation emails a solved-challenge farm can send
+# to attacker-supplied addresses (an email-bombing / sender-reputation risk for
+# digest@horowitz.law), so this endpoint needs a real limiter, not just the
+# human check. Make sure EITHER a Cloudflare WAF "Rate limiting rule"
+# (dashboard > Security > WAF) is active, OR the in-code binding below is
+# enabled -- do not leave both off.
 #
-# NOT required. The PRIMARY rate limit is a Cloudflare WAF "Rate limiting
-# rule" (dashboard > Security > WAF), which needs no code and runs at the
-# edge. functions/api/subscribe/index.js uses the binding below ONLY if it
-# exists and silently skips it otherwise, so leaving this commented changes
-# nothing and cannot break the Pages build.
+# functions/api/subscribe/index.js uses the binding below ONLY if it exists
+# (and silently skips it otherwise, so leaving this commented cannot break the
+# Pages build). When enabled it limits on BOTH the source IP and the
+# destination email, so one victim address can't be bombed from a rotating IP
+# pool.
 #
-# To enable: confirm your Pages project supports the `ratelimit` binding,
-# then uncomment. `period` must be 10 or 60 (seconds); `namespace_id` is any
+# To enable: confirm your Pages project supports the `ratelimit` binding, then
+# uncomment. `period` must be 10 or 60 (seconds); `namespace_id` is any
 # integer-as-string unique to your account. Requires Wrangler >= 4.36.
 #
 # [[ratelimits]]
