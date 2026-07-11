@@ -61,7 +61,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install --upgrade "pypdf>=5,<6"
+        run: pip install -r requirements.txt
 
       - name: Sweep citations, classify treatment, flag adversely-treated cards
         env:

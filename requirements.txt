@@ -1,0 +1,10 @@
+# Runtime Python dependencies for the opinions pipeline, pinned to an exact version so a broken
+# or compromised upstream release cannot land in a funnel run unreviewed. These jobs hold the
+# ANTHROPIC_API_KEY and COURTLISTENER_TOKEN (and several have contents: write), and pypdf parses
+# UNTRUSTED court PDFs -- so an unpinned `pip install --upgrade` was the one supply-chain gap in
+# an otherwise SHA-pinned, egress-blocked setup. Dependabot now proposes bumps as reviewable,
+# CI-gated PRs instead (.github/dependabot.yml), the same posture as the pinned Actions.
+#
+# Kept on the 5.x line: dependabot ignores the pypdf major bump (see dependabot.yml), matching the
+# former `>=5,<6` cap. To move to 6.x, bump this by hand after validating the funnel against it.
+pypdf==5.9.0

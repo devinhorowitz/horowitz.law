@@ -12,8 +12,9 @@ name: Auto-merge self-healing PRs
 #     trust a CI check because a PR opened with the default GITHUB_TOKEN triggers no CI at all --
 #     GitHub's anti-recursion rule -- so there is no check to gate on.
 #
-#   * dependabot/github_actions/* : merged only when authored by dependabot[bot] and every CI check
-#     is green. Dependabot PRs DO trigger CI, so gating on the check rollup is enough.
+#   * dependabot/* (github_actions + pip) : merged only when authored by dependabot[bot] and every
+#     CI check is green. Dependabot PRs DO trigger CI, so gating on the check rollup is enough, and
+#     dependabot's own config bounds what it proposes (e.g. it holds pypdf on the 5.x line).
 #
 # model-watch (bot/model-watch) is deliberately NOT auto-merged: it swaps the Claude model that
 # writes the legal cards, and CI -- being hermetic -- never actually runs that model (the golden-set
@@ -120,17 +121,20 @@ jobs:
           allowed-endpoints: >
             github.com:443
             api.github.com:443
-      - name: Merge green dependabot action bumps
+      - name: Merge green dependabot bumps
         env:
           GH_TOKEN: ${{ github.token }}
           R: ${{ github.repository }}
         run: |
           set -e
-          # Open PRs authored by dependabot on a github-actions bump branch. (The branch-prefix and
-          # author checks are belt-and-suspenders: only dependabot opens dependabot/* here.)
+          # Open PRs authored by dependabot on any managed ecosystem's bump branch -- github_actions
+          # and pip (requirements*.txt). Dependabot's own config bounds what it proposes (e.g. the
+          # pypdf major bump is ignored there), so any PR reaching here is an in-policy update; CI is
+          # the merge gate. The branch-prefix and author checks are belt-and-suspenders: only
+          # dependabot opens dependabot/* here.
           nums=$(gh pr list --repo "$R" --state open --json number,headRefName,author \
-                   --jq '.[] | select(.author.login=="dependabot[bot]" and (.headRefName|startswith("dependabot/github_actions/"))) | .number')
-          if [ -z "$nums" ]; then echo "No open dependabot action-bump PRs."; exit 0; fi
+                   --jq '.[] | select(.author.login=="dependabot[bot]" and (.headRefName|startswith("dependabot/"))) | .number')
+          if [ -z "$nums" ]; then echo "No open dependabot bump PRs."; exit 0; fi
           for num in $nums; do
             # gh pr checks exits 0 only when every check succeeded; nonzero on any failure or while
             # any check is still pending. Fail closed: merge on 0, otherwise leave it for next time.

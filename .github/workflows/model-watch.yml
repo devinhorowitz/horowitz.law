@@ -62,7 +62,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install --upgrade "pypdf>=5,<6"   # golden_check imports update, which imports pypdf
+        run: pip install -r requirements.txt   # golden_check imports update, which imports pypdf
 
       # Map the PAT secret to an output so later steps gate on a plain value (secrets are
       # awkward to reference inside an `if:`). Prints nothing about the secret itself.
