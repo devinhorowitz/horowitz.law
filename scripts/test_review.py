@@ -251,12 +251,43 @@ def test_apply_veto_backstop(tmp):
     check("backstop: counted as vetoed, not accepted", counts["vetoed"] == 1 and counts["accepted_cards"] == 0)
 
 
+def test_merge_new_into_branch(tmp):
+    # The funnel's file-level reconciliation (scripts/review_stage.py -> merge_new_into_branch):
+    # this run's new stage unions into the rebuilt branch, but a case already vetoed/declined on
+    # the branch is NOT resurrected, and existing files + markers are preserved.
+    new_root = os.path.join(tmp, "new")
+    branch = os.path.join(tmp, "branch")
+    # This run freshly stages: card 10 (will be blocked by a branch veto), card 12 (ok), and a
+    # treatment whose citer 30 was declined on the branch.
+    review_store.stage_card(card(10, "Fresh but vetoed"), ["flag"], root=new_root)
+    review_store.stage_card(card(12, "Fresh ok"), ["flag"], root=new_root)
+    review_store.stage_treatment(20, {"cluster_id": 30, "name": "Citer", "kind": "overruled",
+                                      "court": "ctapp", "date": "2026-01-01", "note": ""}, "adverse", root=new_root)
+    # The branch already holds an older card 11 and markers for the vetoed/declined cases.
+    review_store.stage_card(card(11, "Older held"), ["flag"], root=branch)
+    review_store.add_vetoed(10, root=branch)
+    review_store.add_declined(30, root=branch)
+
+    added, skipped = review_store.merge_new_into_branch(new_root, branch)
+    br_cards, br_treats = review_store.read_staged(root=branch)
+    ids = {c["cluster_id"] for c in br_cards}
+    citer_ids = {(t.get("citer") or {}).get("cluster_id") for t in br_treats}
+    check("merge: older branch card kept", 11 in ids)
+    check("merge: an unblocked new card is added", 12 in ids)
+    check("merge: a vetoed case is not re-added by the union", 10 not in ids)
+    check("merge: a declined treatment citer is not re-added", 30 not in citer_ids)
+    check("merge: markers preserved on the branch",
+          review_store.read_vetoed(branch) == {10} and review_store.read_declined(branch) == {30})
+    check("merge: reports 1 added, 2 skipped", len(added) == 1 and len(skipped) == 2)
+
+
 def main():
     print("review routing + apply:")
     test_hold_reasons()
     for t in (test_store_roundtrip, test_route_and_publish, test_route_noop,
               test_apply_merged, test_apply_idempotent_card, test_apply_closed_unmerged,
-              test_apply_declined, test_apply_declined_only, test_apply_veto_backstop):
+              test_apply_declined, test_apply_declined_only, test_apply_veto_backstop,
+              test_merge_new_into_branch):
         tmp = tempfile.mkdtemp(prefix="review_test_")
         try:
             t(tmp)
@@ -265,7 +296,7 @@ def main():
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (43 checks)")
+    print("\nALL TESTS PASSED (49 checks)")
     return 0
 
 
