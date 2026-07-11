@@ -7,4 +7,4 @@
 #
 # Kept on the 5.x line: dependabot ignores the pypdf major bump (see dependabot.yml), matching the
 # former `>=5,<6` cap. To move to 6.x, bump this by hand after validating the funnel against it.
-pypdf==5.9.0
+pypdf==6.13.3
