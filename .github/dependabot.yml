@@ -16,8 +16,8 @@ updates:
   # Python deps pinned in requirements.txt / requirements-ci.txt (pypdf, pyyaml). pypdf parses
   # untrusted court PDFs inside jobs holding secrets, so keeping it patched is a security concern,
   # not just hygiene. Dependabot opens a CI-gated PR on each release; automerge.yml merges it on
-  # green CI. The pypdf MAJOR bump is ignored to hold the 5.x line (the former `>=5,<6` cap); drop
-  # this ignore and validate the funnel by hand to move to 6.x.
+  # green CI. No major-version cap: the 5.x line is EOL for security fixes (several DoS advisories
+  # are 6.x-only), so pypdf tracks the latest 6.x and beyond.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -26,7 +26,4 @@ updates:
       prefix: "deps"
     labels:
       - "dependencies"
-    ignore:
-      - dependency-name: "pypdf"
-        update-types: ["version-update:semver-major"]
  

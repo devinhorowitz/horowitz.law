@@ -59,6 +59,25 @@ NOTFOUND_PATH = os.path.join(WEB, "404.html")
 STATIC_PAGES = [os.path.join(WEB, p) for p in
                 ("index.html", "resume.html", "colophon.html", "subscribe.html", "404.html")]
 
+
+def _rel(p):
+    return os.path.relpath(p, REPO)
+
+
+# The complete set of paths render() creates or maintains, as repo-relative paths -- the ONE source
+# of truth for "what render owns". Everything that has to agree on this set derives from it or is
+# checked against it, so the three-way duplication that caused real bugs (a page render re-stamps
+# but a workflow forgot to stage -> push aborts on a dirty tree) cannot recur:
+#   * scripts/publish.py stages exactly opinions.json + OUTPUT_PATHS on the funnel's write-to-main.
+#   * render-sync.yml's add-paths must equal OUTPUT_PATHS -- asserted in scripts/check_site.py, so a
+#     new output added here without updating that workflow fails CI instead of stranding a file.
+# o/ and areas/ are whole directories render fully manages (create/update/delete); the STATIC_PAGES
+# are re-stamped in place (footer year, asset tokens); the rest are single generated files.
+OUTPUT_PATHS = sorted({_rel(p) for p in (
+    STATIC_PAGES + [HTML_PATH, ARCHIVE_PATH, XML_PATH, SITEMAP_PATH, CHANGES_PATH, STATS_PATH,
+                    CHANGES_XML_PATH, DIGESTS_PATH, SECURITY_TXT_PATH, VCARD_PATH,
+                    PERMA_DIR, AREAS_DIR])})
+
 _YEAR_RE = re.compile(r'(&copy;|\u00a9)\s*\d{4}')
 
 # Asset ?v= tokens are content hashes: the first 10 hex chars of sha256, the
