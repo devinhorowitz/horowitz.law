@@ -66,6 +66,10 @@ def _rm_staged():
                 os.remove(os.path.join(sub, fn))
             except OSError:
                 pass
+    try:
+        os.remove(review_store.DECLINED_PATH)   # the declined marker is consumed once, here
+    except OSError:
+        pass
 
 
 def _summary(md):
@@ -112,38 +116,53 @@ def apply_merged():
         applied_treats.append((card.get("name", ""), citer.get("name", "")))
         accepted_ids.add(int(citer["cluster_id"]))
 
-    # 3. Vetoed = pending when the PR opened, minus everything still staged (accepted).
+    # 3. Resolve the cases a human dropped from the batch. Both a /veto and a /decline remove
+    #    the case's staged file, so both fall out of `surviving`; review/declined.json is what
+    #    tells them apart. A veto is redrafted later (logged, left un-seen); a decline is a
+    #    permanent no (marked seen below, never logged).
     surviving = review_store.staged_cluster_ids()
-    vetoed = sorted(pending - surviving)
+    declined_ids = review_store.read_declined()
+    dropped = pending - surviving
+    vetoed = sorted(dropped - declined_ids)
+    declined = sorted(dropped & declined_ids)
     if vetoed:
         review_store.log_redraft([{"ts": _stamp(), "cluster_id": v, "reason": "vetoed in review"}
                                   for v in vetoed])
 
-    # 4. Persist. Accepted clusters join seen_clusters; vetoed ones are deliberately left out
-    #    so the funnel rediscovers and redrafts them. Then re-render and clear the batch.
-    if accepted_ids:      # non-empty iff a card or a treatment was accepted (both add to it)
-        safeio.atomic_write_json(update.JSON_PATH, entries)
+    # 4. Persist. Accepted clusters AND declined clusters join seen_clusters -- accepted so the
+    #    funnel does not re-evaluate them, declined so it never redrafts them; vetoed ones are
+    #    left out so the funnel rediscovers and redrafts them. opinions.json is rewritten and
+    #    re-rendered only when a card or treatment was actually accepted.
+    seen_add = accepted_ids | set(declined)
+    if seen_add:
         state = _load_state()
-        seen = set(state.get("seen_clusters", [])) | accepted_ids
-        state["seen_clusters"] = sorted(seen)[-update.SEEN_CAP:]
-        if entries:
-            state["last_filed"] = max(e["date"] for e in entries if e.get("date"))
+        state["seen_clusters"] = sorted(set(state.get("seen_clusters", [])) | seen_add)[-update.SEEN_CAP:]
+        if accepted_ids:
+            safeio.atomic_write_json(update.JSON_PATH, entries)
+            if entries:
+                # Clamp to today, same as the funnel: an accepted card with a bad future date
+                # must not poison the watermark.
+                _lf = max(e["date"] for e in entries if e.get("date"))
+                state["last_filed"] = min(_lf, datetime.date.today().isoformat())
         state["updated"] = _stamp()
         safeio.atomic_write_json(update.STATE_PATH, state)
-        render.render(entries)
+        if accepted_ids:
+            render.render(entries)
 
     review_store.save_pending(set(), stamp=_stamp())   # batch resolved
     _rm_staged()
 
     counts = {"accepted_cards": len(added_names), "accepted_treatments": len(applied_treats),
-              "vetoed": len(vetoed), "skipped": len(skipped)}
-    print("review apply (merged): %d card(s), %d treatment(s) accepted; %d vetoed; %d skipped"
-          % (counts["accepted_cards"], counts["accepted_treatments"], counts["vetoed"], counts["skipped"]))
+              "vetoed": len(vetoed), "declined": len(declined), "skipped": len(skipped)}
+    print("review apply (merged): %d card(s), %d treatment(s) accepted; %d vetoed; %d declined; %d skipped"
+          % (counts["accepted_cards"], counts["accepted_treatments"], counts["vetoed"],
+             counts["declined"], counts["skipped"]))
     for s in skipped:
         print("  . " + s)
     _summary("### Review batch applied %s\n\n- accepted: %d card(s), %d treatment change(s)\n"
-             "- vetoed (left for redraft): %d\n"
-             % (_stamp(), counts["accepted_cards"], counts["accepted_treatments"], counts["vetoed"])
+             "- vetoed (left for redraft): %d\n- declined (marked seen, will not return): %d\n"
+             % (_stamp(), counts["accepted_cards"], counts["accepted_treatments"], counts["vetoed"],
+                counts["declined"])
              + ("".join("- accepted card: %s\n" % n for n in added_names)))
     return counts
 

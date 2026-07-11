@@ -53,6 +53,7 @@ def _point_store(tmp):
     review_store.TREAT_DIR = os.path.join(review_store.REVIEW_DIR, "treatments")
     review_store.PENDING_PATH = os.path.join(tmp, "opinions_pending_review.json")
     review_store.REDRAFT_PATH = os.path.join(tmp, "opinions_redraft.jsonl")
+    review_store.DECLINED_PATH = os.path.join(review_store.REVIEW_DIR, "declined.json")
     update.JSON_PATH = os.path.join(tmp, "opinions.json")
     update.STATE_PATH = os.path.join(tmp, "opinions_state.json")
     update.AUTO_PR_PATH = os.path.join(tmp, "pr_body_auto.md")
@@ -161,7 +162,7 @@ def test_apply_merged(tmp):
     check("apply: pending ledger cleared", review_store.load_pending() == set())
     check("apply: staging tree emptied", review_store.read_staged() == ([], []))
     check("apply: counts report 1 card, 1 treatment, 1 veto",
-          counts == {"accepted_cards": 1, "accepted_treatments": 1, "vetoed": 1, "skipped": 0})
+          counts == {"accepted_cards": 1, "accepted_treatments": 1, "vetoed": 1, "declined": 0, "skipped": 0})
 
 
 def test_apply_idempotent_card(tmp):
@@ -190,11 +191,51 @@ def test_apply_closed_unmerged(tmp):
           review_store.load_pending() == set() and review_store.read_staged() == ([], []))
 
 
+def test_apply_declined(tmp):
+    _point_store(tmp)
+    json.dump([card(7, "Existing")], open(update.JSON_PATH, "w"))
+    json.dump({"seen_clusters": []}, open(update.STATE_PATH, "w"))
+    # cid 1 stays staged (accepted). cid 5 was /decline'd (file dropped, id in declined.json).
+    # cid 2 was /veto'd (file dropped, NOT in declined.json). Decline and veto must diverge.
+    review_store.stage_card(card(1, "Kept Card"), ["fidelity flag"])
+    review_store.add_declined(5)
+    review_store.save_pending({1, 2, 5}, stamp="t")
+
+    counts = review_apply.apply_merged()
+    seen = set(json.load(open(update.STATE_PATH)).get("seen_clusters", []))
+    redraft_ids = {json.loads(l).get("cluster_id") for l in open(review_store.REDRAFT_PATH)} \
+        if os.path.exists(review_store.REDRAFT_PATH) else set()
+    check("decline: declined cluster 5 marked seen", 5 in seen)
+    check("decline: declined cluster 5 NOT redraft-logged", 5 not in redraft_ids)
+    check("decline: vetoed cluster 2 left un-seen AND redraft-logged", 2 not in seen and 2 in redraft_ids)
+    check("decline: accepted cluster 1 seen", 1 in seen)
+    check("decline: counts report 1 declined, 1 veto, 1 accepted",
+          counts["declined"] == 1 and counts["vetoed"] == 1 and counts["accepted_cards"] == 1)
+    check("decline: declined.json consumed with the batch", not os.path.exists(review_store.DECLINED_PATH))
+
+
+def test_apply_declined_only(tmp):
+    # A batch whose only human action is a decline (no accepted cards): opinions.json must be
+    # untouched, but the declined cluster must still be marked seen so it never returns.
+    _point_store(tmp)
+    json.dump([card(7, "Existing")], open(update.JSON_PATH, "w"))
+    json.dump({"seen_clusters": []}, open(update.STATE_PATH, "w"))
+    review_store.add_declined(5)
+    review_store.save_pending({5}, stamp="t")
+    counts = review_apply.apply_merged()
+    entries = json.load(open(update.JSON_PATH))
+    seen = set(json.load(open(update.STATE_PATH)).get("seen_clusters", []))
+    check("decline-only: opinions.json untouched", len(entries) == 1 and entries[0]["name"] == "Existing")
+    check("decline-only: cluster 5 marked seen with no accepted card", 5 in seen)
+    check("decline-only: counts 0 accepted, 1 declined", counts["accepted_cards"] == 0 and counts["declined"] == 1)
+
+
 def main():
     print("review routing + apply:")
     test_hold_reasons()
     for t in (test_store_roundtrip, test_route_and_publish, test_route_noop,
-              test_apply_merged, test_apply_idempotent_card, test_apply_closed_unmerged):
+              test_apply_merged, test_apply_idempotent_card, test_apply_closed_unmerged,
+              test_apply_declined, test_apply_declined_only):
         tmp = tempfile.mkdtemp(prefix="review_test_")
         try:
             t(tmp)
@@ -203,7 +244,7 @@ def main():
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (31 checks)")
+    print("\nALL TESTS PASSED (40 checks)")
     return 0
 
 
