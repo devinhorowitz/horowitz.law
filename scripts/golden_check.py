@@ -232,14 +232,16 @@ def recall():
     """Focused recall test for the Tier 1.5 pretriage screen: run pretriage alone on each cached
     case and report whether it would drop a known keeper before the Sonnet triage ever saw it. A
     pretriage drop of an expect_relevant case is a recall failure. Controls (expect_relevant false)
-    are expected to pass pretriage, which is high-recall and leaves real filtering to triage, so a
-    control that passes is fine and only noted. No CourtListener calls. Exits nonzero if any expected
-    keeper is dropped, so this gates enabling pretriage in production."""
+    may legitimately be dropped -- each control pretriage filters is one pricey Sonnet triage read
+    saved, so the control-drop count is reported as the SAVINGS side of the A/B (directional only on
+    this curated set; pretriage pays off in production only if it filters >~1/3 of screen-survivors).
+    No CourtListener calls. Exits nonzero if any expected keeper is dropped, so this gates enabling
+    pretriage in production; a clean run with a high control-drop rate is the signal to enable it."""
     if not update.PRETRIAGE_MODEL:
         print("pretriage is disabled (OPINIONS_PRETRIAGE_MODEL=''); nothing to test")
         return 0
     cases = _load()
-    missed, uncached, kept_ok, ctrl = [], [], 0, 0
+    missed, uncached, kept_ok, ctrl_drop, ctrl_pass = [], [], 0, 0, 0
     for c in cases:
         if not c.get("text"):
             uncached.append(c.get("name", "?"))
@@ -255,12 +257,23 @@ def recall():
         elif keeper:
             kept_ok += 1
             print("  ok   %-55s pretriage passed" % (name[:55]))
+        elif passed:
+            ctrl_pass += 1
+            print("  ctrl %-55s pretriage passed (control)" % (name[:55]))
         else:
-            ctrl += 1
-            print("  ctrl %-55s pretriage %s (control)" % (name[:55], "passed" if passed else "dropped"))
+            ctrl_drop += 1
+            print("  ctrl %-55s pretriage dropped (control -- a saved triage read)" % (name[:55]))
     n_keep = kept_ok + len(missed)
+    ctrl = ctrl_drop + ctrl_pass
     print("\npretriage recall: %d of %d expected keepers passed, %d missed; %d control(s), %d uncached"
           % (kept_ok, n_keep, len(missed), ctrl, len(uncached)))
+    # The savings side of the A/B: how many non-keepers pretriage filters before the pricier Sonnet
+    # triage read. On the golden set (curated, keeper-heavy) this is only a directional signal, not a
+    # production drop rate -- pretriage pays off only if it filters >~1/3 of real screen-survivors --
+    # but a control-drop count near zero means it saves little even in the best case.
+    if ctrl:
+        print("pretriage filter rate (savings signal): dropped %d of %d controls (%.0f%%) before triage"
+              % (ctrl_drop, ctrl, 100.0 * ctrl_drop / ctrl))
     if uncached:
         print("uncached (run `build` first): %s" % ", ".join(uncached))
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
@@ -269,6 +282,9 @@ def recall():
             with open(summary, "a", encoding="utf-8") as f:
                 f.write("### Pretriage recall\n\n- %d of %d expected keepers passed, %d missed\n"
                         % (kept_ok, n_keep, len(missed)))
+                if ctrl:
+                    f.write("- savings signal: pretriage dropped %d of %d controls (%.0f%%) before the "
+                            "Sonnet triage read\n" % (ctrl_drop, ctrl, 100.0 * ctrl_drop / ctrl))
                 for nm, why in missed:
                     f.write("- MISS %s: %s\n" % (nm, why))
         except Exception as e:
