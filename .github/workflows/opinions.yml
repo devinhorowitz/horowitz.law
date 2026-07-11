@@ -78,6 +78,11 @@ jobs:
           OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-5' }}
           OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-4-8' }}
           OPINIONS_MAX: ${{ vars.OPINIONS_MAX || '80' }}
+          # Senior Fable review of held cases: 'clear' auto-publishes a held card Fable is highly
+          # confident is a false positive (fail-closed); set the repo Variable to 'advisory' to
+          # only attach its verdict to the review PR, or 'off' to disable. Model is overridable too.
+          OPINIONS_FABLE_REVIEW: ${{ vars.OPINIONS_FABLE_REVIEW || 'clear' }}
+          OPINIONS_FABLE_MODEL: ${{ vars.OPINIONS_FABLE_MODEL || 'claude-fable-5' }}
         run: |
           set -o pipefail
           python scripts/update.py 2>&1 | tee "$RUNNER_TEMP/run.log"
@@ -94,7 +99,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           CONTENT="opinions.json public/opinions.xml public/opinions.html public/archive.html public/sitemap.xml public/changes.html public/changes.xml public/stats.html public/digests.html public/o public/areas"
-          BOOK="opinions_state.json opinions_pending_review.json opinions_redraft.jsonl opinions_pipeline_log.jsonl opinions_rejections.jsonl skill_alert_state.json"
+          BOOK="opinions_state.json opinions_pending_review.json opinions_redraft.jsonl opinions_pipeline_log.jsonl opinions_rejections.jsonl opinions_fable_review.jsonl skill_alert_state.json"
           # -N surfaces never-committed generated files (a new o/ permalink) to add/diff.
           git add -N $CONTENT 2>/dev/null || true
           if [ -n "$(git status --porcelain -- $CONTENT)" ]; then
