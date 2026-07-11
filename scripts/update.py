@@ -797,6 +797,17 @@ def anthropic_json(body, label="call"):
                  % (label, model, u.get("input_tokens"), u.get("output_tokens"),
                     u.get("cache_creation_input_tokens", 0), u.get("cache_read_input_tokens", 0)))
             txt = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+            # A max_tokens stop means the JSON body was cut off mid-emission. parse_json is lenient
+            # enough that a truncated object can still parse into a valid-but-incomplete dict --
+            # which would then be treated as a real verdict, silently dropping fields (a card scored
+            # on a partial answer). Treat truncation as a hard failure instead of trusting the
+            # fragment: raise so the run surfaces it rather than acting on half a response. This
+            # is the guard for the tight-budget calls (triage max_tokens=1024) as they age into
+            # longer model outputs.
+            if data.get("stop_reason") == "max_tokens":
+                raise RuntimeError("%s %s hit max_tokens (%s); response truncated -- raise its "
+                                   "max_tokens. head=%r"
+                                   % (label, model, body.get("max_tokens"), txt[:200]))
             try:
                 return parse_json(txt)
             except Exception as pe:

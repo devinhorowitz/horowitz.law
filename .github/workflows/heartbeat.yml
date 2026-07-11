@@ -1,0 +1,89 @@
+name: opinions-heartbeat
+
+# Dead-man's-switch for the unattended deployment. Every other alert in this repo is a GitHub
+# issue opened by a workflow's failure step -- which only fires if that workflow RUNS. This job is
+# the out-of-band check for the failure modes that produce no run and no signal: a CourtListener
+# feed-shape change (silent zero discovery), a retired model that stalls the funnel, a stuck
+# upstream status-page outage the preflight skips on, an expired key, or the 60-day auto-disable.
+# scripts/heartbeat.py reads the committed freshness markers (public/status.json scanned_at, and the
+# newest card in opinions.json) and exits nonzero when the funnel looks stalled; this opens/updates
+# a tracking issue, and closes it when things recover.
+#
+# It cannot catch a TOTAL 60-day auto-disable (which takes this cron down too). For that, set the
+# HEARTBEAT_PING_URL secret to an external cron-monitor ping URL (e.g. a free healthchecks.io
+# check) and add its host to allowed-endpoints below: this job pings it only on a healthy run, so
+# the external monitor alerts you when the pings stop -- even if all of GitHub's crons are disabled.
+
+on:
+  schedule:
+    - cron: '7 6 * * *'   # daily, offset from the funnel (:17 every 4h) and maintenance (13:37)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: opinions-heartbeat
+  cancel-in-progress: false
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: block
+          # github.com/api.github.com for checkout + gh; the two *.githubusercontent hosts in case a
+          # runner image lacks Python 3.12 in the toolcache. If you set HEARTBEAT_PING_URL, add its
+          # host here too (e.g. hc-ping.com:443), or the ping step will be blocked (harmless).
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Check funnel freshness
+        id: hb
+        run: |
+          set +e
+          python scripts/heartbeat.py
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+
+      # Stalled (exit 3 = funnel not running; 4 = no new cards): open or update the one tracking issue.
+      - name: Alert on a stall
+        if: ${{ steps.hb.outputs.code == '3' || steps.hb.outputs.code == '4' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body=$(cat scripts/heartbeat_alert.md 2>/dev/null || echo "The funnel heartbeat check failed; see the run log.")
+          title="Funnel heartbeat: possible stall"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi
+
+      # Healthy: close any open heartbeat issue (self-heal) and ping the optional external monitor.
+      - name: Recover and ping
+        if: ${{ steps.hb.outputs.code == '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEARTBEAT_PING_URL: ${{ secrets.HEARTBEAT_PING_URL }}
+        run: |
+          title="Funnel heartbeat: possible stall"
+          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[].number' 2>/dev/null || true); do
+            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: the funnel heartbeat is healthy again." || true
+            gh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
+          done
+          if [ -n "$HEARTBEAT_PING_URL" ]; then
+            curl -fsS -m 15 "$HEARTBEAT_PING_URL" >/dev/null 2>&1 && echo "external monitor pinged" || echo "external ping skipped (host not reachable/allow-listed)"
+          fi

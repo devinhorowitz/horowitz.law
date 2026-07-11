@@ -21,18 +21,26 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: 20
+          node-version: 22   # 20 is past its maintenance EOL; 22 is the current LTS
       - name: Lighthouse CI
         uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
           configPath: ./lighthouserc.json
           temporaryPublicStorage: true
-      - name: Open an issue on a Lighthouse regression
+      # Open ONE tracking issue and comment on it on subsequent failures, rather than a fresh
+      # issue every Monday -- unattended, a `gh issue create` on a weekly cron piles up dozens of
+      # duplicates for a single unfixed regression. Dedup by exact title (same pattern as heartbeat).
+      - name: Open or update the Lighthouse regression issue
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh issue create --repo "$GITHUB_REPOSITORY" \
-            --title "Lighthouse regression on the live site" \
-            --label automated --label perf \
-            --body "A Lighthouse run failed its score assertions. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" || true
+          title="Lighthouse regression on the live site"
+          body="A Lighthouse run failed its score assertions. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body" || true
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
+              --label automated --label perf --body "$body" || true
+          fi

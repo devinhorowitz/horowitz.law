@@ -39,10 +39,24 @@ jobs:
           # accept codes are alive-but-non-200 bot responses, not rot:
           #   202 CourtListener async render, 403/405 court-site bot blocks, 999 LinkedIn.
           #   404/410/5xx/timeout/DNS still flag, so genuine rot is still caught.
-      - name: Open an issue on broken links
+      # Reuse the one open link-rot issue instead of filing a fresh one every Monday: unattended,
+      # a weekly cron would otherwise stack duplicate issues for the same unfixed broken link. Look
+      # up the existing open issue by exact title and hand its number to create-issue-from-file,
+      # which updates that issue (fresh body) when issue-number is set and creates one when it isn't.
+      - name: Find an existing link-rot issue
+        id: existing
+        if: steps.lychee.outputs.exit_code != 0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Link checker found broken links"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          echo "number=$num" >> "$GITHUB_OUTPUT"
+      - name: Open or update the broken-links issue
         if: steps.lychee.outputs.exit_code != 0
         uses: peter-evans/create-issue-from-file@fca9117c27cdc29c6c4db3b86c48e4115a786710 # v6.0.0
         with:
           title: Link checker found broken links
           content-filepath: ./lychee/out.md
           labels: automated, link-rot
+          issue-number: ${{ steps.existing.outputs.number }}
