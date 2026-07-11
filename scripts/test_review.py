@@ -158,6 +158,29 @@ def test_store_roundtrip(tmp):
     check("store: redraft log appends a line", os.path.exists(review_store.REDRAFT_PATH))
 
 
+def test_redraft_ids_and_exemption(tmp):
+    _point_store(tmp)
+    check("redraft ids: missing ledger -> empty", review_store.load_redraft_ids() == set())
+    # A veto records a redraft; a second veto of a different case appends. Blank/malformed lines
+    # and a non-int id must be tolerated without dropping the good records.
+    review_store.log_redraft([{"ts": "t1", "cluster_id": 5, "reason": "vetoed in review"}])
+    review_store.log_redraft([{"ts": "t2", "cluster_id": 8, "reason": "review PR closed unmerged"}])
+    with open(review_store.REDRAFT_PATH, "a", encoding="utf-8") as f:
+        f.write("\n")                          # blank line
+        f.write("{not json}\n")                # malformed
+        f.write('{"reason": "no cluster_id"}\n')  # missing id
+        f.write('{"cluster_id": "x"}\n')       # non-int id
+    check("redraft ids: parses valid, tolerates junk", review_store.load_redraft_ids() == {5, 8})
+
+    # The funnel's exemption set: still-unresolved redraft ids, minus anything already resolved.
+    # Case 5 is still awaiting redraft (exempt from the since floor); case 8 was re-carded and is
+    # now published (in `have`), so it must NOT be exempt again -- the set is self-clearing.
+    seen, have, pending = {2}, {8}, {3}
+    redraft_pending = review_store.load_redraft_ids() - seen - have - pending
+    check("redraft exemption: only the unresolved vetoed case is exempt", redraft_pending == {5})
+    check("redraft exemption: a re-carded case falls out of the set", 8 not in redraft_pending)
+
+
 def test_apply_merged(tmp):
     _point_store(tmp)
     # Seed opinions.json with one already-published card that a staged treatment will modify.
@@ -309,7 +332,8 @@ def test_merge_new_into_branch(tmp):
 def main():
     print("review routing + apply:")
     test_hold_reasons()
-    for t in (test_store_roundtrip, test_route_and_publish, test_route_fable_cleared, test_route_noop,
+    for t in (test_store_roundtrip, test_redraft_ids_and_exemption,
+              test_route_and_publish, test_route_fable_cleared, test_route_noop,
               test_apply_merged, test_apply_idempotent_card, test_apply_closed_unmerged,
               test_apply_declined, test_apply_declined_only, test_apply_veto_backstop,
               test_merge_new_into_branch):
@@ -321,7 +345,7 @@ def main():
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (55 checks)")
+    print("\nALL TESTS PASSED (59 checks)")
     return 0
 
 
