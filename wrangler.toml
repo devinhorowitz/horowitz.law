@@ -41,6 +41,6 @@ SITE_URL = "https://horowitz.law"
 # namespace_id = "1001"
 #
 #   [ratelimits.simple]
-#   limit = 5
-#   period = 60
+#   limit = 3      # matches the active WAF rule: 3 requests / 10s, then a 10s block
+#   period = 10
 # -------------------------------------------------------------------------

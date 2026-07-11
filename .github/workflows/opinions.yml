@@ -138,10 +138,12 @@ jobs:
             git checkout origin/bot/opinions-review -- review 2>/dev/null || true
             branch_existed=1
           fi
-          # Union in this run's new files. Commit ONLY review/ so the branch's sole diff from
-          # main is the staged cases -- merging it can never revert an auto card, and the PR
-          # body file never leaks onto main. The body is passed to gh from the working tree.
-          cp -r "$RUNNER_TEMP/review-new/." review/
+          # Union in this run's new files via the tested Python reconciliation (not a blind cp), so
+          # a case already vetoed/declined on the branch cannot be resurrected into the PR by a
+          # re-discovery, and the "which files survive" logic is covered by scripts/test_review.py.
+          # Commit ONLY review/ so the branch's sole diff from main is the staged cases -- merging
+          # it can never revert an auto card, and the PR body file never leaks onto main.
+          python scripts/review_stage.py "$RUNNER_TEMP/review-new" review
           git add review
           if git diff --cached --quiet; then
             echo "No new review-lane changes to push."

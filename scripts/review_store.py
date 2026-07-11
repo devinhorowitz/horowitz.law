@@ -37,6 +37,7 @@ on main (bookkeeping), so the funnel reads them on its next run.
 """
 import json
 import os
+import shutil
 
 import safeio
 
@@ -242,3 +243,44 @@ def clear_markers(root=None):
             os.remove(_marker_path(name, root))
         except OSError:
             pass
+
+
+def _staged_cid(sub, filename):
+    """The cluster id a staged filename identifies: a card file is <cid>.json; a treatment file is
+    <cardcid>__<citercid>.json, keyed on the CITING cluster (the case that was staged, and the id a
+    human vetoes/declines). Returns None for an unparseable name."""
+    base = filename[:-5] if filename.endswith(".json") else filename
+    if sub == "treatments" and "__" in base:
+        base = base.split("__", 1)[1]
+    try:
+        return int(base)
+    except ValueError:
+        return None
+
+
+def merge_new_into_branch(new_root, branch_root):
+    """Reconcile this run's freshly staged cases into the review branch, deterministically and
+    testably (the funnel's git fetch/checkout/push stay in the workflow; only this file-level
+    union moves here). `branch_root` is the rebuilt branch's review/ tree -- it already holds the
+    prior batch plus the veto/decline markers; `new_root` is this run's freshly staged review/
+    tree. Every new card/treatment file is copied into `branch_root`, EXCEPT a case a human already
+    vetoed or declined on the branch: skipping it means a re-discovery cannot resurrect a dropped
+    case into the PR (a belt to the review_apply backstop's suspenders). Existing files and the
+    markers are left intact. Returns (added, skipped) as lists of "sub/filename"."""
+    blocked = read_vetoed(branch_root) | read_declined(branch_root)
+    added, skipped = [], []
+    for sub in ("cards", "treatments"):
+        src = os.path.join(new_root, sub)
+        if not os.path.isdir(src):
+            continue
+        dst = os.path.join(branch_root, sub)
+        os.makedirs(dst, exist_ok=True)
+        for fn in sorted(os.listdir(src)):
+            rel = "%s/%s" % (sub, fn)
+            cid = _staged_cid(sub, fn)
+            if cid is not None and cid in blocked:
+                skipped.append(rel)
+                continue
+            shutil.copy2(os.path.join(src, fn), os.path.join(dst, fn))
+            added.append(rel)
+    return added, skipped
