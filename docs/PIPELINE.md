@@ -248,8 +248,15 @@ the funnel force-pushes it -- but with `--force-with-lease`, not `-f`, so a `/ve
 since the run's fetch makes the lease stale and the push is **rejected** rather than silently
 clobbering the veto (the run then alerts, and the next scan rebuilds with the veto intact). The
 `/veto` workflow correspondingly retries against a moved branch and shouts "do not merge until
-confirmation posts" if it cannot converge. This reconciliation currently lives in workflow shell
-(`opinions.yml`, `review-veto.yml`) and is not under test; treat it as correctness-critical.
+confirmation posts" if it cannot converge.
+
+That branch-level lease is not the only line of defense. A `/veto` or `/decline` also records the
+cluster id in `review/vetoed.json` / `review/declined.json` on the branch, and `review_apply`
+treats those markers as **authoritative**: it refuses to publish a case a human dropped even if a
+racing scan restored its staged file (the apply-side backstop). So the veto guarantee is enforced
+in tested Python (`scripts/test_review.py`), not only in the workflow shell -- the shell rebuild is
+an optimization, the marker is the guarantee. Still, treat the reconciliation as correctness-
+critical and do not "simplify" the lease.
 
 ## Editing content by hand
 

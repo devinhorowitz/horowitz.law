@@ -53,7 +53,7 @@ def _point_store(tmp):
     review_store.TREAT_DIR = os.path.join(review_store.REVIEW_DIR, "treatments")
     review_store.PENDING_PATH = os.path.join(tmp, "opinions_pending_review.json")
     review_store.REDRAFT_PATH = os.path.join(tmp, "opinions_redraft.jsonl")
-    review_store.DECLINED_PATH = os.path.join(review_store.REVIEW_DIR, "declined.json")
+    # The veto/decline markers resolve under REVIEW_DIR (repointed above), so nothing else to set.
     update.JSON_PATH = os.path.join(tmp, "opinions.json")
     update.STATE_PATH = os.path.join(tmp, "opinions_state.json")
     update.AUTO_PR_PATH = os.path.join(tmp, "pr_body_auto.md")
@@ -211,7 +211,8 @@ def test_apply_declined(tmp):
     check("decline: accepted cluster 1 seen", 1 in seen)
     check("decline: counts report 1 declined, 1 veto, 1 accepted",
           counts["declined"] == 1 and counts["vetoed"] == 1 and counts["accepted_cards"] == 1)
-    check("decline: declined.json consumed with the batch", not os.path.exists(review_store.DECLINED_PATH))
+    check("decline: declined.json consumed with the batch",
+          not os.path.exists(review_store._marker_path("declined.json")))
 
 
 def test_apply_declined_only(tmp):
@@ -230,12 +231,32 @@ def test_apply_declined_only(tmp):
     check("decline-only: counts 0 accepted, 1 declined", counts["accepted_cards"] == 0 and counts["declined"] == 1)
 
 
+def test_apply_veto_backstop(tmp):
+    # The apply-side backstop: a vetoed case whose staged file was RESTORED to the branch by a
+    # racing scan (defeating the branch lease) must still NOT be published -- review_apply reads
+    # vetoed.json as authoritative and refuses the case even though its file is present.
+    _point_store(tmp)
+    json.dump([card(7, "Existing")], open(update.JSON_PATH, "w"))
+    json.dump({"seen_clusters": []}, open(update.STATE_PATH, "w"))
+    review_store.stage_card(card(3, "Clobbered-back veto"), ["fidelity flag"])  # file present (the clobber)
+    review_store.add_vetoed(3)                                                  # but marked vetoed
+    review_store.save_pending({3}, stamp="t")
+    counts = review_apply.apply_merged()
+    entries = json.load(open(update.JSON_PATH))
+    seen = set(json.load(open(update.STATE_PATH)).get("seen_clusters", []))
+    redraft_ids = {json.loads(l).get("cluster_id") for l in open(review_store.REDRAFT_PATH)} \
+        if os.path.exists(review_store.REDRAFT_PATH) else set()
+    check("backstop: a restored-but-vetoed card is NOT published", 3 not in {e["cluster_id"] for e in entries})
+    check("backstop: it is left un-seen and redraft-logged", 3 not in seen and 3 in redraft_ids)
+    check("backstop: counted as vetoed, not accepted", counts["vetoed"] == 1 and counts["accepted_cards"] == 0)
+
+
 def main():
     print("review routing + apply:")
     test_hold_reasons()
     for t in (test_store_roundtrip, test_route_and_publish, test_route_noop,
               test_apply_merged, test_apply_idempotent_card, test_apply_closed_unmerged,
-              test_apply_declined, test_apply_declined_only):
+              test_apply_declined, test_apply_declined_only, test_apply_veto_backstop):
         tmp = tempfile.mkdtemp(prefix="review_test_")
         try:
             t(tmp)
@@ -244,7 +265,7 @@ def main():
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (40 checks)")
+    print("\nALL TESTS PASSED (43 checks)")
     return 0
 
 

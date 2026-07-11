@@ -81,23 +81,26 @@ jobs:
             gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "No staged case with cluster id ${id} was found in this batch." || true
             exit 0
           fi
-          # Remove the case and push, retrying against the 4-hourly funnel's force-pushes of this
-          # same branch: on a rejected push, re-fetch the (moved) branch and re-apply the change --
-          # if the funnel restored the file, this drops it again -- so the action is never silently
-          # clobbered. On /decline, also record the id in review/declined.json (deduped; review_apply
-          # reads it to mark the case seen instead of redrafting it). All steps are idempotent so a
-          # retry, or an already-absent file, still converges to a clean push.
+          # The marker file that records this decision: review_apply reads it as authoritative, so
+          # the case is not published even if a racing scan restored its staged file.
+          case "$cmd" in
+            decline) marker="review/declined.json" ;;
+            *)       marker="review/vetoed.json" ;;
+          esac
+          # Remove the case, record it in the marker, and push -- retrying against the 4-hourly
+          # funnel's force-pushes of this same branch: on a rejected push, re-fetch the (moved)
+          # branch and re-apply the change (if the funnel restored the file, this drops it again),
+          # so the action is never silently clobbered. All steps are idempotent, so a retry -- or an
+          # already-absent file -- still converges to a clean push.
           ok=0
           for attempt in 1 2 3 4 5; do
             git rm -f "review/cards/${id}.json" 2>/dev/null || true
             for f in review/treatments/*__${id}.json; do [ -e "$f" ] || continue; git rm -f "$f" 2>/dev/null || true; done
-            if [ "$cmd" = "decline" ]; then
-              mkdir -p review
-              prev='[]'; [ -f review/declined.json ] && prev=$(jq -c '.clusters // []' review/declined.json)
-              arr=$(printf '%s' "$prev" | jq -c --argjson id "$id" '(. + [$id]) | unique')
-              printf '{"clusters": %s}\n' "$arr" > review/declined.json
-              git add review/declined.json
-            fi
+            mkdir -p review
+            prev='[]'; [ -f "$marker" ] && prev=$(jq -c '.clusters // []' "$marker")
+            arr=$(printf '%s' "$prev" | jq -c --argjson id "$id" '(. + [$id]) | unique')
+            printf '{"clusters": %s}\n' "$arr" > "$marker"
+            git add "$marker"
             git commit -m "review: ${cmd} case ${id}" 2>/dev/null || true
             if git push origin bot/opinions-review; then ok=1; break; fi
             echo "${cmd} push rejected (review branch moved under a scan); refetching and retrying ($attempt)"
