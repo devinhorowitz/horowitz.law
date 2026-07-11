@@ -1,10 +1,14 @@
 name: opinions-review-veto
 
-# Per-case veto for the bundled review PR. Comment `/veto <cluster_id>` on the review PR and
-# this drops that case's staged file(s) from the bot/opinions-review branch, so merging the PR
-# applies only the cases that remain. The vetoed case is left un-seen (recorded for redraft when
-# the batch is applied), so a later funnel run rediscovers and redrafts it. Only the repo owner,
-# an org member, or a collaborator can veto; comments on any other PR are ignored.
+# Per-case veto and decline for the bundled review PR. Both drop a case's staged file(s) from
+# the bot/opinions-review branch, so merging the PR applies only the cases that remain; they
+# differ in what happens to the dropped case when the batch is applied:
+#   /veto <cluster_id>     -- left un-seen and recorded for redraft, so a later funnel run
+#                             rediscovers and redrafts it (the draft was bad; try again).
+#   /decline <cluster_id>  -- marked seen (via review/declined.json, read by review_apply), so
+#                             the funnel never redrafts it (this case is not worth carding).
+# Only the repo owner, an org member, or a collaborator can act; comments on any other PR are
+# ignored.
 
 on:
   issue_comment:
@@ -22,7 +26,8 @@ jobs:
   veto:
     if: >-
       github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/veto') &&
+      (startsWith(github.event.comment.body, '/veto') ||
+       startsWith(github.event.comment.body, '/decline')) &&
       (github.event.comment.author_association == 'OWNER' ||
        github.event.comment.author_association == 'MEMBER' ||
        github.event.comment.author_association == 'COLLABORATOR')
@@ -40,7 +45,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Drop the vetoed case from the review branch
+      - name: Drop the vetoed or declined case from the review branch
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.issue.number }}
@@ -53,10 +58,14 @@ jobs:
             echo "Comment is not on the review PR (head=$head); ignoring."
             exit 0
           fi
-          # Parse the cluster id from `/veto <id>` (first integer after the command).
-          id=$(printf '%s' "$COMMENT_BODY" | grep -oE '/veto[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+          # Which command (veto|decline) and the cluster id after it.
+          case "$COMMENT_BODY" in
+            /decline*) cmd="decline" ;;
+            *)         cmd="veto" ;;
+          esac
+          id=$(printf '%s' "$COMMENT_BODY" | grep -oE "/(veto|decline)[[:space:]]+[0-9]+" | grep -oE '[0-9]+' | head -1 || true)
           if [ -z "$id" ]; then
-            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Could not read a cluster id from that comment. Use \`/veto <cluster_id>\`." || true
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Could not read a cluster id from that comment. Use \`/${cmd} <cluster_id>\`." || true
             exit 0
           fi
           git config user.name "github-actions[bot]"
@@ -66,32 +75,45 @@ jobs:
           git checkout -B bot/opinions-review origin/bot/opinions-review
           present=0
           [ -e "review/cards/${id}.json" ] && present=1
-          # Treatment files are named <cardcid>__<citercid>.json; a case vetoed by its citing id.
+          # Treatment files are named <cardcid>__<citercid>.json; a case addressed by its citing id.
           for f in review/treatments/*__${id}.json; do [ -e "$f" ] && present=1; done
           if [ "$present" = "0" ]; then
             gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "No staged case with cluster id ${id} was found in this batch." || true
             exit 0
           fi
           # Remove the case and push, retrying against the 4-hourly funnel's force-pushes of this
-          # same branch: on a rejected push, re-fetch the (moved) branch and re-apply the removal --
-          # if the funnel restored the vetoed file, this drops it again -- so a veto is never
-          # silently clobbered. `git rm`/commit are guarded so an already-absent file (a prior
-          # attempt landed, or the funnel dropped it) still converges to a clean push.
+          # same branch: on a rejected push, re-fetch the (moved) branch and re-apply the change --
+          # if the funnel restored the file, this drops it again -- so the action is never silently
+          # clobbered. On /decline, also record the id in review/declined.json (deduped; review_apply
+          # reads it to mark the case seen instead of redrafting it). All steps are idempotent so a
+          # retry, or an already-absent file, still converges to a clean push.
           ok=0
           for attempt in 1 2 3 4 5; do
             git rm -f "review/cards/${id}.json" 2>/dev/null || true
             for f in review/treatments/*__${id}.json; do [ -e "$f" ] || continue; git rm -f "$f" 2>/dev/null || true; done
-            git commit -m "review: veto case ${id}" 2>/dev/null || true
+            if [ "$cmd" = "decline" ]; then
+              mkdir -p review
+              prev='[]'; [ -f review/declined.json ] && prev=$(jq -c '.clusters // []' review/declined.json)
+              arr=$(printf '%s' "$prev" | jq -c --argjson id "$id" '(. + [$id]) | unique')
+              printf '{"clusters": %s}\n' "$arr" > review/declined.json
+              git add review/declined.json
+            fi
+            git commit -m "review: ${cmd} case ${id}" 2>/dev/null || true
             if git push origin bot/opinions-review; then ok=1; break; fi
-            echo "veto push rejected (review branch moved under a scan); refetching and retrying ($attempt)"
+            echo "${cmd} push rejected (review branch moved under a scan); refetching and retrying ($attempt)"
             sleep $((attempt * 3))
             git fetch origin bot/opinions-review
             git checkout -B bot/opinions-review origin/bot/opinions-review
           done
           if [ "$ok" = "1" ]; then
-            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Vetoed case ${id}: dropped from this batch and left eligible for a later run to redraft. Merging now applies only the remaining cases." || true
+            if [ "$cmd" = "decline" ]; then
+              msg="Declined case ${id}: dropped from this batch and marked seen -- the funnel will NOT redraft it. Merging now applies only the remaining cases."
+            else
+              msg="Vetoed case ${id}: dropped from this batch and left eligible for a later run to redraft. Merging now applies only the remaining cases."
+            fi
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$msg" || true
             exit 0
           fi
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "⚠️ Could not apply the veto of case ${id} after several retries -- the review branch kept moving under a scan. Please re-run \`/veto ${id}\` in a minute, and do NOT merge this PR until the confirmation posts." || true
-          echo "::error::veto of ${id} could not be pushed after retries"
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "⚠️ Could not apply the ${cmd} of case ${id} after several retries -- the review branch kept moving under a scan. Please re-run \`/${cmd} ${id}\` in a minute, and do NOT merge this PR until the confirmation posts." || true
+          echo "::error::${cmd} of ${id} could not be pushed after retries"
           exit 1

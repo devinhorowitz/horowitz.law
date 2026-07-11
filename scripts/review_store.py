@@ -46,6 +46,7 @@ CARDS_DIR = os.path.join(REVIEW_DIR, "cards")
 TREAT_DIR = os.path.join(REVIEW_DIR, "treatments")
 PENDING_PATH = os.path.join(REPO, "opinions_pending_review.json")
 REDRAFT_PATH = os.path.join(REPO, "opinions_redraft.jsonl")
+DECLINED_PATH = os.path.join(REVIEW_DIR, "declined.json")  # cluster ids /decline'd on the review PR; rides the branch, read once at apply
 
 
 def hold_reasons(entry, flagged_map, crosschecks, completeness, overruling_cids):
@@ -184,3 +185,32 @@ def log_redraft(records, path=None):
     with open(path, "a", encoding="utf-8") as f:
         for rec in records:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
+def _declined_path(root=None):
+    return os.path.join(root, "declined.json") if root else DECLINED_PATH
+
+
+def read_declined(root=None):
+    """Cluster ids a human /decline'd on the review PR: dropped from the batch AND marked seen
+    at apply time, so the funnel never redrafts them (unlike a veto, which is left un-seen and
+    redrafted later). Stored as review/declined.json so it rides the review branch, merges with
+    the PR, and is read once by review_apply. Missing or unreadable = empty set (fail-open)."""
+    path = _declined_path(root)
+    if not os.path.exists(path):
+        return set()
+    try:
+        with open(path, encoding="utf-8") as f:
+            return {int(c) for c in json.load(f).get("clusters", [])}
+    except (OSError, ValueError, TypeError):
+        return set()
+
+
+def add_declined(cluster_id, root=None):
+    """Add one cluster id to review/declined.json (deduped). Called by the /decline workflow on
+    the review branch, alongside removing the case's staged file(s). Returns the new set."""
+    path = _declined_path(root)
+    ids = read_declined(root) | {int(cluster_id)}
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    safeio.atomic_write_json(path, {"clusters": sorted(ids)})
+    return ids

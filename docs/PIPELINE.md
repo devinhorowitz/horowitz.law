@@ -227,9 +227,17 @@ court, date, disposition, areas, and a link to the opinion, and says why it was 
 confidence, a disposition it could not state, a citation that should not be there, a cross-check
 or completeness flag, an overrule/modify of an existing card, a treatment flag, or an
 authority-watch hit). Read the diff, fix anything off in `opinions.json` on the branch if needed,
-and **merge to accept the batch** -- or **veto a single case** by commenting `/veto <cluster_id>`,
-which drops that case so merging applies only the rest. A veto leaves the case un-seen, so a later
-run redrafts it; it is not a permanent decline.
+and **merge to accept the batch** -- or drop a single case by commenting on the PR. Two commands
+drop a case (both apply only the remaining cases on merge), differing in what happens to the
+dropped case:
+
+- **`/veto <cluster_id>`** -- the draft was bad; leave the case un-seen and redraft-log it, so a
+  later run rediscovers and redrafts it. Not permanent.
+- **`/decline <cluster_id>`** -- the case is not worth carding (a thin jurisdictional order, out
+  of scope); mark it **seen** so the funnel never redrafts it. Permanent, and it costs nothing on
+  later scans -- the paper cut a bare veto leaves (the case returns, at Opus cost, every scan it is
+  still in the feed window) is exactly what `/decline` closes. Recorded in `review/declined.json`
+  on the branch and read by `review_apply` at merge.
 
 How the review branch is built, and why the push step looks the way it does -- do not
 "simplify" it. Every run **rebuilds** `bot/opinions-review` from current `main` and re-adds the
