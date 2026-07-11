@@ -46,7 +46,8 @@ CARDS_DIR = os.path.join(REVIEW_DIR, "cards")
 TREAT_DIR = os.path.join(REVIEW_DIR, "treatments")
 PENDING_PATH = os.path.join(REPO, "opinions_pending_review.json")
 REDRAFT_PATH = os.path.join(REPO, "opinions_redraft.jsonl")
-DECLINED_PATH = os.path.join(REVIEW_DIR, "declined.json")  # cluster ids /decline'd on the review PR; rides the branch, read once at apply
+# Per-case veto/decline decisions ride the review branch as review/vetoed.json and
+# review/declined.json (see the marker helpers below).
 
 
 def hold_reasons(entry, flagged_map, crosschecks, completeness, overruling_cids):
@@ -187,16 +188,12 @@ def log_redraft(records, path=None):
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
-def _declined_path(root=None):
-    return os.path.join(root, "declined.json") if root else DECLINED_PATH
+def _marker_path(name, root=None):
+    return os.path.join(root or REVIEW_DIR, name)
 
 
-def read_declined(root=None):
-    """Cluster ids a human /decline'd on the review PR: dropped from the batch AND marked seen
-    at apply time, so the funnel never redrafts them (unlike a veto, which is left un-seen and
-    redrafted later). Stored as review/declined.json so it rides the review branch, merges with
-    the PR, and is read once by review_apply. Missing or unreadable = empty set (fail-open)."""
-    path = _declined_path(root)
+def _read_marker(name, root=None):
+    path = _marker_path(name, root)
     if not os.path.exists(path):
         return set()
     try:
@@ -206,11 +203,42 @@ def read_declined(root=None):
         return set()
 
 
-def add_declined(cluster_id, root=None):
-    """Add one cluster id to review/declined.json (deduped). Called by the /decline workflow on
-    the review branch, alongside removing the case's staged file(s). Returns the new set."""
-    path = _declined_path(root)
-    ids = read_declined(root) | {int(cluster_id)}
+def _add_marker(name, cluster_id, root=None):
+    path = _marker_path(name, root)
+    ids = _read_marker(name, root) | {int(cluster_id)}
     os.makedirs(os.path.dirname(path), exist_ok=True)
     safeio.atomic_write_json(path, {"clusters": sorted(ids)})
     return ids
+
+
+# Two per-case decisions a human records on the review PR, each a small {"clusters": [...]} file
+# that rides the review branch, merges with the PR, and is read ONCE by review_apply:
+#   declined.json -- /decline: drop the case AND mark it seen, so the funnel never redrafts it.
+#   vetoed.json   -- /veto: drop the case, leave it un-seen, redraft it later. The marker also lets
+#                    review_apply REFUSE to publish a vetoed case even if its staged file was
+#                    restored to the branch by a racing scan -- the apply-side backstop to the
+#                    branch-level --force-with-lease, so the guarantee does not live only in shell.
+# Missing/unreadable = empty set (fail-open: at worst a dropped case is re-evaluated).
+def read_declined(root=None):
+    return _read_marker("declined.json", root)
+
+
+def add_declined(cluster_id, root=None):
+    return _add_marker("declined.json", cluster_id, root)
+
+
+def read_vetoed(root=None):
+    return _read_marker("vetoed.json", root)
+
+
+def add_vetoed(cluster_id, root=None):
+    return _add_marker("vetoed.json", cluster_id, root)
+
+
+def clear_markers(root=None):
+    """Remove both decision markers; they are consumed once, when the batch is applied."""
+    for name in ("vetoed.json", "declined.json"):
+        try:
+            os.remove(_marker_path(name, root))
+        except OSError:
+            pass

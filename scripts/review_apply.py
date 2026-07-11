@@ -66,10 +66,7 @@ def _rm_staged():
                 os.remove(os.path.join(sub, fn))
             except OSError:
                 pass
-    try:
-        os.remove(review_store.DECLINED_PATH)   # the declined marker is consumed once, here
-    except OSError:
-        pass
+    review_store.clear_markers()   # the veto/decline markers are consumed once, here
 
 
 def _summary(md):
@@ -84,6 +81,10 @@ def apply_merged():
     counts for the run summary."""
     cards, treatments = review_store.read_staged()
     pending = review_store.load_pending()
+    # Authoritative "do not publish" set: a case a human /veto'd or /decline'd, even if a racing
+    # scan restored its staged file to the branch. This is the apply-side backstop to the
+    # branch-level --force-with-lease, so the veto guarantee does not rest only on the shell.
+    blocked = review_store.read_vetoed() | review_store.read_declined()
     entries = _load_entries()
     by_id = {int(e["cluster_id"]): e for e in entries if e.get("cluster_id") is not None}
 
@@ -96,6 +97,8 @@ def apply_merged():
         if cid is None:
             skipped.append("card file missing cluster_id"); continue
         cid = int(cid)
+        if cid in blocked:
+            skipped.append("card %d was vetoed/declined; not published" % cid); continue
         if cid in by_id:
             skipped.append("card %d already in opinions.json; skipped" % cid); continue
         entries.append(entry)
@@ -109,6 +112,8 @@ def apply_merged():
         citer = t.get("citer") or {}
         if card_cid is None or citer.get("cluster_id") is None:
             skipped.append("treatment file missing ids"); continue
+        if int(citer["cluster_id"]) in blocked:
+            skipped.append("treatment citer %s was vetoed/declined; not applied" % citer.get("cluster_id")); continue
         card = by_id.get(int(card_cid))
         if not card:
             skipped.append("treatment target card %s not found; skipped" % card_cid); continue
@@ -116,15 +121,12 @@ def apply_merged():
         applied_treats.append((card.get("name", ""), citer.get("name", "")))
         accepted_ids.add(int(citer["cluster_id"]))
 
-    # 3. Resolve the cases a human dropped from the batch. Both a /veto and a /decline remove
-    #    the case's staged file, so both fall out of `surviving`; review/declined.json is what
-    #    tells them apart. A veto is redrafted later (logged, left un-seen); a decline is a
-    #    permanent no (marked seen below, never logged).
-    surviving = review_store.staged_cluster_ids()
-    declined_ids = review_store.read_declined()
-    dropped = pending - surviving
-    vetoed = sorted(dropped - declined_ids)
-    declined = sorted(dropped & declined_ids)
+    # 3. Resolve every pending case that was NOT accepted above (either its file was dropped, or
+    #    the backstop refused a restored one). A case is DECLINED (marked seen, never redrafted)
+    #    if a human /decline'd it; otherwise it is a VETO (left un-seen and redraft-logged, so a
+    #    later run redrafts it). Derived from what was actually accepted, not from file presence.
+    declined = sorted(pending & review_store.read_declined())
+    vetoed = sorted(pending - accepted_ids - set(declined))
     if vetoed:
         review_store.log_redraft([{"ts": _stamp(), "cluster_id": v, "reason": "vetoed in review"}
                                   for v in vetoed])
