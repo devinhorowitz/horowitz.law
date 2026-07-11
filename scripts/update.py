@@ -1810,12 +1810,19 @@ def main():
         safeio.step_summary("## Georgia Appellate Watch \u00b7 funnel\n\n"
                             "**No candidates returned from the feeds this run.**")
         return
+    # Cases a human vetoed were left un-seen and logged for redraft, on the promise that a later
+    # run rediscovers and redrafts them. But a newer auto card advances last_filed past an older
+    # vetoed case, so the `since` floor would silently drop it every run and the redraft never
+    # happens. Exempt the still-unresolved redraft ids from the since floor so they are re-carded
+    # while the feed still carries them. Self-clearing: once one is re-carded it enters have/seen
+    # (or is re-held into pending_review), so it falls out of this set on the next run.
+    redraft_pending = review_store.load_redraft_ids() - seen - have - pending_review
     cand, ids = [], set()
     for r in results:
         cid = cluster_id_of(r)
         if not cid or cid in have or cid in seen or cid in ids or cid in pending_review:
             continue
-        if (r.get("dateFiled") or "") and r["dateFiled"] < since:
+        if (r.get("dateFiled") or "") and r["dateFiled"] < since and cid not in redraft_pending:
             continue
         if (r.get("dateFiled") or "") and r["dateFiled"][:10] > today:
             continue        # future-dated filing (typo'd CL metadata): never card it, never let it advance the watermark

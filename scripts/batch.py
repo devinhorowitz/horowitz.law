@@ -77,7 +77,11 @@ def _send(method, url, body=None, label="batch"):
             if e.code in RETRY_STATUS and attempt < 4:
                 time.sleep(min(2 ** attempt * 2, 30)); continue
             raise BatchError(last)
-        except urllib.error.URLError as e:
+        except (urllib.error.URLError, TimeoutError) as e:
+            # TimeoutError (bare socket.timeout) is a SIBLING of URLError under OSError, not a
+            # subclass, and a read timeout on r.read() above raises it unwrapped -- so it must be
+            # named explicitly or it escapes uncaught and crashes the maintain/backfill run instead
+            # of retrying and deferring. This matches update.anthropic_json, which _send mirrors.
             last = "%s %s -> %s" % (label, method, e)
             if attempt < 4:
                 time.sleep(min(2 ** attempt * 2, 30)); continue

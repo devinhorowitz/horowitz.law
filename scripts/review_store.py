@@ -189,6 +189,35 @@ def log_redraft(records, path=None):
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
+def load_redraft_ids(path=None):
+    """The set of cluster ids ever logged for redraft (append-only ledger, one JSON object per
+    line). Callers subtract the resolved state (seen / already-carded / pending) to get the cases
+    still awaiting a redraft, so this stays useful even though the ledger itself never shrinks.
+    Tolerant of blank or malformed lines; missing/unreadable ledger = empty set (fail-open)."""
+    path = path or REDRAFT_PATH
+    ids = set()
+    if not os.path.exists(path):
+        return ids
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    c = json.loads(line).get("cluster_id")
+                except (ValueError, TypeError):
+                    continue
+                if c is not None:
+                    try:
+                        ids.add(int(c))
+                    except (ValueError, TypeError):
+                        continue
+    except OSError:
+        return ids
+    return ids
+
+
 def _marker_path(name, root=None):
     return os.path.join(root or REVIEW_DIR, name)
 

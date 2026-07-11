@@ -98,7 +98,13 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          CONTENT="opinions.json public/opinions.xml public/opinions.html public/archive.html public/sitemap.xml public/changes.html public/changes.xml public/stats.html public/digests.html public/o public/areas"
+          # Every file render() writes, plus opinions.json. render() runs on the content path and
+          # re-stamps the static pages (footer year on the Jan-1 rollover), .well-known/security.txt
+          # (Expires renewal), and the vCard -- so if those are omitted here they are left modified-
+          # but-unstaged, the commit captures only the listed files, and push_main's rebase then
+          # aborts on the dirty tree. Keep this in lockstep with render-sync.yml's add-paths (the
+          # authoritative render-owned set) so no render output can ever strand the working tree.
+          CONTENT="opinions.json public/opinions.xml public/opinions.html public/archive.html public/sitemap.xml public/index.html public/resume.html public/colophon.html public/subscribe.html public/404.html public/changes.html public/changes.xml public/stats.html public/digests.html public/o public/areas public/.well-known/security.txt public/devin-horowitz.vcf"
           BOOK="opinions_state.json opinions_pending_review.json opinions_redraft.jsonl opinions_pipeline_log.jsonl opinions_rejections.jsonl opinions_fable_review.jsonl skill_alert_state.json"
           # Stage only paths that exist. Several BOOK files are written CONDITIONALLY -- no held
           # cases means no pending_review/redraft, Fable review off (the default) means no fable
