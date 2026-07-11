@@ -181,6 +181,36 @@ def test_redraft_ids_and_exemption(tmp):
     check("redraft exemption: a re-carded case falls out of the set", 8 not in redraft_pending)
 
 
+def test_seam_hold_veto_rediscover(tmp):
+    """End-to-end seam across route -> apply -> re-discovery: a card HELD by routing and then VETOED
+    at apply time must stay re-discoverable -- un-seen, redraft-logged, AND admitted by the funnel's
+    redraft-exemption set (so the `since` floor cannot silently drop it). This is the exact confluence
+    bug #3 lived in; a per-subsystem test that stops at route, or at apply, never exercises it."""
+    _point_store(tmp)
+    # Route: card 5 is flagged -> held (staged + pending + un-seen); card 1 is clean -> auto-published.
+    update.route_and_publish(
+        added=[card(1, "Clean"), card(5, "Flagged")], treat_events=[], clean_entries=[],
+        flagged=[("Flagged", ["low confidence"])], crosschecks={}, completeness={},
+        overruling_cids=set(), pending_review=set(), state={"seen_clusters": []},
+        seen=set(), evaluated={1, 5}, have=set(), now_iso="t", treat_flags=[])
+    routed_seen = set(json.load(open(update.STATE_PATH))["seen_clusters"])
+    check("seam: card 5 is held (pending, not yet seen)",
+          review_store.load_pending() == {5} and 5 not in routed_seen)
+
+    # Model /veto at merge: card 5 stays in the pending ledger but its staged file is gone, so
+    # apply_merged records it for redraft and leaves it un-seen (card 1 already auto-published).
+    os.remove(review_store.card_path(5))
+    review_apply.apply_merged()
+
+    seen = set(json.load(open(update.STATE_PATH)).get("seen_clusters", []))
+    have = {e["cluster_id"] for e in json.load(open(update.JSON_PATH))}
+    # The funnel's exemption set (update.py): still-unresolved redraft ids minus resolved state.
+    redraft_pending = review_store.load_redraft_ids() - seen - have - review_store.load_pending()
+    check("seam: vetoed card 5 left un-seen", 5 not in seen)
+    check("seam: vetoed card 5 redraft-logged", 5 in review_store.load_redraft_ids())
+    check("seam: funnel would re-admit card 5 past the since floor", 5 in redraft_pending)
+
+
 def test_apply_merged(tmp):
     _point_store(tmp)
     # Seed opinions.json with one already-published card that a staged treatment will modify.
@@ -336,7 +366,7 @@ def main():
               test_route_and_publish, test_route_fable_cleared, test_route_noop,
               test_apply_merged, test_apply_idempotent_card, test_apply_closed_unmerged,
               test_apply_declined, test_apply_declined_only, test_apply_veto_backstop,
-              test_merge_new_into_branch):
+              test_seam_hold_veto_rediscover, test_merge_new_into_branch):
         tmp = tempfile.mkdtemp(prefix="review_test_")
         try:
             t(tmp)
@@ -345,7 +375,7 @@ def main():
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (59 checks)")
+    print("\nALL TESTS PASSED (63 checks)")
     return 0
 
 

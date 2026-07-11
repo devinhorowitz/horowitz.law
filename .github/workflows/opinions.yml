@@ -98,44 +98,33 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Every file render() writes, plus opinions.json. render() runs on the content path and
-          # re-stamps the static pages (footer year on the Jan-1 rollover), .well-known/security.txt
-          # (Expires renewal), and the vCard -- so if those are omitted here they are left modified-
-          # but-unstaged, the commit captures only the listed files, and push_main's rebase then
-          # aborts on the dirty tree. Keep this in lockstep with render-sync.yml's add-paths (the
-          # authoritative render-owned set) so no render output can ever strand the working tree.
-          CONTENT="opinions.json public/opinions.xml public/opinions.html public/archive.html public/sitemap.xml public/index.html public/resume.html public/colophon.html public/subscribe.html public/404.html public/changes.html public/changes.xml public/stats.html public/digests.html public/o public/areas public/.well-known/security.txt public/devin-horowitz.vcf"
-          BOOK="opinions_state.json opinions_pending_review.json opinions_redraft.jsonl opinions_pipeline_log.jsonl opinions_rejections.jsonl opinions_fable_review.jsonl skill_alert_state.json"
-          # Stage only paths that exist. Several BOOK files are written CONDITIONALLY -- no held
-          # cases means no pending_review/redraft, Fable review off (the default) means no fable
-          # log -- and `git add` is atomic: one missing pathspec makes it stage NOTHING and exit
-          # nonzero. The old `git add $CONTENT $BOOK 2>/dev/null || true` therefore staged nothing
-          # whenever any one bookkeeping file was absent, so the commit was empty ("nothing to
-          # commit") and push_main then rebased a still-dirty tree and failed the whole run -- a
-          # hard failure on any run that found new cards, silent loss of bookkeeping otherwise.
-          add()  { for p in "$@"; do [ -e "$p" ] && git add "$p"; done; return 0; }
-          addN() { for p in "$@"; do [ -e "$p" ] && git add -N "$p"; done; return 0; }
-          # -N surfaces never-committed generated files (a new o/ permalink) to add/diff.
-          addN $CONTENT
-          if [ -n "$(git status --porcelain -- $CONTENT)" ]; then
-            echo "auto=true" >> "$GITHUB_OUTPUT"
-            add $CONTENT $BOOK
-            # Push only if the commit actually captured something: never hand push_main a dirty
-            # tree (its rebase aborts on unstaged changes), which is the exact failure this fixes.
-            if git commit -m "opinions: publish new appellate decisions"; then
-              bash scripts/push_main.sh
-            else
-              echo "::warning::auto lane saw content changes but nothing was committed; skipping push"
-            fi
+          # The publish decision -- which existing files to stage, and whether this is an auto-publish
+          # (new site content) or a bookkeeping-only run -- lives in scripts/publish.py, not in bash.
+          # That is deliberate: file-selection in an untested shell step caused this project's two
+          # write-to-main incidents (git add choking atomically on a missing conditional ledger; a
+          # hand-maintained file list drifting from what render writes). publish.py is unit-tested,
+          # derives its content set from render.OUTPUT_PATHS so it cannot drift, and lists only paths
+          # that exist. It prints: line 1 = mode (auto|bookkeeping|noop), remaining lines = paths to add.
+          if ! plan=$(python scripts/publish.py); then
+            echo "::error::publish.py failed to compute the publish plan"; exit 1
+          fi
+          # Parse the plan pipe-free (a here-string into mapfile, not `... | head`): under the
+          # runner's `set -eo pipefail`, a pipe whose reader exits early can surface a SIGPIPE and
+          # abort the step. line 0 = mode, the rest = existing paths to stage.
+          mapfile -t lines <<< "$plan"
+          mode="${lines[0]}"
+          files=("${lines[@]:1}")
+          echo "auto=$([ "$mode" = auto ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          if [ "$mode" = "noop" ]; then echo "Nothing to publish this run."; exit 0; fi
+          if [ "$mode" = "auto" ]; then msg="opinions: publish new appellate decisions"; else msg="opinions: record run state [skip ci]"; fi
+          for f in "${files[@]}"; do [ -n "$f" ] && git add "$f"; done
+          # Push only if the commit captured something: never hand push_main a dirty tree (its rebase
+          # aborts on unstaged changes). publish.py lists only existing paths, so git add cannot choke
+          # on a missing file and leave the tree dirty -- the exact failure mode this replaces.
+          if git commit -m "$msg"; then
+            bash scripts/push_main.sh
           else
-            echo "auto=false" >> "$GITHUB_OUTPUT"
-            add $BOOK
-            if git diff --cached --quiet; then
-              echo "No bookkeeping changes."
-            else
-              git commit -m "opinions: record run state [skip ci]"
-              bash scripts/push_main.sh
-            fi
+            echo "::warning::publish plan was '$mode' but nothing was committed; skipping push"
           fi
 
       # REVIEW lane. Any case that overrules/modifies an existing card, a new card that causes

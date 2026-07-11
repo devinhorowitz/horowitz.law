@@ -261,6 +261,50 @@ def check_links():
     return 4 if unreachable else 0
 
 
+def check_render_outputs(errors):
+    """render-sync.yml's add-paths must name the exact set render owns (render.OUTPUT_PATHS).
+    render() writes every path in that set; if the workflow's list omits one, a file render
+    re-stamps (the Jan-1 footer year, a security.txt Expires renewal) silently drifts on main
+    until someone notices -- the class of bug that stranded a working tree and broke a push. If it
+    lists an extra, render-sync stages a path render never writes. Either is caught here at push
+    time. (opinions.yml no longer hard-codes the set: its publish step derives it from
+    render.OUTPUT_PATHS via scripts/publish.py, so only this one workflow copy can drift.)"""
+    import render  # OUTPUT_PATHS: the authoritative render-owned set
+    wf = os.path.join(REPO, ".github", "workflows", "render-sync.yml")
+    try:
+        text = open(wf, encoding="utf-8").read()
+    except OSError as e:
+        errors.append("render-sync.yml unreadable, cannot check add-paths (%s)" % e)
+        return
+    # Line-based parse of the `add-paths: |` block scalar: collect the deeper-indented lines under
+    # it until a dedent ends the block. More robust than a regex against YAML indentation.
+    listed, in_block, base_indent = [], False, None
+    for ln in text.splitlines():
+        if not in_block:
+            if re.match(r"\s*add-paths:\s*\|\s*$", ln):
+                in_block, base_indent = True, len(ln) - len(ln.lstrip())
+            continue
+        if not ln.strip():
+            continue
+        if (len(ln) - len(ln.lstrip())) <= base_indent:
+            break
+        s = ln.strip()
+        if not s.startswith("#"):
+            listed.append(s)
+    if not listed:
+        errors.append("render-sync.yml: could not read the add-paths block")
+        return
+    owned = set(render.OUTPUT_PATHS)
+    missing = sorted(owned - set(listed))
+    extra = sorted(set(listed) - owned)
+    if missing:
+        errors.append("render-sync.yml add-paths is MISSING render output(s) (drift risk): %s"
+                      % ", ".join(missing))
+    if extra:
+        errors.append("render-sync.yml add-paths lists path(s) render does not own: %s"
+                      % ", ".join(extra))
+
+
 def main(argv):
     if "--links" in argv:
         return check_links()
@@ -274,12 +318,14 @@ def main(argv):
     check_tokens(errors, fix=False)
     check_xml(errors)
     check_manifests(errors)
+    check_render_outputs(errors)
     if errors:
         print("check_site: %d problem(s)" % len(errors))
         for e in errors:
             print("  ! " + e)
         return 1
-    print("check_site: CSP hash, asset tokens, scripts/ names, XML, and manifests all check out")
+    print("check_site: CSP hash, asset tokens, scripts/ names, XML, manifests, and render-output "
+          "lists all check out")
     return 0
 
 
