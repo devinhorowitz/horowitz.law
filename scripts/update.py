@@ -493,7 +493,14 @@ def feed_court(court, deadline=None):
     same keys the pipeline expects (cluster_id, caseName, court_id, absolute_url, dateFiled,
     docketNumber, snippet), plus pdf_url. The feed snippet is the opinion's opening text,
     which is enough for the screen tier; full text is fetched later only for survivors."""
-    raw = feed_get("https://www.courtlistener.com/feed/court/%s/" % court, deadline)
+    return _parse_feed(feed_get("https://www.courtlistener.com/feed/court/%s/" % court, deadline), court)
+
+
+def _parse_feed(raw, court):
+    """Parse a CourtListener court Atom feed (bytes) into candidate dicts. Split out from
+    feed_court so the funnel and the feed-shape canary (scripts/feed_check.py) run the EXACT same
+    parse -- the canary's job is to detect when this parse silently stops yielding candidates
+    because the feed's shape changed -- and so the parse is unit-testable without a network fetch."""
     root = ET.fromstring(raw)
     out = []
     for e in root.findall(ATOM + "entry"):

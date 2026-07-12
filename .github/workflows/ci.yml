@@ -62,7 +62,7 @@ jobs:
       - name: Compile and import every script
         run: |
           python -m py_compile scripts/*.py
-          cd scripts && python -c "import cl_rate, safeio, jurisdictions, render, treatment_core, update, treatment, backfill, digest, queue_cases, courts, golden_check, model_watch, check_site, alert, official_ga, maintain, skill_authorities, skill_alert, review_store, review_apply, review_stage, fable_review, heartbeat, publish; print('all imports resolve')"
+          cd scripts && python -c "import cl_rate, safeio, jurisdictions, render, treatment_core, update, treatment, backfill, digest, queue_cases, courts, golden_check, model_watch, check_site, alert, official_ga, maintain, skill_authorities, skill_alert, review_store, review_apply, review_stage, fable_review, heartbeat, publish, feed_check; print('all imports resolve')"
 
       # Imports resolving is not enough: a script can import fine yet call a sibling
       # function that was dropped or renamed (a stale upload that reverts
@@ -90,6 +90,7 @@ jobs:
           python scripts/test_fable_review.py
           python scripts/test_heartbeat.py
           python scripts/test_publish.py
+          python scripts/test_feed_check.py
 
       - name: Validate workflow YAML
         run: python -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml')]; print('workflow YAML parses')"

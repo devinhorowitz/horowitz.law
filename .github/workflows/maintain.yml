@@ -128,6 +128,52 @@ jobs:
             gh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body "$body"
           fi
 
+      # Feed-shape canary: the funnel discovers new opinions by parsing each court's Atom feed, and
+      # a silent CourtListener feed-format change would zero all discovery with no error until the
+      # heartbeat notices 30 days later. This runs the real parser over the live feeds and flags the
+      # unambiguous drift signature (entries present, zero candidates parsed) same-day. Feeds are the
+      # free /feed/ path, so no token and no REST quota. Exit 0 clean, 3 drift, 4 soft (empty/outage).
+      - name: Feed-shape canary
+        id: feed
+        run: |
+          set +e
+          python scripts/feed_check.py
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Feed-shape drift flag
+        if: ${{ steps.feed.outputs.code == '3' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Feed-shape drift detected"
+          existing=$(gh issue list --state open --search "$title in:title" --json number,title \
+            --jq "[.[] | select(.title==\"$title\")] | .[0].number" 2>/dev/null || true)
+          if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+            gh issue comment "$existing" --body-file scripts/feed_check_alert.md
+          else
+            gh issue create --title "$title" --body-file scripts/feed_check_alert.md
+          fi
+
+      - name: Feed-shape check clean
+        if: ${{ steps.feed.outputs.code == '0' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Feed-shape drift detected"
+          for n in $(gh issue list --state open --search "$title in:title" --json number,title \
+            --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
+            gh issue comment "$n" --body "Resolved: the funnel's feed parser is extracting candidates again."
+            gh issue close "$n"
+          done
+
+      # Exit 4: every feed empty or unreachable (a quiet stretch or a transient CL outage), not proof
+      # of drift and self-healing, so log a notice and file nothing.
+      - name: Feed-shape check soft
+        if: ${{ steps.feed.outputs.code == '4' }}
+        run: echo "::notice title=Feed-shape::No feed entries to assess (empty or unreachable, exit 4); not drift, will retry next run."
+
       - name: Run maintenance
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -154,6 +200,7 @@ jobs:
         if: success()
         env:
           CODE: ${{ steps.courts.outputs.code }}
+          FEED: ${{ steps.feed.outputs.code }}
         run: |
           case "$CODE" in
             0) reg="clean" ;;
@@ -161,11 +208,18 @@ jobs:
             4) reg="deferred (transient throttle or network)" ;;
             *) reg="error (exit ${CODE:-?})" ;;
           esac
+          case "$FEED" in
+            0) feed="parser healthy" ;;
+            3) feed="DRIFT detected (issue filed)" ;;
+            4) feed="no entries to assess (empty/unreachable)" ;;
+            *) feed="unknown (exit ${FEED:-?})" ;;
+          esac
           {
             echo "## Daily maintenance"
             echo ""
             echo "- Keepalive: committed"
             echo "- Court registry: $reg"
+            echo "- Feed shape: $feed"
             echo "- Golden cross-check: ran"
           } >> "$GITHUB_STEP_SUMMARY"
 
