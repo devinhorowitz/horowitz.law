@@ -141,7 +141,7 @@ Automatic, on a schedule:
 | --- | --- | --- |
 | opinions | every 4 hours | the funnel: scans CourtListener, proposes new cards via a review PR |
 | treatment | Saturdays | reverse citation sweep for adverse treatment of published cards |
-| maintain | daily | budget-gated upkeep: golden check, court check, repo keepalive |
+| maintain | daily | budget-gated upkeep: golden check, court check, feed-shape canary, repo keepalive |
 | render-sync | daily | re-renders pages from `opinions.json`; opens a PR if they drifted |
 | model-watch | daily | checks the Models API for a newer Claude model in a pinned tier; opens a bump PR gated by the golden set |
 | heartbeat | daily | dead-man's-switch: opens a tracking issue if the funnel stalls (no scan in 48h) or stops finding cards (30d); the one alert that fires when runs stop |
@@ -219,3 +219,10 @@ Run by hand, from the Actions tab:
   down too); for that, set a `HEARTBEAT_PING_URL` secret to an external cron-monitor ping URL
   (e.g. a free healthchecks.io check) and add its host to the workflow's allowed-endpoints —
   heartbeat pings it on healthy runs, so the monitor alerts you if the pings ever stop.
+- The `maintain` **feed-shape canary** is heartbeat's faster, more specific sibling for the
+  scariest failure mode: a silent CourtListener feed-format change that zeroes discovery. Heartbeat
+  would catch it as content-stale after 30 days; the canary runs the funnel's real feed parser over
+  the live feeds daily and files a "Feed-shape drift detected" issue **same-day** when the feeds have
+  entries but the parser extracts none. If it fires, compare a live feed
+  (`courtlistener.com/feed/court/<id>/`) against `_parse_feed` in `scripts/update.py` and fix the
+  parser — the `/opinion/<id>/` link pattern is the usual culprit.
