@@ -181,6 +181,41 @@ def test_redraft_ids_and_exemption(tmp):
     check("redraft exemption: a re-carded case falls out of the set", 8 not in redraft_pending)
 
 
+def test_review_command_helpers(tmp):
+    # parse_command: the /veto /decline parse the workflow used to do in grep/sed.
+    check("parse: /veto <id>", review_store.parse_command("/veto 123") == ("veto", 123))
+    check("parse: /decline <id>", review_store.parse_command("/decline 456") == ("decline", 456))
+    check("parse: verb inside a sentence", review_store.parse_command("please /decline 789 thanks") == ("decline", 789))
+    check("parse: first command wins", review_store.parse_command("/veto 12 /decline 34") == ("veto", 12))
+    check("parse: verb with no id", review_store.parse_command("/veto") == ("veto", None))
+    check("parse: look-alike /vetoed is not a command", review_store.parse_command("/vetoed 5") == (None, None))
+    check("parse: no command", review_store.parse_command("looks good, merging") == (None, None))
+    check("parse: non-string is safe", review_store.parse_command(None) == (None, None))
+
+    # staged_files_for: the card + citing-treatment lookup used for the 'is it staged?' check and
+    # the exact set to git rm.
+    _point_store(tmp)
+    review_store.stage_card(card(5, "Held"), ["fidelity flag"])
+    review_store.stage_treatment(7, {"cluster_id": 5, "name": "Citer v. Card", "kind": "overruled"}, "adverse")
+    files = review_store.staged_files_for(5)
+    check("staged_files_for: finds the held card and the citing treatment", len(files) == 2
+          and any(f.endswith("cards/5.json") for f in files)
+          and any(f.endswith("7__5.json") for f in files))
+    check("staged_files_for: all returned paths exist", all(os.path.exists(f) for f in files))
+    check("staged_files_for: empty for an unstaged id", review_store.staged_files_for(999) == [])
+
+    # record_decision: the single marker write the workflow calls, dispatching to the right ledger.
+    review_store.record_decision("veto", 11)
+    review_store.record_decision("decline", 22)
+    check("record_decision: veto lands in vetoed.json", review_store.read_vetoed() == {11})
+    check("record_decision: decline lands in declined.json", review_store.read_declined() == {22})
+    try:
+        review_store.record_decision("bogus", 33)
+        check("record_decision: unknown cmd raises", False)
+    except ValueError:
+        check("record_decision: unknown cmd raises", True)
+
+
 def test_seam_hold_veto_rediscover(tmp):
     """End-to-end seam across route -> apply -> re-discovery: a card HELD by routing and then VETOED
     at apply time must stay re-discoverable -- un-seen, redraft-logged, AND admitted by the funnel's
@@ -366,7 +401,7 @@ def main():
               test_route_and_publish, test_route_fable_cleared, test_route_noop,
               test_apply_merged, test_apply_idempotent_card, test_apply_closed_unmerged,
               test_apply_declined, test_apply_declined_only, test_apply_veto_backstop,
-              test_seam_hold_veto_rediscover, test_merge_new_into_branch):
+              test_review_command_helpers, test_seam_hold_veto_rediscover, test_merge_new_into_branch):
         tmp = tempfile.mkdtemp(prefix="review_test_")
         try:
             t(tmp)
@@ -375,7 +410,7 @@ def main():
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (63 checks)")
+    print("\nALL TESTS PASSED (77 checks)")
     return 0
 
 

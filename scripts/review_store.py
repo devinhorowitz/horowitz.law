@@ -37,6 +37,7 @@ on main (bookkeeping), so the funnel reads them on its next run.
 """
 import json
 import os
+import re
 import shutil
 
 import safeio
@@ -263,6 +264,54 @@ def read_vetoed(root=None):
 
 def add_vetoed(cluster_id, root=None):
     return _add_marker("vetoed.json", cluster_id, root)
+
+
+# --- review-veto workflow helpers: the command parse and staged-file lookup the /veto /decline
+# handler used to do in grep/sed/glob. Kept here (tested) so the workflow is thin git plumbing and
+# the marker write goes through add_vetoed/add_declined above rather than a parallel jq re-write. ---
+_CMD_RE = re.compile(r"/(veto|decline)\b\s+(\d+)")
+
+
+def parse_command(body):
+    """Parse a review-PR comment for a `/veto <id>` or `/decline <id>` command. Returns
+    (cmd, cluster_id): cmd is 'veto' or 'decline', cluster_id an int; (cmd, None) if the verb is
+    present without a valid id; (None, None) if there is no command. First occurrence wins (matching
+    the old `head -1`), and the word boundary after the verb rejects look-alikes like '/vetoed 5'."""
+    if not isinstance(body, str):
+        return (None, None)
+    m = _CMD_RE.search(body)
+    if m:
+        return (m.group(1), int(m.group(2)))
+    m2 = re.search(r"/(veto|decline)\b", body)   # verb but no id -> report it so the handler can hint
+    return (m2.group(1), None) if m2 else (None, None)
+
+
+def record_decision(cmd, cluster_id, root=None):
+    """Record a parsed /veto or /decline on the review branch's marker -- the single write path
+    review_apply reads. Returns the updated id set; unknown cmd raises so a typo fails loudly rather
+    than silently recording nothing."""
+    if cmd == "veto":
+        return add_vetoed(cluster_id, root)
+    if cmd == "decline":
+        return add_declined(cluster_id, root)
+    raise ValueError("unknown review command %r (expected 'veto' or 'decline')" % (cmd,))
+
+
+def staged_files_for(cluster_id, root=None):
+    """The staged files on the review branch for a cluster id: its held-card file, and any treatment
+    file where it is the CITING case (named <cardcid>__<citercid>.json). Returns only existing paths,
+    so the caller uses one call for both 'is it staged?' (non-empty) and the exact set to `git rm`."""
+    root = root or REVIEW_DIR
+    cid = int(cluster_id)
+    out = []
+    cp = card_path(cid, root)
+    if os.path.exists(cp):
+        out.append(cp)
+    tdir = os.path.join(root, "treatments")
+    if os.path.isdir(tdir):
+        out += [os.path.join(tdir, f) for f in sorted(os.listdir(tdir))
+                if f.endswith("__%d.json" % cid)]
+    return out
 
 
 def clear_markers(root=None):

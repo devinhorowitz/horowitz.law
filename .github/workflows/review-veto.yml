@@ -58,12 +58,11 @@ jobs:
             echo "Comment is not on the review PR (head=$head); ignoring."
             exit 0
           fi
-          # Which command (veto|decline) and the cluster id after it.
-          case "$COMMENT_BODY" in
-            /decline*) cmd="decline" ;;
-            *)         cmd="veto" ;;
-          esac
-          id=$(printf '%s' "$COMMENT_BODY" | grep -oE "/(veto|decline)[[:space:]]+[0-9]+" | grep -oE '[0-9]+' | head -1 || true)
+          # Parse the command and cluster id with the tested helper (review_store.parse_command):
+          # one source for what counts as /veto|/decline <id>, rejecting look-alikes like /vetoed.
+          parsed=$(python3 -c "import os, sys; sys.path.insert(0, 'scripts'); import review_store; c, i = review_store.parse_command(os.environ.get('COMMENT_BODY', '')); print((c or ''), (i if i is not None else ''))")
+          read -r cmd id <<< "$parsed"
+          if [ -z "$cmd" ]; then echo "Not a /veto or /decline command; ignoring."; exit 0; fi
           if [ -z "$id" ]; then
             gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Could not read a cluster id from that comment. Use \`/${cmd} <cluster_id>\`." || true
             exit 0
@@ -71,35 +70,30 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # Is the case actually staged? Decide "not found" once, up front, against the current branch.
+          # staged_files_for returns the held-card file plus any citing-treatment file that exist --
+          # the same tested lookup used to drop them below, so the check and the removal can't diverge.
           git fetch origin bot/opinions-review
           git checkout -B bot/opinions-review origin/bot/opinions-review
-          present=0
-          [ -e "review/cards/${id}.json" ] && present=1
-          # Treatment files are named <cardcid>__<citercid>.json; a case addressed by its citing id.
-          for f in review/treatments/*__${id}.json; do [ -e "$f" ] && present=1; done
-          if [ "$present" = "0" ]; then
+          staged() { python3 -c "import sys; sys.path.insert(0, 'scripts'); import review_store; print('\n'.join(review_store.staged_files_for(int(sys.argv[1]))))" "$id"; }
+          if [ -z "$(staged)" ]; then
             gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "No staged case with cluster id ${id} was found in this batch." || true
             exit 0
           fi
-          # The marker file that records this decision: review_apply reads it as authoritative, so
-          # the case is not published even if a racing scan restored its staged file.
-          case "$cmd" in
-            decline) marker="review/declined.json" ;;
-            *)       marker="review/vetoed.json" ;;
-          esac
-          # Remove the case, record it in the marker, and push -- retrying against the 4-hourly
-          # funnel's force-pushes of this same branch: on a rejected push, re-fetch the (moved)
-          # branch and re-apply the change (if the funnel restored the file, this drops it again),
-          # so the action is never silently clobbered. All steps are idempotent, so a retry -- or an
-          # already-absent file -- still converges to a clean push.
+          # Drop the staged file(s) and record the decision in the marker review_apply reads as
+          # authoritative (so the case stays unpublished even if a racing scan restored its file),
+          # then push -- retrying against the 4-hourly funnel's pushes of this same branch: on a
+          # rejected push, re-fetch the (moved) branch and re-apply. record_decision (the marker
+          # union) and staged_files_for (the exact files to drop) are the SAME tested Python the
+          # funnel and review_apply use, so shell and Python can no longer drift on the veto
+          # guarantee. Each step is idempotent, so a retry converges to a clean push.
+          # The one marker file record_decision writes for this command. Add exactly it (it always
+          # exists after the write): `git add` is atomic, so listing a not-yet-existing sibling
+          # marker would stage NOTHING and the decision would never be committed.
+          if [ "$cmd" = "veto" ]; then marker="review/vetoed.json"; else marker="review/declined.json"; fi
           ok=0
           for attempt in 1 2 3 4 5; do
-            git rm -f "review/cards/${id}.json" 2>/dev/null || true
-            for f in review/treatments/*__${id}.json; do [ -e "$f" ] || continue; git rm -f "$f" 2>/dev/null || true; done
-            mkdir -p review
-            prev='[]'; [ -f "$marker" ] && prev=$(jq -c '.clusters // []' "$marker")
-            arr=$(printf '%s' "$prev" | jq -c --argjson id "$id" '(. + [$id]) | unique')
-            printf '{"clusters": %s}\n' "$arr" > "$marker"
+            for f in $(staged); do git rm -f "$f" 2>/dev/null || true; done
+            python3 -c "import sys; sys.path.insert(0, 'scripts'); import review_store; review_store.record_decision(sys.argv[1], int(sys.argv[2]))" "$cmd" "$id"
             git add "$marker"
             git commit -m "review: ${cmd} case ${id}" 2>/dev/null || true
             if git push origin bot/opinions-review; then ok=1; break; fi
