@@ -20,17 +20,15 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# First-party pipeline modules other scripts call into. Stdlib and third-party
-# (os, json, time, pypdf, urllib, ...) are out of scope: this guards our own surface.
-# Keep this in sync with the importable first-party modules; a module omitted here is
-# a blind spot (a dropped/renamed attr it exposes goes unchecked). All listed modules
-# are imported cleanly by the CI import step, so importing them here is side-effect-free.
-TARGETS = ["update", "render", "cl_rate", "safeio", "jurisdictions",
-           "treatment_core", "official_ga", "backfill", "batch",
-           "review_store", "review_apply", "skill_alert",
-           "digest", "queue_cases", "treatment", "maintain", "siteconfig",
-           "courts", "alert", "model_watch", "golden_check", "skill_authorities",
-           "fable_review", "review_stage"]
+# First-party pipeline modules other scripts call into -- DERIVED by globbing scripts/*.py, not
+# hand-listed, so adding a script can't silently leave it unchecked (a hand list made "a module
+# omitted here is a blind spot" a standing hazard; that class is now gone). test_*.py and this
+# checker are excluded; every remaining module imports cleanly (the CI import step proves it), so
+# importing them in main() to introspect their attributes is side-effect-free. Stdlib and
+# third-party (os, json, pypdf, urllib, ...) stay out of scope: this guards only our own surface.
+TARGETS = sorted(os.path.basename(f)[:-3] for f in glob.glob(os.path.join(HERE, "*.py"))
+                 if not os.path.basename(f).startswith("test_")
+                 and os.path.basename(f) != os.path.basename(__file__))
 
 
 def main():
