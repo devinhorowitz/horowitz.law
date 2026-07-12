@@ -13,8 +13,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import feed_check  # noqa: E402
-import update       # noqa: E402
+import feed_check  # noqa: E402  -- drives the real update._parse_feed via feed_check's defaults
 
 FAILS = []
 
