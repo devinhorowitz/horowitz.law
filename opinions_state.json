@@ -747,8 +747,11 @@
     10925575,
     10925576,
     10925587,
-    10925597
+    10925597,
+    10927154,
+    10927155,
+    10927204
   ],
-  "updated": "2026-07-11T07:44:13Z",
+  "updated": "2026-07-13T15:15:41Z",
   "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
