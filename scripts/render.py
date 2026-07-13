@@ -109,10 +109,27 @@ def _stamp_tokens(doc):
                      lambda m, t=tok: m.group(1) + "?v=" + t + m.group(3), doc)
     return doc
 
+def _asof():
+    """The reference 'today' for render's time-dependent output: the WINDOW_YEARS feed cutoff, the
+    footer copyright year, and the security.txt Expires renewal. Real today by default;
+    OPINIONS_RENDER_ASOF=YYYY-MM-DD overrides it. That override lets the CI render-idempotency check
+    render AS OF the last funnel render (public/status.json `scanned_at`) and compare byte-for-byte
+    to the committed pages -- so the check no longer goes spuriously red when the live clock has
+    drifted past a card's 2-year edge (or the Jan-1 footer year) before the funnel/render-sync has
+    reconciled. Inert in normal operation: the funnel and render-sync leave it unset (real today)."""
+    v = os.environ.get("OPINIONS_RENDER_ASOF", "").strip()
+    if v:
+        try:
+            return datetime.date.fromisoformat(v[:10])
+        except ValueError:
+            pass
+    return datetime.date.today()
+
+
 def _stamp_year(doc):
     """Rewrite any footer copyright year to the current year. A no-op when the
     year already matches, so it adds no spurious diff."""
-    year = str(datetime.date.today().year)
+    year = str(_asof().year)
     return _YEAR_RE.sub(lambda m: m.group(1) + " " + year, doc)
 
 AREA_LABELS = siteconfig.AREA_LABELS
@@ -267,7 +284,7 @@ def _sorted(entries):
     return sorted(entries, key=lambda e: (e["date"], int(e.get("cluster_id", 0))), reverse=True)
 
 def _cutoff_iso(today=None):
-    today = today or datetime.date.today()
+    today = today or _asof()
     try:
         c = today.replace(year=today.year - WINDOW_YEARS)
     except ValueError:            # Feb 29 in a non-leap target year -> Feb 28
@@ -956,7 +973,7 @@ def _stamp_security_txt(window_days=30, renew_days=365):
         return
     doc = open(SECURITY_TXT_PATH, encoding="utf-8").read()
     m = re.search(r"(?mi)^(Expires:[ \t]*)(\S.*?)[ \t]*$", doc)
-    today = datetime.datetime.now(datetime.timezone.utc).date()
+    today = _asof()   # honor OPINIONS_RENDER_ASOF so the idempotency check is deterministic
     fresh = False
     if m:
         dm = re.match(r"(\d{4})-(\d{2})-(\d{2})", m.group(2))

@@ -98,13 +98,20 @@ jobs:
       - name: Site invariants (CSP hash, ?v tokens, scripts/ names, XML)
         run: python scripts/check_site.py
 
-      # The committed pages must be exactly what render.py produces from the
-      # committed opinions.json; a hand-uploaded stale page fails here at push
-      # time instead of waiting for the daily render-sync net. (Once a year, on
-      # the first push after Jan 1, this fails with footer-year diffs until the
-      # render-sync rollover PR merges; the diff itself says so.)
+      # The committed pages must be exactly what render.py produces from the committed opinions.json;
+      # a hand-uploaded stale page (wrong wording, a missing new card) fails here at push time instead
+      # of waiting for the daily render-sync net.
       - name: Render idempotency
         run: |
+          # Render AS OF the last funnel render (status.json scanned_at), not the live clock. The
+          # committed pages are whatever the funnel/render-sync last produced; between their runs the
+          # clock can drift past a card's rolling-2-year edge (or the Jan-1 footer year), which would
+          # make a naive re-render differ until the next reconciliation and fail this byte-for-byte
+          # check on an unrelated PR. Pinning the render date to scanned_at reproduces exactly what
+          # was committed, so only REAL drift (stale wording, a card the committed page is missing)
+          # fails -- those still diverge because they don't depend on the clock. Falls back to real
+          # today if status.json is unreadable (strict, as before).
+          export OPINIONS_RENDER_ASOF="$(python -c "import json; print(json.load(open('public/status.json'))['scanned_at'][:10])" 2>/dev/null || true)"
           python scripts/render.py
           # -N (intent-to-add) makes never-committed generated files visible to
           # the diff, so a forgotten o/ upload fails here instead of 404ing live.
