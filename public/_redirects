@@ -10,3 +10,8 @@
 # smaller V3-Q symbol is ever wanted.
 # /dh.vcf /devin-horowitz.vcf 301
 /C /contact.vcf 301
+
+# The pipeline doc lives in the repo at docs/PIPELINE.md and is not deployed to the site root, so
+# the colophon's terminal-style `cat /PIPELINE.md` link 404'd. Serve it by redirecting to the
+# canonical copy on GitHub (rendered there), which keeps the site-relative link working.
+/PIPELINE.md https://github.com/devinhorowitz/horowitz.law/blob/main/docs/PIPELINE.md 302
