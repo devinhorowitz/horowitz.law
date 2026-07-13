@@ -30,6 +30,8 @@ jobs:
           args: >-
             --no-progress
             --max-concurrency 4
+            --max-retries 3
+            --retry-wait-time 5
             --base-url https://horowitz.law
             --accept 200,202,206,403,405,429,999
             './**/*.html'
@@ -39,6 +41,10 @@ jobs:
           # accept codes are alive-but-non-200 bot responses, not rot:
           #   202 CourtListener async render, 403/405 court-site bot blocks, 999 LinkedIn.
           #   404/410/5xx/timeout/DNS still flag, so genuine rot is still caught.
+          # --max-retries/--retry-wait-time: a court site or CourtListener that briefly 5xx's or
+          #   times out is retried (3 attempts, 5s apart) before it counts as rot. Unattended, this
+          #   is the main false-positive source -- one transient blip would otherwise file a broken-
+          #   links issue for a link that is actually fine. Real rot fails all retries and still flags.
       # Reuse the one open link-rot issue instead of filing a fresh one every Monday: unattended,
       # a weekly cron would otherwise stack duplicate issues for the same unfixed broken link. Look
       # up the existing open issue by exact title and hand its number to create-issue-from-file,
