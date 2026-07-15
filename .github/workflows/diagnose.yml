@@ -1,0 +1,68 @@
+name: opinions-diagnose
+
+# When a monitor workflow opens a tracking issue (a run failure, a heartbeat stall, a feed/registry
+# drift, broken links, a Lighthouse regression), post ONE best-effort AI diagnosis as a comment, so
+# whoever picks it up starts with a hypothesis instead of a cold log. scripts/diagnose.py feeds the
+# issue text plus the committed runbook (docs/MAINTENANCE.md) to a capable model (Fable by default)
+# and writes a comment only when there is something to say. It is an aid, not an authority: the model
+# has no live repo access, and the whole thing fails silently -- a broken diagnostic must never
+# become a second alert.
+#
+# Scope + safety: runs ONLY on issues our own automation opened (github-actions[bot]), so it never
+# acts on arbitrary human-filed text. The issue title/body reach the script through env vars, never
+# interpolated into a shell line, so issue content cannot inject shell.
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read      # checkout; diagnose.py reads docs/MAINTENANCE.md from the tree for grounding
+  issues: write       # post the diagnosis comment
+
+concurrency:
+  group: diagnose-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    # Only diagnose issues opened by our own monitors; ignore human-filed issues entirely.
+    if: ${{ github.event.issue.user.login == 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Block egress: only the diagnosis call and GitHub (checkout + gh comment). No CourtListener,
+      # no PyPI -- diagnose.py imports update but every third-party import in that chain (pypdf) is
+      # lazy, so the module loads on the stdlib alone and no install step is needed.
+      - name: Harden the runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.anthropic.com:443
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Diagnose the issue
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DIAGNOSE_MODEL: ${{ vars.DIAGNOSE_MODEL || 'claude-fable-5' }}
+          # Passed as env, NOT interpolated into the run script: issue content stays data, not shell.
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        # Best-effort: diagnose.py already exits 0 on every internal failure; the `|| echo` also keeps
+        # a hard crash (e.g. a future import break) from turning this enhancement into a red run.
+        run: python scripts/diagnose.py || echo "diagnose step skipped (see log)"
+
+      # Post only if a diagnosis was actually written (hashFiles is '' when the file is absent).
+      - name: Post the diagnosis
+        if: ${{ hashFiles('scripts/diagnosis.md') != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment "${{ github.event.issue.number }}" --repo "$GITHUB_REPOSITORY" --body-file scripts/diagnosis.md

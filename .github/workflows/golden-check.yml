@@ -65,8 +65,8 @@ jobs:
           # Use the same models as the daily funnel, so the guard tests what production runs.
           # Pretriage defaults to Haiku here even though the daily workflow ships it off, since
           # the guard's job is to test it before it is enabled in production.
-          OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}
-          OPINIONS_PRETRIAGE_MODEL: ${{ vars.OPINIONS_PRETRIAGE_MODEL || 'claude-haiku-4-5-20251001' }}
+          OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5' }}
+          OPINIONS_PRETRIAGE_MODEL: ${{ vars.OPINIONS_PRETRIAGE_MODEL || 'claude-haiku-4-5' }}
           OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-5' }}
           OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-4-8' }}
         run: python scripts/golden_check.py ${{ inputs.mode }}

@@ -17,6 +17,7 @@ scripts/queue_cases_pr_body.md
 scripts/assess_precedential_pr_body.md
 scripts/heartbeat_alert.md
 scripts/feed_check_alert.md
+scripts/diagnosis.md
  
 # OS and editor cruft
 .DS_Store

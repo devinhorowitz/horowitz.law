@@ -133,7 +133,7 @@ bodies a workflow produces and consumes; they are never committed.
 
 ## The workflows
 
-Fourteen workflows. Most run themselves; a few you trigger by hand from the Actions tab.
+Most run themselves; a few you trigger by hand from the Actions tab.
 
 Automatic, on a schedule:
 
@@ -156,6 +156,12 @@ Automatic, on every push or pull request:
 | --- | --- |
 | ci | render idempotency and import checks for the pipeline and site |
 | ruff | Python lint |
+
+Automatic, when a monitor opens a tracking issue:
+
+| Workflow | What it does |
+| --- | --- |
+| diagnose | posts one best-effort AI first-pass diagnosis (Fable, from the issue text + this runbook) as a comment, so you start with a hypothesis. An aid, not an authority; fails silently and never comments on human-filed issues |
 
 Run by hand, from the Actions tab:
 
