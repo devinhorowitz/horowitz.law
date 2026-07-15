@@ -44,3 +44,17 @@ jobs:
             gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
               --label automated --label perf --body "$body" || true
           fi
+      # Symmetric with the step above: when a later run passes its (error-level) assertions, close the
+      # regression issue so a fixed -- or transiently flaky -- score does not leave a stale issue open
+      # on an unattended deployment. Performance is warn-only now (see lighthouserc.json), so this
+      # fires when accessibility/best-practices/seo are all green. Best-effort; never fails the run.
+      - name: Close the regression issue on a healthy run
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Lighthouse regression on the live site"
+          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number,title --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
+            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: a later Lighthouse run passed its assertions. Closing automatically." || true
+            gh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
+          done

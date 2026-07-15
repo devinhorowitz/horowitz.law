@@ -66,3 +66,17 @@ jobs:
           content-filepath: ./lychee/out.md
           labels: automated, link-rot
           issue-number: ${{ steps.existing.outputs.number }}
+      # Symmetric with the open step: when the weekly check comes back clean (exit_code 0, no broken
+      # links after the retries added above), close the tracking issue so a link that was rotten and
+      # is now fixed -- or was only transiently down -- does not leave a stale issue open on an
+      # unattended deployment. No-op when none is open; best-effort so a gh hiccup never fails the run.
+      - name: Close the link-rot issue when the check is clean
+        if: steps.lychee.outputs.exit_code == 0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Link checker found broken links"
+          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number,title --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
+            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: the weekly link check found no broken links. Closing automatically." || true
+            gh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
+          done
