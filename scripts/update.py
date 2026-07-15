@@ -33,8 +33,8 @@ Environment:
   COURTLISTENER_TOKEN      optional (raises CourtListener rate limits)
   OPINIONS_MODEL           Tier 3 summarizer (default claude-opus-4-8)
   OPINIONS_TRIAGE_MODEL    Tier 2 full-read gate (default claude-sonnet-5). "" disables it.
-  OPINIONS_SCREEN_MODEL    Tier 1 excerpt screen (default claude-haiku-4-5-20251001). "" disables it.
-  OPINIONS_PRETRIAGE_MODEL Tier 1.5 full-read screen (default claude-haiku-4-5-20251001); a cheap full read before triage. "" disables it.
+  OPINIONS_SCREEN_MODEL    Tier 1 excerpt screen (default claude-haiku-4-5). "" disables it.
+  OPINIONS_PRETRIAGE_MODEL Tier 1.5 full-read screen (default claude-haiku-4-5); a cheap full read before triage. "" disables it.
   OPINIONS_CROSSCHECK_MODEL  fidelity check on each drafted card (default = the triage model). "" disables it.
   OPINIONS_COMPLETENESS_MODEL  completeness check on each drafted card (default = the triage model). "" disables it.
   OPINIONS_AUDIT_MODEL     confirms a flagged adverse-treatment event (default = the summarizer model, OPINIONS_MODEL).
@@ -99,8 +99,14 @@ CL_TOKEN     = os.environ.get("COURTLISTENER_TOKEN", "")
 MODEL        = os.environ.get("OPINIONS_MODEL", "claude-opus-4-8")
 AUDIT_MODEL  = os.environ.get("OPINIONS_AUDIT_MODEL", MODEL)  # escalated treatment audit; Opus by default
 TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-5")
-SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5-20251001")
-PRETRIAGE_MODEL = os.environ.get("OPINIONS_PRETRIAGE_MODEL", "claude-haiku-4-5-20251001")  # tier 1.5: cheap full-read screen before the Sonnet triage; "" disables
+# Defaults are the undated canonical ids (claude-haiku-4-5), like every other tier (opus-4-8,
+# sonnet-5, fable-5), not a dated snapshot. A dated snapshot such as claude-haiku-4-5-20251001
+# carries Anthropic's snapshot-retirement lifecycle -- it is eventually deprecated and stops
+# serving -- so it was the one model dependency here with a built-in expiry. The undated id has no
+# such expiry, which is what an unattended deployment wants. Pin a dated snapshot via the repo
+# Variable only if you ever need to reproduce a specific screen decision.
+SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5")
+PRETRIAGE_MODEL = os.environ.get("OPINIONS_PRETRIAGE_MODEL", "claude-haiku-4-5")  # tier 1.5: cheap full-read screen before the Sonnet triage; "" disables
 CROSSCHECK_MODEL = os.environ.get("OPINIONS_CROSSCHECK_MODEL", TRIAGE_MODEL)  # fidelity check on each card; a different model than the Opus summarizer so it is not grading its own work; "" disables
 CROSSCHECK_TRIES = int(os.environ.get("OPINIONS_CROSSCHECK_TRIES", "3"))  # on a substantiated flag, re-ask up to this many times; a flag stands only on a majority, damping one-roll noise at temperature 1. 1 keeps grounding but disables consensus
 COMPLETENESS_MODEL = os.environ.get("OPINIONS_COMPLETENESS_MODEL", TRIAGE_MODEL)  # completeness check on each card: flags a material holding in a covered area the card omits; a different model than the Opus summarizer; "" disables

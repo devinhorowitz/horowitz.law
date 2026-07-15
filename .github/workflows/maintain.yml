@@ -180,7 +180,7 @@ jobs:
           COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
           # Same models the funnel uses, so the golden check and the cross-check test
           # what production actually runs.
-          OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5-20251001' }}
+          OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5' }}
           OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-5' }}
           OPINIONS_CROSSCHECK_MODEL: ${{ vars.OPINIONS_CROSSCHECK_MODEL || 'claude-sonnet-5' }}
           # Reserve and slice are repo-variable tunable; defaults are conservative.
