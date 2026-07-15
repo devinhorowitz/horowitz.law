@@ -9,7 +9,10 @@ repo uses the dependency, a capable model judges whether the bump is good to go 
 cautious about -- so the human deciding starts with an informed read, not a raw changelog.
 
 Same discipline as diagnose.py:
-  - Reuses update.anthropic_json (one Anthropic path: auth, version pin, retry, truncation guard).
+  - Runs the one call through the 50%-priced Batch API (batch.py, as backfill/maintain do): a blocking
+    submit-poll-collect, so the workflow waits (usually minutes) for the result. A held major bump is
+    not urgent, so trading promptness for half price is clearly worth it. A batch timeout or failure
+    is caught and becomes a silent skip.
   - Reviews only MAJOR bumps (classify() parses the "from X to Y" in the title); no-ops otherwise.
   - Advisory only. It never merges anything; automerge holds majors regardless of this verdict.
   - Best-effort: any failure leaves no comment and exits 0. A broken reviewer must not block or
@@ -27,14 +30,30 @@ Run directly: `DEP_PR_TITLE='Bump pypdf from 6.14.2 to 7.0.0' DEP_PR_BODY=... py
 import os
 import re
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import batch  # noqa: E402  -- 50%-priced Batch API transport (same as backfill/maintain)
 import safeio  # noqa: E402
-import update  # noqa: E402  -- reuse the one Anthropic call path
+import update  # noqa: E402  -- parse_json for the batch response text
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.join(HERE, "dep_review_comment.md")
 MODEL = os.environ.get("DEP_REVIEW_MODEL", "claude-fable-5")
+BATCH_SEC = int(os.environ.get("DEP_REVIEW_BATCH_SEC", "480"))  # wall-clock budget to wait on the batch
+
+
+def _call_model(body, label="dep_review"):
+    """Run one request through the 50%-priced Batch API (blocking, up to BATCH_SEC), returning the
+    parsed JSON verdict. Raises on timeout, an errored line, or truncation -- the caller turns that
+    into a silent skip, so a slow or unavailable batch means no comment, never a wrong one."""
+    res = batch.run([batch.from_body(label, body)], deadline=time.time() + BATCH_SEC, label=label)
+    r = res.get(label)
+    if not r or not r.get("ok"):
+        raise RuntimeError("batch %s did not succeed: %r" % (label, r))
+    if r.get("stop_reason") == "max_tokens":
+        raise RuntimeError("batch %s truncated (max_tokens); raise its max_tokens" % label)
+    return update.parse_json(r["text"])
 
 # Dependabot titles: "Bump <dep> from <old> to <new>", optionally with a "deps:"/"ci:" prefix and a
 # leading v on versions. Group updates ("Bump the pip group with 2 updates") do not match -> None,
@@ -188,7 +207,7 @@ def main():
     dep, old, new = info["dep"], info["old"], info["new"]
     try:
         req = build_request(dep, old, new, body, usage_note(dep), MODEL)
-        result = update.anthropic_json(req, label="dep_review")
+        result = _call_model(req, "dep_review")
         comment = format_comment(result if isinstance(result, dict) else {}, dep, old, new)
     except Exception as e:
         # Best-effort: a failed review must not block or mislead. Leave no comment, exit 0.

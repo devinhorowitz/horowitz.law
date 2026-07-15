@@ -154,7 +154,7 @@ Automatic, on a schedule:
 | model-watch | daily | checks the Models API for a newer Claude model in a pinned tier; opens a bump PR gated by the golden set |
 | heartbeat | daily | dead-man's-switch: opens a tracking issue if the funnel stalls (no scan in 48h) or stops finding cards (30d); the one alert that fires when runs stop |
 | automerge | every 6 hours | merges the verified-safe self-healing PRs (render-sync, and patch/minor dependabot bumps for GitHub Actions and Python deps) so they ship untended; holds major bumps and model-watch for a human |
-| dep-review | every 6 hours | posts a one-time AI good-to-go/caution note (Fable) on each held major dependabot bump, scoped to how this repo uses the dep, from the PR's changelog. Advisory; merges nothing |
+| dep-review | every 6 hours | posts a one-time AI good-to-go/caution note (Fable, via the 50%-priced Batch API) on each held major dependabot bump, scoped to how this repo uses the dep, from the PR's changelog. Advisory; merges nothing |
 | digest | Mondays | the weekly email digest, sent last in the cycle |
 | lighthouse | Mondays | performance scores of the deployed site |
 | links | Mondays | link-rot check, gentle on CourtListener |
@@ -170,7 +170,7 @@ Automatic, when a monitor opens a tracking issue:
 
 | Workflow | What it does |
 | --- | --- |
-| diagnose | posts one best-effort AI first-pass diagnosis (Fable, from the issue text + this runbook) as a comment, so you start with a hypothesis. An aid, not an authority; fails silently and never comments on human-filed issues |
+| diagnose | posts one best-effort AI first-pass diagnosis (Fable, via the 50%-priced Batch API, from the issue text + this runbook) as a comment, so you start with a hypothesis. An aid, not an authority; fails silently and never comments on human-filed issues |
 
 Automatic, on a review-lane event (the held-case PR the funnel opens):
 
@@ -240,6 +240,12 @@ Run by hand, from the Actions tab:
   changelog in the PR body against a note of how this repo actually uses that dependency
   (`scripts/dep_review.py`, `DEP_USAGE`). It is advisory and merges nothing; a broken run posts
   nothing. Add a `DEP_USAGE` entry when a new dependency is worth a repo-specific review.
+- The AI-assist features run their model calls through the **50%-priced Batch API** (`batch.py`, the
+  same transport `backfill` and `maintain` use), so `diagnose` and `dep-review` cost half what a
+  synchronous call would. The trade is latency: the workflow polls for the batch (usually minutes),
+  capped by `DIAGNOSE_BATCH_SEC` / `DEP_REVIEW_BATCH_SEC` (480s); if the batch is slow it just posts
+  nothing that run (best-effort). The model is a repo Variable (`DIAGNOSE_MODEL` / `DEP_REVIEW_MODEL`,
+  default Fable) if you ever want to trade quality for a still-lower price.
 - `heartbeat` is the backstop for silent stalls. Every other alert is an issue opened by a
   workflow that *failed* — which only helps if that workflow still runs. Heartbeat instead
   reads the committed freshness markers (`public/status.json` `scanned_at`, newest card

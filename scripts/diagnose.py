@@ -8,8 +8,11 @@ instead of a cold read of a log. It is an aid, never an authority: the model has
 the repo, only the issue text plus the committed runbook (docs/MAINTENANCE.md) passed in as context.
 
 Design, matching the rest of the pipeline:
-  - Reuses update.anthropic_json (raw HTTP, pinned anthropic-version, retry, truncation guard) rather
-    than a second API path, so there is one place network + auth behavior lives.
+  - Runs the one call through the 50%-priced Batch API (batch.py, the same transport backfill and
+    maintain use): a blocking submit-poll-collect, so the workflow waits (usually minutes) for the
+    result. This is a rare, latency-tolerant call, so trading promptness for half price is worth it;
+    update.parse_json parses the response text, and a batch timeout or failure is caught and becomes
+    a silent skip (no comment) rather than a wrong one.
   - The model returns a small JSON verdict; format_comment renders it to markdown. A capable but rare
     call (Fable by default), because this fires only when something already went wrong.
   - Best-effort: any failure (no key, model retired, unparseable answer, a non-diagnosable notice)
@@ -27,16 +30,32 @@ Run directly: `ISSUE_TITLE=... ISSUE_BODY=... python scripts/diagnose.py`.
 """
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import batch  # noqa: E402  -- 50%-priced Batch API transport (same as backfill/maintain)
 import safeio  # noqa: E402
-import update  # noqa: E402  -- reuse the one Anthropic call path (auth, version pin, retry)
+import update  # noqa: E402  -- parse_json for the batch response text
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 RUNBOOK_PATH = os.path.join(REPO, "docs", "MAINTENANCE.md")
 DEFAULT_OUT = os.path.join(HERE, "diagnosis.md")
 MODEL = os.environ.get("DIAGNOSE_MODEL", "claude-fable-5")
+BATCH_SEC = int(os.environ.get("DIAGNOSE_BATCH_SEC", "480"))  # wall-clock budget to wait on the batch
+
+
+def _call_model(body, label="diagnose"):
+    """Run one request through the 50%-priced Batch API (blocking, up to BATCH_SEC), returning the
+    parsed JSON verdict. Raises on timeout, an errored line, or truncation -- the caller turns that
+    into a silent skip, so a slow or unavailable batch means no comment, never a wrong one."""
+    res = batch.run([batch.from_body(label, body)], deadline=time.time() + BATCH_SEC, label=label)
+    r = res.get(label)
+    if not r or not r.get("ok"):
+        raise RuntimeError("batch %s did not succeed: %r" % (label, r))
+    if r.get("stop_reason") == "max_tokens":
+        raise RuntimeError("batch %s truncated (max_tokens); raise its max_tokens" % label)
+    return update.parse_json(r["text"])
 
 # Only issues that describe something gone wrong are worth a diagnosis. The monitors also open pure
 # notifications (a newer model is available; cases queued for review) -- diagnosing those wastes a
@@ -153,7 +172,7 @@ def main():
         return 0
     try:
         req = build_request(title, body, _runbook_context(), MODEL)
-        result = update.anthropic_json(req, label="diagnose")
+        result = _call_model(req, "diagnose")
         comment = format_comment(result if isinstance(result, dict) else {})
     except Exception as e:
         # Best-effort: a failed diagnosis must not become a second alarm. Leave no comment, exit 0.
