@@ -28,10 +28,13 @@ concurrency:
 jobs:
   review:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20    # each review runs through the Batch API (50% cheaper), so the job polls
+                           # per held PR -- usually minutes each; dep_review.py caps its wait at
+                           # DEP_REVIEW_BATCH_SEC (480s). Major bumps are rare, so this is seldom >1.
     steps:
-      # Block egress: the AI call and GitHub only. No PyPI -- dep_review.py imports update, whose
-      # only third-party import (pypdf) is lazy, so it loads on the stdlib alone; no install step.
+      # Block egress: the AI call (Batch API, on api.anthropic.com) and GitHub only. No PyPI --
+      # dep_review.py imports update and batch, both of which load on the stdlib alone (pypdf, the
+      # only third-party in the chain, is lazy), so no install step.
       - name: Harden the runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:

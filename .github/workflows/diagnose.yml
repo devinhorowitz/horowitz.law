@@ -29,11 +29,13 @@ jobs:
     # Only diagnose issues opened by our own monitors; ignore human-filed issues entirely.
     if: ${{ github.event.issue.user.login == 'github-actions[bot]' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15    # the call runs through the Batch API (50% cheaper), so the job polls for
+                           # the result -- usually minutes; diagnose.py caps its wait at DIAGNOSE_BATCH_SEC (480s)
     steps:
-      # Block egress: only the diagnosis call and GitHub (checkout + gh comment). No CourtListener,
-      # no PyPI -- diagnose.py imports update but every third-party import in that chain (pypdf) is
-      # lazy, so the module loads on the stdlib alone and no install step is needed.
+      # Block egress: only the diagnosis call and GitHub (checkout + gh comment). The Batch API lives
+      # on api.anthropic.com too, so no new endpoint. No CourtListener, no PyPI -- diagnose.py imports
+      # update and batch, but both load on the stdlib alone (pypdf, the only third-party in the chain,
+      # is imported lazily), so no install step is needed.
       - name: Harden the runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:

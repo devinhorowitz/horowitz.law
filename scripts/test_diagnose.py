@@ -12,8 +12,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import batch  # noqa: E402  -- stubbed to pin the batch-transport wiring
 import diagnose  # noqa: E402
-import update  # noqa: E402
 
 FAILS = []
 
@@ -25,12 +25,12 @@ def check(name, cond, detail=""):
 
 
 class Stub:
-    """Stand-in for update.anthropic_json: returns a fixed verdict (or raises), and records calls."""
+    """Stand-in for diagnose._call_model: returns a fixed verdict (or raises), and records calls."""
     def __init__(self, ret):
         self.ret = ret
         self.calls = []
 
-    def __call__(self, body, label="call"):
+    def __call__(self, body, *a, **k):
         self.calls.append(body)
         if isinstance(self.ret, Exception):
             raise self.ret
@@ -38,19 +38,19 @@ class Stub:
 
 
 def run_main(title, body, ret, tmp):
-    """Drive diagnose.main() with a stubbed API and env, returning (rc, comment-or-None)."""
+    """Drive diagnose.main() with a stubbed model call and env, returning (rc, comment-or-None)."""
     prev = {k: os.environ.get(k) for k in ("ISSUE_TITLE", "ISSUE_BODY", "DIAGNOSE_OUT")}
-    real = update.anthropic_json
+    real = diagnose._call_model
     os.environ["ISSUE_TITLE"] = title
     os.environ["ISSUE_BODY"] = body
     os.environ["DIAGNOSE_OUT"] = tmp
     if os.path.exists(tmp):
         os.remove(tmp)
-    update.anthropic_json = Stub(ret)
+    diagnose._call_model = Stub(ret)
     try:
         rc = diagnose.main()
     finally:
-        update.anthropic_json = real
+        diagnose._call_model = real
         for k, v in prev.items():
             if v is None:
                 os.environ.pop(k, None)
@@ -100,6 +100,41 @@ def main():
     check("comment renders confidence", "medium" in md)
     check("comment carries the no-repo-access caveat", "no live repo access" in md)
     check("empty verdict renders no comment", diagnose.format_comment({}) == "")
+
+    # --- _call_model: batch-transport wiring (stub batch.run) ---
+    real_run = batch.run
+    cap = {}
+
+    def ok_run(requests, deadline=None, interval=20.0, label="batch"):
+        cap["requests"] = requests
+        return {label: {"ok": True, "text": '{"summary": "batched"}', "usage": {}, "stop_reason": "end_turn"}}
+    body = {"model": "m", "max_tokens": 10, "system": "s", "messages": [{"role": "user", "content": "u"}]}
+    batch.run = ok_run
+    try:
+        out = diagnose._call_model(body, "diagnose")
+        check("_call_model parses the batched verdict", out.get("summary") == "batched")
+        check("_call_model submits one request keyed by the label as custom_id",
+              len(cap["requests"]) == 1 and cap["requests"][0]["custom_id"] == "diagnose")
+
+        batch.run = lambda *a, **k: {"diagnose": {"ok": False, "type": "errored", "error": "x"}}
+        raised = False
+        try:
+            diagnose._call_model(body, "diagnose")
+        except Exception:
+            raised = True
+        check("_call_model raises on an errored batch line (-> silent skip upstream)", raised)
+
+        def timeout_run(*a, **k):
+            raise batch.BatchTimeout("b1", "still running at deadline")
+        batch.run = timeout_run
+        raised = False
+        try:
+            diagnose._call_model(body, "diagnose")
+        except Exception:
+            raised = True
+        check("_call_model propagates a batch timeout (-> silent skip upstream)", raised)
+    finally:
+        batch.run = real_run
 
     tmp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "diagnosis_test_tmp.md")
 

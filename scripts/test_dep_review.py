@@ -12,8 +12,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import batch  # noqa: E402  -- stubbed to pin the batch-transport wiring
 import dep_review  # noqa: E402
-import update  # noqa: E402
 
 FAILS = []
 
@@ -25,11 +25,12 @@ def check(name, cond, detail=""):
 
 
 class Stub:
+    """Stand-in for dep_review._call_model: returns a fixed verdict (or raises), and records calls."""
     def __init__(self, ret):
         self.ret = ret
         self.calls = []
 
-    def __call__(self, body, label="call"):
+    def __call__(self, body, *a, **k):
         self.calls.append(body)
         if isinstance(self.ret, Exception):
             raise self.ret
@@ -37,19 +38,19 @@ class Stub:
 
 
 def run_main(title, body, ret, tmp):
-    """Drive dep_review.main() with a stubbed API and env, returning (rc, comment-or-None)."""
+    """Drive dep_review.main() with a stubbed model call and env, returning (rc, comment-or-None)."""
     prev = {k: os.environ.get(k) for k in ("DEP_PR_TITLE", "DEP_PR_BODY", "DEP_REVIEW_OUT")}
-    real = update.anthropic_json
+    real = dep_review._call_model
     os.environ["DEP_PR_TITLE"] = title
     os.environ["DEP_PR_BODY"] = body
     os.environ["DEP_REVIEW_OUT"] = tmp
     if os.path.exists(tmp):
         os.remove(tmp)
-    update.anthropic_json = Stub(ret)
+    dep_review._call_model = Stub(ret)
     try:
         rc = dep_review.main()
     finally:
-        update.anthropic_json = real
+        dep_review._call_model = real
         for k, v in prev.items():
             if v is None:
                 os.environ.pop(k, None)
@@ -103,6 +104,41 @@ def main():
     check("comment renders concerns and checks", "signature changed" in md and "still iterates" in md)
     check("comment carries the advisory/held caveat", "held for your review" in md)
     check("empty verdict renders no comment", dep_review.format_comment({}, "pypdf", "6.0", "7.0") == "")
+
+    # --- _call_model: batch-transport wiring (stub batch.run) ---
+    real_run = batch.run
+    cap = {}
+
+    def ok_run(requests, deadline=None, interval=20.0, label="batch"):
+        cap["requests"] = requests
+        return {label: {"ok": True, "text": '{"verdict": "hold", "summary": "batched"}', "usage": {}, "stop_reason": "end_turn"}}
+    body = {"model": "m", "max_tokens": 10, "system": "s", "messages": [{"role": "user", "content": "u"}]}
+    batch.run = ok_run
+    try:
+        out = dep_review._call_model(body, "dep_review")
+        check("_call_model parses the batched verdict", out.get("verdict") == "hold")
+        check("_call_model submits one request keyed by the label as custom_id",
+              len(cap["requests"]) == 1 and cap["requests"][0]["custom_id"] == "dep_review")
+
+        batch.run = lambda *a, **k: {"dep_review": {"ok": False, "type": "errored", "error": "x"}}
+        raised = False
+        try:
+            dep_review._call_model(body, "dep_review")
+        except Exception:
+            raised = True
+        check("_call_model raises on an errored batch line (-> silent skip upstream)", raised)
+
+        def timeout_run(*a, **k):
+            raise batch.BatchTimeout("b1", "still running at deadline")
+        batch.run = timeout_run
+        raised = False
+        try:
+            dep_review._call_model(body, "dep_review")
+        except Exception:
+            raised = True
+        check("_call_model propagates a batch timeout (-> silent skip upstream)", raised)
+    finally:
+        batch.run = real_run
 
     tmp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dep_review_test_tmp.md")
 
