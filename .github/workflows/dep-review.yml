@@ -1,0 +1,78 @@
+name: dependency-bump review
+
+# automerge.yml holds Dependabot MAJOR bumps for a human (green CI can't prove a major dependency
+# change safe when the tests are hermetic). This posts a ONE-TIME AI second opinion on each open
+# major-bump PR: good-to-go / caution / hold, scoped to how THIS repo actually uses the dependency,
+# grounded in the release notes Dependabot embeds in the PR body. Advisory only -- it merges nothing;
+# the bump stays held regardless. scripts/dep_review.py fails silently, so a broken reviewer never
+# blocks or misleads.
+#
+# A scheduled poll, not a `pull_request` trigger, on purpose: a Dependabot-triggered workflow gets a
+# read-only token and NO access to ANTHROPIC_API_KEY (GitHub's Dependabot-secrets split). Running on
+# our own schedule keeps it in the base context where the secret is available -- the same reason
+# automerge.yml polls. Major bumps are rare and not time-critical, so a few-hourly poll is plenty.
+
+on:
+  schedule:
+    - cron: '27 */6 * * *'   # every 6 hours, offset from automerge (:47) and the funnel (:17)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read           # checkout; dep_review.py reads its usage notes from the tree
+  pull-requests: write     # post the review comment
+
+concurrency:
+  group: dep-review
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Block egress: the AI call and GitHub only. No PyPI -- dep_review.py imports update, whose
+      # only third-party import (pypdf) is lazy, so it loads on the stdlib alone; no install step.
+      - name: Harden the runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.anthropic.com:443
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Review open major dependabot bumps
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEP_REVIEW_MODEL: ${{ vars.DEP_REVIEW_MODEL || 'claude-fable-5' }}
+          R: ${{ github.repository }}
+        run: |
+          set -e
+          MARKER="Automated dependency-bump review"
+          nums=$(gh pr list --repo "$R" --state open --json number,headRefName,author \
+                   --jq '.[] | select(.author.login=="dependabot[bot]" and (.headRefName|startswith("dependabot/"))) | .number')
+          if [ -z "$nums" ]; then echo "No open dependabot PRs."; exit 0; fi
+          for num in $nums; do
+            # Idempotent across polls: skip a PR we have already reviewed.
+            if gh pr view "$num" --repo "$R" --json comments --jq '.comments[].body' | grep -qF "$MARKER"; then
+              echo "PR #$num already reviewed; skipping."
+              continue
+            fi
+            # Title/body reach the script via env, never interpolated into a shell line, so PR
+            # content stays data. dep_review.py itself no-ops on anything that is not a major bump.
+            title=$(gh pr view "$num" --repo "$R" --json title --jq '.title')
+            body=$(gh pr view "$num" --repo "$R" --json body --jq '.body')
+            rm -f scripts/dep_review_comment.md
+            DEP_PR_TITLE="$title" DEP_PR_BODY="$body" python scripts/dep_review.py || echo "dep_review skipped for #$num (see log)"
+            if [ -s scripts/dep_review_comment.md ]; then
+              gh pr comment "$num" --repo "$R" --body-file scripts/dep_review_comment.md
+              echo "Posted dependency-bump review on PR #$num."
+            fi
+          done

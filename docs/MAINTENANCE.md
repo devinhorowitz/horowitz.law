@@ -107,8 +107,9 @@ its tools.
 
 `digest_preview.html`, `alert_preview.html`, the `scripts/*_pr_body.md` files, and the
 workflow report/alert bodies (`scripts/court_drift.md`, `scripts/link_rot.md`,
-`scripts/heartbeat_alert.md`, `scripts/feed_check_alert.md`, `scripts/diagnosis.md`). These
-are dry-run previews and report bodies a workflow produces and consumes; they are never committed.
+`scripts/heartbeat_alert.md`, `scripts/feed_check_alert.md`, `scripts/diagnosis.md`,
+`scripts/dep_review_comment.md`). These are dry-run previews and report bodies a workflow produces
+and consumes; they are never committed.
 
 ## Common tasks
 
@@ -132,7 +133,9 @@ are dry-run previews and report bodies a workflow produces and consumes; they ar
   `siteconfig.py` so the descriptions name it.
 - **Add a case by hand.** Commit its CourtListener URL or cluster id to `queue.txt`; the
   queue workflow picks it up.
-- **Bump a GitHub Action.** Dependabot opens the PR; review and merge it.
+- **Bump a dependency (GitHub Action or Python).** Dependabot opens the PR. A patch or minor bump
+  auto-merges on green CI; a **major** bump is held for you, and `dep-review` posts an AI good-to-go/
+  caution note on it first — read that, then merge (or close) by hand.
 - **Tune the pipeline** (model ids, budgets, thresholds). These live in repository
   Variables, documented in PIPELINE.md, not in the code.
 
@@ -150,7 +153,8 @@ Automatic, on a schedule:
 | render-sync | daily | re-renders pages from `opinions.json`; opens a PR if they drifted |
 | model-watch | daily | checks the Models API for a newer Claude model in a pinned tier; opens a bump PR gated by the golden set |
 | heartbeat | daily | dead-man's-switch: opens a tracking issue if the funnel stalls (no scan in 48h) or stops finding cards (30d); the one alert that fires when runs stop |
-| automerge | every 6 hours | merges the verified-safe self-healing PRs (render-sync, and dependabot bumps for GitHub Actions and Python deps) so they ship untended; leaves model-watch for a human |
+| automerge | every 6 hours | merges the verified-safe self-healing PRs (render-sync, and patch/minor dependabot bumps for GitHub Actions and Python deps) so they ship untended; holds major bumps and model-watch for a human |
+| dep-review | every 6 hours | posts a one-time AI good-to-go/caution note (Fable) on each held major dependabot bump, scoped to how this repo uses the dep, from the PR's changelog. Advisory; merges nothing |
 | digest | Mondays | the weekly email digest, sent last in the cycle |
 | lighthouse | Mondays | performance scores of the deployed site |
 | links | Mondays | link-rot check, gentle on CourtListener |
@@ -221,15 +225,21 @@ Run by hand, from the Actions tab:
   Actions summary; only the auto-PR is skipped. If a bump PR touches a tier whose pin is
   also set as a repo Variable, update that Variable to match, or the Variable will keep
   overriding the merged default.
-- Two of the self-healing PRs now merge themselves, so the fix ships without you. The
-  `automerge` workflow merges a **render-sync** PR only after re-verifying it is a faithful
-  re-render (data untouched, only `public/` changed, and re-rendering the PR head yields no
-  further diff), and a **dependabot** bump (a GitHub Actions pin or a Python dependency) only
-  when its CI checks are all green. It
-  fails closed: anything it cannot verify stays open for you. **model-watch is deliberately
-  never auto-merged** — it changes the model that writes the legal cards, and CI never runs
-  that model, so you review and merge those by hand. To pause all auto-merging, disable the
-  `automerge` workflow in the Actions tab.
+- The self-healing PRs merge themselves, so the fix ships without you. The `automerge` workflow
+  merges a **render-sync** PR only after re-verifying it is a faithful re-render (data untouched,
+  only `public/` changed, and re-rendering the PR head yields no further diff), and a **dependabot**
+  bump (a GitHub Actions pin or a Python dependency) only when its CI checks are all green — but
+  **patch and minor only**. A **major** dependabot bump is held for you: CI here is hermetic and
+  never runs the risky runtime paths (pypdf on real PDFs), so green CI does not prove a major bump
+  safe. It fails closed: a bump whose major it cannot parse as unchanged (an odd title, a grouped
+  update) is held too. **model-watch is likewise never auto-merged** — it changes the model that
+  writes the legal cards, and CI never runs that model, so you review and merge those by hand. To
+  pause all auto-merging, disable the `automerge` workflow in the Actions tab.
+- Held major dependabot bumps get an AI second opinion. `dep-review` (a scheduled poll, like
+  automerge) posts one comment per major-bump PR — good-to-go, caution, or hold — reasoning over the
+  changelog in the PR body against a note of how this repo actually uses that dependency
+  (`scripts/dep_review.py`, `DEP_USAGE`). It is advisory and merges nothing; a broken run posts
+  nothing. Add a `DEP_USAGE` entry when a new dependency is worth a repo-specific review.
 - `heartbeat` is the backstop for silent stalls. Every other alert is an issue opened by a
   workflow that *failed* — which only helps if that workflow still runs. Heartbeat instead
   reads the committed freshness markers (`public/status.json` `scanned_at`, newest card
