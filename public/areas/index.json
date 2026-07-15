@@ -39,13 +39,13 @@
     {
       "area": "procedure",
       "label": "procedure",
-      "count": 53,
+      "count": 54,
       "url": "https://horowitz.law/areas/procedure.json"
     },
     {
       "area": "damages",
       "label": "damages",
-      "count": 30,
+      "count": 31,
       "url": "https://horowitz.law/areas/damages.json"
     }
   ]

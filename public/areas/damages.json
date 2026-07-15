@@ -1,8 +1,26 @@
 {
   "area": "damages",
   "label": "damages",
-  "count": 30,
+  "count": 31,
   "opinions": [
+    {
+      "cluster_id": 10928205,
+      "name": "Annesser Armenteros, PLLC v. Joseph C. Caparo Jr.",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-07-15",
+      "disposition": "affirmed in part, reversed in part",
+      "areas": [
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10928205/annesser-armenteros-pllc-v-joseph-c-caparo-jr/",
+      "synopsis": "The counterclaimant sought leave to amend to add punitive damages against a law firm and an individual attorney under section 768.72, Florida Statutes. Applying de novo review that tests the sufficiency of the proffer in the light most favorable to the moving party, the court held there was no reasonable evidentiary showing to support punitive damages against the individual attorney, whose name appeared on a quit claim deed only inadvertently and who had no involvement in the underlying representation. The court accordingly reversed the order as to the individual.",
+      "why": "The decision applies the section 768.72 proffer standard to reject a punitive damages claim against an individual defendant where the proffer contained no evidence of that defendant's personal involvement in the alleged misconduct.",
+      "dockets": [
+        "3D25-2154"
+      ]
+    },
     {
       "cluster_id": 10881685,
       "name": "McGovern v. Rowland",
