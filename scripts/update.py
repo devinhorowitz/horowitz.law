@@ -99,12 +99,12 @@ CL_TOKEN     = os.environ.get("COURTLISTENER_TOKEN", "")
 MODEL        = os.environ.get("OPINIONS_MODEL", "claude-opus-4-8")
 AUDIT_MODEL  = os.environ.get("OPINIONS_AUDIT_MODEL", MODEL)  # escalated treatment audit; Opus by default
 TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-5")
-# Defaults are the undated Haiku alias, not a dated snapshot: an alias rolls forward to the current
-# 4.5 Haiku and never 404s, whereas a dated snapshot (claude-haiku-4-5-20251001) is eventually
-# retired -- the one dependency in this repo with a built-in expiry. The other tiers already use
-# aliases (opus-4-8, sonnet-5, fable-5), so this keeps the cheap tiers consistent and self-renewing
-# for the unattended deployment. Pin a specific snapshot via the repo Variable only if you need
-# byte-reproducibility of a screen decision; golden-check catches any behavior drift from a roll.
+# Defaults are the undated canonical ids (claude-haiku-4-5), like every other tier (opus-4-8,
+# sonnet-5, fable-5), not a dated snapshot. A dated snapshot such as claude-haiku-4-5-20251001
+# carries Anthropic's snapshot-retirement lifecycle -- it is eventually deprecated and stops
+# serving -- so it was the one model dependency here with a built-in expiry. The undated id has no
+# such expiry, which is what an unattended deployment wants. Pin a dated snapshot via the repo
+# Variable only if you ever need to reproduce a specific screen decision.
 SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5")
 PRETRIAGE_MODEL = os.environ.get("OPINIONS_PRETRIAGE_MODEL", "claude-haiku-4-5")  # tier 1.5: cheap full-read screen before the Sonnet triage; "" disables
 CROSSCHECK_MODEL = os.environ.get("OPINIONS_CROSSCHECK_MODEL", TRIAGE_MODEL)  # fidelity check on each card; a different model than the Opus summarizer so it is not grading its own work; "" disables

@@ -73,7 +73,9 @@ folder drag, so upload `.gitignore`, `.well-known/`, and `.github/` files indivi
 - Config and assets: `_headers`, `_redirects`, `wrangler.toml`, `robots.txt`, both
   manifests, `ruff.toml`, `lighthouserc.json`, `.gitignore`, `.lycheeignore`, the
   workflows, `.github/dependabot.yml`, `.well-known/mta-sts.txt`, `humans.txt`,
-  `health.txt`, the fonts, icons, `og-card.jpg`, the portraits, and the vCard.
+  `health.txt`, the fonts, icons, `og-card.jpg`, the portraits, and `contact.vcf`.
+  (The QR contact card `devin-horowitz.vcf` is *generated* from `siteconfig.py`, not
+  hand-edited — see the generated list below.)
 - Page layout and heads: `index.html`, `404.html`, and `subscribe.html` are hand-edited
   shells. render stamps them and fills any marker regions they carry: the `/404` link list
   comes from `siteconfig.PAGES`, and `subscribe.html`'s area and jurisdiction choices from
@@ -90,20 +92,23 @@ folder drag, so upload `.gitignore`, `.well-known/`, and `.github/` files indivi
   outside those regions is edited in `colophon.html` directly.
 - From `siteconfig.py`: the meta, Open Graph, and Twitter descriptions and identity fields
   on the pages (the `data-cfg` hooks); the `/404` link list and `sitemap.xml`'s static URLs
-  (both from `PAGES`); and `.well-known/security.txt`.
+  (both from `PAGES`); `.well-known/security.txt`; and `devin-horowitz.vcf`, the QR contact
+  card, whose fields render stamps from the `siteconfig.py` identity.
 - render also stamps the footer year and the asset `?v=` cache tokens on every page.
 
 ### Auto-written state, never hand-edit (committed on purpose, for transparency)
 
 `opinions_state.json`, `opinions_rejections.jsonl`, `opinions_pipeline_log.jsonl`,
 `treatment_state.json`, `status.json`, `scripts/golden_set.json`, `skill-authorities.json`,
-and `.github/keepalive.txt`. These are written by the pipeline and its tools.
+`skill_alert_state.json`, and `.github/keepalive.txt`. These are written by the pipeline and
+its tools.
 
 ### Not in the repo (gitignored, written at runtime)
 
-`digest_preview.html`, `alert_preview.html`, the `scripts/*_pr_body.md` files,
-`scripts/court_drift.md`, and `scripts/link_rot.md`. These are dry-run previews and report
-bodies a workflow produces and consumes; they are never committed.
+`digest_preview.html`, `alert_preview.html`, the `scripts/*_pr_body.md` files, and the
+workflow report/alert bodies (`scripts/court_drift.md`, `scripts/link_rot.md`,
+`scripts/heartbeat_alert.md`, `scripts/feed_check_alert.md`, `scripts/diagnosis.md`). These
+are dry-run previews and report bodies a workflow produces and consumes; they are never committed.
 
 ## Common tasks
 
@@ -139,13 +144,13 @@ Automatic, on a schedule:
 
 | Workflow | When | What it does |
 | --- | --- | --- |
-| opinions | every 4 hours | the funnel: scans CourtListener, proposes new cards via a review PR |
+| opinions | every 4 hours | the funnel: scans CourtListener, auto-publishes clean cards straight to `main`, and routes held cases to a review PR |
 | treatment | Saturdays | reverse citation sweep for adverse treatment of published cards |
 | maintain | daily | budget-gated upkeep: golden check, court check, feed-shape canary, repo keepalive |
 | render-sync | daily | re-renders pages from `opinions.json`; opens a PR if they drifted |
 | model-watch | daily | checks the Models API for a newer Claude model in a pinned tier; opens a bump PR gated by the golden set |
 | heartbeat | daily | dead-man's-switch: opens a tracking issue if the funnel stalls (no scan in 48h) or stops finding cards (30d); the one alert that fires when runs stop |
-| automerge | every 6 hours | merges the two verified-safe self-healing PRs (render-sync, dependabot action bumps) so they ship untended; leaves model-watch for a human |
+| automerge | every 6 hours | merges the verified-safe self-healing PRs (render-sync, and dependabot bumps for GitHub Actions and Python deps) so they ship untended; leaves model-watch for a human |
 | digest | Mondays | the weekly email digest, sent last in the cycle |
 | lighthouse | Mondays | performance scores of the deployed site |
 | links | Mondays | link-rot check, gentle on CourtListener |
@@ -162,6 +167,13 @@ Automatic, when a monitor opens a tracking issue:
 | Workflow | What it does |
 | --- | --- |
 | diagnose | posts one best-effort AI first-pass diagnosis (Fable, from the issue text + this runbook) as a comment, so you start with a hypothesis. An aid, not an authority; fails silently and never comments on human-filed issues |
+
+Automatic, on a review-lane event (the held-case PR the funnel opens):
+
+| Workflow | What it does |
+| --- | --- |
+| review-veto | on a `/veto <id>` or `/decline <id>` comment on the review PR, drops that case from the bundle before you merge |
+| review-apply | when the review PR merges, applies the cases that remained to `main` and re-renders |
 
 Run by hand, from the Actions tab:
 
@@ -212,7 +224,8 @@ Run by hand, from the Actions tab:
 - Two of the self-healing PRs now merge themselves, so the fix ships without you. The
   `automerge` workflow merges a **render-sync** PR only after re-verifying it is a faithful
   re-render (data untouched, only `public/` changed, and re-rendering the PR head yields no
-  further diff), and a **dependabot** action bump only when its CI checks are all green. It
+  further diff), and a **dependabot** bump (a GitHub Actions pin or a Python dependency) only
+  when its CI checks are all green. It
   fails closed: anything it cannot verify stays open for you. **model-watch is deliberately
   never auto-merged** — it changes the model that writes the legal cards, and CI never runs
   that model, so you review and merge those by hand. To pause all auto-merging, disable the
