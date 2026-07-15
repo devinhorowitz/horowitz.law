@@ -48,8 +48,17 @@ import golden_check    # the regression guard; reused so it tests what the funne
 RESERVE   = int(os.environ.get("OPINIONS_MAINT_RESERVE", "50"))     # trailing-24h funnel cl_calls at or above which the CL re-validation is skipped
 SLICE     = int(os.environ.get("OPINIONS_MAINT_SLICE", "3"))        # published cards to re-validate per run
 FETCH_SEC = int(os.environ.get("OPINIONS_MAINT_FETCH_SEC", "180"))  # per-run wall-clock budget for the slice's fetches; a full window or 429 defers the rest
-BATCH     = os.environ.get("MAINTAIN_BATCH", "").strip().lower() in ("1", "true", "yes", "on")  # route the slice's guards through the 50%-priced Batch API
-BATCH_SEC = int(os.environ.get("OPINIONS_MAINT_BATCH_SEC", "3300"))  # wall-clock budget to wait on the guard batch before deferring the slice (must fit the workflow timeout)
+# Route the slice's guard calls through the 50%-priced Batch API. ON by default: the guards are a
+# latency-tolerant daily trickle (SLICE=3 cards -> <=6 small Sonnet calls), so half price is a clear
+# win and there is no reason to make the discount opt-in. Set MAINTAIN_BATCH=0 to force the
+# synchronous path (e.g. to debug a guard against the live model).
+BATCH     = os.environ.get("MAINTAIN_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
+# Wall-clock budget to wait on the guard batch before deferring the slice. MUST fit the workflow
+# timeout (30 min): the golden check + court/feed checks + the FETCH_SEC fetches run first, so this
+# leaves comfortable margin. A tiny <=6-request batch almost always ends in a few minutes; on the
+# rare slow one this defers the slice gracefully (re-checked next run) rather than risking a hard
+# job timeout -- which the old 3300s default (55 min, longer than the whole job) would have caused.
+BATCH_SEC = int(os.environ.get("OPINIONS_MAINT_BATCH_SEC", "900"))
 REQUIRED_FIELDS = ("cluster_id", "name", "court", "date", "dockets", "disposition",
                    "areas", "url", "synopsis", "why", "first_seen", "precedential")
 

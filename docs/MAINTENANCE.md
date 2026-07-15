@@ -240,12 +240,16 @@ Run by hand, from the Actions tab:
   changelog in the PR body against a note of how this repo actually uses that dependency
   (`scripts/dep_review.py`, `DEP_USAGE`). It is advisory and merges nothing; a broken run posts
   nothing. Add a `DEP_USAGE` entry when a new dependency is worth a repo-specific review.
-- The AI-assist features run their model calls through the **50%-priced Batch API** (`batch.py`, the
-  same transport `backfill` and `maintain` use), so `diagnose` and `dep-review` cost half what a
-  synchronous call would. The trade is latency: the workflow polls for the batch (usually minutes),
-  capped by `DIAGNOSE_BATCH_SEC` / `DEP_REVIEW_BATCH_SEC` (480s); if the batch is slow it just posts
-  nothing that run (best-effort). The model is a repo Variable (`DIAGNOSE_MODEL` / `DEP_REVIEW_MODEL`,
-  default Fable) if you ever want to trade quality for a still-lower price.
+- Latency-tolerant model calls run through the **50%-priced Batch API** (`batch.py`). `diagnose` and
+  `dep-review` always do; `maintain`'s daily guard trickle does **by default** now (`MAINTAIN_BATCH`,
+  set it to `0` to force the synchronous path). The trade is latency: the run polls for the batch
+  (usually minutes), capped by the matching `*_BATCH_SEC` budget (`diagnose`/`dep-review` 480s;
+  `maintain` 900s, which must stay under the 30-min job); a slow batch just posts nothing / defers
+  the slice that run (best-effort). `backfill` batches too, but stays opt-in (`BACKFILL_BATCH`) since
+  it's a manual one-off. The **daily funnel is deliberately synchronous** — it publishes cards
+  promptly and the Batch API is async. `diagnose` / `dep-review` models are repo Variables
+  (`DIAGNOSE_MODEL` / `DEP_REVIEW_MODEL`, default Fable) if you ever want to trade quality for a
+  still-lower price.
 - `heartbeat` is the backstop for silent stalls. Every other alert is an issue opened by a
   workflow that *failed* — which only helps if that workflow still runs. Heartbeat instead
   reads the committed freshness markers (`public/status.json` `scanned_at`, newest card
