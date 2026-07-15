@@ -7,8 +7,8 @@
 #   B023  loop-var closure; the one hit is an immediately-invoked re.sub lambda, safe
 #   F541  f-string without a placeholder
 target-version = "py312"
- 
+
 [lint]
 select = ["E9", "F", "B"]
 ignore = ["B904", "B023", "F541"]
- 
+

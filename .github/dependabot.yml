@@ -26,4 +26,4 @@ updates:
       prefix: "deps"
     labels:
       - "dependencies"
- 
+
