@@ -147,7 +147,16 @@ def collect(batch_obj, label="batch"):
         line = line.strip()
         if not line:
             continue
-        rec = json.loads(line)
+        # Skip a malformed line rather than crash the whole collect (and the caller's run). A results
+        # download truncated by a mid-stream network cut leaves the final line a partial JSON object;
+        # the complete lines before it are still valid results. Dropping the bad line yields those
+        # good results and simply omits the affected request(s) -- which the callers already treat as
+        # "unavailable, retry next run" -- instead of turning a transient blip into a failed run.
+        try:
+            rec = json.loads(line)
+        except ValueError as e:
+            print("  . batch %s: skipping an unparseable results line (%s)" % (batch_obj.get("id"), e))
+            continue
         cid = rec.get("custom_id")
         res = rec.get("result") or {}
         if res.get("type") == "succeeded":

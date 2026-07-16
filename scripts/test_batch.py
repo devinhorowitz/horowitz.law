@@ -175,10 +175,23 @@ def main():
         urllib.request.urlopen = orig_urlopen
         batch.time.sleep = _orig_sleep
 
+    # 7. collect() skips a malformed/truncated results line instead of crashing the whole batch and
+    #    its caller's run -- a mid-stream network cut leaves the final JSONL line a partial object.
+    #    The complete lines before AND after it must still be returned. (Stress-test regression.)
+    ended = {"id": "batch_x", "processing_status": "ended", "results_url": batch.API + "/batch_x/results"}
+    body = "\n".join([json.dumps(_succeeded("a", '{"ok":1}')),
+                      '{"custom_id": "b", "result": {"type": "succ',   # truncated: must be skipped
+                      json.dumps(_errored("c")),
+                      ""])                                             # trailing blank line
+    out = with_send(Scripted([body]), lambda: batch.collect(ended))
+    check("collect skips a malformed results line without crashing", set(out) == {"a", "c"}, repr(set(out)))
+    check("collect keeps the good line before the malformed one", out.get("a", {}).get("ok") is True)
+    check("collect keeps the good line after the malformed one", out.get("c", {}).get("ok") is False)
+
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (20 cases)")
+    print("\nALL TESTS PASSED (23 cases)")
     return 0
 
 
