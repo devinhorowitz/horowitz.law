@@ -353,9 +353,10 @@ a handful of Variable edits and the derived checks move with them unless you set
 - Schedule: edit the `cron` line in the workflow (`17 */4 * * *`, every four hours). It is in UTC.
 
 A handful of other guards (`OPINIONS_BUDGET_SEC`, `OPINIONS_BREAKER`, `OPINIONS_SEARCH_BUDGET_SEC`,
-`OPINIONS_SEEN_CAP`, `DRY_RUN`) are documented at the top of `scripts/update.py`. The CourtListener
-rate limits and the reverse-sweep budget are documented at the top of `scripts/cl_rate.py` and
-`scripts/treatment.py`.
+`OPINIONS_SEEN_CAP`, `OPINIONS_FEED_MAX_BYTES`, `OPINIONS_PDF_MAX_BYTES`, `DRY_RUN`) are documented at
+the top of `scripts/update.py`. The CourtListener rate limits and the reverse-sweep budget (including
+`TREATMENT_PENDING_TRIES`, the per-citer re-sweep giveup) are documented at the top of
+`scripts/cl_rate.py` and `scripts/treatment.py`.
 
 ## Cost
 

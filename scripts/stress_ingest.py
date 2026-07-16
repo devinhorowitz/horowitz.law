@@ -131,6 +131,17 @@ def test_parse_feed():
         check("parse_feed: malformed XML (%s) raises or returns a list, never corrupt" % label,
               raised or isinstance(val, list))
 
+    # A DTD / internal-entity declaration (the billion-laughs vector) is refused BEFORE parsing, so
+    # expat never expands it. A genuine CL feed carries none, so this only ever fires on an attack.
+    bomb = (b'<?xml version="1.0"?><!DOCTYPE feed [<!ENTITY lol "lol">]>'
+            b'<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>&lol;</title></entry></feed>')
+    raised = False
+    try:
+        update._parse_feed(bomb, court)
+    except Exception:
+        raised = True
+    check("parse_feed: a DTD/entity feed is refused (no entity expansion)", raised)
+
 
 def test_parse_json():
     good = [('{"a": 1}', dict), ('```json\n{"b": 2}\n```', dict), ('prose {"c": 3} trailer', dict),
@@ -160,8 +171,8 @@ class FakeResp:
     def __init__(self, data):
         self._d = data
 
-    def read(self):
-        return self._d
+    def read(self, n=-1):
+        return self._d[:n] if (n is not None and n >= 0) else self._d
 
     def __enter__(self):
         return self
@@ -243,6 +254,35 @@ def test_pdf_text():
             sys.modules["pypdf"] = saved_pypdf
 
 
+class CapResp:
+    """A urlopen response whose read(n) honors the byte limit, to prove the caller caps it."""
+    def __init__(self, data):
+        self.data = data
+
+    def read(self, n=-1):
+        return self.data[:n] if (n is not None and n >= 0) else self.data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_read_caps():
+    saved_open = update.urllib.request.urlopen
+    saved_sleep = update.time.sleep
+    update.time.sleep = lambda *a, **k: None
+    try:
+        big = b"x" * (update.FEED_MAX_BYTES + 4096)
+        update.urllib.request.urlopen = lambda *a, **k: CapResp(big)
+        out = update.feed_get("https://www.courtlistener.com/feed/court/x/")
+        check("feed_get caps the read at FEED_MAX_BYTES", len(out) == update.FEED_MAX_BYTES, "%d" % len(out))
+    finally:
+        update.urllib.request.urlopen = saved_open
+        update.time.sleep = saved_sleep
+
+
 def test_shape_helpers():
     # opinion_ids_of's REST fallback would hit the network on a cluster-only r; stub cl_get so the
     # fuzz can throw anything at it without a live call, and so a fallback is detected, not executed.
@@ -269,8 +309,8 @@ def test_shape_helpers():
                 update._dup_sig(str(r.get("court_id") or ""), r.get("dateFiled"), r.get("dockets"), r.get("caseName"))
                 update.party_tokens(r.get("caseName"))              # hardened: accepts a non-str name
                 update._normalize_for_match(r.get("snippet"))       # hardened: accepts a non-str quote
-                update.clip(r.get("snippet") if isinstance(r.get("snippet"), str) else "", rng.choice([None, 0, 1, 100, 10**6]))
-                update._pdf_ok(r.get("snippet") if isinstance(r.get("snippet"), str) else "")
+                update.clip(r.get("snippet"), rng.choice([None, 0, 1, 100, 10**6]))   # hardened: non-str ok
+                update._pdf_ok(r.get("snippet"))                    # hardened: accepts a non-str
                 if cid is not None and not isinstance(cid, int):
                     check("cluster_id_of returns int or None", False, "%r -> %r" % (r, cid)); break
             except Exception as e:
@@ -290,6 +330,8 @@ def main():
     test_parse_json()
     print("- pdf_text:")
     test_pdf_text()
+    print("- read caps:")
+    test_read_caps()
     print("- shape/dedup helpers:")
     test_shape_helpers()
     if FAILS:
