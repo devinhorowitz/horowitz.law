@@ -405,7 +405,18 @@ def main():
         # below -- its history is re-searched next run, never silently skipped.
         verdicts = {}
         if collect and BATCH:
-            verdicts, ok = _classify_batch(card, collect, time.time() + BATCH_SEC)
+            # Mirror the synchronous branch's resilience: _classify_batch already handles a batch
+            # timeout / transport failure (ok=False), but a ConfigError must still surface the run
+            # loudly, and any other unexpected error must defer the card (stopped) rather than crash
+            # the sweep. Either way the card is left not-fully-swept and re-searched next run.
+            ok = False
+            try:
+                verdicts, ok = _classify_batch(card, collect, time.time() + BATCH_SEC)
+            except update.ConfigError as e:
+                print("  ! configuration error, stopping this sweep so it surfaces: %s" % e)
+                stopped = "configuration error"
+            except Exception as e:
+                print("  ! treatment classify batch failed unexpectedly (%s); deferring the card" % e)
             if not ok:
                 stopped = stopped or "treatment batch"
         elif collect:

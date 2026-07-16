@@ -275,9 +275,11 @@ def _safe_url(u):  # only http(s) belongs in an href; neutralize javascript:, da
     return u if lo.startswith("http://") or lo.startswith("https://") else ""
 
 def _valid_date(iso):
+    # str() first so a non-string date (a bad hand-edit -- int, dict, list) is coerced rather than
+    # crashing the slice; a validation predicate returns False on any error, never raises.
     try:
-        datetime.date.fromisoformat((iso or "")[:10]); return True
-    except (ValueError, TypeError):
+        datetime.date.fromisoformat(str(iso or "")[:10]); return True
+    except Exception:
         return False
 
 def _sorted(entries):
@@ -336,9 +338,16 @@ def all_areas(e):
     holdings, order-preserving (primary areas first). Drives the card's tag row,
     its data-areas attribute, and its RSS categories, so a card with two holdings
     in different areas is found under either area's filter."""
-    out = list(e.get("areas") or [])
-    for h in (e.get("additional_holdings") or []):
-        for a in (h.get("areas") or []):
+    # Defensive against a malformed hand-edit: a non-list "areas" or "additional_holdings" (or a
+    # non-dict holding) must not crash the taxonomy guard that calls this before _valid_shape runs.
+    src = e.get("areas")
+    out = list(src) if isinstance(src, list) else []
+    ah = e.get("additional_holdings")
+    for h in (ah if isinstance(ah, list) else []):
+        if not isinstance(h, dict):
+            continue
+        ha = h.get("areas")
+        for a in (ha if isinstance(ha, list) else []):
             if a not in out:
                 out.append(a)
     return out
@@ -1318,25 +1327,31 @@ def _inject_resume():
 def render(entries=None):
     if entries is None:
         entries = json.load(open(JSON_PATH, encoding="utf-8"))
+    # A non-dict entry (a hand-edit that leaves a stray string/number in the list) would crash every
+    # e.get(...) below; drop it first so the shape guards can assume a dict.
+    entries = [e for e in entries if isinstance(e, dict)]
     for e in entries:
         if not _valid_date(e.get("date")):
             print("render: skipping a card with an unparseable date %r (%s)"
-                  % (e.get("date"), (e.get("name") or "?")[:50]))
+                  % (e.get("date"), str(e.get("name") or "?")[:50]))
     entries = [e for e in entries if _valid_date(e.get("date"))]
 
     # Taxonomy guard, symmetric with the date filter above: a card whose court or any
     # practice-area code is outside the registry has no label/suffix and would KeyError
     # mid-render, zeroing every page. Drop it with a warning instead so one malformed
     # card can't take the whole site down. All current cards pass, so this is inert today.
+    # Type-checked because these guards run on UNVALIDATED entries: a non-string (and possibly
+    # unhashable) court/area from a bad hand-edit must be dropped, not crash the `in` test.
     def _known_taxonomy(e):
-        if e.get("court") not in COURT_LABELS:
+        court = e.get("court")
+        if not isinstance(court, str) or court not in COURT_LABELS:
             print("render: skipping a card with an unknown court %r (%s)"
-                  % (e.get("court"), (e.get("name") or "?")[:50]))
+                  % (court, str(e.get("name") or "?")[:50]))
             return False
-        unknown = [a for a in all_areas(e) if a not in AREA_LABELS]
+        unknown = [a for a in all_areas(e) if not (isinstance(a, str) and a in AREA_LABELS)]
         if unknown:
             print("render: skipping a card with unknown area code(s) %r (%s)"
-                  % (unknown, (e.get("name") or "?")[:50]))
+                  % (unknown, str(e.get("name") or "?")[:50]))
             return False
         return True
     entries = [e for e in entries if _known_taxonomy(e)]
@@ -1350,17 +1365,17 @@ def render(entries=None):
     _REQUIRED_STR = ("name", "synopsis", "why", "url", "disposition")
     def _valid_shape(e):
         if e.get("cluster_id") is None:
-            print("render: skipping a card with no cluster_id (%s)" % (e.get("name") or "?")[:50])
+            print("render: skipping a card with no cluster_id (%s)" % str(e.get("name") or "?")[:50])
             return False
         if not (isinstance(e.get("dockets"), list) and e["dockets"]):
-            print("render: skipping a card with empty/missing dockets (%s)" % (e.get("name") or "?")[:50])
+            print("render: skipping a card with empty/missing dockets (%s)" % str(e.get("name") or "?")[:50])
             return False
         # Present and a string (empty is fine -- the crash is a missing key or a non-string, not
         # an empty value; over-dropping a legitimately blank field would change the render).
         missing = [k for k in _REQUIRED_STR if not isinstance(e.get(k), str)]
         if missing:
             print("render: skipping a card missing required string field(s) %r (%s)"
-                  % (missing, (e.get("name") or "?")[:50]))
+                  % (missing, str(e.get("name") or "?")[:50]))
             return False
         return True
     entries = [e for e in entries if _valid_shape(e)]
