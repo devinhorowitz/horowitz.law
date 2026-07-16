@@ -61,6 +61,13 @@ def test_swept_full():
           treatment.swept_full(False, "rest budget") is False)
     check("already-full card stays full after a stop", treatment.swept_full(True, "time budget") is True)
     check("already-full card stays full on a clean run", treatment.swept_full(True, "") is True)
+    # Truncation (claim-2): a completed-but-truncated first sweep (search not exhausted, or a cap cut
+    # the collect loop) must NOT mark the card full, or its older citers are orphaned by the next
+    # run's incremental window.
+    check("truncated first sweep (no global stop) -> NOT full", treatment.swept_full(False, "", True) is False)
+    check("clean, untruncated first sweep -> full", treatment.swept_full(False, "", False) is True)
+    check("already-full card stays full even if a later incremental run truncates",
+          treatment.swept_full(True, "", True) is True)
 
 
 def test_classify_batch():

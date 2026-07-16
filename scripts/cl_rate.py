@@ -80,7 +80,13 @@ def parse_throttle(detail):
     m = _THROTTLE_RE.search(detail or "")
     if m:
         limit = int(m.group(1))
-        period = _PERIOD.get(m.group(2).lower())
+        unit = m.group(2).lower()
+        period = _PERIOD.get(unit)
+        # A per-second rate is mapped onto the minute window (the pacer's finest), so convert the
+        # count too: "2/second" is 120/minute, NOT 2/minute. Without the x60 the pacer would strangle
+        # itself to 2 calls a minute -- a 60x over-throttle -- on a limit that is actually generous.
+        if period == "minute" and unit in ("second", "seconds", "sec"):
+            limit *= 60
     w = _WAIT_RE.search(detail or "")
     if w:
         wait = int(w.group(1))

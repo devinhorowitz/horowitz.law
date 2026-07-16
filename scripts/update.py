@@ -1149,7 +1149,14 @@ def _quote_substantiated(quote, source):
     real span of that source; a quote that is absent (the premise was invented) or trivially short
     does not substantiate a flag."""
     q = _normalize_for_match(quote)
-    if len(q) < 4:
+    # A substantiating quote must be a non-trivial span: a multi-word phrase, or a single token of at
+    # least six characters. A lone ubiquitous short word ("that", "held", "when", "court" -- all <=5
+    # chars) is near-guaranteed to appear in any opinion, so at the old four-char floor it would
+    # rubber-stamp a hallucinated flag. Six, not eight, keeps a distinctive single term ("opinion",
+    # "estoppel"). Kept deliberately modest: this guard fails CLOSED -- a substantiated flag HOLDS the
+    # card, an unsubstantiated one lets it auto-publish -- so the bar trades queue noise for a small
+    # under-holding risk, and the Fable held-case review backstops the rare legit-but-short quote.
+    if len(q) < 4 or (len(q) < 6 and " " not in q):
         return False
     return q in _normalize_for_match(source)
 
@@ -1811,8 +1818,9 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
             held_items.append((e, reasons))
         else:
             auto_cards.append((e, []))
-    held_cids = ({int(e["cluster_id"]) for e, _ in held_items}
-                 | {int(ev["citer"]["cluster_id"]) for ev in treat_events})
+    held_card_cids = {int(e["cluster_id"]) for e, _ in held_items}
+    treat_citer_cids = {int(ev["citer"]["cluster_id"]) for ev in treat_events}
+    held_cids = held_card_cids | treat_citer_cids
 
     if not added and not treat_events:
         seen_all = seen | evaluated | have
@@ -1877,9 +1885,13 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
             rb += ["", "To veto a treatment change, `/veto <citing cluster id>`.", ""]
         safeio.atomic_write_text(REVIEW_PR_PATH, "\n".join(rb) + "\n")
 
-    # Seen-state: advance for everything evaluated EXCEPT held cases. A held case stays out of
-    # seen so a veto lets a later run rediscover it; the pending ledger suppresses it meanwhile.
-    seen_all = (seen | evaluated | have | {int(e["cluster_id"]) for e, _ in auto_cards}) - held_cids
+    # Seen-state: advance for everything evaluated EXCEPT held CARDS. A held card stays out of seen so
+    # a veto lets a later run rediscover and redraft it; the pending ledger suppresses it meanwhile. A
+    # treatment citer, by contrast, IS marked seen: "redraft" is meaningless for a treatment finding,
+    # and leaving it un-seen made a vetoed treatment loop forever (re-discovered, re-escalated, re-held
+    # every run). Marking it seen ends that loop; the weekly reverse sweep (treatment.py, its own state)
+    # remains the thorough backstop that re-checks the citation graph if the finding was in fact real.
+    seen_all = (seen | evaluated | have | {int(e["cluster_id"]) for e, _ in auto_cards}) - held_card_cids
     state["seen_clusters"] = sorted(seen_all)[-SEEN_CAP:]
     state["updated"] = now_iso
     safeio.atomic_write_json(STATE_PATH, state)
