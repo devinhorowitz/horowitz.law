@@ -270,6 +270,36 @@ def test_draft_pending():
         print("  ok  batch %s defers the whole draft set (nothing evaluated)" % name)
 
 
+def test_funnel_pr_body():
+    """The run's PR/dry-run markdown assembly (update._funnel_pr_body), extracted verbatim from
+    main(). Pure: given this run's accumulated results it must fold in each section -- the added card
+    with its cross-check flag, the treatment flag on an existing card, and the dropped tail -- and, on
+    an empty run, say so."""
+    print("funnel PR body:")
+    card = {"cluster_id": 4321, "name": "Alpha v. Beta", "court": "ctapp", "date": "2026-06-01",
+            "dockets": ["A26A0001"], "areas": ["auto"], "disposition": "affirmed",
+            "synopsis": "Held a thing.", "why": "It matters.", "url": "https://cl/4321/",
+            "precedential": "published", "additional_holdings": []}
+    body = update._funnel_pr_body(
+        added=[card], flagged=[("Alpha v. Beta", ["low confidence"])],
+        crosschecks={4321: {"verdict": "flag", "reason": "the synopsis overstates the holding"}},
+        completeness={4321: {"verdict": "ok", "reason": ""}},
+        treat_flags=[("Old Card v. State", "Alpha v. Beta", "overruled")],
+        audit_notes=[], sa_events=[], skipped=[("Noise v. State", "screen: out of scope")])
+    for needle in ("## Georgia Appellate Watch: 1 new opinion(s)", "Alpha v. Beta",
+                   "cross-check FLAG: the synopsis overstates the holding", "review: low confidence",
+                   "Treatment flags this run", "Old Card v. State", "Screened or dropped this run",
+                   "Noise v. State"):
+        assert needle in body, "missing %r in PR body" % needle
+    assert body.endswith("\n"), "trailing newline preserved"
+    print("  ok  full run folds in card, checks, treatment flag, and dropped tail")
+
+    empty = update._funnel_pr_body([], [], {}, {}, [], [], [], [])
+    assert "No new relevant opinions this run." in empty, empty
+    assert empty.startswith("## Georgia Appellate Watch: 0 new opinion(s)"), empty
+    print("  ok  empty run says 'no new relevant opinions'")
+
+
 def main():
     print("crosscheck guardrails:")
     for c in CASES:
@@ -284,6 +314,7 @@ def main():
     test_substantiation_helper()
     test_docket_set()
     test_draft_pending()
+    test_funnel_pr_body()
     print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 2))
     return 0
 

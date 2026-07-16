@@ -4,11 +4,12 @@
 #   B   flake8-bugbear: likely bugs
 # Muted as stylistic or benign in this codebase:
 #   B904  exception chaining (re-raise ... from); used deliberately throughout
-#   B023  loop-var closure; the one hit is an immediately-invoked re.sub lambda, safe
 #   F541  f-string without a placeholder
+# B023 (loop-var closure) is kept ACTIVE: every current closure-in-a-loop binds its loop var via a
+# default arg, so a genuine late-binding closure bug is caught rather than muted.
 target-version = "py312"
 
 [lint]
 select = ["E9", "F", "B"]
-ignore = ["B904", "B023", "F541"]
+ignore = ["B904", "F541"]
 

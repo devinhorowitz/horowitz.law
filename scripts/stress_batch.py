@@ -166,10 +166,10 @@ def stress_draft_pending(iters, rng):
             mode = rng.random()
             finished = []
 
-            def finish_fn(v, p):
+            def finish_fn(v, p, _finished=finished):
                 # Models the real funnel _finish: does its work, and catches its own non-ConfigError
                 # exceptions (a bad card must not sink the batch), so it never propagates here.
-                finished.append(p["cid"])
+                _finished.append(p["cid"])
                 try:
                     if rng.random() < 0.1:
                         raise RuntimeError("boom finishing %s" % p["cid"])

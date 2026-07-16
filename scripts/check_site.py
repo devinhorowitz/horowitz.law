@@ -133,7 +133,7 @@ def check_tokens(errors, fix=False):
                     continue
                 if fix:
                     new = ref_re[a].sub(
-                        lambda mm: mm.group(1) + "?v=" + expected[a] + mm.group(4), new)
+                        lambda mm, _a=a: mm.group(1) + "?v=" + expected[_a] + mm.group(4), new)
                 elif tok is None:
                     errors.append("%s: /%s is referenced without a ?v= token "
                                   "(run scripts/check_site.py --fix)" % (p, a))

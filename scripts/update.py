@@ -1622,6 +1622,61 @@ def _pr_card(e, i):
     return out
 
 
+def _funnel_pr_body(added, flagged, crosschecks, completeness, treat_flags, audit_notes, sa_events, skipped):
+    """Assemble the funnel run's PR / dry-run markdown body from this run's accumulated results: the
+    added cards (each with its review + cross-check + completeness lines), treatment flags and audit
+    notes on existing cards, skill-authority alerts, golden-set nominations, and the screened/dropped
+    tail. Pure -- no state, no I/O -- so it is unit-testable and keeps main()'s orchestration free of
+    ~50 lines of formatting. Extracted verbatim from main(); byte-identical output."""
+    lines = ["## Georgia Appellate Watch: %d new opinion(s)" % len(added), ""]
+    flagged_map = dict(flagged)
+    for i, e in enumerate(added, 1):
+        lines += _pr_card(e, i)
+        checks = []
+        fr = flagged_map.get(e["name"])
+        if fr:
+            checks.append("review: %s" % "; ".join(fr))
+        cc = crosschecks.get(e["cluster_id"])
+        if cc and cc["verdict"] == "flag":
+            checks.append("cross-check FLAG: %s" % (cc["reason"] or "the summary may misstate the holding; verify against the opinion"))
+        elif cc and cc["verdict"] == "unavailable":
+            checks.append("cross-check could not run (%s); verify this card manually" % cc["reason"])
+        elif cc:
+            checks.append("cross-check: holding matches the opinion")
+        cp = completeness.get(e["cluster_id"])
+        if cp and cp["verdict"] == "flag":
+            checks.append("completeness FLAG: %s" % (cp["reason"] or "the opinion may decide a material point in a covered area the card omits; verify against the opinion"))
+        elif cp and cp["verdict"] == "unavailable":
+            checks.append("completeness check could not run (%s); verify this card manually" % cp["reason"])
+        elif cp:
+            checks.append("completeness: no material holding omitted")
+        if checks:
+            lines += ["", "**Checks:**"] + ["- %s" % c for c in checks]
+        lines.append("")
+    if treat_flags or audit_notes:
+        lines += ["", "Treatment flags this run (existing cards; confirm on Shepard\u2019s before relying):"]
+        for cardnm, newnm, kind in treat_flags:
+            lines.append("- **%s** -- possibly %s by the new decision %s. Raised to caution; confirm, "
+                         "then set `treatment` to negative or superseded, or back to ok." % (cardnm, kind, newnm))
+        for cardnm, newnm, rev in audit_notes:
+            if rev:
+                lines.append("- audit -- the **%s** card may need an edit in light of %s: %s" % (cardnm, newnm, rev))
+    lines += skill_alert.digest_lines(sa_events)
+    noms = golden_nominations(added, crosschecks, {n for n, _ in flagged})
+    if noms:
+        lines += ["", "Golden-set nominations (the set never adopts on its own; to adopt one, paste the "
+                      "object into scripts/golden_set.json, merge, and run golden-check in build mode):"]
+        for thin, nom in noms:
+            lines.append("- **%s** would anchor thin area(s): %s" % (nom["name"], ", ".join(thin)))
+            lines.append("```json\n%s\n```" % json.dumps(nom, ensure_ascii=False, indent=2))
+    if skipped:
+        lines += ["", "Screened or dropped this run (not added):"]
+        lines += ["- %s: %s" % (n, why) for n, why in skipped]
+    if not added and not treat_flags and not sa_events:
+        lines += ["", "No new relevant opinions this run."]
+    return "\n".join(lines) + "\n"
+
+
 def _log_fable(records):
     """Append this run's Fable held-case verdicts to FABLE_LOG_PATH, one JSON line each, so every
     auto-clear (and every held-with-recommendation) is auditable. Kept to the most recent LOG_CAP
@@ -2277,53 +2332,7 @@ def main():
             print("  ! configuration error finishing a batched draft (nothing committed): %s" % ce)
             cfg_error = True
 
-    lines = ["## Georgia Appellate Watch: %d new opinion(s)" % len(added), ""]
-    flagged_map = dict(flagged)
-    for i, e in enumerate(added, 1):
-        lines += _pr_card(e, i)
-        checks = []
-        fr = flagged_map.get(e["name"])
-        if fr:
-            checks.append("review: %s" % "; ".join(fr))
-        cc = crosschecks.get(e["cluster_id"])
-        if cc and cc["verdict"] == "flag":
-            checks.append("cross-check FLAG: %s" % (cc["reason"] or "the summary may misstate the holding; verify against the opinion"))
-        elif cc and cc["verdict"] == "unavailable":
-            checks.append("cross-check could not run (%s); verify this card manually" % cc["reason"])
-        elif cc:
-            checks.append("cross-check: holding matches the opinion")
-        cp = completeness.get(e["cluster_id"])
-        if cp and cp["verdict"] == "flag":
-            checks.append("completeness FLAG: %s" % (cp["reason"] or "the opinion may decide a material point in a covered area the card omits; verify against the opinion"))
-        elif cp and cp["verdict"] == "unavailable":
-            checks.append("completeness check could not run (%s); verify this card manually" % cp["reason"])
-        elif cp:
-            checks.append("completeness: no material holding omitted")
-        if checks:
-            lines += ["", "**Checks:**"] + ["- %s" % c for c in checks]
-        lines.append("")
-    if treat_flags or audit_notes:
-        lines += ["", "Treatment flags this run (existing cards; confirm on Shepard\u2019s before relying):"]
-        for cardnm, newnm, kind in treat_flags:
-            lines.append("- **%s** -- possibly %s by the new decision %s. Raised to caution; confirm, "
-                         "then set `treatment` to negative or superseded, or back to ok." % (cardnm, kind, newnm))
-        for cardnm, newnm, rev in audit_notes:
-            if rev:
-                lines.append("- audit -- the **%s** card may need an edit in light of %s: %s" % (cardnm, newnm, rev))
-    lines += skill_alert.digest_lines(sa_events)
-    noms = golden_nominations(added, crosschecks, {n for n, _ in flagged})
-    if noms:
-        lines += ["", "Golden-set nominations (the set never adopts on its own; to adopt one, paste the "
-                      "object into scripts/golden_set.json, merge, and run golden-check in build mode):"]
-        for thin, nom in noms:
-            lines.append("- **%s** would anchor thin area(s): %s" % (nom["name"], ", ".join(thin)))
-            lines.append("```json\n%s\n```" % json.dumps(nom, ensure_ascii=False, indent=2))
-    if skipped:
-        lines += ["", "Screened or dropped this run (not added):"]
-        lines += ["- %s: %s" % (n, why) for n, why in skipped]
-    if not added and not treat_flags and not sa_events:
-        lines += ["", "No new relevant opinions this run."]
-    pr_body = "\n".join(lines) + "\n"
+    pr_body = _funnel_pr_body(added, flagged, crosschecks, completeness, treat_flags, audit_notes, sa_events, skipped)
     funnel = "screened %d, pretriaged %d, triaged %d, summarized %d, audited %d" % (n_screen, n_pretriage, n_triage, n_opus, n_audit)
 
     cl_line = "CourtListener REST calls: %d%s" % (

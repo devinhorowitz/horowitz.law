@@ -213,7 +213,7 @@ def test_pdf_text():
         # url gating: nothing that is not http(s) should ever hit the network.
         for bad in (None, "", "ftp://x/y.pdf", "file:///etc/passwd", "javascript:alert(1)", "/local"):
             called = {"n": 0}
-            update.urllib.request.urlopen = lambda *a, **k: called.__setitem__("n", called["n"] + 1)
+            update.urllib.request.urlopen = lambda *a, _c=called, **k: _c.__setitem__("n", _c["n"] + 1)
             r = update.pdf_text(bad)
             check("pdf_text: non-http url %r -> '' and no fetch" % bad, r == "" and called["n"] == 0)
 
