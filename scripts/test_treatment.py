@@ -105,17 +105,49 @@ def test_classify_batch():
               ok is False and verdicts == {})
 
 
+def test_pending_rec():
+    """The per-citer pending record (option b) trims a search result to just what a later run needs to
+    re-fetch its text and re-classify it: cluster id, name, date, court, sub-opinion ids + PDF urls,
+    and the _tries counter. _pending_key gives an order-independent identity for change detection."""
+    r = {"cluster_id": 4242, "caseName": "Later v. Earlier", "dateFiled": "2026-06-01", "court_id": "ga",
+         "opinions": [{"id": 91, "download_url": "https://x/91.pdf", "junk": "drop me"},
+                      {"id": 92, "download_url": None}, "not-a-dict"],
+         "html_with_citations": "HUGE TEXT " * 1000}
+    rec = treatment._pending_rec(r, 2)
+    check("pending rec keeps the identity + tries", rec["cluster_id"] == 4242 and rec["_tries"] == 2)
+    check("pending rec keeps name/date/court", rec["caseName"] == "Later v. Earlier"
+          and rec["dateFiled"] == "2026-06-01" and rec["court_id"] == "ga")
+    check("pending rec keeps only id + download_url per sub-opinion (drops bulk text)",
+          rec["opinions"] == [{"id": 91, "download_url": "https://x/91.pdf"}, {"id": 92, "download_url": None}]
+          and "html_with_citations" not in rec)
+    # A trimmed rec is itself a valid `r` for cluster_id_of / citer_text on the next run.
+    check("a pending rec round-trips as an r (cluster_id_of resolves it)",
+          treatment.update.cluster_id_of(rec) == 4242)
+    check("missing name falls back, missing opinions -> empty list",
+          treatment._pending_rec({"cluster_id": 7}, 0) == {"cluster_id": 7, "caseName": "(unnamed)",
+                                                            "dateFiled": None, "court_id": None,
+                                                            "opinions": [], "_tries": 0})
+    # _pending_key is order-independent and reflects (id, tries), so a reordered list compares equal.
+    a = [treatment._pending_rec({"cluster_id": 1}, 1), treatment._pending_rec({"cluster_id": 2}, 3)]
+    check("pending key is order-independent",
+          treatment._pending_key(a) == treatment._pending_key(list(reversed(a))))
+    check("pending key changes when tries change",
+          treatment._pending_key(a) != treatment._pending_key([treatment._pending_rec({"cluster_id": 1}, 2),
+                                                               treatment._pending_rec({"cluster_id": 2}, 3)]))
+
+
 def main():
     print("treatment pure logic:")
     test_passage()
     test_sweep_since()
     test_swept_full()
+    test_pending_rec()
     print("treatment classify batch:")
     test_classify_batch()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (%d checks)" % 18)
+    print("\nALL TESTS PASSED (%d checks)" % 25)
     return 0
 
 

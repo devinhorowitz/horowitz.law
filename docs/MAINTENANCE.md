@@ -255,7 +255,14 @@ Run by hand, from the Actions tab:
   instant rollback if a run ever looks wrong. The weekly **`treatment` sweep batches too** by default
   (`TREATMENT_BATCH`, `=0` for sync): each card's citer classifications go through one job, and a
   failed/slow batch defers that card's citers *and* leaves it not-fully-swept, so its history is
-  re-searched next run rather than silently skipped. `diagnose` / `dep-review` models are repo Variables
+  re-searched next run rather than silently skipped. An *individual* citer that fails classification
+  (a bad model read, unparseable output, or a per-result batch error — below the breaker, with no
+  global stop) no longer blocks the card: it's marked fully-swept, but that one citer is recorded in
+  `treatment_state.json` under the card's `pending` list and re-fetched + re-classified next run even
+  on the narrow incremental window, so an old citer can't be stranded by the sweep completing. After
+  `TREATMENT_PENDING_TRIES` (default 4) failed runs it's given up — marked seen so it stops recurring,
+  and surfaced in the sweep PR ("CHECK MANUALLY") for a human, never silently dropped.
+  `diagnose` / `dep-review` models are repo Variables
   (`DIAGNOSE_MODEL` / `DEP_REVIEW_MODEL`, default Fable) if you ever want to trade quality for a
   still-lower price.
 - `heartbeat` is the backstop for silent stalls. Every other alert is an issue opened by a
