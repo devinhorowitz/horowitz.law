@@ -65,6 +65,7 @@ AREA_CODES_STR = ", ".join(siteconfig.AREA_CODES)  # prompt-injected; single sou
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
+import batch           # Message Batches transport (tier-3 summarize batch when OPINIONS_BATCH is on)
 import render          # single source of truth renderer
 import treatment_core  # shared treatment-flag model (the forward escalation writes it)
 import skill_alert     # alert-out: extend the treats watch-list to skill-relied authorities
@@ -130,6 +131,15 @@ DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "ye
 BUDGET_SEC   = int(os.environ.get("OPINIONS_BUDGET_SEC", "480"))
 BREAKER      = int(os.environ.get("OPINIONS_BREAKER", "4"))
 SEARCH_BUDGET= int(os.environ.get("OPINIONS_SEARCH_BUDGET_SEC", "120"))
+# Route the tier-3 Opus summary through the 50%-priced Batch API. ON by default: the summarizer is
+# the single most expensive per-token call in the funnel, so half price is the biggest saving here.
+# The candidates that pass triage are drafted as ONE post-loop batch instead of a synchronous call
+# each; screen/pretriage/triage (and the treatment escalation) stay synchronous, so nothing about
+# discovery or routing changes. The trade is latency: the run waits for the batch (usually minutes),
+# and on a slow batch the whole draft set defers to the next run (like backfill/maintain). Set
+# OPINIONS_BATCH=0 for the synchronous path (the instant rollback if a run ever looks wrong).
+FUNNEL_BATCH = os.environ.get("OPINIONS_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
+SUMMARIZE_BATCH_SEC = int(os.environ.get("OPINIONS_SUMMARIZE_BATCH_SEC", "1500"))  # wait budget for the tier-3 batch; fits the 45-min funnel job after the loop's BUDGET_SEC
 STATUS_URL   = os.environ.get("ANTHROPIC_STATUS_URL", "https://status.claude.com/api/v2/summary.json")
 STATUS_MODE  = (os.environ.get("ANTHROPIC_STATUS", "on") or "on").strip().lower()  # on | warn | off
 
@@ -1734,6 +1744,54 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
             "wrote_auto": bool(auto_cards), "noop": False}
 
 
+def _draft_pending(pending, deadline, finish_fn):
+    """Draft the tier-3 summaries for the collected `pending` candidates as ONE 50%-priced Batch API
+    job (OPINIONS_BATCH), then call finish_fn(v, p) for each that succeeds. Returns the set of cluster
+    ids that were drafted, to fold into the run's `evaluated` set. Recovery mirrors the synchronous
+    path's per-candidate summarize error:
+
+      * a batch timeout or transport failure returns an empty set -- the whole draft set defers and
+        every candidate retries next run (none marked evaluated);
+      * a per-result batch error or an unparseable body skips just that candidate (it retries next
+        run), the others still finish;
+      * finish_fn owns its own exceptions, except ConfigError, which propagates so the run can abort.
+
+    A candidate is counted drafted (evaluated) the moment its summary is produced, before finish_fn --
+    exactly where the synchronous path calls evaluated.add(cid), so a card that summarizes but fails
+    to finish is not re-summarized next run. Extracted from main() so this orchestration is unit-
+    testable (test_update) without standing up the whole funnel."""
+    reqs = [batch.from_body(str(p["cid"]),
+                            summarize_request(p["court_id"], p["name"], p["docket"],
+                                              p["date_filed"], p["text"], p["note"],
+                                              cl_status=p["cl_status"]))
+            for p in pending]
+    try:
+        results = batch.run(reqs, deadline=deadline, label="funnel-summarize")
+    except (batch.BatchTimeout, batch.BatchError) as e:
+        print("  ! tier-3 summarize batch deferred (%s); %d draft(s) roll to the next run"
+              % (e, len(pending)))
+        return set()
+    by_cid = {str(p["cid"]): p for p in pending}
+    drafted = set()
+    for cidk, res in results.items():
+        p = by_cid.get(cidk)
+        if not p:
+            continue
+        if not res.get("ok"):
+            print("  . tier-3 summary unavailable for %s (batch: %s); rolls to next run"
+                  % (p["name"][:50], res.get("type")))
+            continue
+        try:
+            v = parse_json(res["text"])
+        except Exception as pe:
+            print("  . tier-3 summary unparseable for %s (%s); rolls to next run"
+                  % (p["name"][:50], pe))
+            continue
+        drafted.add(p["cid"])
+        finish_fn(v, p)
+    return drafted
+
+
 # Console log prefixes, so a raw job log reads at a glance: "+" an opinion added
 # or a routing override, "~" an adverse-treatment flag on an existing card or a duplicate skip,
 # "!" a warning or error, "." a minor or best-effort step that was skipped. The
@@ -1868,6 +1926,72 @@ def main():
     # each card added this run is appended as it is carded, so an in-run twin is caught too.
     dedup_index = [(_dup_sig(e.get("court"), e.get("date"), e.get("dockets"), e.get("name")),
                     e.get("name", "?")) for e in entries]
+    pending = []   # tier-3 drafts deferred to the post-loop summarize batch (OPINIONS_BATCH on)
+
+    def finish_card(v, r, cid, name, court_id, docket, date_filed, url, text, cl_deadline):
+        """Tier-3 downstream: turn a summarize verdict into a published-card entry and append it (or
+        skip it), running the fidelity/completeness guards and the official-link enrichment. Extracted
+        verbatim from the loop so the synchronous path and the post-loop summarize batch share exactly
+        the same finishing logic. cl_deadline is the live loop budget in sync mode, and a fresh window
+        after the batch wait in batch mode, so the CourtListener official-link fetches are not pre-
+        expired. Mutates the run's collections (added/flagged/skipped/crosschecks/completeness/texts/
+        dedup_index) in place, the same side effects the inline code had."""
+        if not v.get("relevant"):
+            skipped.append((name, "summarizer: not relevant")); return
+        if (v.get("significance") or "").lower() == "low":
+            skipped.append((name, "summarizer: low significance")); return
+        areas = [a for a in (v.get("areas") or []) if a in VALID_AREAS]
+        if not areas:
+            skipped.append((name, "no recognized practice area")); return
+        court = COURT_MAP.get(court_id) or (v.get("court") if v.get("court") in VALID_KEYS else None)
+        if not court:
+            skipped.append((name, "unrecognized court id %s" % court_id)); return
+        entry = assemble_entry(v, cid, name, court, areas, docket, date_filed, url,
+                               datetime.date.today().isoformat())
+        synopsis = entry["synopsis"]; why = entry["why"]; disp = entry["disposition"]
+        additional_holdings = entry.get("additional_holdings", [])
+        if entry["court"] == "scotga":
+            try:
+                _ou = official_ga.official_url_for(entry)
+                if _ou:
+                    entry["official_url"] = _ou
+            except Exception as _oe:
+                _dbg("official_url lookup failed (%s)" % _oe)
+        elif entry["court"] in ("ca11", "scotus"):
+            try:
+                _ou = enriched(r, since, deadline=cl_deadline).get("download_url") \
+                    or official_download_url(r, deadline=cl_deadline)
+                if _ou:
+                    entry["official_url"] = _ou
+            except ConfigError:
+                raise
+            except Exception as _oe:
+                _dbg("official_url lookup failed (%s)" % _oe)
+        reasons = []
+        if (v.get("confidence") or "").lower() == "low":
+            reasons.append("low confidence")
+        if (CITE_RE.search(synopsis) or CITE_RE.search(why)
+                or any(CITE_RE.search(h["synopsis"]) or CITE_RE.search(h["why"]) for h in additional_holdings)):
+            reasons.append("contains a reporter-style citation")
+        if not disp:
+            reasons.append("no disposition")
+        if not synopsis or not why:
+            reasons.append("empty synopsis or reason")
+        if reasons:
+            flagged.append((entry["name"], reasons))
+        cc = crosscheck(entry["name"], text, entry)
+        if cc:
+            crosschecks[cid] = cc
+        cp = completeness_check(entry["name"], text, entry)
+        if cp:
+            completeness[cid] = cp
+        added.append(entry)
+        texts[cid] = text
+        dedup_index.append((_dup_sig(entry["court"], entry["date"], entry["dockets"], entry["name"]),
+                            entry["name"]))
+        hold_note = (", %d holdings" % (1 + len(additional_holdings))) if additional_holdings else ""
+        print("  + %s [%s] %s (sig=%s%s)" % (entry["name"], ",".join(areas), disp, v.get("significance"), hold_note))
+
     for r in cand:
         if time.time() - run_start > BUDGET_SEC:
             print("  ! time budget reached (%ds) after %d evaluated; finalizing with what is collected"
@@ -2064,6 +2188,18 @@ def main():
             # for anything the search window did not return, so fidelity is intact.
             cl_status = enriched(r, since, deadline=run_start + BUDGET_SEC).get("status") \
                 or cluster_precedential_status(r, deadline=run_start + BUDGET_SEC)
+            if FUNNEL_BATCH:
+                # Defer the Opus draft to one 50%-priced batch after the loop. Seed the dedup index
+                # with this candidate NOW: in batch mode nothing is carded mid-loop, so an in-run twin
+                # (a later candidate that is the same case) must still be caught here -- exactly what
+                # the synchronous path gets from the card finish_card appends. Not marked evaluated
+                # yet: the batch (or its deferral) decides that, so a deferred draft retries next run.
+                pending.append({"r": r, "cid": cid, "name": name, "court_id": court_id, "docket": docket,
+                                "date_filed": date_filed, "url": url, "text": text, "note": note,
+                                "cl_status": cl_status})
+                dedup_index.append((csig, name))
+                consec = 0
+                continue
             v = summarize(court_id, name, docket, date_filed, text, note, cl_status=cl_status)
             consec = 0
             evaluated.add(cid)
@@ -2080,80 +2216,33 @@ def main():
                 break
             continue  # leave unseen so it is retried next run
 
-        if not v.get("relevant"):
-            skipped.append((name, "summarizer: not relevant")); continue
-        if (v.get("significance") or "").lower() == "low":
-            skipped.append((name, "summarizer: low significance")); continue
+        # Synchronous path only (batch mode 'continue'd above and finishes post-loop). Same call,
+        # same collections, live loop budget for the official-link fetches.
+        finish_card(v, r, cid, name, court_id, docket, date_filed, url, text, run_start + BUDGET_SEC)
 
-        areas = [a for a in (v.get("areas") or []) if a in VALID_AREAS]
-        if not areas:
-            skipped.append((name, "no recognized practice area")); continue
-        court = COURT_MAP.get(court_id) or (v.get("court") if v.get("court") in VALID_KEYS else None)
-        if not court:
-            skipped.append((name, "unrecognized court id %s" % court_id)); continue
-        # Card assembly is shared with the backfill (scripts/backfill.py) through
-        # assemble_entry, so seeded cards carry the same Phase-4 taxonomy as the live
-        # feed. first_seen is today for the daily run; the backfill passes the filing
-        # date instead. synopsis/why/disp/additional_holdings are re-bound from the
-        # entry for the review and print logic below.
-        entry = assemble_entry(v, cid, name, court, areas, docket, date_filed, url,
-                               datetime.date.today().isoformat())
-        synopsis = entry["synopsis"]; why = entry["why"]; disp = entry["disposition"]
-        additional_holdings = entry.get("additional_holdings", [])
-        # Official-link enrichment (Phase 5): the rendered title links to the
-        # court's own opinion PDF, with CourtListener kept as the full record
-        # below. Two sources by court. Georgia Supreme Court: resolve the PDF from
-        # gasupreme.us (scripts/official_ga.py). Eleventh Circuit and SCOTUS: the
-        # court's own PDF URL is already on CourtListener as the opinion's
-        # download_url (media.ca11.uscourts.gov, www.supremecourt.gov), so read it
-        # through the same budgeted cl_get rather than fetching the court site,
-        # which a server-side run cannot always reach. Stored only when resolved,
-        # matching the lean-JSON pattern above. Fail-open: any miss leaves the
-        # field absent and the card renders exactly as before; a ConfigError from
-        # cl_get still propagates.
-        if entry["court"] == "scotga":
+    # Tier 3, batched: draft every candidate that passed triage as ONE 50%-priced job, then finish
+    # each exactly as the synchronous path would (finish_card). A batch that does not end within the
+    # budget, or a transport failure, defers the whole draft set: those clusters stay unevaluated and
+    # retry next run -- the same recovery a synchronous summarize error already gets. finish_card runs
+    # with a FRESH CourtListener deadline, since the loop's run_start+BUDGET_SEC is spent by now and
+    # its official-link fetches must not start pre-expired.
+    if FUNNEL_BATCH and pending and not cfg_error:
+        cl_deadline = time.time() + BUDGET_SEC   # fresh CL window for the official-link enrichment
+
+        def _finish(v, p):
             try:
-                _ou = official_ga.official_url_for(entry)
-                if _ou:
-                    entry["official_url"] = _ou
-            except Exception as _oe:
-                _dbg("official_url lookup failed (%s)" % _oe)
-        elif entry["court"] in ("ca11", "scotus"):
-            try:
-                _ou = enriched(r, since, deadline=run_start + BUDGET_SEC).get("download_url") \
-                    or official_download_url(r, deadline=run_start + BUDGET_SEC)
-                if _ou:
-                    entry["official_url"] = _ou
+                finish_card(v, p["r"], p["cid"], p["name"], p["court_id"], p["docket"],
+                            p["date_filed"], p["url"], p["text"], cl_deadline)
             except ConfigError:
-                raise
-            except Exception as _oe:
-                _dbg("official_url lookup failed (%s)" % _oe)
+                raise                 # abort the run; nothing is committed
+            except Exception as fe:   # a bad card must not sink the rest of the batch
+                print("  ! finishing card failed for %s: %s" % (p["name"][:50], fe))
 
-        reasons = []
-        if (v.get("confidence") or "").lower() == "low":
-            reasons.append("low confidence")
-        if (CITE_RE.search(synopsis) or CITE_RE.search(why)
-                or any(CITE_RE.search(h["synopsis"]) or CITE_RE.search(h["why"]) for h in additional_holdings)):
-            reasons.append("contains a reporter-style citation")
-        if not disp:
-            reasons.append("no disposition")
-        if not synopsis or not why:
-            reasons.append("empty synopsis or reason")
-        if reasons:
-            flagged.append((entry["name"], reasons))
-
-        cc = crosscheck(entry["name"], text, entry)
-        if cc:
-            crosschecks[cid] = cc
-        cp = completeness_check(entry["name"], text, entry)
-        if cp:
-            completeness[cid] = cp
-        added.append(entry)
-        texts[cid] = text
-        dedup_index.append((_dup_sig(entry["court"], entry["date"], entry["dockets"], entry["name"]),
-                            entry["name"]))
-        hold_note = (", %d holdings" % (1 + len(additional_holdings))) if additional_holdings else ""
-        print("  + %s [%s] %s (sig=%s%s)" % (entry["name"], ",".join(areas), disp, v.get("significance"), hold_note))
+        try:
+            evaluated |= _draft_pending(pending, time.time() + SUMMARIZE_BATCH_SEC, _finish)
+        except ConfigError as ce:
+            print("  ! configuration error finishing a batched draft (nothing committed): %s" % ce)
+            cfg_error = True
 
     lines = ["## Georgia Appellate Watch: %d new opinion(s)" % len(added), ""]
     flagged_map = dict(flagged)

@@ -226,6 +226,50 @@ def test_docket_set():
     print("  ok  docket-set normalization (split, noise, empties)")
 
 
+def test_draft_pending():
+    """The tier-3 summarize-batch orchestration (OPINIONS_BATCH, update._draft_pending): result
+    mapping by custom_id, the ok / errored-line / unparseable-body / whole-batch-defer branches, and
+    the drafted (evaluated) set it returns. Stubs batch.run, so it exercises the real summarize_request
+    + batch.from_body request building with no network."""
+    print("tier-3 summarize batch (_draft_pending):")
+    pend = [{"cid": c, "r": {}, "name": nm, "court_id": "ga", "docket": "A%d" % c,
+             "date_filed": "2026-07-0%d" % i, "text": "t%d" % c, "note": "", "cl_status": "published"}
+            for i, (c, nm) in enumerate([(111, "A v. B"), (222, "C v. D"), (333, "E v. F")], 1)]
+    real_run = update.batch.run
+    finished = []
+
+    def finish_fn(v, p):
+        finished.append((p["cid"], v))
+
+    def mixed_run(reqs, deadline=None, interval=20.0, label="batch"):
+        assert sorted(rq["custom_id"] for rq in reqs) == ["111", "222", "333"], [rq["custom_id"] for rq in reqs]
+        return {"111": {"ok": True, "text": '{"relevant": true, "significance": "high"}', "stop_reason": "end_turn"},
+                "222": {"ok": False, "type": "errored", "error": "x"},
+                "333": {"ok": True, "text": "not json {{{", "stop_reason": "end_turn"}}
+    update.batch.run = mixed_run
+    try:
+        drafted = update._draft_pending(pend, deadline=123.0, finish_fn=finish_fn)
+    finally:
+        update.batch.run = real_run
+    assert drafted == {111}, drafted
+    assert finished == [(111, {"relevant": True, "significance": "high"})], finished
+    print("  ok  ok line drafts+finishes; errored and unparseable lines skip (retry next run)")
+
+    for name, exc in (("timeout", update.batch.BatchTimeout("bid", "still running")),
+                      ("transport error", update.batch.BatchError("submit failed"))):
+        finished.clear()
+
+        def raiser(reqs, deadline=None, interval=20.0, label="batch", _e=exc):
+            raise _e
+        update.batch.run = raiser
+        try:
+            drafted = update._draft_pending(pend, deadline=123.0, finish_fn=finish_fn)
+        finally:
+            update.batch.run = real_run
+        assert drafted == set() and finished == [], (name, drafted, finished)
+        print("  ok  batch %s defers the whole draft set (nothing evaluated)" % name)
+
+
 def main():
     print("crosscheck guardrails:")
     for c in CASES:
@@ -239,6 +283,7 @@ def main():
     print("helpers:")
     test_substantiation_helper()
     test_docket_set()
+    test_draft_pending()
     print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 2))
     return 0
 
