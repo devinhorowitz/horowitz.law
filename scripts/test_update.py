@@ -270,6 +270,45 @@ def test_draft_pending():
         print("  ok  batch %s defers the whole draft set (nothing evaluated)" % name)
 
 
+def test_party_tokens():
+    """The three-char floor (lowered from four): common short surnames survive so an individual-vs-
+    individual case's higher-court reappearance still clears the two-token dedup/escalation bar, while
+    institution words and sub-three-char noise stay out."""
+    assert update.party_tokens("Lee v. Cox") == {"lee", "cox"}, "short surnames retained at floor 3"
+    assert update.party_tokens("Smith v. Jones") == {"smith", "jones"}, "normal surnames unchanged"
+    assert update.party_tokens("In re Wu") == set(), "2-char tokens (in, re, wu) all out"
+    assert update.party_tokens("State Farm Mutual v. Kim") == {"kim"}, "institution stopped -> one token"
+    print("  ok  party tokens keep short surnames, drop institutions and <3-char noise")
+
+
+def test_parse_json_extraction():
+    """parse_json's fallback extracts the FIRST brace-balanced object even amid prose -- including
+    trailing prose that itself contains braces (a greedy regex over-grabbed to invalid JSON) and a
+    nested object (a lazy regex stopped at the first })."""
+    assert update.parse_json('{"a": 1}') == {"a": 1}
+    assert update.parse_json('```json\n{"a": 2}\n```') == {"a": 2}
+    assert update.parse_json('{"a": {"b": 1}} then prose {oops}') == {"a": {"b": 1}}, "nested + trailing-brace prose"
+    assert update.parse_json('Sure! {"ok": true} hope that helps') == {"ok": True}, "leading + trailing prose"
+    assert update._first_json_object('{"s": "a } b"}') == '{"s": "a } b"}', "brace inside a string is not counted"
+    raised = False
+    try:
+        update.parse_json("no json here")
+    except Exception:
+        raised = True
+    assert raised, "parse_json should raise when there is no object"
+    print("  ok  json extraction: nested, prose-braces, string-braces, no-object")
+
+
+def test_today_eastern():
+    """_today_eastern is today's UTC date or the day before (Eastern is UTC-4/-5), never ahead -- so a
+    late-Eastern-evening discovery is not stamped a day forward on the UTC runner."""
+    import datetime as _dt
+    te = update._today_eastern()
+    utc = _dt.datetime.now(_dt.timezone.utc).date()
+    assert te in (utc.isoformat(), (utc - _dt.timedelta(days=1)).isoformat()), te
+    print("  ok  _today_eastern is UTC-today or the day before, never ahead")
+
+
 def test_funnel_pr_body():
     """The run's PR/dry-run markdown assembly (update._funnel_pr_body), extracted verbatim from
     main(). Pure: given this run's accumulated results it must fold in each section -- the added card
@@ -313,6 +352,9 @@ def main():
     print("helpers:")
     test_substantiation_helper()
     test_docket_set()
+    test_party_tokens()
+    test_parse_json_extraction()
+    test_today_eastern()
     test_draft_pending()
     test_funnel_pr_body()
     print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 2))

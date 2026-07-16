@@ -496,6 +496,18 @@ ATOM = "{http://www.w3.org/2005/Atom}"
 DOCKET_RE = jurisdictions.DOCKET_RE
 
 
+def _today_eastern():
+    """Today's date in US Eastern -- the courts' and the feeds' timezone -- so first_seen, the
+    since/last_filed watermark, and the digest week bucket the way the Eastern-stamped RSS/digest dates
+    already do, rather than a day ahead on the UTC CI runner for an opinion discovered late in the
+    Eastern evening (e.g. Sunday 10pm EDT, when UTC has already rolled to Monday). Reuses render's
+    date-level DST calc (zero-dependency); the 2 a.m. transition edge does not matter at day
+    granularity."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    shift = int(render._eastern_offset(now.date())[:3])   # -4 (EDT) or -5 (EST)
+    return (now + datetime.timedelta(hours=shift)).date().isoformat()
+
+
 def feed_get(url, deadline=None):
     """Fetch a public CourtListener court feed. This is the /feed/ path, not /api/rest/,
     so it does not draw on the REST API daily rate limit. No token needed."""
@@ -536,8 +548,12 @@ def _parse_feed(raw, court):
     # Refuse any DTD / entity declaration before parsing: a real CL Atom feed has none, and ET's expat
     # backend expands INTERNAL entities, so a crafted feed could "billion-laughs" a memory blowup in an
     # unattended run. Raising here is caught per-court by feed_court, exactly like a malformed feed.
+    # NUL-strip the probe first: a UTF-16/UTF-32 payload NUL-pads its ASCII, so "<!DOCTYPE" would arrive
+    # as "<\x00!\x00D..." and slip a raw byte-substring match -- ET would still decode and detonate it.
+    # A real UTF-8 feed has no interior NULs, so stripping them cannot cause a false reject.
     head = raw if isinstance(raw, bytes) else raw.encode("utf-8", "ignore")
-    if b"<!DOCTYPE" in head or b"<!ENTITY" in head:
+    probe = head.replace(b"\x00", b"")
+    if b"<!DOCTYPE" in probe or b"<!ENTITY" in probe:
         raise ValueError("feed declares a DTD/entity; refusing to parse (possible entity-expansion attack)")
     root = ET.fromstring(raw)
     out = []
@@ -782,6 +798,37 @@ def pdf_text(pdf_url, deadline=None):
     return re.sub(r"[ \t]+", " ", text).strip()
 
 
+def _first_json_object(s):
+    """The first brace-balanced {...} object in s, ignoring braces inside string literals. Replaces a
+    greedy `\\{.*\\}` (which over-grabs to the last } in trailing prose -- e.g. a chatty '...also cited
+    {Smith v. Jones}' after the object -- and yields invalid JSON) and a lazy `\\{.*?\\}` (which stops
+    at the first } and breaks any nested object). Returns the substring, or None if there is no
+    balanced object from the first {."""
+    start = s.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    in_str = esc = False
+    for i in range(start, len(s)):
+        c = s[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+        elif c == '"':
+            in_str = True
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return s[start:i + 1]
+    return None
+
+
 def parse_json(s):
     s = s.strip()
     if s.startswith("```"):
@@ -790,10 +837,10 @@ def parse_json(s):
     try:
         return json.loads(s)
     except Exception:
-        m = re.search(r"\{.*\}", s, re.S)
-        if not m:
+        obj = _first_json_object(s)
+        if obj is None:
             raise
-        return json.loads(m.group(0))
+        return json.loads(obj)
 
 
 def _dbg(msg):
@@ -1367,7 +1414,7 @@ def golden_nominations(added, crosschecks, flagged_names):
             "docket": (e.get("dockets") or [""])[0],
             "expect_relevant": True, "expect_areas": thin,
             "note": "thin-area anchor (%s): nominated by the %s run; adopted by editor paste + merge"
-                    % (", ".join(thin), datetime.date.today().isoformat()),
+                    % (", ".join(thin), _today_eastern()),
             "text": ""}))
     return out
 
@@ -1375,11 +1422,19 @@ def golden_nominations(added, crosschecks, flagged_names):
 def party_tokens(name):
     """Distinctive party tokens from a case caption, lowercased and split on
     non-alphanumerics (so a hyphenated surname yields two tokens); drops digits,
-    short tokens, and the institutional/noise stoplist. str()-coerced so a malformed
-    hand-edit (a non-string `name` in opinions.json) can't crash the dedup index this
-    feeds -- it is built directly from the entries with no shape guard."""
+    the institutional/noise stoplist, and tokens under three characters. The floor is
+    3, not 4, so common short surnames (Lee, Cox, Kim, Ali) survive -- at 4 they
+    vanished, and an individual-vs-individual case's higher-court reappearance then
+    yielded no tokens and slipped past the two-token dedup/escalation bar. Two-letter
+    noise (in, re, et, al, ex) stays out via the length floor or the stoplist. Note a
+    structural limit the floor cannot fix: an institution-vs-individual caption (State
+    Farm v. Wu) reduces to a single token because the institution words are stopped, so
+    the two-token override never fires for it -- that case rides its own merits through
+    the screen. str()-coerced so a malformed hand-edit (a non-string `name` in
+    opinions.json) can't crash the dedup index this feeds -- it is built directly from
+    the entries with no shape guard."""
     toks = re.split(r"[^a-z0-9]+", str(name or "").lower())
-    return {t for t in toks if len(t) >= 4 and not t.isdigit() and t not in _NAME_STOP}
+    return {t for t in toks if len(t) >= 3 and not t.isdigit() and t not in _NAME_STOP}
 
 
 def party_match(name, card_token_sets):
@@ -1777,7 +1832,7 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
         # future, which would make every later run compute a future `since` and silently
         # filter out all real opinions until wall-clock time caught up.
         _lf = max(e["date"] for e in auto_entries if e.get("date"))
-        state["last_filed"] = min(_lf, datetime.date.today().isoformat())
+        state["last_filed"] = min(_lf, _today_eastern())
         render.render(auto_entries)
         ab = ["## Georgia Appellate Watch: %d new opinion(s) (auto-published)" % len(auto_cards), ""]
         if cleared_items:
@@ -1943,11 +1998,11 @@ def main():
     # clears the case from this ledger, so it is rediscovered and redrafted on a later run.
     pending_review = review_store.load_pending()
     last = state.get("last_filed")
-    today = datetime.date.today().isoformat()
+    today = _today_eastern()
     if last:
         since = (datetime.date.fromisoformat(last) - datetime.timedelta(days=2)).isoformat()
     else:
-        since = (datetime.date.today() - datetime.timedelta(days=LOOKBACK)).isoformat()
+        since = (datetime.date.fromisoformat(today) - datetime.timedelta(days=LOOKBACK)).isoformat()
     # Never search from later than today: recovers gracefully if last_filed was ever
     # poisoned by a future-dated filing, so `since` can't filter out every real opinion.
     since = min(since, today)
@@ -2035,7 +2090,7 @@ def main():
         if not court:
             skipped.append((name, "unrecognized court id %s" % court_id)); return
         entry = assemble_entry(v, cid, name, court, areas, docket, date_filed, url,
-                               datetime.date.today().isoformat())
+                               _today_eastern())
         synopsis = entry["synopsis"]; why = entry["why"]; disp = entry["disposition"]
         additional_holdings = entry.get("additional_holdings", [])
         if entry["court"] == "scotga":
