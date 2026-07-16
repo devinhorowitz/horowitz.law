@@ -113,7 +113,14 @@ def main():
         p.penalize(detail="throttled: 99/min", retry_after=0)
         check("429 never RAISES a limit (stays 3/min)", p.limits["minute"] == 3)
 
-        # --- 3. parse_throttle survives adversarial 429 strings -----------------------------------
+        # --- 3. parse_throttle unit conversion + survives adversarial 429 strings ------------------
+        # A per-second rate maps onto the minute window, so the COUNT must be scaled x60 -- else the
+        # pacer strangles itself to N/minute on a limit that is really N*60/minute.
+        check("parse_throttle: '2/second' -> 120/minute (x60, not 2/minute)",
+              cl_rate.parse_throttle("throttled to 2/second") == ("minute", 120, None))
+        check("parse_throttle: '5/sec' -> 300/minute", cl_rate.parse_throttle("5/sec") == ("minute", 300, None))
+        check("parse_throttle: '5/min' unchanged", cl_rate.parse_throttle("5/min") == ("minute", 5, None))
+        check("parse_throttle: '100/hour' unchanged", cl_rate.parse_throttle("100/hour") == ("hour", 100, None))
         rng = random.Random(424242)
         frag = ["throttled", "Expected available in", "seconds", "5/min", "50/hour", "125/day",
                 "%d" % rng.randint(0, 10**7), "/", "  ", "\n", "min", "hr", "days", "", "?/?"]

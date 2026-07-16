@@ -141,24 +141,28 @@ def lead_opinion_id(cluster_id, deadline):
     return None
 
 
-def citing_results(opinion_id, since, deadline):
+def citing_results(opinion_id, since, deadline, max_pages=None):
     """In-scope opinions citing opinion_id, filed on/after `since`, newest first.
 
-    Uses the search `cites:(id)` query with repeated court params (the REST API
-    accepts repeated court= filters), paginating up to PAGES pages.
+    Uses the search `cites:(id)` query with repeated court params (the REST API accepts repeated court=
+    filters). Returns (results, exhausted): `exhausted` is True only when the search reached the end
+    (no further page) within `max_pages`. `max_pages=None` pages the ENTIRE history -- a first,
+    full-history sweep must see every citer, not just the newest page, or a card with more citers than
+    one page is marked fully-swept while its older citers (possibly an overruling) are never examined.
+    Incremental runs pass max_pages=PAGES to stay cheap in the recent window.
     """
     params = [("type", "o"), ("q", "cites:(%d)" % int(opinion_id)),
               ("filed_after", since), ("order_by", "dateFiled desc"), ("page_size", "20")]
     params += [("court", c) for c in SCOPE_COURTS]
     url = "https://www.courtlistener.com/api/rest/v4/search/?" + urllib.parse.urlencode(params)
     out, pages = [], 0
-    while url and pages < PAGES:
+    while url and (max_pages is None or pages < max_pages):
         data = update.cl_get(url, deadline)
         out += data.get("results", [])
         url = data.get("next")
         pages += 1
         time.sleep(0.5)
-    return out
+    return out, (url is None)   # exhausted iff no further page remains
 
 
 def _rest_opinion_text(oid, deadline):
@@ -249,12 +253,14 @@ def sweep_since(card, full_done, today=None):
     return (today - datetime.timedelta(days=LOOKBACK_DAYS)).isoformat()
 
 
-def swept_full(full_done, stopped):
-    """Whether a card is marked as having a completed full-history pass after this
-    run. Once true it stays true; otherwise it becomes true only if the pass ran to
-    completion -- `stopped` (a global rate/time/breaker/config stop) truncating it
-    leaves the flag unset so the next run redoes the full-history search."""
-    return bool(full_done or not stopped)
+def swept_full(full_done, stopped, truncated=False):
+    """Whether a card is marked as having a completed full-history pass after this run. Once true it
+    stays true; otherwise it becomes true only if the pass ran to completion -- neither a global stop
+    (`stopped`: a rate/time/breaker/config halt) NOR a `truncated` pass (the citer search hit its page
+    cap with more citers behind it, or the per-card/per-run cap cut the collect loop short) may set it,
+    since either left history unexamined. Leaving it unset makes the next run redo the full-history
+    search, resuming past the citers already in `seen`."""
+    return bool(full_done or (not stopped and not truncated))
 
 
 def _pending_rec(r, tries):
@@ -386,7 +392,10 @@ def main():
                 changed = True
                 continue
             since = sweep_since(card, full_done)
-            citers = citing_results(int(oid), since, deadline)
+            # First (full-history) sweep pages the ENTIRE citation history so no older citer is
+            # orphaned; an already-full incremental run stays in the cheap PAGES-deep recent window.
+            citers, exhausted = citing_results(int(oid), since, deadline,
+                                               max_pages=(None if first_time else PAGES))
         except cl_rate.RateBudgetExceeded:
             stopped = "rest budget"; defer = cl_rate.PACER.defer_note(); break
         except Exception as e:
@@ -413,8 +422,10 @@ def main():
         # card go through the batch API in one job; the gates and the seen/full state below are
         # unchanged. collect: list of {ccid, cname, cdate, ccourt, ctext, r} dicts.
         collect = []
+        cap_truncated = False
         for r in work:                                 # pending, then newest-first fresh citers
             if classified + len(collect) >= PER_RUN or len(collect) >= PER_CARD:
+                cap_truncated = True                   # cut short by a cap, not because work ran out
                 break
             if time.time() - run_start > BUDGET_SEC:
                 stopped = "time budget"; break
@@ -537,13 +548,14 @@ def main():
         pending = list(new_pending.values())
 
         if first_time or seen != before or _pending_key(pending) != _pending_key(pending_in):
-            # Mark the card fully swept only when this run actually completed a full-history
-            # pass without a global stop (rate/time budget, breaker, config error) cutting it
-            # short; `stopped` is set only by those global conditions, not by the per-card /
-            # per-run classification caps. An incremental run keeps the existing flag. A stop
-            # leaves `full` unset so the next run redoes the full-history search (skipping the
-            # citers already in `seen`, so it resumes rather than restarts).
-            new_full = swept_full(full_done, stopped)
+            # Mark the card fully swept only when this run actually completed a full-history pass: no
+            # global stop (rate/time/breaker/config), no unpaged search tail (exhausted), and no cap
+            # cutting the collect loop short. A first-sweep card with more citers than a run's caps can
+            # process therefore stays full=False and resumes next run (past `seen`) instead of stranding
+            # its older, unexamined citers behind the incremental window. An incremental run keeps the
+            # existing flag regardless (full_done dominates).
+            truncated = cap_truncated or not exhausted
+            new_full = swept_full(full_done, stopped, truncated)
             state[key] = {"oid": oid, "seen": sorted(seen), "full": new_full, "pending": pending}
             changed = True
         if stopped:

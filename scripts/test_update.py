@@ -270,6 +270,60 @@ def test_draft_pending():
         print("  ok  batch %s defers the whole draft set (nothing evaluated)" % name)
 
 
+def test_treatment_citer_seen():
+    """Claim-1 regression (the vetoed-treatment loop): route_and_publish marks a treatment citer SEEN,
+    not held-out like a card. Held out, a vetoed treatment finding was redraft-logged, re-discovered,
+    and re-escalated every run forever; marked seen, the loop cannot form. Held CARDS still stay out of
+    seen (their veto is meant to redraft)."""
+    import json as _json
+    import os as _os
+    import shutil as _sh
+    import tempfile as _tf
+    tmp = _tf.mkdtemp(prefix="route-test-")
+    saved = {}
+
+    def sv(obj, name, val):
+        saved[(id(obj), name)] = (obj, name, getattr(obj, name))
+        setattr(obj, name, val)
+    try:
+        sv(update, "STATE_PATH", _os.path.join(tmp, "state.json"))
+        sv(update, "REVIEW_PR_PATH", _os.path.join(tmp, "review_pr.md"))
+        sv(update.review_store, "REVIEW_DIR", _os.path.join(tmp, "review"))
+        sv(update.review_store, "CARDS_DIR", _os.path.join(tmp, "review", "cards"))
+        sv(update.review_store, "TREAT_DIR", _os.path.join(tmp, "review", "treatments"))
+        sv(update.review_store, "PENDING_PATH", _os.path.join(tmp, "pending.json"))
+        citer = {"cluster_id": 5555, "name": "Later v. State", "court": "ctapp",
+                 "date": "2026-06-01", "kind": "overruled"}
+        state = {"seen_clusters": []}
+        counts = update.route_and_publish(
+            added=[], treat_events=[{"card_cid": 111, "citer": citer}], clean_entries=[],
+            flagged=[], crosschecks={}, completeness={}, overruling_cids=set(), pending_review=set(),
+            state=state, seen=set(), evaluated={5555}, have=set(), now_iso="2026-07-16T00:00:00Z",
+            treat_flags=[("Old Card", "Later v. State", "overruled")])
+        written = _json.load(open(update.STATE_PATH))
+        assert 5555 in written.get("seen_clusters", []), "treatment citer must be marked seen (no veto loop)"
+        assert counts["treatments"] == 1, counts
+    finally:
+        for obj, name, val in saved.values():
+            setattr(obj, name, val)
+        _sh.rmtree(tmp, ignore_errors=True)
+    print("  ok  a treatment citer is marked seen (breaks the vetoed-treatment loop)")
+
+
+def test_quote_substantiated():
+    """A flag's verbatim quote must be a non-trivial span really present in the source: a lone short
+    word ("that", "held") no longer rubber-stamps a hallucinated flag, but a real phrase or a
+    distinctive long single term still substantiates. The guard fails closed (substantiated -> held)."""
+    src = "the court held that the temporary substitute provision did not apply to the borrowed car"
+    assert update._quote_substantiated("that", src) is False, "lone short word rejected"
+    assert update._quote_substantiated("held", src) is False, "lone short word rejected"
+    assert update._quote_substantiated("", src) is False, "empty rejected"
+    assert update._quote_substantiated("temporary substitute", src) is True, "real phrase substantiates"
+    assert update._quote_substantiated("provision", src) is True, "distinctive long single term substantiates"
+    assert update._quote_substantiated("mechanical breakdown clause", src) is False, "absent phrase is not substantiated"
+    print("  ok  quote substantiation rejects lone short words, keeps real spans")
+
+
 def test_party_tokens():
     """The three-char floor (lowered from four): common short surnames survive so an individual-vs-
     individual case's higher-court reappearance still clears the two-token dedup/escalation bar, while
@@ -352,6 +406,8 @@ def main():
     print("helpers:")
     test_substantiation_helper()
     test_docket_set()
+    test_treatment_citer_seen()
+    test_quote_substantiated()
     test_party_tokens()
     test_parse_json_extraction()
     test_today_eastern()

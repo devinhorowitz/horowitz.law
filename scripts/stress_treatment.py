@@ -56,18 +56,22 @@ def _ccid_of(cname):
 
 
 @contextlib.contextmanager
-def sandbox(cards, batch_mode, fault, fail_ids=frozenset(), tmp=None):
+def sandbox(cards, batch_mode, fault, fail_ids=frozenset(), tmp=None, per_card=None):
     """Redirect treatment's paths to a tempdir and stub every network seam; inject `fault`. Yields
-    the tempdir. `fault` in: '', 'rate_citers', 'rate_text', 'breaker', 'batch_fail', 'config'.
-    `fail_ids` fails ONLY those citer ids at classify time (an individual failure, no global stop) to
-    exercise the per-citer pending re-sweep. Pass `tmp` to reuse a dir so state persists across runs.
-    The tempdir is never removed here, so a caller can re-enter with the same `tmp` for a second run."""
+    the tempdir. `fault` in: '', 'rate_citers', 'rate_text', 'breaker', 'batch_fail', 'config',
+    'search_truncated'. `fail_ids` fails ONLY those citer ids at classify time (an individual failure,
+    no global stop) to exercise the per-citer pending re-sweep. `per_card` overrides PER_CARD (to force
+    the collect-loop cap). Pass `tmp` to reuse a dir so state persists across runs. The tempdir is
+    never removed here, so a caller can re-enter with the same `tmp` for a second run."""
     tmp = tmp or tempfile.mkdtemp(prefix="treat-stress-")
     saved = {}
 
     def sv(obj, name, val):
         saved[(id(obj), name)] = (obj, name, getattr(obj, name))
         setattr(obj, name, val)
+
+    if per_card is not None:
+        sv(treatment, "PER_CARD", per_card)
 
     sv(treatment, "JSON_PATH", os.path.join(tmp, "opinions.json"))
     sv(treatment, "STATE_PATH", os.path.join(tmp, "treatment_state.json"))
@@ -81,13 +85,16 @@ def sandbox(cards, batch_mode, fault, fail_ids=frozenset(), tmp=None):
     sv(update, "anthropic_status", lambda: ("operational", "ok"))
     sv(treatment, "lead_opinion_id", lambda cid, dl: int(cid) * 10)
 
-    def citing_results(oid, since, deadline):
+    def citing_results(oid, since, deadline, max_pages=None):
         if fault == "rate_citers":
             raise cl_rate.RateBudgetExceeded("budget")
         # Enough citers that an all-classify-fail run actually TRIPS the breaker (>= BREAKER
         # consecutive failures) -- i.e. a genuine global stop, which is the precondition the
         # not-fully-swept invariant is about.
-        return [citer(oid * 100 + k) for k in range(treatment.BREAKER + 2)]
+        cites = [citer(oid * 100 + k) for k in range(treatment.BREAKER + 2)]
+        # 'search_truncated' models a first-sweep card whose citation history exceeds the page window:
+        # the search is NOT exhausted, so the card must NOT be marked fully-swept.
+        return cites, (fault != "search_truncated")
     sv(treatment, "citing_results", citing_results)
 
     def citer_text(r, deadline):
@@ -152,10 +159,13 @@ def main():
         # Every global-stop fault must leave EVERY card NOT fully-swept (the load-bearing invariant).
         # breaker is a synchronous per-citer thing; the batch path's equivalents are a timeout /
         # transport error / config error surfacing from the one job.
+        # Every global-stop OR truncation fault must leave EVERY card NOT fully-swept. 'search_truncated'
+        # is the key claim-2 case: classification succeeds for every returned citer, but the search was
+        # not exhausted (more citers behind the page window), so the card must still not be marked full.
         if batch_mode:
-            faults = ["rate_citers", "rate_text", "batch_timeout", "batch_error", "config"]
+            faults = ["rate_citers", "rate_text", "batch_timeout", "batch_error", "config", "search_truncated"]
         else:
-            faults = ["rate_citers", "rate_text", "breaker", "config"]
+            faults = ["rate_citers", "rate_text", "breaker", "config", "search_truncated"]
         for fault in faults:
             st = run_sweep(CARDS, batch_mode, fault)
             leaked = [k for k, v in st.items() if v is True]
@@ -166,6 +176,20 @@ def main():
     s_sync = {k for k, v in run_sweep(CARDS, False, "").items() if v is True}
     s_bat = {k for k, v in run_sweep(CARDS, True, "").items() if v is True}
     check("clean sync and batch mark the same cards full (parity)", s_sync == s_bat, "%r vs %r" % (s_sync, s_bat))
+
+    # Cap truncation: a first sweep with MORE citers than PER_CARD breaks the collect loop on the cap,
+    # so the card must stay full=False -- its unprocessed older citers resume next run, not orphaned.
+    onecard = [dict(CARDS[0])]
+    tmp = tempfile.mkdtemp(prefix="treat-cap-")
+    with sandbox(onecard, False, "", tmp=tmp, per_card=2):     # stub returns BREAKER+2 (=6) citers
+        try:
+            treatment.main()
+        except SystemExit:
+            pass
+        capped = json.load(open(treatment.STATE_PATH)).get("700", {})
+    shutil.rmtree(tmp, ignore_errors=True)
+    check("first sweep truncated by PER_CARD stays NOT full (older citers not orphaned)",
+          capped.get("full") is not True, "full=%r seen=%r" % (capped.get("full"), capped.get("seen")))
 
     # An already-full card stays full even under a stop (swept_full must never REGRESS a flag).
     prefull = [dict(CARDS[0])]
