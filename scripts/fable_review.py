@@ -71,7 +71,13 @@ def review_held(entry, reasons, opinion_text, call_json, model="claude-fable-5",
     if not isinstance(v, dict):
         return _held("Fable review returned an unexpected shape; left for human review.")
 
-    fp = bool(v.get("is_false_positive"))
+    # Parse the boolean fail-closed: a model that emits the STRING "false" (a common JSON-adherence
+    # slip) must not clear a hold, but bool("false") is True in Python. So a clear requires an actual
+    # True, or a string that unambiguously means true; anything else -- "false", "", None, 0 -- is a
+    # not-a-false-positive, which keeps the card held. This is the load-bearing gate: a wrong read here
+    # auto-publishes a card the model actually flagged.
+    raw_fp = v.get("is_false_positive")
+    fp = raw_fp is True or (isinstance(raw_fp, str) and raw_fp.strip().lower() in ("true", "yes", "1"))
     conf = str(v.get("confidence", "")).lower()
     rec = str(v.get("recommendation", "")).lower()
     if rec not in ("accept", "veto", "decline"):

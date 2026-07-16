@@ -129,6 +129,33 @@ def test_route_noop(tmp):
     check("route noop: evaluated clusters marked seen", set(state["seen_clusters"]) == {7, 8})
 
 
+def test_flag_caution_no_zombie_date():
+    """flag_caution must bump treatment_date ONLY on the ok->caution transition. Recording another
+    citer on an already-flagged, or human-resolved (negative/superseded), card must NOT re-date it --
+    doing so resurrected a long-dead case in the weekly digest each time a new opinion cited it."""
+    import treatment_core
+
+    def citer(cid):
+        return {"cluster_id": cid, "name": "Later %d" % cid, "court": "ctapp", "date": "2026-07-16", "kind": "overruled"}
+
+    c = {"name": "A", "treated_by": []}
+    raised = treatment_core.flag_caution(c, citer(1))
+    check("ok->caution returns True and stamps a date", raised is True and c["treatment"] == "caution" and bool(c.get("treatment_date")))
+
+    sup = {"name": "B", "treatment": "superseded", "treatment_date": "2025-01-10", "treated_by": [{"cluster_id": 7}]}
+    r = treatment_core.flag_caution(sup, citer(8))
+    check("superseded + new citer returns False", r is False)
+    check("superseded + new citer: treatment_date NOT bumped (no digest zombie)", sup["treatment_date"] == "2025-01-10")
+    check("superseded + new citer: still superseded, citer recorded", sup["treatment"] == "superseded" and len(sup["treated_by"]) == 2)
+
+    cau = {"name": "C", "treatment": "caution", "treatment_date": "2026-01-01", "treated_by": [{"cluster_id": 3}]}
+    treatment_core.flag_caution(cau, citer(4))
+    check("caution + new citer: treatment_date not re-bumped", cau["treatment_date"] == "2026-01-01")
+
+    r2 = treatment_core.flag_caution(sup, citer(8))
+    check("duplicate citer is a no-op", r2 is False and len(sup["treated_by"]) == 2)
+
+
 def test_hold_reasons():
     e = card(1)
     check("hold: clean additive card auto-publishes", review_store.hold_reasons(e, {}, {}, {}, set()) == [])
@@ -396,6 +423,7 @@ def test_merge_new_into_branch(tmp):
 
 def main():
     print("review routing + apply:")
+    test_flag_caution_no_zombie_date()
     test_hold_reasons()
     for t in (test_store_roundtrip, test_redraft_ids_and_exemption,
               test_route_and_publish, test_route_fable_cleared, test_route_noop,
@@ -410,7 +438,7 @@ def main():
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (77 checks)")
+    print("\nALL TESTS PASSED (83 checks)")
     return 0
 
 

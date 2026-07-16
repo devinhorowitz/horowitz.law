@@ -75,6 +75,19 @@ def main():
         cutoff_lastrender = render._cutoff_iso()
         check("card is aged out as of real now (excluded)", not (card_date >= cutoff_now))
         check("card is kept as of the last render date (included)", card_date >= cutoff_lastrender)
+
+        # The /areas/*.json slice must carry the HUMAN treatment_note when present, exactly as the
+        # HTML card does -- not silently substitute the generic machine auto-note, which would erase an
+        # editor's manual correction in the data feed draft-time consumers read.
+        base = {"cluster_id": 1, "name": "X v. Y", "court": "ctapp", "date": "2026-01-01",
+                "url": "https://cl/1/", "areas": ["auto"], "treatment": "superseded",
+                "treatment_auto_note": "Possibly overruled by a later decision. Confirm on Shepard's.",
+                "treatment_date": "2026-01-05"}
+        human = dict(base, treatment_note="Good law for duty; overruled only on causation.")
+        check("slice prefers the human treatment_note over the auto note",
+              render._slice_entry(human)["treatment_note"] == "Good law for duty; overruled only on causation.")
+        check("slice falls back to the auto note when there is no human note",
+              render._slice_entry(base)["treatment_note"] == base["treatment_auto_note"])
     finally:
         restore()
 
