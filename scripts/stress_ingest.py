@@ -142,10 +142,24 @@ def test_parse_feed():
         raised = True
     check("parse_feed: a DTD/entity feed is refused (no entity expansion)", raised)
 
+    # The refusal must survive an encoding switch: a UTF-16/UTF-32 payload NUL-pads its ASCII, so a raw
+    # byte-substring check on "<!DOCTYPE" would miss it while ET still decodes and detonates it.
+    entity_xml = ('<?xml version="1.0"?><!DOCTYPE feed [<!ENTITY lol "lol">]>'
+                  '<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>&lol;</title></entry></feed>')
+    for enc in ("utf-16", "utf-16-le", "utf-16-be", "utf-32"):
+        refused = False
+        try:
+            update._parse_feed(entity_xml.encode(enc), court)
+        except Exception:
+            refused = True
+        check("parse_feed: %s-encoded entity payload is still refused (no NUL-pad bypass)" % enc, refused)
+
 
 def test_parse_json():
     good = [('{"a": 1}', dict), ('```json\n{"b": 2}\n```', dict), ('prose {"c": 3} trailer', dict),
-            ('[1, 2, 3]', list), ('```\n[4]\n```', list)]
+            ('[1, 2, 3]', list), ('```\n[4]\n```', list),
+            ('{"a": {"b": 1}} then {oops}', dict),      # nested object + trailing prose-brace (greedy-trap)
+            ('Sure! {"ok": true} done', dict)]          # leading + trailing prose
     for s, typ in good:
         try:
             v = update.parse_json(s)
