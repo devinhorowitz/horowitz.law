@@ -63,15 +63,59 @@ def test_swept_full():
     check("already-full card stays full on a clean run", treatment.swept_full(True, "") is True)
 
 
+def test_classify_batch():
+    """The per-card classify-batch orchestration (TREATMENT_BATCH, treatment._classify_batch):
+    custom_id round-trip, per-result ok / errored / unparseable handling, and -- the correctness-
+    critical part -- a whole-batch failure returning ok=False so the card is NOT marked fully-swept
+    (its citer history is re-searched next run rather than silently skipped)."""
+    card = {"name": "Landmark v. State", "synopsis": "holds X", "why": "matters because Y"}
+    collect = [{"ccid": c, "cname": "Citer %d" % c, "cdate": "2026-07-0%d" % i, "ccourt": "ga",
+                "ctext": "Landmark v. State opinion text. " * 40}
+               for i, c in enumerate([501, 502, 503], 1)]
+    real_run = treatment.batch.run
+
+    def mixed_run(reqs, deadline=None, interval=20.0, label="batch"):
+        check("classify batch custom_ids are str(ccid)",
+              sorted(rq["custom_id"] for rq in reqs) == ["501", "502", "503"])
+        return {"501": {"ok": True, "stop_reason": "end_turn",
+                        "text": '{"treatment": "negative", "kind": "overruled", "affects_proposition": true, "confidence": "high"}'},
+                "502": {"ok": False, "type": "errored", "error": "x"},
+                "503": {"ok": True, "text": "not json {{{", "stop_reason": "end_turn"}}
+    treatment.batch.run = mixed_run
+    try:
+        verdicts, ok = treatment._classify_batch(card, collect, deadline=123.0)
+    finally:
+        treatment.batch.run = real_run
+    check("classify batch: completed job -> ok True", ok is True)
+    check("classify batch: only the ok+parseable citer yields a verdict",
+          set(verdicts) == {501} and verdicts[501].get("kind") == "overruled")
+    check("classify batch: errored + unparseable citers omitted (retry next run, stay unseen)",
+          502 not in verdicts and 503 not in verdicts)
+
+    for label, exc in (("timeout", treatment.batch.BatchTimeout("bid", "still running")),
+                       ("transport error", treatment.batch.BatchError("submit failed"))):
+        def raiser(reqs, deadline=None, interval=20.0, label="batch", _e=exc):
+            raise _e
+        treatment.batch.run = raiser
+        try:
+            verdicts, ok = treatment._classify_batch(card, collect, deadline=123.0)
+        finally:
+            treatment.batch.run = real_run
+        check("classify batch: whole-batch %s -> ok False (card deferred, not marked full)" % label,
+              ok is False and verdicts == {})
+
+
 def main():
     print("treatment pure logic:")
     test_passage()
     test_sweep_since()
     test_swept_full()
+    print("treatment classify batch:")
+    test_classify_batch()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (%d checks)" % 12)
+    print("\nALL TESTS PASSED (%d checks)" % 18)
     return 0
 
 

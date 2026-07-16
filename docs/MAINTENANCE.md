@@ -252,7 +252,10 @@ Run by hand, from the Actions tab:
   treatment escalation stay synchronous, so discovery and routing are unchanged; the trade is that a
   new card may publish up to a run later if a draft batch is slow (it defers to the next run, capped
   by `OPINIONS_SUMMARIZE_BATCH_SEC`, 1500s). Set `OPINIONS_BATCH=0` for the synchronous funnel — the
-  instant rollback if a run ever looks wrong. `diagnose` / `dep-review` models are repo Variables
+  instant rollback if a run ever looks wrong. The weekly **`treatment` sweep batches too** by default
+  (`TREATMENT_BATCH`, `=0` for sync): each card's citer classifications go through one job, and a
+  failed/slow batch defers that card's citers *and* leaves it not-fully-swept, so its history is
+  re-searched next run rather than silently skipped. `diagnose` / `dep-review` models are repo Variables
   (`DIAGNOSE_MODEL` / `DEP_REVIEW_MODEL`, default Fable) if you ever want to trade quality for a
   still-lower price.
 - `heartbeat` is the backstop for silent stalls. Every other alert is an issue opened by a
