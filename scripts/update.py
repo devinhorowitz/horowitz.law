@@ -468,9 +468,17 @@ def search_window(court, after, before, deadline=None, max_pages=400):
 
 
 def cluster_id_of(r):
-    if r.get("cluster_id"):
-        return int(r["cluster_id"])
-    m = re.search(r"/opinion/(\d+)/", r.get("absolute_url", "") or "")
+    # Coerce the id as before (an int, or a numeric string CL might send), but never let a malformed
+    # value crash the candidate loop: a non-numeric cluster_id (a stray list/dict from a bad CL result
+    # or hand-edit) or a non-string absolute_url falls through to None, and the caller drops the card.
+    cid = r.get("cluster_id")
+    if cid:
+        try:
+            return int(cid)
+        except (TypeError, ValueError):
+            pass
+    au = r.get("absolute_url")
+    m = re.search(r"/opinion/(\d+)/", au) if isinstance(au, str) else None
     return int(m.group(1)) if m else None
 
 
@@ -567,11 +575,14 @@ def snippet_of(r):
 def opinion_ids_of(r, deadline=None):
     """Every sub-opinion id for a result/cluster (lead, concurrences, dissents), so
     the REST fallback can read the whole decision rather than only the first writing."""
-    ops = r.get("opinions") or []
-    ids = [o["id"] for o in ops if isinstance(o, dict) and o.get("id")]
+    # isinstance-list guarded so a malformed CL result (opinions/sibling_ids arriving as a scalar
+    # rather than a list) falls through to the cluster lookup instead of raising "not iterable".
+    ops = r.get("opinions")
+    ids = [o["id"] for o in ops if isinstance(o, dict) and o.get("id")] if isinstance(ops, list) else []
     if ids:
         return ids
-    sib = [s for s in (r.get("sibling_ids") or []) if s]
+    sib_src = r.get("sibling_ids")
+    sib = [s for s in sib_src if s] if isinstance(sib_src, list) else []
     if sib:
         return list(sib)
     cid = cluster_id_of(r)
@@ -1060,8 +1071,9 @@ CROSSCHECK_SYSTEM = (
 
 def _normalize_for_match(s):
     """Lowercase, unwrap surrounding quotes/ellipses, and collapse whitespace, so a model's
-    copied span matches the drafted summary despite trivial reformatting."""
-    s = (s or "").strip().strip("'\"\u201c\u201d\u2018\u2019").strip()
+    copied span matches the drafted summary despite trivial reformatting. str()-coerced so a
+    non-string model quote (a malformed guard response) can't crash the substantiation check."""
+    s = str(s or "").strip().strip("'\"\u201c\u201d\u2018\u2019").strip()
     s = s.replace("\u2026", " ")
     s = re.sub(r"^\.\.\.|\.\.\.$", " ", s)
     return re.sub(r"\s+", " ", s).strip().lower()
@@ -1346,8 +1358,10 @@ def golden_nominations(added, crosschecks, flagged_names):
 def party_tokens(name):
     """Distinctive party tokens from a case caption, lowercased and split on
     non-alphanumerics (so a hyphenated surname yields two tokens); drops digits,
-    short tokens, and the institutional/noise stoplist."""
-    toks = re.split(r"[^a-z0-9]+", (name or "").lower())
+    short tokens, and the institutional/noise stoplist. str()-coerced so a malformed
+    hand-edit (a non-string `name` in opinions.json) can't crash the dedup index this
+    feeds -- it is built directly from the entries with no shape guard."""
+    toks = re.split(r"[^a-z0-9]+", str(name or "").lower())
     return {t for t in toks if len(t) >= 4 and not t.isdigit() and t not in _NAME_STOP}
 
 
@@ -1387,8 +1401,10 @@ def _docket_set(d):
 
 def _dup_sig(court_key, date, dockets, name):
     """A comparison signature for the duplicate guard: (court key, YYYY-MM-DD,
-    docket-token set, party-token set)."""
-    return (court_key or "", (date or "")[:10], _docket_set(dockets), party_tokens(name or ""))
+    docket-token set, party-token set). str()-coerced (like party_tokens / _docket_set) so a
+    non-string date/court from a malformed hand-edit can't crash the dedup index built from the
+    entries with no shape guard."""
+    return (str(court_key or ""), str(date or "")[:10], _docket_set(dockets), party_tokens(name or ""))
 
 
 def _same_case(a, b):
