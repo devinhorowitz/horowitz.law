@@ -72,6 +72,7 @@ import render            # single source of truth renderer
 import treatment_core    # shared treatment-flag model
 import cl_rate           # shared CourtListener REST budget (limits, pacing, defer)
 import safeio            # crash-safe atomic writes
+import batch             # Message Batches transport (per-card classify batch when TREATMENT_BATCH is on)
 
 JSON_PATH  = update.JSON_PATH
 STATE_PATH = os.path.join(update.REPO, "treatment_state.json")
@@ -87,6 +88,14 @@ BUDGET_SEC    = int(os.environ.get("TREATMENT_BUDGET_SEC", "900"))
 MAXCHARS      = int(os.environ.get("TREATMENT_MAXCHARS", "9000"))
 PDF_MIN_CHARS = int(os.environ.get("TREATMENT_PDF_MIN_CHARS", "500"))
 BREAKER       = int(os.environ.get("TREATMENT_BREAKER", "4"))   # stop after this many consecutive API failures
+# Route each card's citer classifications through the 50%-priced Batch API. ON by default: the weekly
+# sweep is latency-tolerant (a held card is not urgent), so half price is a clear win. A card's
+# qualifying citers are collected (text fetched, gates + caps applied) and classified as ONE job, then
+# the verdicts are processed exactly as the synchronous path does. Set TREATMENT_BATCH=0 for the
+# synchronous path. A batch that fails or times out defers that card's citers -- and, like any stop,
+# leaves the card NOT marked fully-swept, so its history is re-searched next run (never skipped).
+BATCH         = os.environ.get("TREATMENT_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
+BATCH_SEC     = int(os.environ.get("TREATMENT_BATCH_SEC", "600"))  # wait budget for a card's classify batch; fits the sweep job
 DRY_RUN       = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 
 # CourtListener court ids whose decisions can bind or treat a card in our feed.
@@ -211,15 +220,20 @@ def passage(text, name):
     return ("\n...\n".join(chunks))[:MAXCHARS]
 
 
-def classify(card, citing_name, citing_text):
+def classify_request(card, citing_name, citing_text):
+    """The Messages body for one treatment classification. Shared by the synchronous classify() and
+    the per-card batch, the same request/transport split update.summarize_request uses."""
     prop = "%s\nProposition: %s\nWhy it matters: %s" % (
         card.get("name", ""), card.get("synopsis", ""), card.get("why", ""))
     body = passage(citing_text, card.get("name", "")) or "(no text available)"
     user = ("CITED CASE (A):\n%s\n\nLATER OPINION THAT CITES IT (B) -- %s:\n%s"
             % (prop, citing_name, body))
-    return update.anthropic_json(
-        {"model": MODEL, "max_tokens": 400, "system": TREATMENT_SYSTEM,
-         "messages": [{"role": "user", "content": user}]}, "treatment")
+    return {"model": MODEL, "max_tokens": 400, "system": TREATMENT_SYSTEM,
+            "messages": [{"role": "user", "content": user}]}
+
+
+def classify(card, citing_name, citing_text):
+    return update.anthropic_json(classify_request(card, citing_name, citing_text), "treatment")
 
 
 def sweep_since(card, full_done, today=None):
@@ -239,6 +253,36 @@ def swept_full(full_done, stopped):
     completion -- `stopped` (a global rate/time/breaker/config stop) truncating it
     leaves the flag unset so the next run redoes the full-history search."""
     return bool(full_done or not stopped)
+
+
+def _classify_batch(card, collect, deadline):
+    """Classify a card's collected citers as ONE 50%-priced batch. `collect` is a list of dicts, each
+    {ccid, cname, cdate, ccourt, ctext}. Returns (verdicts, ok): `verdicts` maps ccid -> the parsed
+    verdict for each citer that succeeded (a per-result batch error or an unparseable body is omitted,
+    so that citer stays unseen and retries next run -- the same outcome a synchronous per-citer
+    failure gets); `ok` is False only when the WHOLE batch timed out or failed transport, so the
+    caller defers the card and leaves it not-fully-swept. Isolated from main() so the orchestration is
+    unit-testable (test_treatment) without a live sweep."""
+    reqs = [batch.from_body(str(c["ccid"]), classify_request(card, c["cname"], c["ctext"]))
+            for c in collect]
+    try:
+        res = batch.run(reqs, deadline=deadline, label="treatment-batch")
+    except (batch.BatchTimeout, batch.BatchError) as be:
+        print("  ! treatment classify batch deferred (%s); %d citer(s) retry next run" % (be, len(collect)))
+        return {}, False
+    verdicts = {}
+    for c in collect:
+        ccid = c["ccid"]
+        rr = res.get(str(ccid))
+        if not rr or not rr.get("ok"):
+            print("  . treatment classify unavailable citing=%s (%s); retry next run"
+                  % (ccid, (rr or {}).get("type")))
+            continue
+        try:
+            verdicts[ccid] = update.parse_json(rr["text"])
+        except Exception as pe:
+            print("  ! treatment classify unparseable citing=%s: %s" % (ccid, pe))
+    return verdicts, True
 
 
 def main():
@@ -322,9 +366,14 @@ def main():
             continue
 
         before = set(seen)
-        per_card = 0
+        # Collect this card's qualifying citers -- fetch text, apply the same gates and the per-card /
+        # per-run caps -- then classify them together (one 50%-priced batch when TREATMENT_BATCH is
+        # on, else synchronously). Splitting collection from classification is what lets the whole
+        # card go through the batch API in one job; the gates and the seen/full state below are
+        # unchanged. collect: list of {ccid, cname, cdate, ccourt, ctext} dicts.
+        collect = []
         for r in citers:                               # newest first
-            if classified >= PER_RUN or per_card >= PER_CARD:
+            if classified + len(collect) >= PER_RUN or len(collect) >= PER_CARD:
                 break
             if time.time() - run_start > BUDGET_SEC:
                 stopped = "time budget"; break
@@ -348,27 +397,46 @@ def main():
             if sum(c.isalpha() for c in ctext) < 100:
                 print("  . citing=%s text not ingested yet; will retry next run" % ccid)
                 continue
-            try:
-                v = classify(card, cname, ctext)
-                api_fail = 0
-            except cl_rate.RateBudgetExceeded:
-                stopped = "rest budget"; defer = cl_rate.PACER.defer_note(); break
-            except update.ConfigError as e:
-                print("  ! configuration error, stopping this sweep so it surfaces: %s" % e)
-                stopped = "configuration error"; break
-            except Exception as e:
-                api_fail += 1
-                print("  ! classify failed citing=%s: %s" % (ccid, e))
-                if api_fail >= BREAKER:
-                    stopped = "Anthropic API errors"
-                    print("  ! %d consecutive model-call failures; stopping early. "
-                          "Remaining cards roll to the next run." % api_fail)
-                    break
-                continue
+            collect.append({"ccid": ccid, "cname": cname, "cdate": cdate, "ccourt": ccourt, "ctext": ctext})
 
+        # Classify the collected citers. verdicts maps ccid -> parsed verdict; a citer absent from it
+        # was deferred (not marked seen) and retries next run. A whole-batch failure, a rate-budget
+        # stop, a config error, or the breaker sets `stopped`, so the card is NOT marked fully-swept
+        # below -- its history is re-searched next run, never silently skipped.
+        verdicts = {}
+        if collect and BATCH:
+            verdicts, ok = _classify_batch(card, collect, time.time() + BATCH_SEC)
+            if not ok:
+                stopped = stopped or "treatment batch"
+        elif collect:
+            for c in collect:
+                ccid = c["ccid"]
+                try:
+                    verdicts[ccid] = classify(card, c["cname"], c["ctext"])
+                    api_fail = 0
+                except cl_rate.RateBudgetExceeded:
+                    stopped = "rest budget"; defer = cl_rate.PACER.defer_note(); break
+                except update.ConfigError as e:
+                    print("  ! configuration error, stopping this sweep so it surfaces: %s" % e)
+                    stopped = "configuration error"; break
+                except Exception as e:
+                    api_fail += 1
+                    print("  ! classify failed citing=%s: %s" % (ccid, e))
+                    if api_fail >= BREAKER:
+                        stopped = "Anthropic API errors"
+                        print("  ! %d consecutive model-call failures; stopping early. "
+                              "Remaining cards roll to the next run." % api_fail)
+                        break
+                    continue
+
+        # Process the verdicts in collection order (newest first); seen/report/flag logic unchanged.
+        for c in collect:
+            v = verdicts.get(c["ccid"])
+            if v is None:
+                continue                               # deferred/failed -> not seen, retried next run
+            ccid, cname, cdate, ccourt = c["ccid"], c["cname"], c["cdate"], c["ccourt"]
             seen.add(ccid)
             classified += 1
-            per_card += 1
             t = (v.get("treatment") or "neutral").lower()
             kind = (v.get("kind") or "").lower().strip() or None
             note = (v.get("note") or "").strip()
