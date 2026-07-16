@@ -1,7 +1,7 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 54,
+  "count": 55,
   "opinions": [
     {
       "cluster_id": 10928205,
@@ -19,6 +19,26 @@
       "why": "The decision applies the section 768.72 proffer standard to reject a punitive damages claim against an individual defendant where the proffer contained no evidence of that defendant's personal involvement in the alleged misconduct.",
       "dockets": [
         "3D25-2154"
+      ]
+    },
+    {
+      "cluster_id": 10928157,
+      "name": "Keais v. Kelley",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-07-15",
+      "disposition": "reversed in case no. a25a2193; affirmed in part and reversed in part in case no. a26a0122",
+      "areas": [
+        "auto",
+        "damages",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10928157/manfred-keais-as-next-of-kin-and-as-administrator-of-the-estate-of-eric/",
+      "synopsis": "A cyclist was struck and killed by a driver who fled the scene and instead summoned a non-driver, an attorney, who observed the scene and made informal calls rather than contacting emergency services. The trial court dismissed the wrongful death claim against the non-driver on the ground that the render-aid and reporting duties of OCGA 40-6-270 apply only to the driver. The Court of Appeals agreed that the statutory duties in OCGA 40-6-270 bind only the driver of the vehicle, but held that a non-driver who voluntarily undertakes those duties may be liable under the voluntary undertaking doctrine of Restatement (Second) of Torts Section 324A, extending Carmichael beyond premises and inspection contexts to a non-delegable statutory duty. Because the complaint alleged the non-driver assumed control of the incident and negligently handled reporting, dismissal was improper at the pleading stage.",
+      "why": "The decision confirms that OCGA 40-6-270's stop-and-render-aid duties apply only to the driver while holding that a non-driver who voluntarily undertakes those duties can face wrongful death liability under Restatement Section 324A, extending the voluntary undertaking doctrine to statutory motor-vehicle duties.",
+      "dockets": [
+        "A25A2193",
+        "A26A0122"
       ]
     },
     {
