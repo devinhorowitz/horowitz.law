@@ -59,6 +59,7 @@ Env:
   TREATMENT_MAXCHARS       citing-opinion characters sent to the classifier (default 9000)
   TREATMENT_PDF_MIN_CHARS  min extracted PDF chars to use before REST fallback (default 500)
   TREATMENT_BREAKER        stop after this many consecutive model-call failures (default 4)
+  TREATMENT_PENDING_TRIES  give up on an individually-failing citer after this many runs (default 4)
   CL_PER_MINUTE / CL_PER_HOUR / CL_PER_DAY / CL_RATE_MARGIN  REST budget (see cl_rate.py)
   DRY_RUN=1                evaluate and print; write nothing, open no PR
   OPINIONS_DEBUG=1         verbose (inherited from update.py)
@@ -88,6 +89,7 @@ BUDGET_SEC    = int(os.environ.get("TREATMENT_BUDGET_SEC", "900"))
 MAXCHARS      = int(os.environ.get("TREATMENT_MAXCHARS", "9000"))
 PDF_MIN_CHARS = int(os.environ.get("TREATMENT_PDF_MIN_CHARS", "500"))
 BREAKER       = int(os.environ.get("TREATMENT_BREAKER", "4"))   # stop after this many consecutive API failures
+PENDING_TRIES = int(os.environ.get("TREATMENT_PENDING_TRIES", "4"))  # give up on a citer after this many failed classify runs
 # Route each card's citer classifications through the 50%-priced Batch API. ON by default: the weekly
 # sweep is latency-tolerant (a held card is not urgent), so half price is a clear win. A card's
 # qualifying citers are collected (text fetched, gates + caps applied) and classified as ONE job, then
@@ -255,6 +257,30 @@ def swept_full(full_done, stopped):
     return bool(full_done or not stopped)
 
 
+def _pending_rec(r, tries):
+    """Trim a citing search result to the minimum needed to re-fetch its text and re-classify it on a
+    later run: cluster id, name, date, court, and the sub-opinion ids + PDF urls citer_text relies on
+    (PDF-first, REST fallback). `_tries` counts genuine per-citer classification failures toward
+    PENDING_TRIES. Kept tiny because it is persisted in treatment_state.json (committed to git)."""
+    ops = [{"id": o.get("id"), "download_url": o.get("download_url")}
+           for o in (r.get("opinions") or []) if isinstance(o, dict)]
+    return {"cluster_id": update.cluster_id_of(r),
+            "caseName": r.get("caseName") or r.get("caseNameFull") or "(unnamed)",
+            "dateFiled": r.get("dateFiled"), "court_id": r.get("court_id"),
+            "opinions": ops, "_tries": int(tries)}
+
+
+def _pending_key(recs):
+    """Order-independent identity of a pending list -- (ccid, tries) pairs -- so a run can tell whether
+    the pending set actually changed and skip a no-op state write."""
+    out = []
+    for r in recs or []:
+        cid = update.cluster_id_of(r)
+        if cid:
+            out.append((cid, int(r.get("_tries", 0))))
+    return sorted(out)
+
+
 def _classify_batch(card, collect, deadline):
     """Classify a card's collected citers as ONE 50%-priced batch. `collect` is a list of dicts, each
     {ccid, cname, cdate, ccourt, ctext}. Returns (verdicts, ok): `verdicts` maps ccid -> the parsed
@@ -312,6 +338,7 @@ def main():
     deadline = run_start + BUDGET_SEC
     classified = 0
     report = []        # (card_name, citing_name, citing_date, verdict_str)
+    stuck = []         # (card_name, citing_name, ccid, tries) citers given up after PENDING_TRIES failed runs
     new_flags = []     # card dicts newly raised to caution this run
     changed = False    # any tracked-file change (state grew, or a flag changed)
     stopped = ""       # why the run ended early, if it did
@@ -336,6 +363,7 @@ def main():
         st = state.get(key) or {}
         seen = set(st.get("seen", []))
         full_done = bool(st.get("full"))
+        pending_in = list(st.get("pending") or [])   # citers awaiting individual re-classification (option b)
         # first_time == run a full-history citation search (since the card's own date),
         # vs. the cheap LOOKBACK_DAYS incremental window. Gate it on whether a full pass
         # has actually COMPLETED, not on mere presence in state: a run that resolves the
@@ -351,10 +379,10 @@ def main():
             if oid is None:
                 oid = lead_opinion_id(int(cid), deadline)
                 if oid:
-                    state[key] = {"oid": oid, "seen": sorted(seen), "full": full_done}   # cache id immediately
+                    state[key] = {"oid": oid, "seen": sorted(seen), "full": full_done, "pending": pending_in}   # cache id immediately
                     changed = True
             if not oid:
-                state[key] = {"oid": None, "seen": sorted(seen), "full": full_done}      # do not refetch weekly
+                state[key] = {"oid": None, "seen": sorted(seen), "full": full_done, "pending": pending_in}      # do not refetch weekly
                 changed = True
                 continue
             since = sweep_since(card, full_done)
@@ -366,13 +394,26 @@ def main():
             continue
 
         before = set(seen)
+        # Re-attempt this card's still-unclassified citers FIRST (option b): a citer that failed its
+        # individual classification on a prior run is tracked in `pending` with a stored r-shape and
+        # re-swept here even after the card is marked full -- an incremental run's narrow LOOKBACK
+        # window would otherwise strand a citer filed before it. Deduped against the fresh search so a
+        # pending citer still inside the window is not processed twice.
+        work, work_ids = [], set()
+        for r in list(pending_in) + citers:            # pending first, then the fresh search (newest first)
+            rid = update.cluster_id_of(r)
+            if not rid or rid in work_ids:
+                continue
+            work_ids.add(rid)
+            work.append(r)
+
         # Collect this card's qualifying citers -- fetch text, apply the same gates and the per-card /
         # per-run caps -- then classify them together (one 50%-priced batch when TREATMENT_BATCH is
         # on, else synchronously). Splitting collection from classification is what lets the whole
         # card go through the batch API in one job; the gates and the seen/full state below are
-        # unchanged. collect: list of {ccid, cname, cdate, ccourt, ctext} dicts.
+        # unchanged. collect: list of {ccid, cname, cdate, ccourt, ctext, r} dicts.
         collect = []
-        for r in citers:                               # newest first
+        for r in work:                                 # pending, then newest-first fresh citers
             if classified + len(collect) >= PER_RUN or len(collect) >= PER_CARD:
                 break
             if time.time() - run_start > BUDGET_SEC:
@@ -397,7 +438,7 @@ def main():
             if sum(c.isalpha() for c in ctext) < 100:
                 print("  . citing=%s text not ingested yet; will retry next run" % ccid)
                 continue
-            collect.append({"ccid": ccid, "cname": cname, "cdate": cdate, "ccourt": ccourt, "ctext": ctext})
+            collect.append({"ccid": ccid, "cname": cname, "cdate": cdate, "ccourt": ccourt, "ctext": ctext, "r": r})
 
         # Classify the collected citers. verdicts maps ccid -> parsed verdict; a citer absent from it
         # was deferred (not marked seen) and retries next run. A whole-batch failure, a rate-budget
@@ -461,7 +502,41 @@ def main():
                 if treatment_core.flag_caution(card, citer):
                     new_flags.append(card)
 
-        if first_time or seen != before:
+        # --- option (b): recompute this card's per-citer pending list ---------------------------------
+        # A citer that was ATTEMPTED (fetched, gated, put in `collect`) but yielded no verdict failed
+        # its individual classification -- a bad model read, an unparseable body, or a per-result batch
+        # error. Track it by id so it is re-swept next run even after the card is marked full; the
+        # narrow incremental window would otherwise strand a citer filed before it. A global stop
+        # (rate/time/breaker/config/whole-batch defer) is NOT the citer's fault, so it never burns a
+        # try. After PENDING_TRIES genuine failures a citer is given up: marked seen so it stops
+        # recurring, and surfaced in the PR for manual review -- bounded cost, never a silent drop.
+        attempted = {c["ccid"] for c in collect}
+        succeeded = set(verdicts)
+        prev_pending = {}
+        for rec in pending_in:
+            pid = update.cluster_id_of(rec)
+            if pid:
+                prev_pending[pid] = rec
+        new_pending = {}
+        for pid, rec in prev_pending.items():
+            if pid in succeeded:
+                continue                                       # classified now -> resolved (already seen)
+            if not stopped and pid in attempted:
+                tries = int(rec.get("_tries", 0)) + 1
+                if tries >= PENDING_TRIES:
+                    seen.add(pid)                              # give up: stop recurring, surface for a human
+                    stuck.append((card.get("name", ""), rec.get("caseName") or "(unnamed)", pid, tries))
+                    continue
+                rec = dict(rec, _tries=tries)
+            new_pending[pid] = rec                             # bumped, or preserved (not attempted / stopped)
+        for c in collect:
+            ccid = c["ccid"]
+            if ccid in succeeded or ccid in prev_pending:
+                continue                                       # succeeded, or already handled above
+            new_pending[ccid] = _pending_rec(c["r"], 0 if stopped else 1)   # a fresh individual failure
+        pending = list(new_pending.values())
+
+        if first_time or seen != before or _pending_key(pending) != _pending_key(pending_in):
             # Mark the card fully swept only when this run actually completed a full-history
             # pass without a global stop (rate/time budget, breaker, config error) cutting it
             # short; `stopped` is set only by those global conditions, not by the per-card /
@@ -469,7 +544,7 @@ def main():
             # leaves `full` unset so the next run redoes the full-history search (skipping the
             # citers already in `seen`, so it resumes rather than restarts).
             new_full = swept_full(full_done, stopped)
-            state[key] = {"oid": oid, "seen": sorted(seen), "full": new_full}
+            state[key] = {"oid": oid, "seen": sorted(seen), "full": new_full, "pending": pending}
             changed = True
         if stopped:
             break
@@ -492,20 +567,29 @@ def main():
         lines.append("Citing opinions reviewed this run (logged, not all adverse):")
         for cardnm, cname, cdate, verdict in report:
             lines.append("- %s <- %s (%s): %s" % (cardnm, cname, cdate, verdict))
+    if stuck:
+        lines += ["", "**Could not auto-classify after %d attempts -- CHECK MANUALLY on CourtListener:**" % PENDING_TRIES]
+        for cardnm, cname, ccid, tries in stuck:
+            lines.append("- %s <- %s -- https://www.courtlistener.com/opinion/%d/x/ "
+                         "(%d failed classify attempts; marked reviewed to stop retrying)"
+                         % (cardnm, cname, ccid, tries))
     if stopped:
         lines += ["", "_Run stopped early (%s%s); remaining cards roll to the next run._"
                   % (stopped, "; " + defer if defer else "")]
     pr_body = "\n".join(lines) + "\n"
 
-    print("\nclassified %d citing opinion(s); new flags: %d; CourtListener REST calls: %d%s"
+    print("\nclassified %d citing opinion(s); new flags: %d; CourtListener REST calls: %d%s%s"
           % (classified, len(new_flags), cl_rate.PACER.calls,
-             (" (stopped: %s%s)" % (stopped, "; " + defer if defer else "")) if stopped else ""))
+             (" (stopped: %s%s)" % (stopped, "; " + defer if defer else "")) if stopped else "",
+             ("; %d citer(s) given up for manual review" % len(stuck)) if stuck else ""))
 
     safeio.step_summary(
         "## Georgia Appellate Watch \u00b7 treatment sweep\n\n"
-        "Classified %d citing opinion(s); raised %d flag(s) to caution.\n\n"
+        "Classified %d citing opinion(s); raised %d flag(s) to caution.%s\n\n"
         "CourtListener REST calls: %d%s"
-        % (classified, len(new_flags), cl_rate.PACER.calls,
+        % (classified, len(new_flags),
+           " \u00b7 %d citer(s) given up for manual review" % len(stuck) if stuck else "",
+           cl_rate.PACER.calls,
            " \u00b7 run stopped early, remaining cards roll to the next run" if stopped else ""))
 
     if DRY_RUN:

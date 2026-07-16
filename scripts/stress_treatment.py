@@ -19,6 +19,7 @@ Run directly: `python scripts/stress_treatment.py`. Exits nonzero on any failure
 import contextlib
 import json
 import os
+import shutil
 import sys
 import tempfile
 
@@ -49,11 +50,19 @@ def citer(ccid):
             "court_id": SCOPE_COURT}
 
 
+def _ccid_of(cname):
+    tok = cname.split()[-1]
+    return int(tok) if tok.isdigit() else None
+
+
 @contextlib.contextmanager
-def sandbox(cards, batch_mode, fault):
+def sandbox(cards, batch_mode, fault, fail_ids=frozenset(), tmp=None):
     """Redirect treatment's paths to a tempdir and stub every network seam; inject `fault`. Yields
-    the tempdir. `fault` in: '', 'rate_citers', 'rate_text', 'breaker', 'batch_fail', 'config'."""
-    tmp = tempfile.mkdtemp(prefix="treat-stress-")
+    the tempdir. `fault` in: '', 'rate_citers', 'rate_text', 'breaker', 'batch_fail', 'config'.
+    `fail_ids` fails ONLY those citer ids at classify time (an individual failure, no global stop) to
+    exercise the per-citer pending re-sweep. Pass `tmp` to reuse a dir so state persists across runs.
+    The tempdir is never removed here, so a caller can re-enter with the same `tmp` for a second run."""
+    tmp = tmp or tempfile.mkdtemp(prefix="treat-stress-")
     saved = {}
 
     def sv(obj, name, val):
@@ -92,6 +101,8 @@ def sandbox(cards, batch_mode, fault):
             raise RuntimeError("model down")
         if fault == "config":
             raise update.ConfigError("credit exhausted")
+        if _ccid_of(cname) in fail_ids:                 # individual failure -> stays pending, no global stop
+            raise RuntimeError("flaky classify")
         return {"treatment": "neutral"}
     sv(treatment, "classify", classify)
 
@@ -102,7 +113,10 @@ def sandbox(cards, batch_mode, fault):
             raise batch.BatchError("submit failed")
         if fault == "config":
             raise update.ConfigError("credit exhausted")
-        return {rq["custom_id"]: {"ok": True, "text": '{"treatment": "neutral"}', "stop_reason": "end_turn"}
+        # A per-result error for a fail_id (custom_id is str(ccid)) -> that citer stays unseen/pending,
+        # the rest of the job succeeds -- the batch analogue of an individual classify failure.
+        return {rq["custom_id"]: ({"ok": False, "type": "errored"} if int(rq["custom_id"]) in fail_ids
+                                  else {"ok": True, "text": '{"treatment": "neutral"}', "stop_reason": "end_turn"})
                 for rq in reqs}
     sv(batch, "run", fake_run)
 
@@ -165,6 +179,64 @@ def main():
             pass
         after = json.load(open(treatment.STATE_PATH)) if os.path.exists(treatment.STATE_PATH) else {key: {"full": True}}
     check("an already-full card stays full through a stop (no regression)", after.get(key, {}).get("full") is True)
+
+    # --- option (b): a per-citer classify failure is TRACKED and re-swept, not stranded -------------
+    # A single citer failing classification (below the breaker, no global stop) must NOT block the
+    # card from being marked full -- but the failed citer must be recorded in `pending` so the next
+    # run re-attempts it, even though the card is now on the narrow incremental window.
+    def read_state(tmp):
+        sp = os.path.join(tmp, "treatment_state.json")
+        return json.load(open(sp)) if os.path.exists(sp) else {}
+
+    flaky = 700 * 10 * 100 + 0    # oid = cid*10 = 7000; citer id = oid*100 + 0 = 700000
+    for mode_name, bm in (("sync", False), ("batch", True)):
+        onecard = [dict(CARDS[0])]
+        tmp = tempfile.mkdtemp(prefix="treat-pending-")
+        with sandbox(onecard, bm, "", fail_ids={flaky}, tmp=tmp):
+            try:
+                treatment.main()
+            except SystemExit:
+                pass
+        s1 = read_state(tmp).get("700", {})
+        pend1 = {r.get("cluster_id"): r.get("_tries") for r in (s1.get("pending") or [])}
+        check("%s pending: a lone failed citer still marks the card full" % mode_name, s1.get("full") is True,
+              "full=%r" % s1.get("full"))
+        check("%s pending: the failed citer is tracked (tries=1), not seen" % mode_name,
+              pend1.get(flaky) == 1 and flaky not in set(s1.get("seen") or []), "pending=%r" % pend1)
+        check("%s pending: the other citers were classified (seen)" % mode_name,
+              len(set(s1.get("seen") or [])) == treatment.BREAKER + 1,
+              "seen=%r" % (s1.get("seen"),))
+        # Second run, no fault: the pending citer is re-attempted, succeeds, and clears.
+        with sandbox(onecard, bm, "", fail_ids=set(), tmp=tmp):
+            try:
+                treatment.main()
+            except SystemExit:
+                pass
+        s2 = read_state(tmp).get("700", {})
+        check("%s pending: the tracked citer is re-swept next run and resolved" % mode_name,
+              not (s2.get("pending") or []) and flaky in set(s2.get("seen") or []),
+              "pending=%r seen=%r" % (s2.get("pending"), s2.get("seen")))
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    # A citer that keeps failing is given up after PENDING_TRIES runs -- marked seen so it stops
+    # recurring, and surfaced in the PR body for manual review (bounded cost, never a silent drop).
+    onecard = [dict(CARDS[0])]
+    tmp = tempfile.mkdtemp(prefix="treat-giveup-")
+    last_pr = ""
+    for _run in range(treatment.PENDING_TRIES):
+        with sandbox(onecard, False, "", fail_ids={flaky}, tmp=tmp):
+            try:
+                treatment.main()
+            except SystemExit:
+                pass
+            last_pr = open(treatment.PR_PATH).read()
+    sg = read_state(tmp).get("700", {})
+    check("giveup: a perpetually-failing citer is dropped from pending after PENDING_TRIES",
+          not (sg.get("pending") or []), "pending=%r" % (sg.get("pending"),))
+    check("giveup: the given-up citer is marked seen (stops recurring)", flaky in set(sg.get("seen") or []))
+    check("giveup: the PR body surfaces it for manual review", "CHECK MANUALLY" in last_pr,
+          "pr=%r" % last_pr[:200])
+    shutil.rmtree(tmp, ignore_errors=True)
 
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
