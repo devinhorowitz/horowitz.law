@@ -246,8 +246,13 @@ Run by hand, from the Actions tab:
   (usually minutes), capped by the matching `*_BATCH_SEC` budget (`diagnose`/`dep-review` 480s;
   `maintain` 900s, which must stay under the 30-min job); a slow batch just posts nothing / defers
   the slice that run (best-effort). `backfill` batches too, but stays opt-in (`BACKFILL_BATCH`) since
-  it's a manual one-off. The **daily funnel is deliberately synchronous** — it publishes cards
-  promptly and the Batch API is async. `diagnose` / `dep-review` models are repo Variables
+  it's a manual one-off. The **daily funnel batches its tier-3 Opus summarizer too** (`OPINIONS_BATCH`,
+  on by default): the candidates that pass triage are drafted as one job after the loop instead of a
+  synchronous Opus call each — the biggest single AI saving here. Screen/pretriage/triage and the
+  treatment escalation stay synchronous, so discovery and routing are unchanged; the trade is that a
+  new card may publish up to a run later if a draft batch is slow (it defers to the next run, capped
+  by `OPINIONS_SUMMARIZE_BATCH_SEC`, 1500s). Set `OPINIONS_BATCH=0` for the synchronous funnel — the
+  instant rollback if a run ever looks wrong. `diagnose` / `dep-review` models are repo Variables
   (`DIAGNOSE_MODEL` / `DEP_REVIEW_MODEL`, default Fable) if you ever want to trade quality for a
   still-lower price.
 - `heartbeat` is the backstop for silent stalls. Every other alert is an issue opened by a
