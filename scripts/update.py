@@ -45,6 +45,8 @@ Environment:
   OPINIONS_SEEN_CAP        max cluster ids kept in opinions_state.json seen list (default 5000; bounds state-file growth)
   OPINIONS_MAXCHARS        opinion characters sent to triage and summarizer (default 60000)
   OPINIONS_MAX_TOKENS      summarizer output token cap (default 4096)
+  OPINIONS_FEED_MAX_BYTES  hard cap on a court-feed read; bounds memory vs a hostile/huge response (default 25 MiB)
+  OPINIONS_PDF_MAX_BYTES   hard cap on an opinion-PDF read (default 75 MiB)
   DRY_RUN                  if set to 1, evaluate and print but write nothing
   OPINIONS_DEBUG           if set to 1, log every model call and full API error bodies
   OPINIONS_BUDGET_SEC      wall-clock cap on the candidate loop in seconds (default 480)
@@ -125,6 +127,12 @@ MAX_RUN      = int(os.environ.get("OPINIONS_MAX", "25"))
 SEEN_CAP     = int(os.environ.get("OPINIONS_SEEN_CAP", "5000"))  # cap on seen_clusters kept in state (bounds growth)
 MAXCHARS     = int(os.environ.get("OPINIONS_MAXCHARS", "60000"))
 PDF_MIN_CHARS= int(os.environ.get("OPINIONS_PDF_MIN_CHARS", "500"))  # below this, fall back from PDF to REST
+# Hard byte caps on the two unbounded reads of external bytes (a court feed, an opinion PDF), so a
+# hostile or runaway upstream response cannot exhaust memory in an unattended run. Generous vs. real
+# data (feeds are KBs, opinion PDFs a few MB); a response over the cap is truncated, which then fails
+# the XML parse / PDF extract and is handled like any bad fetch. Override via env if a real feed grows.
+FEED_MAX_BYTES = int(os.environ.get("OPINIONS_FEED_MAX_BYTES", str(25 * 1024 * 1024)))
+PDF_MAX_BYTES  = int(os.environ.get("OPINIONS_PDF_MAX_BYTES", str(75 * 1024 * 1024)))
 OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
 DRY_RUN      = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "yes")
@@ -498,7 +506,7 @@ def feed_get(url, deadline=None):
         try:
             with urllib.request.urlopen(
                     urllib.request.Request(url, headers={"User-Agent": UA}), timeout=20) as r:
-                return r.read()
+                return r.read(FEED_MAX_BYTES)
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
             last = e
             if attempt < 2:
@@ -525,6 +533,12 @@ def _parse_feed(raw, court):
     feed_court so the funnel and the feed-shape canary (scripts/feed_check.py) run the EXACT same
     parse -- the canary's job is to detect when this parse silently stops yielding candidates
     because the feed's shape changed -- and so the parse is unit-testable without a network fetch."""
+    # Refuse any DTD / entity declaration before parsing: a real CL Atom feed has none, and ET's expat
+    # backend expands INTERNAL entities, so a crafted feed could "billion-laughs" a memory blowup in an
+    # unattended run. Raising here is caught per-court by feed_court, exactly like a malformed feed.
+    head = raw if isinstance(raw, bytes) else raw.encode("utf-8", "ignore")
+    if b"<!DOCTYPE" in head or b"<!ENTITY" in head:
+        raise ValueError("feed declares a DTD/entity; refusing to parse (possible entity-expansion attack)")
     root = ET.fromstring(raw)
     out = []
     for e in root.findall(ATOM + "entry"):
@@ -723,7 +737,9 @@ def _pdf_ok(text):
     A failed or image-only extraction yields little or no text; a real opinion yields plenty.
     Survivors of the Tier 1 screen are substantive, so genuine opinions clear this easily, and
     only true extraction failures (image-only scans, download errors) fall through to REST."""
-    return bool(text) and len(text) >= PDF_MIN_CHARS and sum(c.isalpha() for c in text) >= 100
+    # isinstance-str, not bool(): a non-string is not usable PDF text, and this avoids .isalpha()
+    # crashing on a non-str element -- symmetric with the other ingestion guards.
+    return isinstance(text, str) and len(text) >= PDF_MIN_CHARS and sum(c.isalpha() for c in text) >= 100
 
 
 def pdf_text(pdf_url, deadline=None):
@@ -745,7 +761,7 @@ def pdf_text(pdf_url, deadline=None):
         try:
             req = urllib.request.Request(pdf_url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=30) as resp:
-                raw = resp.read()
+                raw = resp.read(PDF_MAX_BYTES)
             break
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
             if attempt < 1:
@@ -933,6 +949,7 @@ def clip(text, limit=None):
     the disposition, and the ending, dropping only the long middle, with a marker so
     the reader knows text was omitted."""
     limit = limit or MAXCHARS
+    text = text if isinstance(text, str) else str(text or "")   # tolerate a non-str like the other guards
     if not text:
         return ""
     if len(text) <= limit:
