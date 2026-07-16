@@ -227,11 +227,24 @@ export async function onRequestPost(context) {
     return json({ ok: false, message: "Please enter a valid email address." }, 422);
   }
 
-  // Second rate-limit dimension, keyed on the DESTINATION email (the IP-keyed limit above
-  // does not stop a rotating IP pool from bombing one victim address with confirmation
-  // emails). Same binding, a different key. Inert unless SUBSCRIBE_RATELIMIT is configured --
-  // see the deploy notes: an always-on limiter (this binding or a WAF rule) is required, since
-  // Turnstile alone does not bound how many emails a solved-challenge farm can send.
+  // Human-verification gate: confirm the Turnstile token with Cloudflare BEFORE sending any email,
+  // AND before the email-keyed rate limit below, so a forged/missing/replayed token can neither
+  // trigger a message from our domain nor spend the victim address's rate budget. (If the email
+  // limit ran first, an attacker could POST a victim's address with an invalid token to exhaust
+  // that address's bucket for free -- a targeted lockout -- without ever solving a challenge.)
+  if (!token) {
+    return json({ ok: false, message: "Please complete the verification and try again." }, 400);
+  }
+  if (!(await verifyTurnstile(env, token, request))) {
+    return json({ ok: false, message: "Verification failed. Please reload the page and try again." }, 403);
+  }
+
+  // Second rate-limit dimension, keyed on the DESTINATION email (the IP-keyed limit above does not
+  // stop a rotating IP pool from bombing one victim address with confirmation emails). Same binding,
+  // a different key. Only reached AFTER Turnstile passes, so only a human-verified request can spend
+  // a given address's budget. Inert unless SUBSCRIBE_RATELIMIT is configured -- see the deploy notes:
+  // an always-on limiter (this binding or a WAF rule) is required, since Turnstile alone does not
+  // bound how many emails a solved-challenge farm can send.
   if (env.SUBSCRIBE_RATELIMIT && typeof env.SUBSCRIBE_RATELIMIT.limit === "function") {
     try {
       const { success } = await env.SUBSCRIBE_RATELIMIT.limit({ key: "email:" + email });
@@ -239,15 +252,6 @@ export async function onRequestPost(context) {
         return json({ ok: false, message: "Too many attempts. Please wait a minute and try again." }, 429);
       }
     } catch { /* never block legitimate users if the limiter itself errors */ }
-  }
-
-  // Human-verification gate: confirm the Turnstile token with Cloudflare BEFORE sending any
-  // email, so a forged, missing, or replayed token can never trigger a message from our domain.
-  if (!token) {
-    return json({ ok: false, message: "Please complete the verification and try again." }, 400);
-  }
-  if (!(await verifyTurnstile(env, token, request))) {
-    return json({ ok: false, message: "Verification failed. Please reload the page and try again." }, 403);
   }
 
   try {

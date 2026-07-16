@@ -66,8 +66,13 @@ def flag_caution(card, citer):
         return False                          # already recorded; respect any review
     tb.append({k: citer.get(k) for k in _CITER_FIELDS})
     card["treatment_auto_note"] = auto_note(card)
-    card["treatment_date"] = datetime.date.today().isoformat()   # date of the latest finding; the weekly digest signals corrections by it
+    # Bump treatment_date ONLY on the ok -> caution transition -- the status change the weekly digest
+    # announces (it lists non-ok cards whose treatment_date is inside the window). Merely recording
+    # another citer on a card already flagged, or already human-set to negative/superseded, must NOT
+    # bump the date: doing so re-announced a long-resolved case to every subscriber each time a new
+    # opinion cited it ("zombie digest"). A human status change sets its own date via the edit.
     if (card.get("treatment") or "ok") == "ok":
         card["treatment"] = "caution"
+        card["treatment_date"] = datetime.date.today().isoformat()
         return True
     return False

@@ -53,6 +53,23 @@ def test_clears_only_on_the_full_triple():
         check(label, v["clear"] is False)
 
 
+def test_stringy_boolean_is_fail_closed():
+    """A model that emits the STRING "false" for is_false_positive must NOT clear -- bool("false") is
+    True in Python, so a naive cast would auto-publish a card the model actually flagged. Only a real
+    True (or an unambiguous true-string) clears; anything else stays held."""
+    stringy_false = {"is_false_positive": "false", "confidence": "high", "recommendation": "accept", "assessment": "a"}
+    v = fable_review.review_held(ENTRY, ["fidelity flag"], TEXT, stub(stringy_false))
+    check("string 'false' does not clear (fail-closed)", v["clear"] is False and v["is_false_positive"] is False)
+    for raw in ("False", "no", "0", "", None, 0):
+        v = fable_review.review_held(ENTRY, ["fidelity flag"], TEXT,
+                                     stub({"is_false_positive": raw, "confidence": "high", "recommendation": "accept", "assessment": "a"}))
+        check("falsy is_false_positive %r does not clear" % (raw,), v["clear"] is False)
+    # A genuine string "true" is still honored (the triple otherwise holds).
+    v = fable_review.review_held(ENTRY, ["fidelity flag"], TEXT,
+                                 stub({"is_false_positive": "true", "confidence": "high", "recommendation": "accept", "assessment": "a"}))
+    check("string 'true' clears when the rest of the triple holds", v["clear"] is True)
+
+
 def test_fail_closed():
     # Thin/empty opinion text -> never call the model, never clear.
     s = stub({"is_false_positive": True, "confidence": "high", "recommendation": "accept", "assessment": "a"})
@@ -84,12 +101,13 @@ def test_verdict_fields_normalized():
 def main():
     print("fable_review.review_held:")
     test_clears_only_on_the_full_triple()
+    test_stringy_boolean_is_fail_closed()
     test_fail_closed()
     test_verdict_fields_normalized()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (%d checks)" % 13)
+    print("\nALL TESTS PASSED")
     return 0
 
 

@@ -1080,8 +1080,13 @@ def _slice_entry(e):
     t = e.get("treatment")
     if t and t != "ok":
         rec["treatment"] = t
-        if e.get("treatment_auto_note"):
-            rec["treatment_note"] = e["treatment_auto_note"]
+        # Prefer the human treatment_note over the machine treatment_auto_note, exactly as the HTML
+        # card and permalink do -- otherwise an editor's manual correction ("good law for duty, only
+        # overruled on causation") is silently replaced by the generic auto note in the /areas/*.json
+        # feed that draft-time consumers read.
+        note = e.get("treatment_note") or e.get("treatment_auto_note")
+        if note:
+            rec["treatment_note"] = note
         if e.get("treatment_date"):
             rec["treatment_date"] = e["treatment_date"]
     return rec
