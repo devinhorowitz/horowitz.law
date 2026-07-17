@@ -956,6 +956,10 @@ def rss_item(e):
 # but human-confirmed -- no auto lane -- so this renderer only ever projects legislation.json.
 
 _LEG_STATUS_LABEL = {"enacted": "Enacted", "vetoed": "Vetoed"}
+# Jurisdiction label on a legislation card: Georgia is the core, U.S. Congress the federal overlay
+# (the FAAAA / motor-carrier and federal-jurisdiction statutes that reach a Georgia practice), the
+# same core-plus-federal shape the opinion feed carries. An unknown code renders as itself.
+_LEG_JURIS = {"GA": "Ga.", "US": "U.S."}
 _LEG_EMPTY = ('      <div class="leg-empty">No enacted legislation is carded yet. This watch fills as '
               'the Georgia General Assembly acts — each entry is a bill that became law (signed, or '
               'allowed to become law without signature) or was vetoed, read for civil-litigation impact '
@@ -999,11 +1003,14 @@ def legislation_card_html(c):
            if url else "")
     official = (f' · <a href="{_attr(state_link)}" target="_blank" rel="noopener noreferrer">state page</a>'
                 if state_link else "")
+    st = (c.get("state") or "").strip().upper()
+    juris = _LEG_JURIS.get(st, st)
+    juris_html = f'<span class="leg-juris">{_esc(juris)}</span>' if juris else ""
     return (
         f'      <article id="leg-{int(c["bill_id"])}" class="leg" data-status="{status_class}" '
-        f'data-areas="{",".join(areas)}" data-date="{_attr(date)}">\n'
+        f'data-juris="{_attr(st.lower())}" data-areas="{",".join(areas)}" data-date="{_attr(date)}">\n'
         f'        <div class="leg-head"><span class="leg-status leg-{status_class}">{_esc(slabel)}</span>'
-        f'<span class="leg-number">{_esc(c.get("number") or "")}</span>'
+        f'{juris_html}<span class="leg-number">{_esc(c.get("number") or "")}</span>'
         f'<span class="leg-date">{_esc(date_lbl)}</span></div>\n'
         f'        <div class="leg-title">{_esc((c.get("title") or "").strip())}</div>\n'
         + (f'        <div class="leg-tags">{tags}</div>\n' if tags else "")
@@ -1021,7 +1028,9 @@ def legislation_card_html(c):
 def legislation_rss_item(c):
     status = (c.get("status") or "").strip().lower()
     slabel = _LEG_STATUS_LABEL.get(status, status.title() or "Update")
-    cats = [slabel] + [AREA_LABELS[a] for a in (c.get("areas") or []) if a in AREA_LABELS]
+    st = (c.get("state") or "").strip().upper()
+    cats = [slabel] + ([_LEG_JURIS.get(st, st)] if st else []) \
+        + [AREA_LABELS[a] for a in (c.get("areas") or []) if a in AREA_LABELS]
     desc = str(c.get("synopsis") or "")
     impact = (c.get("impact") or "").strip()
     if impact:

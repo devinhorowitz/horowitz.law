@@ -78,18 +78,54 @@ BILLS = {
 }
 
 
+# --- a fake U.S. Congress: one relevant federal statute (FAAAA/motor-carrier) and one not (NDAA) ---
+US_SESSIONS = {
+    "status": "OK",
+    "sessions": [
+        {"session_id": 3000, "year_start": 2025, "year_end": 2026, "session_name": "119th Congress"},
+    ],
+}
+US_MASTERLIST = {
+    "status": "OK",
+    "masterlist": {
+        "session": {"session_id": 3000, "session_name": "119th Congress"},
+        "0": {"bill_id": 5001, "number": "HR 100", "change_hash": "h-hr100-v1", "status": 4,
+              "status_date": "2025-06-01", "url": "https://legiscan.com/US/bill/HR100/2025",
+              "title": "Motor Carrier Safety and FAAAA Preemption Clarification Act",
+              "description": "Amends 49 U.S.C. 14501 to clarify FAAAA preemption of negligent-hiring "
+                             "claims against motor-carrier brokers."},
+        "1": {"bill_id": 5002, "number": "HR 200", "change_hash": "h-hr200-v1", "status": 4,
+              "status_date": "2025-06-02", "url": "https://legiscan.com/US/bill/HR200/2025",
+              "title": "National Defense Authorization Act for FY2026",
+              "description": "Authorizes appropriations for the Department of Defense."},
+    },
+}
+US_BILLS = {
+    5001: {"bill_id": 5001, "number": "HR 100", "status": 4, "status_date": "2025-06-01",
+           "change_hash": "h-hr100-v1", "url": "https://legiscan.com/US/bill/HR100/2025",
+           "title": "Motor Carrier Safety and FAAAA Preemption Clarification Act",
+           "description": "Amends 49 U.S.C. 14501 to clarify FAAAA preemption of negligent-hiring "
+                          "claims against motor-carrier brokers."},
+    5002: {"bill_id": 5002, "number": "HR 200", "status": 4, "status_date": "2025-06-02",
+           "change_hash": "h-hr200-v1", "title": "National Defense Authorization Act for FY2026",
+           "description": "Authorizes appropriations for the Department of Defense."},
+}
+
+
 def fake_fetch(url):
     q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
     op = q.get("op", [""])[0]
+    state = q.get("state", ["GA"])[0].upper()
     if q.get("key", [""])[0] == "BADKEY":
         return json.dumps({"status": "ERROR", "alert": {"message": "Invalid API Key"}})
     if op == "getSessionList":
-        return json.dumps(SESSIONS)
+        return json.dumps(US_SESSIONS if state == "US" else SESSIONS)
     if op == "getMasterList":
-        return json.dumps(MASTERLIST)
+        sid = int(q.get("id", ["0"])[0])
+        return json.dumps(US_MASTERLIST if sid == 3000 else MASTERLIST)
     if op == "getBill":
         bid = int(q.get("id", ["0"])[0])
-        return json.dumps({"status": "OK", "bill": BILLS.get(bid, {})})
+        return json.dumps({"status": "OK", "bill": US_BILLS.get(bid) or BILLS.get(bid, {})})
     return json.dumps({"status": "ERROR", "alert": {"message": "unknown op"}})
 
 
@@ -220,8 +256,45 @@ def main():
     check("a transient writer error leaves the bill un-seen (retries next run)",
           "111" not in seen_err and "222" not in seen_err)
 
+    # --- federal overlay (LegiScan state="US") ---
+    check("federal screen is STRICT (default DROP)", "default is DROP" in L._screen_system("US"))
+    check("georgia screen is PERMISSIVE", "PERMISSIVE" in L._screen_system("GA"))
+    check("federal writer prompt frames reaching a Georgia practice",
+          "GEORGIA civil practice" in L._write_system("US"))
+    us_bill = US_BILLS[5001]
+    check("build_card stamps the federal jurisdiction on a US card",
+          L.build_card(us_bill, good_v, state="US")["state"] == "US")
+    check("_bill_brief labels the jurisdiction for the model",
+          "federal (U.S. Congress)" in L._bill_brief(us_bill, "US"))
+
+    # A strict federal screen (drops NDAA/appropriations, keeps the FAAAA statute); the writer keeps.
+    def us_screen(body):
+        txt = body["messages"][0]["content"].lower()
+        rel = ("faaaa" in txt or "motor carrier" in txt or "14501" in txt) and "appropriations" not in txt
+        return {"relevant": rel, "areas": ["auto"], "reason": "x"}
+
+    us_ai = make_ai({"leg-screen": us_screen, "leg-write": write_router})
+    fed_cards, fed_notes, _ = L.run(key="GOODKEY", fetch=fake_fetch, ai=us_ai, states=["US"],
+                                    today=__import__("datetime").date(2026, 7, 17))
+    fed_ids = {c["bill_id"] for c in fed_cards}
+    check("federal run cards the FAAAA / motor-carrier statute", 5001 in fed_ids)
+    check("federal run drops the NDAA / appropriations statute", 5002 not in fed_ids)
+    check("federal card carries state US", all(c["state"] == "US" for c in fed_cards))
+
+    # Both jurisdictions in one run, into one card set keyed on the globally-unique bill_id.
+    both_ai = make_ai({"leg-screen": lambda b: (us_screen(b) if "u.s. congress" in b["messages"][0]["content"].lower()
+                                                else screen_router(b)),
+                       "leg-write": write_router})
+    both, bnotes, _ = L.run(key="GOODKEY", fetch=fake_fetch, ai=both_ai, states=["GA", "US"],
+                            today=__import__("datetime").date(2026, 7, 17))
+    both_ids = {c["bill_id"] for c in both}
+    check("multi-state run carries Georgia and federal cards together",
+          111 in both_ids and 5001 in both_ids)
+    check("multi-state run drops both jurisdictions' noise", 444 not in both_ids and 5002 not in both_ids)
+    check("multi-state run notes each jurisdiction", any("[GA]" in n for n in bnotes) and any("[US]" in n for n in bnotes))
+
     # --- run honors LEGISLATION_MAX ---
-    capped, cnotes, _ = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, max_run=1,
+    capped, cnotes, _ = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, max_run=1, states=["GA"],
                               today=__import__("datetime").date(2026, 7, 17))
     check("run honors max_run and says remaining bills retry",
           len(capped) == 1 and any("LEGISLATION_MAX" in n for n in cnotes))

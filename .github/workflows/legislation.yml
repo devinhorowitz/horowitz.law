@@ -69,7 +69,10 @@ jobs:
         env:
           LEGISCAN_API_KEY: ${{ secrets.LEGISCAN_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          LEGISLATION_STATE: ${{ vars.LEGISLATION_STATE || 'GA' }}
+          # Georgia is the curated core; US is the federal overlay (FAAAA / motor-carrier and
+          # federal-jurisdiction statutes that reach a Georgia practice), screened strictly. Set the
+          # LEGISLATION_STATES repo Variable to narrow (e.g. 'GA') or widen without editing this file.
+          LEGISLATION_STATES: ${{ vars.LEGISLATION_STATES || 'GA,US' }}
           LEGISLATION_SCREEN_MODEL: ${{ vars.LEGISLATION_SCREEN_MODEL || 'claude-haiku-4-5' }}
           LEGISLATION_MODEL: ${{ vars.LEGISLATION_MODEL || 'claude-opus-4-8' }}
           LEGISLATION_MAX: ${{ vars.LEGISLATION_MAX || '40' }}

@@ -20,10 +20,14 @@ Case law, regulations, and statutes are three different watches, not one:
   automate; a manual once-a-year check is often the right tool. Not in v1.
 
 Congress matters to this practice mainly through a handful of statutes — the **FAAAA**
-preemption that governs motor-carrier claims, the statutes that authorize FMCSA — and those ride
-the *same* funnel as Georgia with `LEGISLATION_STATE=US`. It is off by default because the federal
-*legislative* surface relevant here is thin, and the federal *regulatory* surface (FMCSA) is the
-part that actually moves — and that is a Federal Register job, above.
+preemption that governs motor-carrier claims, the statutes that authorize FMCSA, the federal
+jurisdiction statutes (diversity, removal, CAFA) — and those ride the *same* funnel as Georgia
+with `LEGISLATION_STATES=GA,US`. Georgia is the curated core, screened permissively; the federal
+overlay is screened **strictly** (default DROP), because almost all enacted federal law
+(appropriations, the NDAA, foreign affairs) is irrelevant and only a narrow set reaches a state
+civil practice. This is exactly the core-plus-federal shape the opinion feed already has. Note the
+federal *legislative* surface relevant here is genuinely thin — the federal *regulatory* surface
+(FMCSA) is the part that actually moves, and that is a Federal Register job (above), not this one.
 
 ## The data-source unlock: LegiScan
 
@@ -131,7 +135,8 @@ Preview it by hand first (needs both keys):
 LEGISCAN_API_KEY=... ANTHROPIC_API_KEY=... python scripts/legislation.py --json
 ```
 
-Optional repo Variables tune it without editing code: `LEGISLATION_STATE` (default `GA`),
+Optional repo Variables tune it without editing code: `LEGISLATION_STATES` (default `GA,US` — a
+comma list of LegiScan jurisdictions; set to `GA` to drop the federal overlay), plus
 `LEGISLATION_SCREEN_MODEL`, `LEGISLATION_MODEL`, `LEGISLATION_MAX`.
 
 ## Status
@@ -140,7 +145,9 @@ Optional repo Variables tune it without editing code: `LEGISLATION_STATE` (defau
   (`scripts/test_legislation.py`); the public `/legislation` page and `legislation.xml` feed
   (rendered by `scripts/render.py`, registered in `siteconfig.PAGES` and `check_site.py`, covered
   by the CI idempotency and CSP/token guards); and the weekly `legislation.yml` workflow with its
-  review-PR wiring. Add the key to turn it on.
-- **Later, by source:** the federal statute watch (`LEGISLATION_STATE=US`, for the FAAAA and the
-  FMCSA authorizing statutes); the FMCSA **regulatory** watch (Federal Register API); the FRCP/FRE
-  rules check (uscourts.gov, low-frequency).
+  review-PR wiring; and the **federal statute overlay** (`LEGISLATION_STATES=GA,US`) — the FAAAA /
+  motor-carrier and federal-jurisdiction statutes that reach a Georgia practice, screened strictly,
+  rendered with a `U.S.` jurisdiction label beside the Georgia core on the same page. Add the key
+  to turn it all on.
+- **Later, by source:** the FMCSA **regulatory** watch (Federal Register API — where FMCSA actually
+  moves); the FRCP/FRE rules check (uscourts.gov, low-frequency).

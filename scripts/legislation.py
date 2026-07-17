@@ -43,7 +43,9 @@ Add --json to print the drafted cards as JSON.
 Environment:
   LEGISCAN_API_KEY        required to reach live data; absent = fail-open no-op
   ANTHROPIC_API_KEY       required for the relevance screen and the writer
-  LEGISLATION_STATE       LegiScan state code to watch (default "GA")
+  LEGISLATION_STATES      comma list of LegiScan jurisdictions to watch (default "GA"; the workflow
+                          sets "GA,US"). "US" is the federal overlay, screened strictly. The legacy
+                          single-state alias LEGISLATION_STATE is still accepted.
   LEGISLATION_SCREEN_MODEL relevance screen model (default claude-haiku-4-5)
   LEGISLATION_MODEL       card writer model (default claude-opus-4-8)
   LEGISLATION_MAX         cap on bills sent to the writer per run (default 40)
@@ -66,7 +68,24 @@ STATE_PATH = os.path.join(REPO, "legislation_state.json")
 LOG_PATH   = os.path.join(REPO, "legislation_log.jsonl")
 
 KEY_LEGISCAN = os.environ.get("LEGISCAN_API_KEY", "")
-STATE_CODE   = (os.environ.get("LEGISLATION_STATE", "GA") or "GA").strip().upper()
+DEFAULT_STATE = "GA"
+# The LegiScan jurisdictions to watch, in order. "GA" is the Georgia General Assembly; "US" is the
+# U.S. Congress, whose relevant surface for this practice is narrow -- the FAAAA motor-carrier
+# preemption statute (49 U.S.C. 14501), statutes authorizing/amending the FMCSA, and the federal
+# jurisdiction/procedure statutes that reach a state civil practice -- not FMCSA *regulations*
+# (Federal Register) or the FRCP (uscourts.gov), which are separate sources. LEGISLATION_STATE is
+# accepted as the legacy single-state alias. Cards from all states share one legislation.json,
+# keyed on the globally-unique LegiScan bill_id.
+def _states():
+    raw = os.environ.get("LEGISLATION_STATES") or os.environ.get("LEGISLATION_STATE") or DEFAULT_STATE
+    seen, out = set(), []
+    for s in raw.split(","):
+        s = s.strip().upper()
+        if s and s not in seen:
+            seen.add(s); out.append(s)
+    return out or [DEFAULT_STATE]
+
+LEGISLATION_STATES = _states()
 SCREEN_MODEL = os.environ.get("LEGISLATION_SCREEN_MODEL", "claude-haiku-4-5")
 WRITE_MODEL  = os.environ.get("LEGISLATION_MODEL", "claude-opus-4-8")
 MAX_RUN      = int(os.environ.get("LEGISLATION_MAX", "40"))
@@ -230,43 +249,78 @@ def act_number(bill):
 # --------------------------------------------------------------------------- #
 # The funnel: relevance screen (cheap) then the card writer (expensive).       #
 # --------------------------------------------------------------------------- #
-SCREEN_SYSTEM = (
-    "You are a triage filter for a Georgia civil-litigation and insurance-defense law "
-    "practice. You are shown a Georgia bill that has become law (or been vetoed). Decide "
-    "whether it plausibly affects that practice: tort/negligence liability, damages "
-    "(including caps and apportionment), civil procedure, evidence, insurance (coverage, "
-    "bad faith), premises liability, negligent security, expert testimony, motor-carrier / "
-    "trucking, wrongful death, or the courts and litigation generally. Be PERMISSIVE: if it "
-    "plausibly touches civil litigation or you are unsure, keep it. DROP only what is clearly "
-    "unrelated: appropriations and the budget, criminal-only law, licensing boards, local and "
-    "special acts, elections, education, tax administration, procurement, naming/commendation. "
-    "Reply with ONLY a JSON object: {\"relevant\": true|false, \"areas\": [codes], "
-    "\"reason\": \"<=15 words\"}. Valid area codes: " + AREA_CODES_STR + "."
-)
-
-WRITE_SYSTEM = (
-    "You write for a Georgia civil-litigation and insurance-defense audience of practicing "
-    "lawyers. Given a Georgia bill that has become law (or been vetoed), write a tight, "
-    "neutral, plain-English card describing what the law actually changes and why a civil "
-    "litigator should care. No hype, no editorializing, no legislative history recap. State "
-    "what the prior rule was and what it now is where you can tell; if the text does not make "
-    "a detail clear, say so rather than guessing. Ground every statement in the provided title "
-    "and description -- do not invent code sections, effective dates, or dollar figures that are "
-    "not present. Reply with ONLY a JSON object: {\"keep\": true|false, \"areas\": [codes], "
-    "\"synopsis\": \"2-4 sentences\", \"impact\": \"one sentence, <=30 words\", "
-    "\"effective_date\": \"YYYY-MM-DD or empty if not stated\"}. Set keep=false if, on a full "
-    "read, the bill does not in fact affect civil litigation. Valid area codes: "
-    + AREA_CODES_STR + "."
-)
+# The screen framing differs by jurisdiction. Georgia is the curated core: be PERMISSIVE, because
+# a state civil-litigation bill is common. Congress is a federal OVERLAY: be STRICT, because the
+# base rate of relevance is tiny -- almost all enacted federal law (appropriations, the NDAA,
+# foreign affairs, agency reauthorizations, tax administration, post-office namings) is irrelevant
+# to a state personal-injury / insurance-defense practice, and only a narrow set actually reaches
+# it. Getting this bar right is what keeps the federal overlay from flooding the feed with noise.
+def _label(state):
+    return {"GA": "Georgia", "US": "federal (U.S. Congress)"}.get(state, state)
 
 
-def _bill_brief(bill):
+def _screen_system(state):
+    if state == "US":
+        return (
+            "You are a strict triage filter for a Georgia civil-litigation and insurance-defense "
+            "law practice. You are shown a FEDERAL bill (U.S. Congress) that has become law or been "
+            "vetoed. Almost all federal law is IRRELEVANT to a state civil tort/insurance practice; "
+            "your default is DROP. Keep ONLY a bill that directly changes the ground such a practice "
+            "litigates on: motor-carrier / trucking law and FAAAA preemption (49 U.S.C. 14501), the "
+            "FMCSA's statutory mandate, federal diversity/removal or class-action jurisdiction (CAFA, "
+            "28 U.S.C. 1332/1441/1332(d)), the Rules Enabling Act or a statute directly amending the "
+            "Federal Rules of Civil Procedure or Evidence, federal caps or standards on tort damages, "
+            "or a federal insurance statute that preempts or overrides state coverage law. DROP "
+            "everything else: appropriations, the NDAA, foreign affairs, immigration, criminal law, "
+            "healthcare/benefits administration, agency reauthorizations unrelated to civil "
+            "litigation, tax, and namings/commendations. Reply with ONLY a JSON object: "
+            "{\"relevant\": true|false, \"areas\": [codes], \"reason\": \"<=15 words\"}. Valid area "
+            "codes: " + AREA_CODES_STR + "."
+        )
+    return (
+        "You are a triage filter for a Georgia civil-litigation and insurance-defense law "
+        "practice. You are shown a Georgia bill that has become law (or been vetoed). Decide "
+        "whether it plausibly affects that practice: tort/negligence liability, damages "
+        "(including caps and apportionment), civil procedure, evidence, insurance (coverage, "
+        "bad faith), premises liability, negligent security, expert testimony, motor-carrier / "
+        "trucking, wrongful death, or the courts and litigation generally. Be PERMISSIVE: if it "
+        "plausibly touches civil litigation or you are unsure, keep it. DROP only what is clearly "
+        "unrelated: appropriations and the budget, criminal-only law, licensing boards, local and "
+        "special acts, elections, education, tax administration, procurement, naming/commendation. "
+        "Reply with ONLY a JSON object: {\"relevant\": true|false, \"areas\": [codes], "
+        "\"reason\": \"<=15 words\"}. Valid area codes: " + AREA_CODES_STR + "."
+    )
+
+
+def _write_system(state):
+    origin = ("a federal bill (U.S. Congress) that has become law (or been vetoed)" if state == "US"
+              else "a Georgia bill that has become law (or been vetoed)")
+    fed = (" For a federal law, say plainly how it reaches a GEORGIA civil practice (for example, "
+           "by preempting or overriding state law, or by changing federal jurisdiction or the "
+           "federal rules)." if state == "US" else "")
+    return (
+        "You write for a Georgia civil-litigation and insurance-defense audience of practicing "
+        "lawyers. Given " + origin + ", write a tight, neutral, plain-English card describing what "
+        "the law actually changes and why a civil litigator should care." + fed + " No hype, no "
+        "editorializing, no legislative history recap. State what the prior rule was and what it "
+        "now is where you can tell; if the text does not make a detail clear, say so rather than "
+        "guessing. Ground every statement in the provided title and description -- do not invent "
+        "code sections, effective dates, or dollar figures that are not present. Reply with ONLY a "
+        "JSON object: {\"keep\": true|false, \"areas\": [codes], \"synopsis\": \"2-4 sentences\", "
+        "\"impact\": \"one sentence, <=30 words\", \"effective_date\": \"YYYY-MM-DD or empty if not "
+        "stated\"}. Set keep=false if, on a full read, the bill does not in fact affect a Georgia "
+        "civil practice. Valid area codes: " + AREA_CODES_STR + "."
+    )
+
+
+def _bill_brief(bill, state=DEFAULT_STATE):
     """The compact text block both model tiers read: identity + title + description.
     We deliberately do NOT fetch full bill text for v1 -- LegiScan bill descriptions are
     substantive summaries, and skipping the per-document getBillText call keeps a run to
     two model calls per surviving bill and one LegiScan call per enacted bill."""
     parts = [
-        "Bill: %s (%s)" % (bill.get("number") or bill.get("bill_number") or "?", STATE_CODE),
+        "Jurisdiction: %s" % _label(state),
+        "Bill: %s (%s)" % (bill.get("number") or bill.get("bill_number") or "?", state),
         "Status: %s" % STATUS_LABEL.get(int(bill.get("status") or 0), str(bill.get("status"))),
         "Status date: %s" % (bill.get("status_date") or ""),
         "Title: %s" % (bill.get("title") or ""),
@@ -278,14 +332,15 @@ def _bill_brief(bill):
     return "\n".join(p for p in parts if p)
 
 
-def screen_bill(bill, ai, model=None):
-    """Cheap relevance gate. Returns (keep: bool, areas: list, reason: str).
-    Fail-open on a model/parse error: keep the bill (route it to the writer, which
-    reads more and can still decline) rather than silently dropping a real law."""
+def screen_bill(bill, ai, state=DEFAULT_STATE, model=None):
+    """Cheap relevance gate, jurisdiction-aware (strict for the federal overlay). Returns
+    (keep: bool, areas: list, reason: str). Fail-open on a model/parse error: keep the bill
+    (route it to the writer, which reads more and can still decline) rather than silently
+    dropping a real law."""
     model = model or SCREEN_MODEL
     try:
-        v = ai({"model": model, "max_tokens": 256, "system": SCREEN_SYSTEM,
-                "messages": [{"role": "user", "content": _bill_brief(bill)}]}, "leg-screen")
+        v = ai({"model": model, "max_tokens": 256, "system": _screen_system(state),
+                "messages": [{"role": "user", "content": _bill_brief(bill, state)}]}, "leg-screen")
     except Exception as e:
         _dbg("screen failed, keeping: %s" % e)
         return True, [], "screen-error-kept"
@@ -302,13 +357,13 @@ def screen_bill(bill, ai, model=None):
 WRITER_ERROR = object()
 
 
-def write_card(bill, ai, model=None):
-    """The card writer. Returns a verdict dict on a keep, None on a DEFINITIVE decline, or the
-    WRITER_ERROR sentinel on a transient model/parse error. Never a partial card."""
+def write_card(bill, ai, state=DEFAULT_STATE, model=None):
+    """The card writer, jurisdiction-aware. Returns a verdict dict on a keep, None on a DEFINITIVE
+    decline, or the WRITER_ERROR sentinel on a transient model/parse error. Never a partial card."""
     model = model or WRITE_MODEL
     try:
-        v = ai({"model": model, "max_tokens": 900, "system": WRITE_SYSTEM,
-                "messages": [{"role": "user", "content": _bill_brief(bill)}]}, "leg-write")
+        v = ai({"model": model, "max_tokens": 900, "system": _write_system(state),
+                "messages": [{"role": "user", "content": _bill_brief(bill, state)}]}, "leg-write")
     except Exception as e:
         _dbg("write failed: %s" % e)
         return WRITER_ERROR
@@ -319,7 +374,7 @@ def write_card(bill, ai, model=None):
     return v
 
 
-def build_card(bill, verdict, today=None):
+def build_card(bill, verdict, state=DEFAULT_STATE, today=None):
     """Assemble a legislation card from a bill detail object and the writer verdict.
     Keyed on LegiScan bill_id (unique, stable, the permalink slug). Areas fall back to
     the screen's areas via the verdict; an empty area list is allowed (it still files
@@ -332,7 +387,7 @@ def build_card(bill, verdict, today=None):
         eff = ""
     return {
         "bill_id": int(bill.get("bill_id")),
-        "state": STATE_CODE,
+        "state": state,
         "number": bill.get("number") or bill.get("bill_number") or "",
         "title": (bill.get("title") or "").strip(),
         "status": STATUS_LABEL.get(status, str(status)),
@@ -351,16 +406,16 @@ def build_card(bill, verdict, today=None):
 # --------------------------------------------------------------------------- #
 # Orchestration.                                                              #
 # --------------------------------------------------------------------------- #
-def discover(key, fetch=None, today=None):
-    """Reach LegiScan and return the enacted/vetoed bills that have moved since we
-    last saw them, as (summary, session) pairs, newest sessions first. Reads
-    legislation_state.json for the seen change_hashes. Fail-open: returns [] on any
+def discover(key, state=DEFAULT_STATE, fetch=None, today=None, seen=None):
+    """Reach LegiScan for one jurisdiction and return the enacted/vetoed bills that have moved
+    since we last saw them, as (summary, session) pairs, newest sessions first. `seen` (str
+    bill_id -> change_hash) defaults to legislation_state.json. Fail-open: returns [] on any
     LegiScan error and logs it."""
-    seen = _load_seen()
+    seen = _load_seen() if seen is None else seen
     try:
-        sess_payload = api("getSessionList", key, fetch=fetch, state=STATE_CODE)
+        sess_payload = api("getSessionList", key, fetch=fetch, state=state)
     except Exception as e:
-        _dbg("getSessionList failed: %s" % e)
+        _dbg("getSessionList %s failed: %s" % (state, e))
         return []
     sessions = sessions_to_watch(sess_payload.get("sessions"), today=today)
     cands = []
@@ -383,49 +438,56 @@ def _default_ai(body, label="call"):
     return update.anthropic_json(body, label)
 
 
-def run(key=None, fetch=None, ai=None, today=None, max_run=None):
-    """Full funnel: discover moved enacted/vetoed bills, screen, fetch detail, write.
-    Returns (cards, notes, seen_updates). `seen_updates` maps str(bill_id) -> change_hash for
-    every bill that reached a DEFINITIVE outcome this run (carded, or read and declined by the
-    screen or the writer), so the caller can record it as seen and never re-pay to screen it
-    unless it changes. A bill that only hit a transient error is deliberately absent, so it
-    retries next run. Writes nothing itself. Fail-open throughout."""
+def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None):
+    """Full funnel over every configured jurisdiction: discover moved enacted/vetoed bills, screen
+    (permissive for Georgia, strict for the federal overlay), fetch detail, write. Returns
+    (cards, notes, seen_updates). `seen_updates` maps str(bill_id) -> change_hash for every bill
+    that reached a DEFINITIVE outcome this run (carded, or read and declined by the screen or the
+    writer), so the caller can record it as seen and never re-pay to screen it unless it changes.
+    A bill that only hit a transient error is deliberately absent, so it retries next run. Writes
+    nothing itself. Fail-open throughout."""
     key = KEY_LEGISCAN if key is None else key
     ai = ai or _default_ai
     max_run = MAX_RUN if max_run is None else max_run
+    states = states or LEGISLATION_STATES
     notes = []
     seen_updates = {}
+    cards = []
     if not key:
         notes.append("LEGISLATION: no LEGISCAN_API_KEY; skipping (fail-open no-op).")
         return [], notes, seen_updates
-    cands = discover(key, fetch=fetch, today=today)
-    notes.append("LEGISLATION: %d enacted/vetoed bill(s) moved since last run." % len(cands))
-    cards = []
-    for b, _sess in cands:
-        if len(cards) >= max_run:
-            notes.append("LEGISLATION: hit LEGISLATION_MAX=%d; remaining bills retry next run." % max_run)
-            break
-        bid, ch = str(b.get("bill_id")), (b.get("change_hash") or "")
-        keep, areas, reason = screen_bill(b, ai)
-        if not keep:
-            _dbg("screen dropped %s: %s" % (b.get("number"), reason))
-            seen_updates[bid] = ch      # definitively not relevant; do not re-screen unless it changes
+    seen = _load_seen()
+    for state in states:
+        cands = discover(key, state=state, fetch=fetch, today=today, seen=seen)
+        notes.append("LEGISLATION[%s]: %d enacted/vetoed bill(s) moved since last run." % (state, len(cands)))
+        for b, _sess in cands:
+            if len(cards) >= max_run:
+                notes.append("LEGISLATION: hit LEGISLATION_MAX=%d; remaining bills retry next run." % max_run)
+                break
+            bid, ch = str(b.get("bill_id")), (b.get("change_hash") or "")
+            keep, areas, reason = screen_bill(b, ai, state=state)
+            if not keep:
+                _dbg("screen dropped %s %s: %s" % (state, b.get("number"), reason))
+                seen_updates[bid] = ch      # definitively not relevant; do not re-screen unless it changes
+                continue
+            detail = bill_detail(b.get("bill_id"), key, fetch=fetch) or b
+            # carry the freshest change_hash (the master list's) onto the detail for carding
+            if b.get("change_hash"):
+                detail["change_hash"] = b.get("change_hash")
+            verdict = write_card(detail, ai, state=state)
+            if verdict is WRITER_ERROR:
+                continue                    # transient: no seen record, retry next run
+            if verdict is None:
+                seen_updates[bid] = ch      # writer read it and declined: definitive
+                continue
+            # let the screen's areas fill in if the writer returned none
+            if not verdict.get("areas") and areas:
+                verdict["areas"] = areas
+            cards.append(build_card(detail, verdict, state=state, today=today))
+            seen_updates[bid] = ch
+        else:
             continue
-        detail = bill_detail(b.get("bill_id"), key, fetch=fetch) or b
-        # carry the freshest change_hash (the master list's) onto the detail for carding
-        if b.get("change_hash"):
-            detail["change_hash"] = b.get("change_hash")
-        verdict = write_card(detail, ai)
-        if verdict is WRITER_ERROR:
-            continue                    # transient: no seen record, retry next run
-        if verdict is None:
-            seen_updates[bid] = ch      # writer read it and declined: definitive
-            continue
-        # let the screen's areas fill in if the writer returned none
-        if not verdict.get("areas") and areas:
-            verdict["areas"] = areas
-        cards.append(build_card(detail, verdict, today=today))
-        seen_updates[bid] = ch
+        break   # inner loop hit max_run and broke; stop scanning further states this run
     notes.append("LEGISLATION: drafted %d card(s)." % len(cards))
     return cards, notes, seen_updates
 
