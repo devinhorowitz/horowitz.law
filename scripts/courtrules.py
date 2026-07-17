@@ -81,6 +81,9 @@ def _sources():
 
 SOURCES = _sources()
 MODEL = os.environ.get("COURTRULES_MODEL", "claude-opus-4-8")
+# The pending-amendments page can list many rules at once (a full FRCP/FRE/FRAP/FRBP cycle), so the
+# extraction JSON needs generous room; 1500 truncated mid-list. Configurable for a heavy year.
+EXTRACT_MAX_TOKENS = int(os.environ.get("COURTRULES_MAX_TOKENS", "8000"))
 DEBUG = os.environ.get("COURTRULES_DEBUG", "") == "1"
 
 # Rule sets a civil litigator cares about; the extractor is told to ignore criminal-only rules.
@@ -166,7 +169,7 @@ def extract(text, ai, model=None, label="courtrules"):
     if not text.strip():
         return []
     try:
-        v = ai({"model": model, "max_tokens": 1500, "system": EXTRACT_SYSTEM,
+        v = ai({"model": model, "max_tokens": EXTRACT_MAX_TOKENS, "system": EXTRACT_SYSTEM,
                 "messages": [{"role": "user", "content": "PAGE TEXT:\n" + text}]}, label)
     except Exception as e:
         _dbg("extract failed: %s" % e)
