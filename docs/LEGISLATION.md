@@ -14,7 +14,8 @@ Case law, regulations, and statutes are three different watches, not one:
   *enactment*: signed, or became law without signature. This is what v1 covers, for Georgia.
 - **Agency regulations** — e.g. **FMCSA** rulemaking, which lives in the **Federal Register**
   (49 CFR 350–399), not in any legislature. A different source (the Federal Register API), a
-  different cadence, tracked separately. Not in v1.
+  different cadence — **now shipped** as a sibling watch (`scripts/regulations.py`), rendered in
+  its own "Federal regulations" section of the /legislation page. See below.
 - **Court rules** — the **FRCP / FRE**, which change through the Rules Enabling Act on a slow
   annual cycle and are published by uscourts.gov, not enacted as ordinary statutes. Lowest ROI to
   automate; a manual once-a-year check is often the right tool. Not in v1.
@@ -109,18 +110,38 @@ Keyed on `bill_id`. One object per bill:
 `merge_cards` keys on `bill_id`: a re-carded bill (its `change_hash` moved — an amendment, a
 correction) replaces its card but keeps the original `first_seen`.
 
+## The FMCSA regulatory watch (a sibling source)
+
+`scripts/regulations.py` watches **agency rulemaking**, not statutes: FMCSA (and, by config, kindred
+agencies like NHTSA/PHMSA) **final rules** in the Federal Register — the regulatory analog of a
+statute that became law. The source is the **Federal Register API** (federalregister.gov), which is
+**public and keyless** — no secret to add. It filters to the agency and to final rules, reads the
+abstract + CFR references the endpoint already returns (so a run is a single paginated fetch, no
+per-document call), and runs the same cheapest-first funnel. A Federal Register document is
+**immutable** once published, so `seen` is just a set of processed `document_number`s (no
+change_hash). The relevance screen is moderately strict: it keeps substantive safety, liability, and
+financial-responsibility (insurance) rules and drops fee/technical/administrative ones.
+
+Regulation cards render in a **"Federal regulations"** section of the same /legislation page (with
+their own `regulations.xml` feed), because statutes and regulations are the two halves of "law that
+moved" for this practice. The card schema keys on `document_number` and carries the agency, rule
+type (Final/Proposed), CFR references, RIN, and effective date.
+
 ## The workflow
 
-`.github/workflows/legislation.yml` runs weekly (Sundays), under Harden-Runner block mode with only
-`api.legiscan.com`, `api.anthropic.com`, and the install/GitHub hosts on its allowlist. It mirrors
-the opinion pipeline's commit model:
+`.github/workflows/legislation.yml` — one **Legislative & Regulatory Watch** job — runs weekly
+(Sundays) under Harden-Runner block mode with `api.legiscan.com`, `www.federalregister.gov`,
+`api.anthropic.com`, and the install/GitHub hosts on its allowlist. It runs both watches, renders
+once, and mirrors the opinion pipeline's commit model:
 
-- **New/updated cards** → re-render and open (or update) the `bot/legislation-review` PR for a
-  person to confirm. Merge to publish; edit `legislation.json` on the branch to correct.
-- **No new cards** → commit only the advanced seen-state and run log straight to `main` with
-  `[skip ci]` (a settled non-match must not be re-screened, but nothing public changes).
+- **New/updated cards in either watch** → re-render the shared page + both feeds and open (or
+  update) the one `bot/legislation-review` PR (a combined body) for a person to confirm. Merge to
+  publish; edit `legislation.json` / `regulations.json` on the branch to correct.
+- **Nothing new** → commit only the advanced seen-state and run logs straight to `main` with
+  `[skip ci]`.
 
-A manual dispatch defaults to `dry_run` (prints the drafted cards, writes nothing).
+A manual dispatch defaults to `dry_run` (prints the drafted cards, writes nothing). The regulatory
+half runs with no key, so it works on the first scheduled run even before `LEGISCAN_API_KEY` is set.
 
 ## Going live
 
@@ -149,5 +170,8 @@ comma list of LegiScan jurisdictions; set to `GA` to drop the federal overlay), 
   motor-carrier and federal-jurisdiction statutes that reach a Georgia practice, screened strictly,
   rendered with a `U.S.` jurisdiction label beside the Georgia core on the same page. Add the key
   to turn it all on.
-- **Later, by source:** the FMCSA **regulatory** watch (Federal Register API — where FMCSA actually
-  moves); the FRCP/FRE rules check (uscourts.gov, low-frequency).
+- **Shipped (regulations):** the **FMCSA regulatory watch** (`scripts/regulations.py` +
+  `test_regulations.py`) — Federal Register final rules in 49 CFR, keyless, rendered in the
+  "Federal regulations" section with its own `regulations.xml` feed, run by the same weekly workflow.
+- **Later, by source:** the FRCP/FRE rules check (uscourts.gov, low-frequency); additional agencies
+  (NHTSA vehicle-safety, PHMSA hazmat) — one entry in the `REGULATION_AGENCIES` Variable each.

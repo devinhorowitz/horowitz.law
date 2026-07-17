@@ -116,4 +116,4 @@ jobs:
           # -N (intent-to-add) makes never-committed generated files visible to
           # the diff, so a forgotten o/ upload fails here instead of 404ing live.
           git add -N public/o
-          git diff --exit-code -- public/opinions.html public/archive.html public/opinions.xml public/sitemap.xml public/index.html public/resume.html public/colophon.html public/subscribe.html public/404.html public/changes.html public/stats.html public/digests.html public/changes.xml public/legislation.html public/legislation.xml public/o public/areas public/devin-horowitz.vcf
+          git diff --exit-code -- public/opinions.html public/archive.html public/opinions.xml public/sitemap.xml public/index.html public/resume.html public/colophon.html public/subscribe.html public/404.html public/changes.html public/stats.html public/digests.html public/changes.xml public/legislation.html public/legislation.xml public/regulations.xml public/o public/areas public/devin-horowitz.vcf

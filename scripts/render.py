@@ -58,6 +58,11 @@ NOTFOUND_PATH = os.path.join(WEB, "404.html")
 LEG_JSON_PATH = os.path.join(REPO, "legislation.json")
 LEG_HTML_PATH = os.path.join(WEB, "legislation.html")
 LEG_XML_PATH  = os.path.join(WEB, "legislation.xml")
+# Federal regulatory watch (FMCSA rulemaking; see scripts/regulations.py). Regulation cards render
+# in their own section of the SAME /legislation page (statutes + regulations are the two halves of
+# "law that moved" for this practice); regulations.json is the source, regulations.xml the feed.
+REG_JSON_PATH = os.path.join(REPO, "regulations.json")
+REG_XML_PATH  = os.path.join(WEB, "regulations.xml")
 # Pages outside the marker-injection set whose footer year would otherwise rot on
 # Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
 # place, writing only when the year actually changed, so it is a no-op all year;
@@ -82,7 +87,7 @@ def _rel(p):
 OUTPUT_PATHS = sorted({_rel(p) for p in (
     STATIC_PAGES + [HTML_PATH, ARCHIVE_PATH, XML_PATH, SITEMAP_PATH, CHANGES_PATH, STATS_PATH,
                     CHANGES_XML_PATH, DIGESTS_PATH, SECURITY_TXT_PATH, VCARD_PATH,
-                    LEG_HTML_PATH, LEG_XML_PATH,
+                    LEG_HTML_PATH, LEG_XML_PATH, REG_XML_PATH,
                     PERMA_DIR, AREAS_DIR])})
 
 _YEAR_RE = re.compile(r'(&copy;|\u00a9)\s*\d{4}')
@@ -1065,13 +1070,7 @@ def render_legislation():
                          if isinstance(c, dict) and c.get("bill_id") is not None])
     if os.path.exists(LEG_HTML_PATH):
         body = "\n\n".join(legislation_card_html(c) for c in cards) if cards else _LEG_EMPTY
-        _inject(LEG_HTML_PATH, "legislation", body)
-        # Self-contained stamp (tokens + footer year + identity hooks), like the STATIC_PAGES loop
-        # does for the hand-authored pages; this page is neither injected-only nor fully static.
-        doc = open(LEG_HTML_PATH, encoding="utf-8").read()
-        stamped = _stamp_tokens(_stamp_year(_stamp_identity(doc)))
-        if stamped != doc:
-            safeio.atomic_write_text(LEG_HTML_PATH, stamped)
+        _inject(LEG_HTML_PATH, "legislation", body)  # the page is stamped once, after both sections
 
     build = (_rfc822(cards[0]["status_date"])
              if (cards and _valid_date(cards[0].get("status_date") or ""))
@@ -1092,6 +1091,143 @@ def render_legislation():
     out += [legislation_rss_item(c) for c in cards]
     out += ['  </channel>', '</rss>', '']
     safeio.atomic_write_text(LEG_XML_PATH, "\n".join(out))
+
+
+# ---- Federal regulations (a second section on the same /legislation page) ----
+_REG_EMPTY = ('      <div class="leg-empty">No federal regulations are carded yet. This section fills '
+              'as the FMCSA (and kindred agencies) issue rules in the Federal Register that reach a '
+              'Georgia trucking practice — read for civil-litigation impact and confirmed by hand.</div>')
+
+
+def load_regulations():
+    try:
+        with open(REG_JSON_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except FileNotFoundError:
+        return []
+    except Exception:
+        return []
+
+
+def _reg_sorted(cards):
+    return sorted(cards, key=lambda c: (str(c.get("publication_date") or ""),
+                                        str(c.get("document_number") or "")), reverse=True)
+
+
+def regulation_card_html(c):
+    typ = (c.get("type") or "Rule").strip()
+    type_class = "final" if typ.lower().startswith("final") else ("proposed" if "propos" in typ.lower() else "other")
+    areas = [a for a in (c.get("areas") or []) if a in AREA_LABELS]
+    tags = "".join(f'<span class="tag">{_esc(AREA_LABELS[a])}</span>' for a in areas)
+    date = c.get("publication_date") or ""
+    date_lbl = _date_label(date) if _valid_date(date) else date
+    impact = (c.get("impact") or "").strip()
+    impact_html = (f'        <p class="leg-why"><strong>Why it matters:</strong> {_esc(impact)}</p>\n'
+                   if impact else "")
+    eff = (c.get("effective_date") or "").strip()
+    eff_html = (f'          <span class="leg-eff">Effective {_esc(_date_label(eff) if _valid_date(eff) else eff)}</span>\n'
+                if eff else "")
+    url = _safe_url(c.get("url") or "")
+    src = (f'<a href="{_attr(url)}" target="_blank" rel="noopener noreferrer">Federal Register →</a>'
+           if url else "")
+    agency = (c.get("agency") or "").strip()
+    agency_html = f'<span class="leg-juris">{_esc(agency)}</span>' if agency else ""
+    cfr = (c.get("cfr") or "").strip()
+    cfr_html = f'<span class="leg-number">{_esc(cfr)}</span>' if cfr else ""
+    return (
+        f'      <article id="reg-{_attr(str(c.get("document_number") or ""))}" class="leg" '
+        f'data-type="{type_class}" data-areas="{",".join(areas)}" data-date="{_attr(date)}">\n'
+        f'        <div class="leg-head"><span class="leg-type leg-type-{type_class}">{_esc(typ)}</span>'
+        f'{agency_html}{cfr_html}<span class="leg-date">{_esc(date_lbl)}</span></div>\n'
+        f'        <div class="leg-title">{_esc((c.get("title") or "").strip())}</div>\n'
+        + (f'        <div class="leg-tags">{tags}</div>\n' if tags else "")
+        + f'        <p class="leg-synopsis">{_esc((c.get("synopsis") or "").strip())}</p>\n'
+        + impact_html
+        + '        <div class="leg-foot">\n'
+        + (f'          <span class="leg-source">{src}</span>\n' if src else "")
+        + eff_html
+        + '          <span class="leg-disclaimer">AI-drafted summary · verify against the rule</span>\n'
+        + '        </div>\n'
+        + '      </article>'
+    )
+
+
+def regulation_rss_item(c):
+    typ = (c.get("type") or "Rule").strip()
+    cats = [typ] + ([c.get("agency")] if c.get("agency") else []) \
+        + [AREA_LABELS[a] for a in (c.get("areas") or []) if a in AREA_LABELS]
+    desc = str(c.get("synopsis") or "")
+    impact = (c.get("impact") or "").strip()
+    if impact:
+        desc += " Why it matters: " + impact
+    if (c.get("cfr") or "").strip():
+        desc += " (" + c["cfr"].strip() + ")"
+    eff = (c.get("effective_date") or "").strip()
+    if eff:
+        desc += " Effective %s." % eff
+    desc += " AI-drafted summary. Verify against the Federal Register document."
+    url = c.get("url") or ""
+    if url:
+        desc += " " + url
+    desc = _xml_safe(desc).replace("]]>", "]]]]><![CDATA[>")
+    title = ("%s — %s" % (c.get("agency") or "", (c.get("title") or "").strip())).strip(" —")
+    guid = url or ("urn:federalregister:%s" % c.get("document_number"))
+    date = c.get("publication_date") or ""
+    pub = _rfc822(date) if _valid_date(date) else _rfc822(datetime.date.today().isoformat())
+    lines = ["    <item>",
+             f"      <title>{xml_escape(_xml_safe(title))} ({xml_escape(typ)})</title>",
+             f"      <link>{xml_escape(url)}</link>",
+             f'      <guid isPermaLink="{"true" if url else "false"}">{xml_escape(guid)}</guid>',
+             f"      <pubDate>{pub}</pubDate>"]
+    lines += [f"      <category>{xml_escape(cat)}</category>" for cat in cats]
+    lines += [f"      <description><![CDATA[{desc}]]></description>", "    </item>"]
+    return "\n".join(lines)
+
+
+def render_regulations():
+    """Project regulations.json onto the /legislation page (between the regulations markers) and
+    regulations.xml. Deterministic from regulations.json; the page itself is stamped once by
+    render_legislation_page()."""
+    cards = _reg_sorted([c for c in load_regulations()
+                         if isinstance(c, dict) and c.get("document_number")])
+    if os.path.exists(LEG_HTML_PATH):
+        body = "\n\n".join(regulation_card_html(c) for c in cards) if cards else _REG_EMPTY
+        _inject(LEG_HTML_PATH, "regulations", body)
+
+    build = (_rfc822(cards[0]["publication_date"])
+             if (cards and _valid_date(cards[0].get("publication_date") or ""))
+             else _rfc822(datetime.date.today().isoformat()))
+    desc = ("Federal agency rulemaking (FMCSA and kindred agencies) that reaches a Georgia trucking / "
+            "civil-litigation practice: safety standards, carrier and broker liability, and financial-"
+            "responsibility minimums in 49 CFR. From the Federal Register. Each summary is AI-drafted "
+            "and human-confirmed; the Federal Register document is the authority.")
+    out = ['<?xml version="1.0" encoding="UTF-8"?>',
+           '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
+           '  <channel>',
+           '    <title>horowitz.law: Federal Regulatory Watch</title>',
+           f'    <link>{SITE}/legislation</link>',
+           f'    <atom:link href="{SITE}/regulations.xml" rel="self" type="application/rss+xml" />',
+           f'    <description>{xml_escape(desc)}</description>',
+           '    <language>en-us</language>',
+           f'    <lastBuildDate>{build}</lastBuildDate>',
+           '    <generator>horowitz.law Federal Regulatory Watch (prototype)</generator>']
+    out += [regulation_rss_item(c) for c in cards]
+    out += ['  </channel>', '</rss>', '']
+    safeio.atomic_write_text(REG_XML_PATH, "\n".join(out))
+
+
+def render_legislation_page():
+    """Render both sections of the /legislation page (statutes + federal regulations) and their two
+    feeds, then stamp the page once (tokens + footer year + identity hooks). Deterministic; the CI
+    idempotency gate covers legislation.html, legislation.xml, and regulations.xml."""
+    render_legislation()
+    render_regulations()
+    if os.path.exists(LEG_HTML_PATH):
+        doc = open(LEG_HTML_PATH, encoding="utf-8").read()
+        stamped = _stamp_tokens(_stamp_year(_stamp_identity(doc)))
+        if stamped != doc:
+            safeio.atomic_write_text(LEG_HTML_PATH, stamped)
 
 
 def archive_html(entries):
@@ -1611,9 +1747,10 @@ def render(entries=None):
     out += ['  </channel>', '</rss>', '']
     safeio.atomic_write_text(XML_PATH, "\n".join(out))
 
-    # The Legislative Watch page + feed: a sibling projection, from legislation.json (see
-    # scripts/legislation.py). Independent of the opinion entries above; self-stamping.
-    render_legislation()
+    # The Legislative & Regulatory Watch page + feeds: sibling projections from legislation.json
+    # (statutes) and regulations.json (FMCSA rulemaking), two sections of the same /legislation
+    # page. Independent of the opinion entries above; the page is stamped once inside.
+    render_legislation_page()
 
     # The treatment ledger, its feed, the stats page, and the permalinks: all
     # deterministic projections of the same opinions.json the cards come from.
