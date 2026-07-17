@@ -88,6 +88,28 @@ def main():
               render._slice_entry(human)["treatment_note"] == "Good law for duty; overruled only on causation.")
         check("slice falls back to the auto note when there is no human note",
               render._slice_entry(base)["treatment_note"] == base["treatment_auto_note"])
+
+        # Adversarial card text must not break the feeds or the JSON-LD.
+        import re as _re
+        card = {"cluster_id": 9, "name": "X v. Y", "court": "ctapp", "date": "2026-01-01",
+                "dockets": ["A1"], "areas": ["auto"], "disposition": "affirmed",
+                "precedential": "published", "why": "matters", "url": "https://cl/9/",
+                "additional_holdings": []}
+
+        # JSON-LD: a U+2028/U+2029 in the text is a JS line terminator; it must be \u-escaped inside
+        # the <script>, never raw (which throws SyntaxError and drops the whole rich snippet).
+        LS, PS = chr(0x2028), chr(0x2029)
+        perma = render.permalink_html(dict(card, synopsis="holding" + LS + "then" + PS + "more <b> </script>"))
+        ld = _re.search(r'<script type="application/ld\+json">(.*?)</script>', perma, _re.S).group(1)
+        check("JSON-LD escapes U+2028 (no raw line-separator in the script)", LS not in ld and "\\u2028" in ld)
+        check("JSON-LD escapes U+2029", PS not in ld and "\\u2029" in ld)
+        check("JSON-LD still neutralizes < and > (no </script> breakout)",
+              "<" not in ld and ">" not in ld)
+
+        # RSS: an XML-1.0-illegal control char (bad PDF OCR) must be stripped, or the whole feed breaks.
+        item = render.rss_item(dict(card, name="X v. Y\x0b", synopsis="a\x08b\x0bc holding", why="w\x1fy"))
+        check("rss_item strips XML-illegal control chars", not _re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", item))
+        check("rss_item keeps legal whitespace and real text", "holding" in item and "X v. Y" in item)
     finally:
         restore()
 
