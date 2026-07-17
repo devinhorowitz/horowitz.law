@@ -60,7 +60,10 @@ def main():
 
     # --- card id + build_card ---
     check("card id is stable and case-insensitive on rule_set",
-          C._card_id("FRCP", "Rule 26", "2025-12-01") == C._card_id("frcp", "Rule 26", "2025-12-01"))
+          C._card_id("FRCP", "Rule 26") == C._card_id("frcp", "Rule 26"))
+    check("card id ignores the effective date so pending->effective updates in place, not duplicates",
+          C.build_card(dict(AMEND_26, status="pending", effective_date=""), "u")["id"]
+          == C.build_card(dict(AMEND_26, status="effective", effective_date="2025-12-01"), "u")["id"])
     card = C.build_card(AMEND_26, "https://uscourts.gov/x")
     check("build_card keys on the synthetic id and normalizes fields",
           card and card["rule_set"] == "FRCP" and card["status"] == "pending" and card["effective_date"] == "2025-12-01")
@@ -95,7 +98,7 @@ def main():
     check("run notes the page as unchanged", any("unchanged" in n for n in notes2))
 
     # --- run: an already-carded amendment is not re-carded ---
-    cid = C._card_id("FRCP", "Rule 26", "2025-12-01")
+    cid = C._card_id("FRCP", "Rule 26")
     with _m.patch.object(C, "_load_seen", lambda: {"pages": {}, "cards": {cid: "2026-01-01"}}):
         cards3, _, _ = C.run(fetch=lambda url: PAGE_V1, ai=ai_returning(AMEND_26), sources=[("Pending", "u")],
                              today=__import__("datetime").date(2026, 7, 17))

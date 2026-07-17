@@ -48,12 +48,15 @@ Environment:
                           single-state alias LEGISLATION_STATE is still accepted.
   LEGISLATION_SCREEN_MODEL relevance screen model (default claude-haiku-4-5)
   LEGISLATION_MODEL       card writer model (default claude-opus-4-8)
-  LEGISLATION_MAX         cap on bills sent to the writer per run (default 40)
+  LEGISLATION_MAX         cap on CARDS drafted per run (default 40)
+  LEGISLATION_SCREEN_MAX  cap on bills SCREENED per run (default 60); bounds a cold-start, the
+                          remainder rolls into the next run. Progress streams to stdout as it goes.
   LEGISCAN_MIN_INTERVAL   min seconds between real LegiScan calls (default 1.0; 0 disables). Courtesy
                           pacing per LegiScan's "play nice" guidance; applies only to live calls.
   LEGISLATION_DEBUG       if 1, log each step
 """
 import os
+import re
 import sys
 import json
 import time
@@ -91,8 +94,24 @@ def _states():
 LEGISLATION_STATES = _states()
 SCREEN_MODEL = os.environ.get("LEGISLATION_SCREEN_MODEL", "claude-haiku-4-5")
 WRITE_MODEL  = os.environ.get("LEGISLATION_MODEL", "claude-opus-4-8")
-MAX_RUN      = int(os.environ.get("LEGISLATION_MAX", "40"))
+MAX_RUN      = int(os.environ.get("LEGISLATION_MAX", "40"))     # cap on CARDS drafted per run
+# Cap on bills SCREENED per run. The cold-start problem: with an empty change_hash state every
+# enacted/vetoed bill in the whole biennium (plus US Congress) is "new", so an unbounded first run
+# screens hundreds serially. Bounding screens keeps every run short; the unscreened remainder is
+# left un-seen and simply rolls into the next weekly run, draining the backlog over a few Sundays.
+SCREEN_MAX   = int(os.environ.get("LEGISLATION_SCREEN_MAX", "60"))
 DEBUG        = os.environ.get("LEGISLATION_DEBUG", "") == "1"
+
+# LegiScan's page-7 "API Operations" timing table: the MINIMUM resolution at which each operation's
+# data can change. Polling faster than this returns unchanged, cached data that STILL spends a query
+# (LegiScan flags it as a "cache hit"). We persist the last-poll time per operation and skip a
+# re-poll inside its window -- caching the small session list so a skipped getSessionList still
+# works -- so the watch is provably compliant no matter how often it is triggered. getBill needs no
+# guard: it is already gated by change_hash, so an unchanged bill is never re-fetched. Seconds.
+POLL_MIN = {
+    "session": int(os.environ.get("LEGISCAN_SESSIONLIST_MIN", str(24 * 3600))),  # getSessionList: daily
+    "master":  int(os.environ.get("LEGISCAN_MASTERLIST_MIN", str(3600))),        # getMasterList: hourly
+}
 
 API_BASE   = "https://api.legiscan.com/"
 UA         = "horowitz.law Georgia Legislative Watch (contact: via horowitz.law)"
@@ -222,10 +241,35 @@ def masterlist_bills(payload):
     return out
 
 
-def enacted_candidates(bills, seen):
-    """From master-list summaries, the bills that (a) are enacted or vetoed and
-    (b) have moved since we last carded them -- a new bill_id, or a changed
-    change_hash on a known one. `seen` maps str(bill_id) -> last change_hash.
+# Resolution number-prefixes to skip BEFORE screening, per jurisdiction. A legislature adopts
+# ceremonial and procedural resolutions (commendations, condolences, memorials, chamber rules) by
+# the hundreds or thousands and marks them "passed", so without this they swamp the screen budget
+# and the substantive bills are never reached -- exactly what the first live run showed (60 screened,
+# all commendations, 0 cards). The prefix meaning is JURISDICTION-SPECIFIC: in Georgia "HR"/"SR" are
+# House/Senate Resolutions, but in the U.S. Congress "HR" is a House BILL and "S" a Senate bill, so
+# only true resolution prefixes are listed per state. (Georgia constitutional amendments are also
+# "HR" and are skipped with the rest; they are ratified at the ballot, not enacted as statutes.)
+_RESOLUTION_PREFIX = {
+    "GA": ("HR", "SR"),
+    # Congress simple/concurrent resolutions never become law. Both the THOMAS/GPO style
+    # (HRES/SRES/HCONRES/SCONRES) and the shorter HCR/SCR style are listed so the pre-screen
+    # filter catches them whichever way LegiScan normalizes the number. Joint resolutions
+    # (HJRES/SJRES) are deliberately NOT listed -- those can be enacted.
+    "US": ("HRES", "SRES", "HCONRES", "SCONRES", "HCR", "SCR"),
+}
+
+
+def is_resolution(number, state):
+    """True if a bill number is a (skippable) resolution in this jurisdiction. Keys off the
+    leading alpha prefix of the number; unknown states never skip (fail-open to screening)."""
+    m = re.match(r"[A-Za-z]+", str(number or "").replace(".", "").replace(" ", ""))
+    return bool(m) and m.group(0).upper() in _RESOLUTION_PREFIX.get(state, ())
+
+
+def enacted_candidates(bills, seen, state=None):
+    """From master-list summaries, the bills that (a) are enacted or vetoed, (b) are not ceremonial
+    resolutions for `state` (when given), and (c) have moved since we last carded them -- a new
+    bill_id, or a changed change_hash on a known one. `seen` maps str(bill_id) -> last change_hash.
 
     change_hash is the whole point of the master list: a run where nothing enacted
     changed returns [] after a single call, so the schedule is nearly free."""
@@ -237,8 +281,13 @@ def enacted_candidates(bills, seen):
             status = 0
         if status not in (STATUS_ENACTED, STATUS_VETOED):
             continue
+        if state and is_resolution(b.get("number") or b.get("bill_number"), state):
+            continue
         bid = str(b.get("bill_id"))
-        if seen.get(bid) and seen.get(bid) == b.get("change_hash"):
+        # Membership test (not truthiness) and a normalized change_hash, so a bill LegiScan returns
+        # with an empty/absent change_hash is still deduped once seen instead of re-screened forever
+        # (seen stores "" for a missing hash; "" is falsy, which the old `seen.get(bid) and ...` missed).
+        if bid in seen and seen[bid] == (b.get("change_hash") or ""):
             continue
         out.append(b)
     return out
@@ -250,23 +299,11 @@ def bill_detail(bill_id, key, fetch=None):
     so a single unreachable bill drops out of the run instead of failing it."""
     try:
         data = api("getBill", key, fetch=fetch, id=bill_id)
-    except (LegiScanError, urllib.error.URLError, TimeoutError, Exception) as e:
+    except Exception as e:   # fail-open: any error (LegiScan, transport, parse) drops this bill
         _dbg("getBill %s failed: %s" % (bill_id, e))
         return {}
     bill = data.get("bill")
     return bill if isinstance(bill, dict) else {}
-
-
-def act_number(bill):
-    """The chapter/act number a bill received on enactment, from its progress trail.
-    LegiScan progress events include 8 = 'Chapter/Act/Statute'. Returns '' if none
-    is recorded yet (LegiScan often carries the Act number in the last_action instead)."""
-    for ev in (bill.get("progress") or []):
-        if isinstance(ev, dict) and int(ev.get("event") or 0) == 8:
-            # LegiScan does not always split the act number out; the date is what it
-            # reliably carries. Callers use this only as a presence signal.
-            return str(ev.get("date") or "")
-    return ""
 
 
 # --------------------------------------------------------------------------- #
@@ -429,26 +466,79 @@ def build_card(bill, verdict, state=DEFAULT_STATE, today=None):
 # --------------------------------------------------------------------------- #
 # Orchestration.                                                              #
 # --------------------------------------------------------------------------- #
-def discover(key, state=DEFAULT_STATE, fetch=None, today=None, seen=None):
+def _fresh(polls, opkey, min_seconds, now):
+    """True if opkey was polled more recently than its LegiScan min-resolution window, so a re-poll
+    would only spend a cached query. `polls` maps opkey -> ISO datetime string. Missing/unparseable
+    timestamps are stale (poll)."""
+    ts = (polls or {}).get(opkey)
+    if not ts:
+        return False
+    try:
+        last = datetime.datetime.fromisoformat(ts)
+    except (ValueError, TypeError):
+        return False
+    return 0 <= (now - last).total_seconds() < min_seconds
+
+
+def discover(key, state=DEFAULT_STATE, fetch=None, today=None, seen=None, pollstate=None, now=None):
     """Reach LegiScan for one jurisdiction and return the enacted/vetoed bills that have moved
     since we last saw them, as (summary, session) pairs, newest sessions first. `seen` (str
-    bill_id -> change_hash) defaults to legislation_state.json. Fail-open: returns [] on any
-    LegiScan error and logs it."""
+    bill_id -> change_hash) defaults to legislation_state.json.
+
+    `pollstate` (a mutable dict with "polls" and "sessioncache", read AND updated in place)
+    enforces LegiScan's page-7 timing guidelines: getSessionList is skipped inside its 24h window
+    (the cached session list is reused) and getMasterList inside its 1h window (that session yields
+    no candidates this run), so a re-run never spends a cache-hit query. `now` is the reference
+    time (datetime). Fail-open: returns [] on any LegiScan error and logs it."""
     seen = _load_seen() if seen is None else seen
-    try:
-        sess_payload = api("getSessionList", key, fetch=fetch, state=state)
-    except Exception as e:
-        _dbg("getSessionList %s failed: %s" % (state, e))
-        return []
-    sessions = sessions_to_watch(sess_payload.get("sessions"), today=today)
+    now = now or datetime.datetime.now()
+    ps = pollstate if pollstate is not None else {}
+    polls = ps.setdefault("polls", {})
+    scache = ps.setdefault("sessioncache", {})
+
+    skey = "session:%s" % state
+    if _fresh(polls, skey, POLL_MIN["session"], now) and scache.get(state) is not None:
+        all_sessions = scache[state]
+        _dbg("%s: getSessionList skipped (polled < %ds ago); reusing %d cached session(s)"
+             % (state, POLL_MIN["session"], len(all_sessions)))
+    else:
+        try:
+            sess_payload = api("getSessionList", key, fetch=fetch, state=state)
+        except Exception as e:
+            # Surface unconditionally (not just under DEBUG): a swallowed error here previously read
+            # as a benign "0 moved", hiding a real outage or a bad key. Fail-open, but loudly.
+            print("LEGISLATION[%s]: getSessionList FAILED (%s); treating as 0 this run." % (state, e), flush=True)
+            return []
+        all_sessions = sess_payload.get("sessions") or []
+        polls[skey] = now.isoformat()
+        scache[state] = all_sessions
+    sessions = sessions_to_watch(all_sessions, today=today)
+    _dbg("%s: getSessionList -> %d session(s); %d in watch window: %s"
+         % (state, len(all_sessions), len(sessions),
+            [(s.get("session_id"), s.get("session_name") or s.get("year_start")) for s in sessions]))
     cands = []
     for s in sessions:
+        mkey = "master:%s" % s.get("session_id")
+        if _fresh(polls, mkey, POLL_MIN["master"], now):
+            _dbg("%s session %s: getMasterList skipped (polled < %ds ago; nothing can have changed)"
+                 % (state, s.get("session_id"), POLL_MIN["master"]))
+            continue
         try:
             ml = api("getMasterList", key, fetch=fetch, id=s.get("session_id"))
         except Exception as e:
-            _dbg("getMasterList %s failed: %s" % (s.get("session_id"), e))
+            print("LEGISLATION[%s]: getMasterList %s FAILED (%s); skipping that session."
+                  % (state, s.get("session_id"), e), flush=True)
             continue
-        for b in enacted_candidates(masterlist_bills(ml), seen):
+        polls[mkey] = now.isoformat()
+        bills = masterlist_bills(ml)
+        cand = enacted_candidates(bills, seen, state=state)
+        if DEBUG:
+            import collections
+            dist = collections.Counter(int(b.get("status") or 0) for b in bills)
+            n_res = sum(1 for b in bills if is_resolution(b.get("number") or b.get("bill_number"), state))
+            _dbg("%s session %s: %d bills, status counts %s, %d resolutions skipped, %d candidate(s)"
+                 % (state, s.get("session_id"), len(bills), dict(dist), n_res, len(cand)))
+        for b in cand:
             cands.append((b, s))
     return cands
 
@@ -461,32 +551,56 @@ def _default_ai(body, label="call"):
     return update.anthropic_json(body, label)
 
 
-def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None):
+def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, screen_max=None,
+        pollstate=None, now=None):
     """Full funnel over every configured jurisdiction: discover moved enacted/vetoed bills, screen
     (permissive for Georgia, strict for the federal overlay), fetch detail, write. Returns
     (cards, notes, seen_updates). `seen_updates` maps str(bill_id) -> change_hash for every bill
     that reached a DEFINITIVE outcome this run (carded, or read and declined by the screen or the
     writer), so the caller can record it as seen and never re-pay to screen it unless it changes.
-    A bill that only hit a transient error is deliberately absent, so it retries next run. Writes
-    nothing itself. Fail-open throughout."""
+    A bill that only hit a transient error is deliberately absent, so it retries next run. Bounded
+    by max_run (cards) and screen_max (screens) so a cold-start stays short. Streams progress to
+    stdout as it goes (flushed) so a long run is never silent. Writes nothing itself. Fail-open."""
     key = KEY_LEGISCAN if key is None else key
     ai = ai or _default_ai
     max_run = MAX_RUN if max_run is None else max_run
+    screen_max = SCREEN_MAX if screen_max is None else screen_max
     states = states or LEGISLATION_STATES
     notes = []
     seen_updates = {}
     cards = []
+
+    def note(msg):
+        notes.append(msg)
+        print(msg, flush=True)     # stream live so a long cold-start shows progress, not silence
+
     if not key:
-        notes.append("LEGISLATION: no LEGISCAN_API_KEY; skipping (fail-open no-op).")
+        note("LEGISLATION: no LEGISCAN_API_KEY; skipping (fail-open no-op).")
         return [], notes, seen_updates
     seen = _load_seen()
+    # pollstate (the LegiScan timing guard) is threaded in by the caller so it can be persisted;
+    # a direct/test caller that passes none gets the on-disk state, which is empty in tests.
+    if pollstate is None:
+        pollstate = _load_pollstate()
+    now = now or datetime.datetime.now()
+    screened = 0
+    stop = False
     for state in states:
-        cands = discover(key, state=state, fetch=fetch, today=today, seen=seen)
-        notes.append("LEGISLATION[%s]: %d enacted/vetoed bill(s) moved since last run." % (state, len(cands)))
+        if stop:
+            break
+        cands = discover(key, state=state, fetch=fetch, today=today, seen=seen,
+                         pollstate=pollstate, now=now)
+        note("LEGISLATION[%s]: %d enacted/vetoed bill(s) moved since last run." % (state, len(cands)))
         for b, _sess in cands:
             if len(cards) >= max_run:
-                notes.append("LEGISLATION: hit LEGISLATION_MAX=%d; remaining bills retry next run." % max_run)
+                note("LEGISLATION: hit LEGISLATION_MAX=%d cards; remaining bills retry next run." % max_run)
+                stop = True
                 break
+            if screened >= screen_max:
+                note("LEGISLATION: hit LEGISLATION_SCREEN_MAX=%d; remaining bills retry next run." % screen_max)
+                stop = True
+                break
+            screened += 1
             bid, ch = str(b.get("bill_id")), (b.get("change_hash") or "")
             keep, areas, reason = screen_bill(b, ai, state=state)
             if not keep:
@@ -506,12 +620,12 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None):
             # let the screen's areas fill in if the writer returned none
             if not verdict.get("areas") and areas:
                 verdict["areas"] = areas
-            cards.append(build_card(detail, verdict, state=state, today=today))
+            card = build_card(detail, verdict, state=state, today=today)
+            cards.append(card)
             seen_updates[bid] = ch
-        else:
-            continue
-        break   # inner loop hit max_run and broke; stop scanning further states this run
-    notes.append("LEGISLATION: drafted %d card(s)." % len(cards))
+            print("  + [%s] %s %s  %s" % (state, card.get("number") or "?", card.get("status") or "?",
+                                          (card.get("title") or "")[:60]), flush=True)
+    note("LEGISLATION: screened %d, drafted %d card(s)." % (screened, len(cards)))
     return cards, notes, seen_updates
 
 
@@ -530,6 +644,25 @@ def _load_seen():
         return {}
 
 
+def _load_pollstate():
+    """Load the LegiScan timing guard state -- {"polls": {opkey: iso}, "sessioncache": {state: [...]}}
+    -- from the state file. Missing/malformed keys default to empty so the guard simply never fires
+    (every operation reads as stale and is polled), i.e. fail-open to the old always-poll behavior."""
+    try:
+        with open(STATE_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {"polls": {}, "sessioncache": {}}
+        polls = data.get("polls")
+        scache = data.get("sessioncache")
+        return {"polls": polls if isinstance(polls, dict) else {},
+                "sessioncache": scache if isinstance(scache, dict) else {}}
+    except FileNotFoundError:
+        return {"polls": {}, "sessioncache": {}}
+    except Exception:
+        return {"polls": {}, "sessioncache": {}}
+
+
 def load_cards():
     try:
         with open(JSON_PATH, encoding="utf-8") as f:
@@ -546,15 +679,21 @@ def save_cards(cards):
     safeio.atomic_write_text(JSON_PATH, json.dumps(cards, ensure_ascii=False, indent=2) + "\n")
 
 
-def save_seen(seen, today=None):
+def save_seen(seen, today=None, pollstate=None):
     """Persist the seen change_hash map. Stored under a "seen" key (what _load_seen reads) so
-    the file can carry run metadata alongside it without touching the lookup shape."""
+    the file can carry run metadata alongside it without touching the lookup shape. When
+    `pollstate` is given, its "polls" (opkey -> last-poll ISO) and "sessioncache" (state ->
+    raw session list) ride along in the same file so the LegiScan timing guard survives across
+    runs; omitting it drops those keys (the guard resets to always-poll, which is safe)."""
     import safeio
     today = (today or datetime.date.today()).isoformat()
+    doc = {"seen": seen, "updated": today, "count": len(seen)}
+    if pollstate is not None:
+        doc["polls"] = pollstate.get("polls", {})
+        doc["sessioncache"] = pollstate.get("sessioncache", {})
     safeio.atomic_write_text(
         STATE_PATH,
-        json.dumps({"seen": seen, "updated": today, "count": len(seen)},
-                   ensure_ascii=False, indent=2) + "\n")
+        json.dumps(doc, ensure_ascii=False, indent=2) + "\n")
 
 
 def append_log(rec, cap=2000):
@@ -621,9 +760,10 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     as_json = "--json" in argv
     apply = "--apply" in argv
-    cards, notes, seen_updates = run()
-    for n in notes:
-        print(n)
+    # Load the LegiScan timing guard here so run() can update it in place and we can persist it
+    # below: a re-run inside an operation's min-resolution window must not spend a cache-hit query.
+    pollstate = _load_pollstate()
+    cards, notes, seen_updates = run(pollstate=pollstate)   # run() streams its notes live; do not reprint them here
 
     if apply and not KEY_LEGISCAN:
         # Nothing ran (fail-open no-op); do not touch any file.
@@ -641,7 +781,7 @@ def main(argv=None):
         content_changed = bool(added or updated)
         if content_changed:
             save_cards(merged)
-        save_seen(seen)
+        save_seen(seen, pollstate=pollstate)
         append_log({"cards": len(cards), "added": added, "updated": updated,
                     "seen_total": len(seen), "notes": notes})
         pr_path = os.path.join(REPO, "scripts", "pr_body_legislation.md")

@@ -40,7 +40,7 @@
 
 <!-- pre-paint theme + .js marker: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js), and tag <html> with .js so JS-gated styling fails open when scripts are blocked; CSP hash-pinned -->
 <script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}document.documentElement.className+=' js';})();</script>
-<link rel="stylesheet" href="/base.css?v=b81ef98c82">
+<link rel="stylesheet" href="/base.css?v=a8b2555175">
 
 <style>
   :root {
@@ -322,6 +322,11 @@
 
     <h1 class="page-title">Digests</h1>
     <div class="subtitle">// the weekly email, week by week</div>
+    <div class="feeds" aria-label="RSS feeds">
+      <span class="feeds-label">rss</span>
+      <a class="feed-btn" href="/opinions.xml">opinions</a>
+      <a class="feed-btn" href="/changes.xml">changes</a>
+    </div>
 
     <p class="intro">What each week&rsquo;s <a href="/subscribe">digest</a> covered: the decisions added that week and any earlier cards flagged for adverse treatment. Reconstructed from the record itself &mdash; the same data that builds the cards builds this page &mdash; so it reaches back before the email existed, and the launch-week backfill is the big one.</p>
     <p class="intro" style="font-size:13px; margin-top:-6px;">The digest sends only in weeks with something to say. <a href="/subscribe">Subscribe</a>, or follow the <a href="/opinions.xml">RSS feed</a> and the <a href="/changes.xml">corrections feed</a> instead.</p>

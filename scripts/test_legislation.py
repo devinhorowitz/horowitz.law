@@ -129,6 +129,16 @@ def fake_fetch(url):
     return json.dumps({"status": "ERROR", "alert": {"message": "unknown op"}})
 
 
+def counting_fetch(ops):
+    """Wrap fake_fetch, appending each LegiScan `op` to `ops`, so a test can assert exactly which
+    operations hit the wire -- the point of the timing guard is that a skipped op makes NO call."""
+    def f(url):
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        ops.append(q.get("op", [""])[0])
+        return fake_fetch(url)
+    return f
+
+
 def make_ai(script):
     """An `ai` seam that returns canned verdicts keyed by the call label. `script`
     maps label -> callable(body)->dict, or label -> dict."""
@@ -173,6 +183,36 @@ def main():
     moved = L.enacted_candidates(bills, seen={"111": "h-sb68-OLD"})
     check("enacted_candidates re-includes a bill whose change_hash moved",
           111 in {b["bill_id"] for b in moved})
+    # A bill LegiScan returns with no change_hash normalizes to "" and must still dedup once seen
+    # (the old truthiness test re-screened it forever).
+    nohash = [{"bill_id": 55, "number": "SB 5", "status": 4}]  # no change_hash key
+    check("enacted_candidates dedups a hash-less bill once seen (stored as \"\")",
+          55 not in {b["bill_id"] for b in L.enacted_candidates(nohash, seen={"55": ""})})
+    check("enacted_candidates still screens a hash-less bill that is unseen",
+          55 in {b["bill_id"] for b in L.enacted_candidates(nohash, seen={})})
+
+    # --- resolution filter (jurisdiction-aware): ceremonial resolutions must not consume budget ---
+    check("GA HR is a (skippable) resolution", L.is_resolution("HR 61", "GA"))
+    check("GA SR is a (skippable) resolution", L.is_resolution("SR 3", "GA"))
+    check("GA HB/SB are NOT resolutions", not L.is_resolution("HB 100", "GA") and not L.is_resolution("SB 68", "GA"))
+    check("US HR is a BILL, not a resolution (must be kept)", not L.is_resolution("HR 100", "US"))
+    check("US S is a BILL, not a resolution", not L.is_resolution("S 1234", "US"))
+    check("US HRES/HCONRES ARE resolutions", L.is_resolution("HRES 5", "US") and L.is_resolution("HCONRES 2", "US"))
+    check("US HCR/SCR (short-style concurrent resolutions) are also skipped",
+          L.is_resolution("HCR 10", "US") and L.is_resolution("SCR 4", "US"))
+    check("US joint resolutions (HJRES/SJRES) are NOT skipped -- they can be enacted",
+          not L.is_resolution("HJRES 1", "US") and not L.is_resolution("SJRES 2", "US"))
+    check("an unknown jurisdiction never skips (fail-open to screening)", not L.is_resolution("HR 1", "ZZ"))
+    ga_bills = [{"bill_id": 900, "number": "HR 61", "status": 4, "change_hash": "z"},
+                {"bill_id": 901, "number": "SB 68", "status": 4, "change_hash": "z"}]
+    ga_cand = {b["bill_id"] for b in L.enacted_candidates(ga_bills, seen={}, state="GA")}
+    check("enacted_candidates(state=GA) drops the ceremonial HR and keeps the SB",
+          900 not in ga_cand and 901 in ga_cand)
+    us_bills = [{"bill_id": 902, "number": "HR 100", "status": 4, "change_hash": "z"},
+                {"bill_id": 903, "number": "HRES 5", "status": 4, "change_hash": "z"}]
+    us_cand = {b["bill_id"] for b in L.enacted_candidates(us_bills, seen={}, state="US")}
+    check("enacted_candidates(state=US) keeps the HR bill and drops the HRES resolution",
+          902 in us_cand and 903 not in us_cand)
 
     # --- api envelope handling ---
     raised = False
@@ -297,7 +337,15 @@ def main():
     capped, cnotes, _ = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, max_run=1, states=["GA"],
                               today=__import__("datetime").date(2026, 7, 17))
     check("run honors max_run and says remaining bills retry",
-          len(capped) == 1 and any("LEGISLATION_MAX" in n for n in cnotes))
+          len(capped) == 1 and any("hit LEGISLATION_MAX" in n for n in cnotes))
+
+    # --- run honors the screen cap (bounds a cold-start; the rest rolls to next run) ---
+    scapped, snotes, sseen = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, screen_max=1, states=["GA"],
+                                   today=__import__("datetime").date(2026, 7, 17))
+    check("run honors screen_max and stops after screening the cap",
+          any("LEGISLATION_SCREEN_MAX=1" in n for n in snotes) and len(sseen) <= 1)
+    check("run's final note reports screened and drafted counts",
+          any(n.startswith("LEGISLATION: screened ") for n in snotes))
 
     # --- merge_cards: add vs update, first_seen preserved, sorted by status_date desc ---
     c1 = L.build_card(BILLS[222], {"keep": True, "areas": [], "synopsis": "s", "impact": "i", "effective_date": ""})
@@ -340,6 +388,66 @@ def main():
         L._last_call[0] = clock[0]
         L._pace()
         check("pacer is disabled at LEGISCAN_MIN_INTERVAL=0", slept == [])
+
+    # --- LegiScan timing guard (page-7 min-resolution table): never spend a cache-hit query ---
+    # LegiScan flags a poll faster than an operation's data-change resolution as a "cache hit": it
+    # serves cached JSON but STILL debits a query. The guard persists the last-poll time per op and
+    # skips a re-poll inside its window, so re-runs / a tightened schedule can't burn the quota.
+    import datetime as _dt
+    now0 = _dt.datetime(2026, 7, 17, 12, 0, 0)
+    today0 = _dt.date(2026, 7, 17)
+
+    check("_fresh is False for a never-polled op (must poll)", not L._fresh({}, "session:GA", 3600, now0))
+    check("_fresh is True inside the window (a re-poll would be a cache hit)",
+          L._fresh({"session:GA": (now0 - _dt.timedelta(minutes=30)).isoformat()}, "session:GA", 3600, now0))
+    check("_fresh is False past the window (data may have changed -- poll)",
+          not L._fresh({"session:GA": (now0 - _dt.timedelta(hours=2)).isoformat()}, "session:GA", 3600, now0))
+    check("_fresh is False for a future timestamp (clock skew -> poll, never trust it)",
+          not L._fresh({"session:GA": (now0 + _dt.timedelta(hours=1)).isoformat()}, "session:GA", 3600, now0))
+    check("_fresh is False for an unparseable timestamp (poll)",
+          not L._fresh({"session:GA": "not-a-date"}, "session:GA", 3600, now0))
+
+    # First discover polls both operations, records their timestamps, and caches the session list.
+    ps = {}
+    ops1 = []
+    c1 = L.discover("GOODKEY", state="GA", fetch=counting_fetch(ops1), today=today0,
+                    seen={}, pollstate=ps, now=now0)
+    check("first discover polls getSessionList and getMasterList",
+          "getSessionList" in ops1 and "getMasterList" in ops1)
+    check("first discover records the session and master poll timestamps",
+          ps["polls"].get("session:GA") and any(k.startswith("master:") for k in ps["polls"]))
+    check("first discover caches the raw session list for a later skipped poll", ps["sessioncache"].get("GA"))
+    check("first discover still returns the moved candidates", bool(c1))
+
+    # A minute later, same pollstate: both windows are open, so NO LegiScan call is made at all.
+    ops2 = []
+    c2 = L.discover("GOODKEY", state="GA", fetch=counting_fetch(ops2), today=today0,
+                    seen={}, pollstate=ps, now=now0 + _dt.timedelta(minutes=1))
+    check("a re-run inside both windows makes ZERO LegiScan calls (no cache-hit spend)", ops2 == [])
+    check("a fully-skipped re-run yields no candidates (getMasterList never re-polled)", c2 == [])
+
+    # After 90 minutes getSessionList is still cached (24h window) but getMasterList re-polls (1h).
+    ops3 = []
+    L.discover("GOODKEY", state="GA", fetch=counting_fetch(ops3), today=today0,
+               seen={}, pollstate=ps, now=now0 + _dt.timedelta(minutes=90))
+    check("after 90m getSessionList stays cached but getMasterList re-polls",
+          "getSessionList" not in ops3 and "getMasterList" in ops3)
+
+    # After 25 hours the session-list window has also closed, so getSessionList re-polls.
+    ops4 = []
+    L.discover("GOODKEY", state="GA", fetch=counting_fetch(ops4), today=today0,
+               seen={}, pollstate=ps, now=now0 + _dt.timedelta(hours=25))
+    check("after 24h getSessionList re-polls", "getSessionList" in ops4)
+
+    # run() threads the guard end to end: a rapid re-run spends zero queries and drafts nothing.
+    rps = {}
+    L.run(key="GOODKEY", fetch=counting_fetch([]), ai=ai, states=["GA"],
+          today=today0, pollstate=rps, now=now0)
+    runops2 = []
+    c_re, _, _ = L.run(key="GOODKEY", fetch=counting_fetch(runops2), ai=ai, states=["GA"],
+                       today=today0, pollstate=rps, now=now0 + _dt.timedelta(minutes=2))
+    check("run() threads the timing guard: a rapid re-run makes zero LegiScan calls", runops2 == [])
+    check("run()'s guarded re-run drafts no cards", c_re == [])
 
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))

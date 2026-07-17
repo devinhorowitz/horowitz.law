@@ -89,6 +89,10 @@ jobs:
           # Federal Rules amendments; override the source page list via the repo Variable if it moves.
           COURTRULES_URLS: ${{ vars.COURTRULES_URLS }}
           COURTRULES_MODEL: ${{ vars.COURTRULES_MODEL || 'claude-opus-4-8' }}
+          # Flip these repo Variables to '1' to trace a run (per-session bill/status/resolution counts).
+          LEGISLATION_DEBUG: ${{ vars.LEGISLATION_DEBUG }}
+          REGULATION_DEBUG: ${{ vars.REGULATION_DEBUG }}
+          COURTRULES_DEBUG: ${{ vars.COURTRULES_DEBUG }}
         run: |
           set -o pipefail
           if [ "${{ inputs.dry_run }}" = "true" ]; then

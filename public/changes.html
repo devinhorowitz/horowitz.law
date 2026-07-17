@@ -40,7 +40,7 @@
 
 <!-- pre-paint theme + .js marker: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js), and tag <html> with .js so JS-gated styling fails open when scripts are blocked; CSP hash-pinned -->
 <script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}document.documentElement.className+=' js';})();</script>
-<link rel="stylesheet" href="/base.css?v=b81ef98c82">
+<link rel="stylesheet" href="/base.css?v=a8b2555175">
 
 <style>
   :root {
@@ -329,6 +329,11 @@
 
     <h1 class="page-title">Changes</h1>
     <div class="subtitle">// the treatment ledger</div>
+    <div class="feeds" aria-label="RSS feeds">
+      <span class="feeds-label">rss</span>
+      <a class="feed-btn" href="/changes.xml">changes</a>
+      <a class="feed-btn" href="/opinions.xml">opinions</a>
+    </div>
 
     <p class="intro">When a later decision treats a published case adversely, the sweep raises a flag: on the card, in the weekly digest, and here. The machine may only ever raise a flag to <strong>caution</strong> — calling a case negative or superseded remains human work, done on Shepard&rsquo;s. A cleared flag drops off this ledger; the card stands again.</p>
     <p class="intro" style="font-size:13px; margin-top:-6px;">Machine-readable too: the ledger is an <a href="/changes.xml">RSS feed</a>, so a correction can reach your reader the day it is flagged. The full feed lives at <a href="/opinions">the watch</a>.</p>
