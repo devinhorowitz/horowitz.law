@@ -111,6 +111,25 @@ Keyed on `bill_id`. One object per bill:
 `merge_cards` keys on `bill_id`: a re-carded bill (its `change_hash` moved — an amendment, a
 correction) replaces its card but keeps the original `first_seen`.
 
+### Respecting LegiScan's cache (the timing guard)
+
+LegiScan's API manual publishes a **minimum data-change resolution** per operation — the fastest
+rate at which that operation's data can actually change: `getSessionList` **daily**, `getMasterList`
+**hourly**, `getBill` **every 3 hours**. Poll faster than that and LegiScan serves the same cached
+JSON but **still debits a query** against the 30,000/month quota (it flags these on the API-status
+page as "cache hits"). The weekly cadence never trips this, but a manual re-trigger or a tightened
+schedule could — so the watch is defensively compliant rather than merely usually-compliant.
+
+`legislation_state.json` therefore records, alongside `seen`, a **`polls`** map (`session:<STATE>`
+and `master:<session_id>` → last-poll timestamp) and a small **`sessioncache`** (the raw session
+list per state). Before each call `discover` checks the window: inside it, `getSessionList` is
+skipped and the cached session list reused, and `getMasterList` is skipped for that session (nothing
+can have changed), so a re-run inside the window makes **zero** LegiScan calls. `getBill` needs no
+timer — `change_hash` already stops it re-fetching an unmoved bill. The guard **fails open**: a
+missing or unparseable timestamp (or a future one, from clock skew) reads as stale and polls, so the
+worst case is the old always-poll behavior, never a missed update. The windows are tunable via
+`LEGISCAN_SESSIONLIST_MIN` and `LEGISCAN_MASTERLIST_MIN` (seconds).
+
 ## The FMCSA regulatory watch (a sibling source)
 
 `scripts/regulations.py` watches **agency rulemaking**, not statutes: FMCSA (and, by config, kindred
@@ -178,7 +197,8 @@ LEGISCAN_API_KEY=... ANTHROPIC_API_KEY=... python scripts/legislation.py --json
 
 Optional repo Variables tune it without editing code: `LEGISLATION_STATES` (default `GA,US` — a
 comma list of LegiScan jurisdictions; set to `GA` to drop the federal overlay), plus
-`LEGISLATION_SCREEN_MODEL`, `LEGISLATION_MODEL`, `LEGISLATION_MAX`.
+`LEGISLATION_SCREEN_MODEL`, `LEGISLATION_MODEL`, `LEGISLATION_MAX`, and the LegiScan cache-window
+guards `LEGISCAN_SESSIONLIST_MIN` / `LEGISCAN_MASTERLIST_MIN` (seconds; default 86400 / 3600).
 
 ## Status
 

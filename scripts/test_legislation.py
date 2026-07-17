@@ -129,6 +129,16 @@ def fake_fetch(url):
     return json.dumps({"status": "ERROR", "alert": {"message": "unknown op"}})
 
 
+def counting_fetch(ops):
+    """Wrap fake_fetch, appending each LegiScan `op` to `ops`, so a test can assert exactly which
+    operations hit the wire -- the point of the timing guard is that a skipped op makes NO call."""
+    def f(url):
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        ops.append(q.get("op", [""])[0])
+        return fake_fetch(url)
+    return f
+
+
 def make_ai(script):
     """An `ai` seam that returns canned verdicts keyed by the call label. `script`
     maps label -> callable(body)->dict, or label -> dict."""
@@ -378,6 +388,66 @@ def main():
         L._last_call[0] = clock[0]
         L._pace()
         check("pacer is disabled at LEGISCAN_MIN_INTERVAL=0", slept == [])
+
+    # --- LegiScan timing guard (page-7 min-resolution table): never spend a cache-hit query ---
+    # LegiScan flags a poll faster than an operation's data-change resolution as a "cache hit": it
+    # serves cached JSON but STILL debits a query. The guard persists the last-poll time per op and
+    # skips a re-poll inside its window, so re-runs / a tightened schedule can't burn the quota.
+    import datetime as _dt
+    now0 = _dt.datetime(2026, 7, 17, 12, 0, 0)
+    today0 = _dt.date(2026, 7, 17)
+
+    check("_fresh is False for a never-polled op (must poll)", not L._fresh({}, "session:GA", 3600, now0))
+    check("_fresh is True inside the window (a re-poll would be a cache hit)",
+          L._fresh({"session:GA": (now0 - _dt.timedelta(minutes=30)).isoformat()}, "session:GA", 3600, now0))
+    check("_fresh is False past the window (data may have changed -- poll)",
+          not L._fresh({"session:GA": (now0 - _dt.timedelta(hours=2)).isoformat()}, "session:GA", 3600, now0))
+    check("_fresh is False for a future timestamp (clock skew -> poll, never trust it)",
+          not L._fresh({"session:GA": (now0 + _dt.timedelta(hours=1)).isoformat()}, "session:GA", 3600, now0))
+    check("_fresh is False for an unparseable timestamp (poll)",
+          not L._fresh({"session:GA": "not-a-date"}, "session:GA", 3600, now0))
+
+    # First discover polls both operations, records their timestamps, and caches the session list.
+    ps = {}
+    ops1 = []
+    c1 = L.discover("GOODKEY", state="GA", fetch=counting_fetch(ops1), today=today0,
+                    seen={}, pollstate=ps, now=now0)
+    check("first discover polls getSessionList and getMasterList",
+          "getSessionList" in ops1 and "getMasterList" in ops1)
+    check("first discover records the session and master poll timestamps",
+          ps["polls"].get("session:GA") and any(k.startswith("master:") for k in ps["polls"]))
+    check("first discover caches the raw session list for a later skipped poll", ps["sessioncache"].get("GA"))
+    check("first discover still returns the moved candidates", bool(c1))
+
+    # A minute later, same pollstate: both windows are open, so NO LegiScan call is made at all.
+    ops2 = []
+    c2 = L.discover("GOODKEY", state="GA", fetch=counting_fetch(ops2), today=today0,
+                    seen={}, pollstate=ps, now=now0 + _dt.timedelta(minutes=1))
+    check("a re-run inside both windows makes ZERO LegiScan calls (no cache-hit spend)", ops2 == [])
+    check("a fully-skipped re-run yields no candidates (getMasterList never re-polled)", c2 == [])
+
+    # After 90 minutes getSessionList is still cached (24h window) but getMasterList re-polls (1h).
+    ops3 = []
+    L.discover("GOODKEY", state="GA", fetch=counting_fetch(ops3), today=today0,
+               seen={}, pollstate=ps, now=now0 + _dt.timedelta(minutes=90))
+    check("after 90m getSessionList stays cached but getMasterList re-polls",
+          "getSessionList" not in ops3 and "getMasterList" in ops3)
+
+    # After 25 hours the session-list window has also closed, so getSessionList re-polls.
+    ops4 = []
+    L.discover("GOODKEY", state="GA", fetch=counting_fetch(ops4), today=today0,
+               seen={}, pollstate=ps, now=now0 + _dt.timedelta(hours=25))
+    check("after 24h getSessionList re-polls", "getSessionList" in ops4)
+
+    # run() threads the guard end to end: a rapid re-run spends zero queries and drafts nothing.
+    rps = {}
+    L.run(key="GOODKEY", fetch=counting_fetch([]), ai=ai, states=["GA"],
+          today=today0, pollstate=rps, now=now0)
+    runops2 = []
+    c_re, _, _ = L.run(key="GOODKEY", fetch=counting_fetch(runops2), ai=ai, states=["GA"],
+                       today=today0, pollstate=rps, now=now0 + _dt.timedelta(minutes=2))
+    check("run() threads the timing guard: a rapid re-run makes zero LegiScan calls", runops2 == [])
+    check("run()'s guarded re-run drafts no cards", c_re == [])
 
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
