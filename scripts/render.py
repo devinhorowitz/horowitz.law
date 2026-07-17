@@ -184,6 +184,15 @@ def _esc(t):  # HTML text content (leave quotes alone)
 def _attr(t):  # HTML attribute value (escape quotes too)
     return html.escape(t or "", quote=True)
 
+# C0 control characters XML 1.0 forbids ANYWHERE -- even inside CDATA, even as a numeric entity --
+# except tab, newline, and carriage return. A single stray one (bad OCR / a corrupt PDF text layer,
+# echoed by the model into a synopsis or a treatment note) makes opinions.xml / changes.xml
+# unparseable and breaks the feed for every reader, so it is stripped before it reaches the feeds.
+_XML_ILLEGAL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+def _xml_safe(t):
+    return _XML_ILLEGAL.sub("", t or "")
+
 def _stamp_identity(doc):
     """Fill data-cfg hooks from siteconfig.IDENTITY so the name, role, and contact
     details come from one config file instead of being hand-edited across pages.
@@ -571,9 +580,9 @@ def changes_rss(entries):
         by = [b.get("name") for b in (e.get("treated_by") or []) if b.get("name")]
         cited = (" Cited by: " + "; ".join(by[:3]) + ".") if by else ""
         desc = f'{note}{cited}{_TREAT_TAIL.get(t, "")} Card: {SITE}/o/{e["cluster_id"]}'
-        desc = desc.replace("]]>", "]]]]><![CDATA[>")
+        desc = _xml_safe(desc).replace("]]>", "]]]]><![CDATA[>")
         out += ["    <item>",
-                f"      <title>{xml_escape(_TREAT_LABEL.get(t, 'Flagged') + ': ' + e['name'])}</title>",
+                f"      <title>{xml_escape(_TREAT_LABEL.get(t, 'Flagged') + ': ' + _xml_safe(e['name']))}</title>",
                 f"      <link>{SITE}/o/{e['cluster_id']}</link>",
                 f'      <guid isPermaLink="false">change-{e["cluster_id"]}-{e.get("treatment_date") or e["date"]}</guid>',
                 f"      <pubDate>{_rfc822(e.get('treatment_date') or e['date'])}</pubDate>",
@@ -789,9 +798,13 @@ def permalink_html(e):
         "author": {"@type": "Organization", "name": "Georgia Appellate Watch \u00b7 horowitz.law"},
         "publisher": {"@type": "Person", "name": siteconfig.PUBLISHER_NAME, "url": siteconfig.AUTHOR_URL},
         "description": desc + " AI-drafted synopsis; the linked opinion is the authority."}, ensure_ascii=False)
-    # JSON inside an HTML <script>: escape "<" (and ">") so a "</script>" in a case
-    # name or synopsis cannot break out of the element. Valid JSON; parses identically.
-    ld = ld.replace("<", "\\u003c").replace(">", "\\u003e")
+    # JSON inside an HTML <script>: escape "<" (and ">") so a "</script>" in a case name or synopsis
+    # cannot break out of the element, and escape U+2028/U+2029 -- valid in a JSON string but PHYSICAL
+    # line terminators to a JS parser, so a raw one (common in text pasted from a PDF opinion) splits
+    # the string literal and throws SyntaxError, silently dropping the whole rich snippet. json.dumps
+    # here uses ensure_ascii=False, so it does not escape them for us. All four stay valid JSON.
+    ld = (ld.replace("<", "\\u003c").replace(">", "\\u003e")
+            .replace("\u2028", "\\u2028").replace("\u2029", "\\u2029"))
     flagged_line = ""
     if (e.get("treatment") or "ok") != "ok":
         flagged_line = ('    <p class="perma-note">This card carries an adverse-treatment flag \u2014 '
@@ -917,11 +930,11 @@ def rss_item(e):
     extra = "".join(f' Also: {h.get("synopsis", "")} Why it matters: {h.get("why", "")}'
                     for h in (e.get("additional_holdings") or []))
     desc = f'{e["synopsis"]} Why it matters: {e["why"]}{extra}{prec_txt} AI-drafted summary. Verify against the opinion. {e["url"]}'
-    # CDATA is verbatim: a literal "]]>" anywhere in the card text would terminate the
-    # section early and break the feed. Standard split-escape keeps the XML well-formed.
-    desc = desc.replace("]]>", "]]]]><![CDATA[>")
+    # Strip XML-illegal control chars, THEN split-escape a literal "]]>" (which would otherwise end the
+    # CDATA early). CDATA is verbatim, so a control byte in the card text would still poison the feed.
+    desc = _xml_safe(desc).replace("]]>", "]]]]><![CDATA[>")
     lines = ["    <item>",
-             f"      <title>{xml_escape(e['name'] + TITLE_SUFFIX[e['court']])}</title>",
+             f"      <title>{xml_escape(_xml_safe(e['name']) + TITLE_SUFFIX[e['court']])}</title>",
              f"      <link>{xml_escape(e['url'])}</link>",
              f'      <guid isPermaLink="true">{xml_escape(e["url"])}</guid>',
              f"      <pubDate>{_rfc822(e['date'])}</pubDate>"]
