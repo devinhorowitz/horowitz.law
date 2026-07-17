@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>horowitz.law: Georgia Legislative Watch</title>
+    <link>https://horowitz.law/legislation</link>
+    <atom:link href="https://horowitz.law/legislation.xml" rel="self" type="application/rss+xml" />
+    <description>Georgia legislation that became law (signed, or allowed to become law without signature) or was vetoed, read for a civil-litigation and insurance-defense practice. Each summary is AI-drafted and human-confirmed; the enrolled bill is the authority.</description>
+    <language>en-us</language>
+    <copyright>Legislative bill data via LegiScan (https://legiscan.com/), licensed CC BY 4.0.</copyright>
+    <lastBuildDate>Fri, 17 Jul 2026 12:00:00 -0400</lastBuildDate>
+    <generator>horowitz.law Georgia Legislative Watch (prototype)</generator>
+  </channel>
+</rss>

@@ -1,0 +1,178 @@
+name: Georgia Legislative & Regulatory Watch
+
+# Three sibling watches of the law that moves outside the case reporters, rendered onto the one
+# /legislation page and reviewed together:
+#   * STATUTES -- the Georgia General Assembly (and the U.S. Congress overlay) via LegiScan, for
+#     bills that became law (signed, or allowed to become law without signature) or were vetoed.
+#     Needs the LEGISCAN_API_KEY secret (free); without it that half is a clean no-op.
+#   * REGULATIONS -- FMCSA (and kindred agency) rulemaking via the Federal Register API (keyless),
+#     for final rules in 49 CFR that reach a Georgia trucking practice.
+#   * COURT RULES -- amendments to the Federal Rules (FRCP/FRE/FRAP) via uscourts.gov (keyless),
+#     extracted by the model; the lightest-touch source (the rules move once a year, Dec 1).
+# Unlike the opinion feed there is NO auto lane: every card is held in one review PR for a person
+# to confirm. A quiet run (nothing moved) commits only bookkeeping straight to main. Leave dry_run
+# checked on a manual dispatch to preview the drafted cards without writing anything.
+on:
+  schedule:
+    - cron: '23 6 * * 0'    # Sundays 06:23 UTC (offset from the other jobs' windows)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (print drafted cards as JSON; write nothing, open no PR)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write          # the failure-alert step opens or comments on a tracking issue
+
+env:
+  PYTHONUNBUFFERED: '1'
+
+concurrency:
+  group: legislation
+  cancel-in-progress: false
+
+jobs:
+  legislation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      # Supply-chain hardening (block mode). Egress this job needs:
+      #   api.legiscan.com          the enacted-bill data (getSessionList / getMasterList / getBill).
+      #   www.federalregister.gov   the FMCSA rulemaking data (documents.json; keyless).
+      #   api.anthropic.com         the relevance screen and the card writer.
+      #   pypi.org / files.pythonhosted.org  the requirements install.
+      #   github.com / api.github.com  checkout + PR push, the PR-open and failure-alert gh steps.
+      # Cache/infra endpoints are auto-allowed.
+      - name: Harden the runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.legiscan.com:443
+            www.federalregister.gov:443
+            www.uscourts.gov:443
+            api.anthropic.com:443
+            pypi.org:443
+            files.pythonhosted.org:443
+            github.com:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            api.github.com:443
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run the legislative and regulatory watches
+        id: run
+        env:
+          LEGISCAN_API_KEY: ${{ secrets.LEGISCAN_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Georgia is the curated core; US is the federal overlay (FAAAA / motor-carrier and
+          # federal-jurisdiction statutes that reach a Georgia practice), screened strictly. Set the
+          # LEGISLATION_STATES repo Variable to narrow (e.g. 'GA') or widen without editing this file.
+          LEGISLATION_STATES: ${{ vars.LEGISLATION_STATES || 'GA,US' }}
+          LEGISLATION_SCREEN_MODEL: ${{ vars.LEGISLATION_SCREEN_MODEL || 'claude-haiku-4-5' }}
+          LEGISLATION_MODEL: ${{ vars.LEGISLATION_MODEL || 'claude-opus-4-8' }}
+          LEGISLATION_MAX: ${{ vars.LEGISLATION_MAX || '40' }}
+          # FMCSA rulemaking; add agencies (comma list of Federal Register slugs) via the repo Variable.
+          REGULATION_AGENCIES: ${{ vars.REGULATION_AGENCIES || 'federal-motor-carrier-safety-administration' }}
+          REGULATION_SCREEN_MODEL: ${{ vars.REGULATION_SCREEN_MODEL || 'claude-haiku-4-5' }}
+          REGULATION_MODEL: ${{ vars.REGULATION_MODEL || 'claude-opus-4-8' }}
+          # Federal Rules amendments; override the source page list via the repo Variable if it moves.
+          COURTRULES_URLS: ${{ vars.COURTRULES_URLS }}
+          COURTRULES_MODEL: ${{ vars.COURTRULES_MODEL || 'claude-opus-4-8' }}
+        run: |
+          set -o pipefail
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "== statutes ==" | tee    "$RUNNER_TEMP/run.log"
+            python scripts/legislation.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+            echo "== regulations ==" | tee -a "$RUNNER_TEMP/run.log"
+            python scripts/regulations.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+            echo "== court rules ==" | tee -a "$RUNNER_TEMP/run.log"
+            python scripts/courtrules.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+            echo "changed=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "== statutes ==" | tee    "$RUNNER_TEMP/run.log"
+            python scripts/legislation.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+            echo "== regulations ==" | tee -a "$RUNNER_TEMP/run.log"
+            python scripts/regulations.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+            echo "== court rules ==" | tee -a "$RUNNER_TEMP/run.log"
+            python scripts/courtrules.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+            leg=$(grep -oE 'LEGISLATION_CONTENT_CHANGED=[01]' "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
+            reg=$(grep -oE 'REGULATION_CONTENT_CHANGED=[01]'  "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
+            crc=$(grep -oE 'COURTRULES_CONTENT_CHANGED=[01]'  "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
+            changed=0
+            { [ "${leg:-0}" = "1" ] || [ "${reg:-0}" = "1" ] || [ "${crc:-0}" = "1" ]; } && changed=1
+            echo "changed=${changed}" >> "$GITHUB_OUTPUT"
+            # One combined review-PR body from whichever watches produced cards.
+            : > scripts/pr_body_legreg.md
+            for b in pr_body_legislation pr_body_regulations pr_body_courtrules; do
+              [ -f "scripts/$b.md" ] && { cat "scripts/$b.md" >> scripts/pr_body_legreg.md; echo >> scripts/pr_body_legreg.md; }
+            done
+          fi
+
+      # New/updated cards in either watch: re-render the shared page + both feeds and open (or
+      # update) the one review PR. A person confirms every card before it publishes -- merge to
+      # accept, edit legislation.json / regulations.json on the branch to correct.
+      - name: Render the page and feeds
+        if: steps.run.outputs.changed == '1'
+        run: python scripts/render.py
+
+      - name: Open review pull request
+        if: steps.run.outputs.changed == '1'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          branch: bot/legislation-review
+          title: 'Georgia Legislative & Regulatory Watch: new law for review'
+          commit-message: 'legislation/regulation: new law and rules for review'
+          body-path: scripts/pr_body_legreg.md
+          labels: legislation, automated, review
+          delete-branch: true
+          add-paths: |
+            legislation.json
+            legislation_state.json
+            legislation_log.jsonl
+            regulations.json
+            regulations_state.json
+            regulations_log.jsonl
+            courtrules.json
+            courtrules_state.json
+            courtrules_log.jsonl
+            public/legislation.html
+            public/legislation.xml
+            public/regulations.xml
+
+      # Nothing new: the seen-state and run logs still advanced (a settled non-match must not be
+      # re-screened), so commit only that bookkeeping straight to main, like the opinion no-op run.
+      - name: Commit bookkeeping (nothing new)
+        if: steps.run.outputs.changed == '0' && inputs.dry_run != true
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add legislation_state.json legislation_log.jsonl regulations_state.json regulations_log.jsonl courtrules_state.json courtrules_log.jsonl 2>/dev/null || true
+          git diff --cached --quiet || { git commit -m "legislation/regulation/courtrules: record run state [skip ci]"; git push; }
+
+      # Surfaces a broken run instead of letting it fail silently: comments on the one open
+      # tracking issue, or opens it the first time, so repeated failures collect on one issue.
+      - name: Report a failed run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          logtail=$(tail -c 3500 "$RUNNER_TEMP/run.log" 2>/dev/null || true)
+          body=$(printf 'A scheduled Legislative Watch run failed.\n\n%s\n\n**Last output**\n\n```\n%s\n```\n' "$run_url" "${logtail:-(no run output captured)}")
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Legislative Watch run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Legislative Watch run failures" --body "$body"
+          fi
