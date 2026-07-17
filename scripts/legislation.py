@@ -56,6 +56,7 @@ Environment:
   LEGISLATION_DEBUG       if 1, log each step
 """
 import os
+import re
 import sys
 import json
 import time
@@ -229,10 +230,31 @@ def masterlist_bills(payload):
     return out
 
 
-def enacted_candidates(bills, seen):
-    """From master-list summaries, the bills that (a) are enacted or vetoed and
-    (b) have moved since we last carded them -- a new bill_id, or a changed
-    change_hash on a known one. `seen` maps str(bill_id) -> last change_hash.
+# Resolution number-prefixes to skip BEFORE screening, per jurisdiction. A legislature adopts
+# ceremonial and procedural resolutions (commendations, condolences, memorials, chamber rules) by
+# the hundreds or thousands and marks them "passed", so without this they swamp the screen budget
+# and the substantive bills are never reached -- exactly what the first live run showed (60 screened,
+# all commendations, 0 cards). The prefix meaning is JURISDICTION-SPECIFIC: in Georgia "HR"/"SR" are
+# House/Senate Resolutions, but in the U.S. Congress "HR" is a House BILL and "S" a Senate bill, so
+# only true resolution prefixes are listed per state. (Georgia constitutional amendments are also
+# "HR" and are skipped with the rest; they are ratified at the ballot, not enacted as statutes.)
+_RESOLUTION_PREFIX = {
+    "GA": ("HR", "SR"),
+    "US": ("HRES", "SRES", "HCONRES", "SCONRES"),
+}
+
+
+def is_resolution(number, state):
+    """True if a bill number is a (skippable) resolution in this jurisdiction. Keys off the
+    leading alpha prefix of the number; unknown states never skip (fail-open to screening)."""
+    m = re.match(r"[A-Za-z]+", str(number or "").replace(".", "").replace(" ", ""))
+    return bool(m) and m.group(0).upper() in _RESOLUTION_PREFIX.get(state, ())
+
+
+def enacted_candidates(bills, seen, state=None):
+    """From master-list summaries, the bills that (a) are enacted or vetoed, (b) are not ceremonial
+    resolutions for `state` (when given), and (c) have moved since we last carded them -- a new
+    bill_id, or a changed change_hash on a known one. `seen` maps str(bill_id) -> last change_hash.
 
     change_hash is the whole point of the master list: a run where nothing enacted
     changed returns [] after a single call, so the schedule is nearly free."""
@@ -243,6 +265,8 @@ def enacted_candidates(bills, seen):
         except (TypeError, ValueError):
             status = 0
         if status not in (STATUS_ENACTED, STATUS_VETOED):
+            continue
+        if state and is_resolution(b.get("number") or b.get("bill_number"), state):
             continue
         bid = str(b.get("bill_id"))
         if seen.get(bid) and seen.get(bid) == b.get("change_hash"):
@@ -445,7 +469,9 @@ def discover(key, state=DEFAULT_STATE, fetch=None, today=None, seen=None):
     try:
         sess_payload = api("getSessionList", key, fetch=fetch, state=state)
     except Exception as e:
-        _dbg("getSessionList %s failed: %s" % (state, e))
+        # Surface unconditionally (not just under DEBUG): a swallowed error here previously read as
+        # a benign "0 moved", hiding a real outage or a bad key. Fail-open, but loudly.
+        print("LEGISLATION[%s]: getSessionList FAILED (%s); treating as 0 this run." % (state, e), flush=True)
         return []
     all_sessions = sess_payload.get("sessions") or []
     sessions = sessions_to_watch(all_sessions, today=today)
@@ -457,15 +483,17 @@ def discover(key, state=DEFAULT_STATE, fetch=None, today=None, seen=None):
         try:
             ml = api("getMasterList", key, fetch=fetch, id=s.get("session_id"))
         except Exception as e:
-            _dbg("getMasterList %s failed: %s" % (s.get("session_id"), e))
+            print("LEGISLATION[%s]: getMasterList %s FAILED (%s); skipping that session."
+                  % (state, s.get("session_id"), e), flush=True)
             continue
         bills = masterlist_bills(ml)
-        cand = enacted_candidates(bills, seen)
+        cand = enacted_candidates(bills, seen, state=state)
         if DEBUG:
             import collections
             dist = collections.Counter(int(b.get("status") or 0) for b in bills)
-            _dbg("%s session %s: %d bills, status counts %s, %d enacted/vetoed candidate(s)"
-                 % (state, s.get("session_id"), len(bills), dict(dist), len(cand)))
+            n_res = sum(1 for b in bills if is_resolution(b.get("number") or b.get("bill_number"), state))
+            _dbg("%s session %s: %d bills, status counts %s, %d resolutions skipped, %d candidate(s)"
+                 % (state, s.get("session_id"), len(bills), dict(dist), n_res, len(cand)))
         for b in cand:
             cands.append((b, s))
     return cands

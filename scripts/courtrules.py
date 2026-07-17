@@ -59,7 +59,7 @@ MAX_BYTES = 15 * 1024 * 1024
 MAX_TEXT  = 60000   # characters of page text handed to the model
 
 _DEFAULT_SOURCE = ("Pending amendments",
-                   "https://www.uscourts.gov/rules-policies/pending-rules-and-forms-amendments")
+                   "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments")
 
 
 def _sources():

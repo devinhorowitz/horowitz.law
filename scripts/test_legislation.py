@@ -174,6 +174,25 @@ def main():
     check("enacted_candidates re-includes a bill whose change_hash moved",
           111 in {b["bill_id"] for b in moved})
 
+    # --- resolution filter (jurisdiction-aware): ceremonial resolutions must not consume budget ---
+    check("GA HR is a (skippable) resolution", L.is_resolution("HR 61", "GA"))
+    check("GA SR is a (skippable) resolution", L.is_resolution("SR 3", "GA"))
+    check("GA HB/SB are NOT resolutions", not L.is_resolution("HB 100", "GA") and not L.is_resolution("SB 68", "GA"))
+    check("US HR is a BILL, not a resolution (must be kept)", not L.is_resolution("HR 100", "US"))
+    check("US S is a BILL, not a resolution", not L.is_resolution("S 1234", "US"))
+    check("US HRES/HCONRES ARE resolutions", L.is_resolution("HRES 5", "US") and L.is_resolution("HCONRES 2", "US"))
+    check("an unknown jurisdiction never skips (fail-open to screening)", not L.is_resolution("HR 1", "ZZ"))
+    ga_bills = [{"bill_id": 900, "number": "HR 61", "status": 4, "change_hash": "z"},
+                {"bill_id": 901, "number": "SB 68", "status": 4, "change_hash": "z"}]
+    ga_cand = {b["bill_id"] for b in L.enacted_candidates(ga_bills, seen={}, state="GA")}
+    check("enacted_candidates(state=GA) drops the ceremonial HR and keeps the SB",
+          900 not in ga_cand and 901 in ga_cand)
+    us_bills = [{"bill_id": 902, "number": "HR 100", "status": 4, "change_hash": "z"},
+                {"bill_id": 903, "number": "HRES 5", "status": 4, "change_hash": "z"}]
+    us_cand = {b["bill_id"] for b in L.enacted_candidates(us_bills, seen={}, state="US")}
+    check("enacted_candidates(state=US) keeps the HR bill and drops the HRES resolution",
+          902 in us_cand and 903 not in us_cand)
+
     # --- api envelope handling ---
     raised = False
     try:
