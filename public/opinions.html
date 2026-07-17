@@ -80,7 +80,7 @@
 <!-- Shared foundation: @font-face, color-scheme, text-wrap, reset, overlays -->
 <!-- pre-paint theme + .js marker: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js), and tag <html> with .js so JS-gated styling fails open when scripts are blocked; CSP hash-pinned -->
 <script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}document.documentElement.className+=' js';})();</script>
-<link rel="stylesheet" href="/base.css?v=b81ef98c82">
+<link rel="stylesheet" href="/base.css?v=a8b2555175">
 
 <style>
   :root {
@@ -274,6 +274,12 @@
   <main id="main-content">
     <h1 class="page-title">Georgia Appellate Watch</h1>
     <div class="subtitle">// recent Georgia and federal appellate opinions, plus Florida and Alabama</div>
+    <div class="feeds" aria-label="RSS feeds">
+      <span class="feeds-label">rss</span>
+      <a class="feed-btn" href="/opinions.xml">opinions</a>
+      <a class="feed-btn" href="/changes.xml">changes</a>
+      <a class="feed-btn" href="/legislation.xml">legislation</a>
+    </div>
     <p id="scanStatus" class="scan-status" hidden>
       <span class="scan-dot" aria-hidden="true"></span><span class="scan-label"></span><span class="scan-scanned"></span>
     </p>
@@ -281,8 +287,8 @@
     <p class="intro">Recent decisions from the Georgia appellate courts, the U.S. Court of Appeals for the Eleventh Circuit, and the U.S. Supreme Court, filtered for relevance to civil litigation and insurance practice. The feed also pulls Florida and Alabama appellate decisions in the same areas as supplementary content; neither is a curated focus. Each entry is an <strong>AI-drafted synopsis</strong> of the actual opinion, written to orient quickly. The linked opinion is the authority, so verify before relying. This is a curated core rather than a complete docket, and the federal courts in particular are filtered hard for the few decisions that bear on Georgia civil litigation and insurance practice.</p>
       <p class="install" id="installRow" hidden><button type="button" id="installGo">[ install the app ]</button><span id="installHow" hidden> &mdash; on iPhone: open in Safari, tap Share, then Add to Home Screen. It works offline once installed.</span></p>
     <p class="intro" style="font-size:13px; color:var(--fg-muted); margin-top:-8px;">This feed shows opinions from the last two years; older opinions are in the <a href="/archive">archive, organized by year</a>.</p>
-    <p class="intro" style="font-size:13px; color:var(--fg-muted); margin-top:-8px;">When a published case is later treated adversely, the card is flagged and the flag is logged in the <a href="/changes">changes ledger</a> (<a href="/changes.xml">RSS</a>). Coverage <a href="/stats">stats</a>, too.</p>
-    <p class="intro" style="font-size:13px; color:var(--fg-muted); margin-top:-8px;">The watch reads statutes as well as decisions: Georgia law enacted or vetoed, read for the same audience, is on the <a href="/legislation">legislative watch</a> (<a href="/legislation.xml">RSS</a>).</p>
+    <p class="intro" style="font-size:13px; color:var(--fg-muted); margin-top:-8px;">When a published case is later treated adversely, the card is flagged and the flag is logged in the <a href="/changes">changes ledger</a>. Coverage <a href="/stats">stats</a>, too.</p>
+    <p class="intro" style="font-size:13px; color:var(--fg-muted); margin-top:-8px;">The watch reads statutes as well as decisions: Georgia law enacted or vetoed, read for the same audience, is on the <a href="/legislation">legislative watch</a>.</p>
     <p class="intro" style="font-size:13px; color:var(--fg-muted); margin-top:-8px;">Prefer email? A weekly digest links you to each new case as it is added. <a href="/subscribe">Subscribe</a>.</p>
 
     <div class="filters search" role="search">

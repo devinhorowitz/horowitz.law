@@ -245,6 +245,51 @@ html.can-copy .op-copycite.copied { color: var(--accent); border-color: var(--ac
 }
 .op-permalink:hover { color: var(--accent); border-color: var(--accent); }
 
+/* ---- Feed buttons: one consistent affordance for reaching the RSS feeds from
+   every feed page (opinions, legislation, changes, archive, digests). Shares the
+   bordered-pill vocabulary of .op-permalink / .op-copycite; the small accent dot
+   echoes the RSS mark without an image, so it stays CSP-clean. The row sits right
+   under each page's subtitle so "where's the feed" has the same answer everywhere. */
+.feeds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 34px;
+}
+.feeds-label {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.feed-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 5px 12px;
+  text-decoration: none;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.feed-btn::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+.feed-btn:hover,
+.feed-btn:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+@media print { .feeds { display: none !important; } }
+
 /* ---- Print: a filtered view of /opinions or /archive prints as a clean
    digest. Filter chrome, navigation, and interactive controls drop out;
    [hidden] cards are already excluded by the browser, so whatever the screen
