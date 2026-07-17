@@ -105,31 +105,42 @@ Keyed on `bill_id`. One object per bill:
 `merge_cards` keys on `bill_id`: a re-carded bill (its `change_hash` moved — an amendment, a
 correction) replaces its card but keeps the original `first_seen`.
 
+## The workflow
+
+`.github/workflows/legislation.yml` runs weekly (Sundays), under Harden-Runner block mode with only
+`api.legiscan.com`, `api.anthropic.com`, and the install/GitHub hosts on its allowlist. It mirrors
+the opinion pipeline's commit model:
+
+- **New/updated cards** → re-render and open (or update) the `bot/legislation-review` PR for a
+  person to confirm. Merge to publish; edit `legislation.json` on the branch to correct.
+- **No new cards** → commit only the advanced seen-state and run log straight to `main` with
+  `[skip ci]` (a settled non-match must not be re-screened, but nothing public changes).
+
+A manual dispatch defaults to `dry_run` (prints the drafted cards, writes nothing).
+
 ## Going live
 
-Two operator steps, both one-time:
+One operator step: **add the `LEGISCAN_API_KEY` secret** (Settings → Secrets and variables →
+Actions). A free key from legiscan.com/legiscan. Until it is set, every scheduled run is a clean
+no-op — the workflow is already committed and safe to leave enabled. The `ANTHROPIC_API_KEY` secret
+the opinion pipeline already uses is reused here.
 
-1. **Add the `LEGISCAN_API_KEY` secret** (Settings → Secrets and variables → Actions). A free key
-   from legiscan.com/legiscan. Without it the module is a clean no-op, so nothing breaks before it
-   is set.
-2. **Enable the schedule** — the `legislation.yml` workflow (added with the render/page step). Like
-   every networked workflow it runs under Harden-Runner block mode with `api.legiscan.com` and
-   `api.anthropic.com` on its allowlist.
-
-Run it by hand first, dry, to see what it drafts (needs both keys):
+Preview it by hand first (needs both keys):
 
 ```
 LEGISCAN_API_KEY=... ANTHROPIC_API_KEY=... python scripts/legislation.py --json
 ```
 
+Optional repo Variables tune it without editing code: `LEGISLATION_STATE` (default `GA`),
+`LEGISLATION_SCREEN_MODEL`, `LEGISLATION_MODEL`, `LEGISLATION_MAX`.
+
 ## Status
 
 - **Shipped:** the core funnel (`scripts/legislation.py`) and its hermetic tests
-  (`scripts/test_legislation.py`) — discovery, status filter, change_hash dedup, screen, writer,
-  card assembly, merge. Fully testable with no key.
-- **Next:** render the cards into a `/legislation` page + `legislation.xml` feed (carrying the CSP
-  pin and registered in `siteconfig.PAGES` and `check_site.py`), and the `legislation.yml`
-  schedule + review-PR wiring.
+  (`scripts/test_legislation.py`); the public `/legislation` page and `legislation.xml` feed
+  (rendered by `scripts/render.py`, registered in `siteconfig.PAGES` and `check_site.py`, covered
+  by the CI idempotency and CSP/token guards); and the weekly `legislation.yml` workflow with its
+  review-PR wiring. Add the key to turn it on.
 - **Later, by source:** the federal statute watch (`LEGISLATION_STATE=US`, for the FAAAA and the
   FMCSA authorizing statutes); the FMCSA **regulatory** watch (Federal Register API); the FRCP/FRE
   rules check (uscourts.gov, low-frequency).

@@ -107,6 +107,8 @@ jobs:
             public/stats.html
             public/digests.html
             public/changes.xml
+            public/legislation.html
+            public/legislation.xml
             public/o
             public/.well-known/security.txt
             public/devin-horowitz.vcf

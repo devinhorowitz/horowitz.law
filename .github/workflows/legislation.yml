@@ -1,0 +1,136 @@
+name: Georgia Legislative Watch
+
+# Watches the Georgia General Assembly (via LegiScan) for bills that became law -- signed, or
+# allowed to become law without signature -- and vetoes, and drafts a card for the ones that
+# touch a civil-litigation practice. Unlike the opinion feed there is NO auto lane: every card
+# is held in a review PR for a person to confirm. A quiet run (nothing enacted moved) costs a
+# single LegiScan call and commits only bookkeeping straight to main.
+#
+# Requires the LEGISCAN_API_KEY secret (a free key from legiscan.com/legiscan). Without it the
+# run is a clean no-op. Leave dry_run checked on a manual dispatch to preview the drafted cards
+# without writing anything or opening a PR.
+on:
+  schedule:
+    - cron: '23 6 * * 0'    # Sundays 06:23 UTC (offset from the other jobs' windows)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (print drafted cards as JSON; write nothing, open no PR)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write          # the failure-alert step opens or comments on a tracking issue
+
+env:
+  PYTHONUNBUFFERED: '1'
+
+concurrency:
+  group: legislation
+  cancel-in-progress: false
+
+jobs:
+  legislation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      # Supply-chain hardening (block mode). Egress this job needs:
+      #   api.legiscan.com     the enacted-bill data (getSessionList / getMasterList / getBill).
+      #   api.anthropic.com    the relevance screen and the card writer.
+      #   pypi.org / files.pythonhosted.org  the requirements install.
+      #   github.com / api.github.com  checkout + PR push, the PR-open and failure-alert gh steps.
+      # Cache/infra endpoints are auto-allowed.
+      - name: Harden the runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.legiscan.com:443
+            api.anthropic.com:443
+            pypi.org:443
+            files.pythonhosted.org:443
+            github.com:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            api.github.com:443
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run the legislative watch
+        id: run
+        env:
+          LEGISCAN_API_KEY: ${{ secrets.LEGISCAN_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LEGISLATION_STATE: ${{ vars.LEGISLATION_STATE || 'GA' }}
+          LEGISLATION_SCREEN_MODEL: ${{ vars.LEGISLATION_SCREEN_MODEL || 'claude-haiku-4-5' }}
+          LEGISLATION_MODEL: ${{ vars.LEGISLATION_MODEL || 'claude-opus-4-8' }}
+          LEGISLATION_MAX: ${{ vars.LEGISLATION_MAX || '40' }}
+        run: |
+          set -o pipefail
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python scripts/legislation.py --json 2>&1 | tee "$RUNNER_TEMP/run.log"
+            echo "changed=0" >> "$GITHUB_OUTPUT"
+          else
+            python scripts/legislation.py --apply 2>&1 | tee "$RUNNER_TEMP/run.log"
+            changed=$(grep -oE 'LEGISLATION_CONTENT_CHANGED=[01]' "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
+            echo "changed=${changed:-0}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # New/updated cards: re-render the page + feed and open (or update) the review PR. A person
+      # confirms every card before it publishes -- merge to accept, edit legislation.json on the
+      # branch to correct.
+      - name: Render the page and feed
+        if: steps.run.outputs.changed == '1'
+        run: python scripts/render.py
+
+      - name: Open review pull request
+        if: steps.run.outputs.changed == '1'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          branch: bot/legislation-review
+          title: 'Georgia Legislative Watch: newly enacted law'
+          commit-message: 'legislation: new enacted/vetoed Georgia law for review'
+          body-path: scripts/pr_body_legislation.md
+          labels: legislation, automated, review
+          delete-branch: true
+          add-paths: |
+            legislation.json
+            legislation_state.json
+            legislation_log.jsonl
+            public/legislation.html
+            public/legislation.xml
+
+      # No new cards: the seen-state and run log still advanced (a settled non-match must not be
+      # re-screened), so commit only that bookkeeping straight to main, like the opinion no-op run.
+      - name: Commit bookkeeping (no new cards)
+        if: steps.run.outputs.changed == '0' && inputs.dry_run != true
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add legislation_state.json legislation_log.jsonl 2>/dev/null || true
+          git diff --cached --quiet || { git commit -m "legislation: record run state [skip ci]"; git push; }
+
+      # Surfaces a broken run instead of letting it fail silently: comments on the one open
+      # tracking issue, or opens it the first time, so repeated failures collect on one issue.
+      - name: Report a failed run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          logtail=$(tail -c 3500 "$RUNNER_TEMP/run.log" 2>/dev/null || true)
+          body=$(printf 'A scheduled Legislative Watch run failed.\n\n%s\n\n**Last output**\n\n```\n%s\n```\n' "$run_url" "${logtail:-(no run output captured)}")
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Legislative Watch run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Legislative Watch run failures" --body "$body"
+          fi

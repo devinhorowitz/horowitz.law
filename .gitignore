@@ -13,6 +13,7 @@ scripts/court_drift.md
 scripts/link_rot.md
 scripts/backfill_pr_body.md
 scripts/treatment_pr_body.md
+scripts/pr_body_legislation.md
 scripts/queue_cases_pr_body.md
 scripts/assess_precedential_pr_body.md
 scripts/heartbeat_alert.md

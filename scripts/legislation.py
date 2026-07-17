@@ -294,17 +294,24 @@ def screen_bill(bill, ai, model=None):
     return keep, areas, str(v.get("reason") or "")[:120]
 
 
+# Sentinel distinguishing a TRANSIENT writer failure (a model/parse error -- retry next run,
+# do not record the bill as seen) from a DEFINITIVE decline (the model read the bill and said it
+# does not belong -- record it seen so we never pay to re-screen it unless it changes). A bare
+# None conflates the two; that difference is what keeps a flaky run from burying a real law AND
+# keeps a settled non-match from being re-screened every week.
+WRITER_ERROR = object()
+
+
 def write_card(bill, ai, model=None):
-    """The card writer. Returns a verdict dict or None if the model declines or errors.
-    Errors return None (the bill drops from this run and is retried next run because its
-    change_hash is only recorded on a successful card), never a partial card."""
+    """The card writer. Returns a verdict dict on a keep, None on a DEFINITIVE decline, or the
+    WRITER_ERROR sentinel on a transient model/parse error. Never a partial card."""
     model = model or WRITE_MODEL
     try:
         v = ai({"model": model, "max_tokens": 900, "system": WRITE_SYSTEM,
                 "messages": [{"role": "user", "content": _bill_brief(bill)}]}, "leg-write")
     except Exception as e:
         _dbg("write failed: %s" % e)
-        return None
+        return WRITER_ERROR
     if v.get("keep") is not True:
         return None
     if not str(v.get("synopsis") or "").strip():
@@ -378,15 +385,19 @@ def _default_ai(body, label="call"):
 
 def run(key=None, fetch=None, ai=None, today=None, max_run=None):
     """Full funnel: discover moved enacted/vetoed bills, screen, fetch detail, write.
-    Returns (cards, notes). Writes nothing -- the caller (or main) decides whether to
-    persist. Fail-open throughout."""
+    Returns (cards, notes, seen_updates). `seen_updates` maps str(bill_id) -> change_hash for
+    every bill that reached a DEFINITIVE outcome this run (carded, or read and declined by the
+    screen or the writer), so the caller can record it as seen and never re-pay to screen it
+    unless it changes. A bill that only hit a transient error is deliberately absent, so it
+    retries next run. Writes nothing itself. Fail-open throughout."""
     key = KEY_LEGISCAN if key is None else key
     ai = ai or _default_ai
     max_run = MAX_RUN if max_run is None else max_run
     notes = []
+    seen_updates = {}
     if not key:
         notes.append("LEGISLATION: no LEGISCAN_API_KEY; skipping (fail-open no-op).")
-        return [], notes
+        return [], notes, seen_updates
     cands = discover(key, fetch=fetch, today=today)
     notes.append("LEGISLATION: %d enacted/vetoed bill(s) moved since last run." % len(cands))
     cards = []
@@ -394,23 +405,29 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None):
         if len(cards) >= max_run:
             notes.append("LEGISLATION: hit LEGISLATION_MAX=%d; remaining bills retry next run." % max_run)
             break
+        bid, ch = str(b.get("bill_id")), (b.get("change_hash") or "")
         keep, areas, reason = screen_bill(b, ai)
         if not keep:
             _dbg("screen dropped %s: %s" % (b.get("number"), reason))
+            seen_updates[bid] = ch      # definitively not relevant; do not re-screen unless it changes
             continue
         detail = bill_detail(b.get("bill_id"), key, fetch=fetch) or b
         # carry the freshest change_hash (the master list's) onto the detail for carding
         if b.get("change_hash"):
             detail["change_hash"] = b.get("change_hash")
         verdict = write_card(detail, ai)
-        if not verdict:
+        if verdict is WRITER_ERROR:
+            continue                    # transient: no seen record, retry next run
+        if verdict is None:
+            seen_updates[bid] = ch      # writer read it and declined: definitive
             continue
         # let the screen's areas fill in if the writer returned none
         if not verdict.get("areas") and areas:
             verdict["areas"] = areas
         cards.append(build_card(detail, verdict, today=today))
+        seen_updates[bid] = ch
     notes.append("LEGISLATION: drafted %d card(s)." % len(cards))
-    return cards, notes
+    return cards, notes, seen_updates
 
 
 # --------------------------------------------------------------------------- #
@@ -439,6 +456,39 @@ def load_cards():
         return []
 
 
+def save_cards(cards):
+    import safeio
+    safeio.atomic_write_text(JSON_PATH, json.dumps(cards, ensure_ascii=False, indent=2) + "\n")
+
+
+def save_seen(seen, today=None):
+    """Persist the seen change_hash map. Stored under a "seen" key (what _load_seen reads) so
+    the file can carry run metadata alongside it without touching the lookup shape."""
+    import safeio
+    today = (today or datetime.date.today()).isoformat()
+    safeio.atomic_write_text(
+        STATE_PATH,
+        json.dumps({"seen": seen, "updated": today, "count": len(seen)},
+                   ensure_ascii=False, indent=2) + "\n")
+
+
+def append_log(rec, cap=2000):
+    """Append one per-run record to the bounded run log (observability), like the opinion
+    pipeline's log. Best-effort: a log failure never fails the run."""
+    import safeio
+    try:
+        lines = []
+        try:
+            with open(LOG_PATH, encoding="utf-8") as f:
+                lines = [ln for ln in f.read().splitlines() if ln.strip()]
+        except FileNotFoundError:
+            pass
+        lines.append(json.dumps(rec, ensure_ascii=False))
+        safeio.atomic_write_text(LOG_PATH, "\n".join(lines[-cap:]) + "\n")
+    except Exception as e:
+        _dbg("log append failed: %s" % e)
+
+
 def merge_cards(existing, new_cards):
     """Merge new cards into the existing list, keyed on bill_id. A re-carded bill
     (its change_hash moved) replaces its prior card but keeps the original first_seen,
@@ -463,15 +513,63 @@ def merge_cards(existing, new_cards):
     return merged, added, updated
 
 
+def _pr_body(added, updated, cards):
+    """The review-PR body: a person confirms every legislation card before it publishes."""
+    lines = ["## Georgia Legislative Watch: newly enacted / vetoed law", "",
+             "The watch found Georgia legislation that became law (signed, or allowed to become law "
+             "without signature) or was vetoed and is relevant to a civil-litigation practice. "
+             "**Every card here is held for your review** — nothing publishes on the machine alone. "
+             "Read each against the enrolled bill, edit `legislation.json` on this branch if needed, "
+             "and merge to publish.", "",
+             "| Bill | Status | Areas | Bill |", "|---|---|---|---|"]
+    for c in cards:
+        lines.append("| %s | %s | %s | [%s](%s) |" % (
+            c.get("number") or "?", c.get("status") or "?",
+            ", ".join(c.get("areas") or []) or "—",
+            (c.get("title") or "")[:80], c.get("url") or ""))
+    lines += ["", "%d new, %d updated." % (added, updated), "",
+              "_AI-drafted summaries; the enrolled bill is the authority._"]
+    return "\n".join(lines) + "\n"
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     as_json = "--json" in argv
-    cards, notes = run()
+    apply = "--apply" in argv
+    cards, notes, seen_updates = run()
     for n in notes:
         print(n)
+
+    if apply and not KEY_LEGISCAN:
+        # Nothing ran (fail-open no-op); do not touch any file.
+        print("LEGISLATION_CONTENT_CHANGED=0")
+        return 0
+
+    if apply:
+        # Merge new cards into legislation.json (keyed on bill_id, preserving first_seen) and record
+        # the seen change_hashes. Persist state on every run (even a no-card run advances seen so a
+        # settled non-match is not re-screened); write the PR body only when a card actually changed.
+        existing = load_cards()
+        merged, added, updated = merge_cards(existing, cards)
+        seen = _load_seen()
+        seen.update(seen_updates)
+        content_changed = bool(added or updated)
+        if content_changed:
+            save_cards(merged)
+        save_seen(seen)
+        append_log({"cards": len(cards), "added": added, "updated": updated,
+                    "seen_total": len(seen), "notes": notes})
+        pr_path = os.path.join(REPO, "scripts", "pr_body_legislation.md")
+        if content_changed:
+            import safeio
+            safeio.atomic_write_text(pr_path, _pr_body(added, updated, cards))
+        # A machine-readable signal for the workflow: did content change (open a PR) or not (skip)?
+        print("LEGISLATION_CONTENT_CHANGED=%s" % ("1" if content_changed else "0"))
+        print("LEGISLATION: %d added, %d updated; %d bills tracked." % (added, updated, len(seen)))
+
     if as_json:
         print(json.dumps(cards, ensure_ascii=False, indent=2))
-    else:
+    elif not apply:
         for c in cards:
             print("  %-8s %-8s %s  [%s]" % (c["number"], c["status"],
                                             (c["title"] or "")[:70], ",".join(c["areas"]) or "-"))

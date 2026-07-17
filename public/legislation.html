@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Georgia Legislative Watch · horowitz.law</title>
+<meta name="description" content="Georgia legislation that became law or was vetoed, read for a civil-litigation and insurance-defense practice. AI-drafted summaries, human-confirmed.">
+<meta name="theme-color" content="#0d0e10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5ede0" media="(prefers-color-scheme: light)">
+
+<link rel="canonical" href="https://horowitz.law/legislation">
+
+<!-- RSS auto-discovery -->
+<link rel="alternate" type="application/rss+xml" title="horowitz.law — Georgia Legislative Watch" href="/legislation.xml">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://horowitz.law/legislation">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Georgia Legislative Watch · horowitz.law">
+<meta property="og:description" content="Georgia legislation that became law or was vetoed, read for a civil-litigation and insurance-defense practice. AI-drafted summaries, human-confirmed.">
+<meta property="og:image" content="https://horowitz.law/og-card.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:site_name" content="horowitz.law">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Georgia Legislative Watch · horowitz.law">
+<meta name="twitter:description" content="Georgia legislation that became law or was vetoed, read for a civil-litigation and insurance-defense practice. AI-drafted summaries, human-confirmed.">
+<meta name="twitter:image" content="https://horowitz.law/og-card.jpg">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="GA Watch">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+<link rel="preload" href="/fonts/jetbrains-mono-400.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-500.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-600.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-700.subset.woff2" as="font" type="font/woff2" crossorigin>
+
+<!-- pre-paint theme + .js marker: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js), and tag <html> with .js so JS-gated styling fails open when scripts are blocked; CSP hash-pinned -->
+<script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}document.documentElement.className+=' js';})();</script>
+<link rel="stylesheet" href="/base.css?v=b81ef98c82">
+
+<style>
+  :root {
+    --bg: #0d0e10;
+    --fg: #e8e3d8;
+    --fg-muted: #807a72;
+    --accent: #ff9e5e;
+    --border: #25262a;
+    --grain-opacity: 0.04;
+    --scanline-opacity: 0.018;
+  }
+
+  [data-theme="light"] {
+    --bg: #f5ede0;
+    --fg: #1a1a1a;
+    --fg-muted: #6a6560;
+    --accent: #a4471a;
+    --border: #d4cab8;
+    --grain-opacity: 0.025;
+    --scanline-opacity: 0;
+  }
+
+  /* First-visit: honor an OS light preference on initial paint, before any
+     explicit choice exists. The :not([data-theme="dark"]) guard ensures an
+     explicit dark toggle still wins on a light-mode OS. Keep vars in sync
+     with the [data-theme="light"] block above. */
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f5ede0;
+      --fg: #1a1a1a;
+      --fg-muted: #6a6560;
+      --accent: #a4471a;
+      --border: #d4cab8;
+      --grain-opacity: 0.025;
+      --scanline-opacity: 0;
+    }
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--fg);
+    background: var(--bg);
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+    overflow-wrap: break-word;
+  }
+
+  .container {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+    position: relative;
+    z-index: 3;
+  }
+
+  /* topbar */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 72px;
+    font-size: 13px;
+  }
+
+  .topbar-prompt {
+    color: var(--fg-muted);
+    letter-spacing: 0.05em;
+  }
+
+  .topbar-prompt a {
+    color: var(--fg-muted);
+    text-decoration: none;
+    border-bottom: 1px dotted transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .topbar-prompt a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .theme-toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--fg-muted);
+    font: inherit;
+    font-size: 11px;
+    text-transform: lowercase;
+    letter-spacing: 0.05em;
+    padding: 5px 11px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.2s;
+  }
+
+  /* page title */
+  h1.page-title {
+    font-size: clamp(28px, 4.5vw, 38px);
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    margin-bottom: 12px;
+  }
+
+  .subtitle {
+    color: var(--accent);
+    font-size: 13px;
+    margin-bottom: 48px;
+    letter-spacing: 0.03em;
+  }
+
+  /* sections */
+  section { margin-bottom: 44px; }
+
+  /* footer */
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--fg-muted);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  footer a {
+    color: var(--fg-muted);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--fg-muted);
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  /* theme transition flicker — matches main site */
+  @keyframes themeFlicker {
+    0%   { opacity: 1; }
+    18%  { opacity: 0.78; }
+    34%  { opacity: 0.95; }
+    50%  { opacity: 0.68; }
+    68%  { opacity: 0.92; }
+    85%  { opacity: 0.96; }
+    100% { opacity: 1; }
+  }
+
+  html.theme-flickering .container > *:not(.topbar) {
+    animation: themeFlicker var(--flicker-duration, 550ms) ease-out forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html.theme-flickering .container > *:not(.topbar) {
+      animation: none !important;
+    }
+    body::after { display: none !important; }
+  }
+
+  /* skip-to-content link (keyboard accessibility) */
+  .skip-link {
+    position: absolute;
+    inset-inline-start: -9999px;
+    top: 0;
+    background: var(--accent);
+    color: var(--bg);
+    padding: 8px 16px;
+    font-size: 12px;
+    text-decoration: none;
+    z-index: 100;
+  }
+  .skip-link:focus {
+    inset-inline-start: 16px;
+    top: 16px;
+  }
+
+  /* focus indicators for keyboard navigation */
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  @media (max-width: 600px) {
+    .container { padding: 36px 22px 80px; }
+    .topbar { margin-bottom: 50px; }
+    footer { flex-direction: column; align-items: flex-start; }
+  }
+
+  .intro { color: var(--fg-muted); font-size: 13px; margin-bottom: 18px; max-width: 64ch; }
+  .intro strong { color: var(--fg); font-weight: 600; }
+  .intro a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--fg-muted); transition: color 0.2s, border-color 0.2s; }
+  .intro a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* legislation cards */
+  .leg { border: 1px solid var(--border); padding: 18px 20px; margin-bottom: 18px; }
+  .leg-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .leg-status { font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 700; padding: 2px 8px; border: 1px solid currentColor; }
+  .leg-enacted { color: #5ea88a; }
+  .leg-vetoed  { color: #e06c5e; }
+  .leg-other   { color: var(--fg-muted); }
+  [data-theme="light"] .leg-enacted { color: #2f7d5b; }
+  [data-theme="light"] .leg-vetoed  { color: #b03a2e; }
+  .leg-number { font-weight: 600; font-size: 13px; color: var(--fg); font-variant-numeric: tabular-nums; }
+  .leg-date { color: var(--fg-muted); font-size: 12px; font-variant-numeric: tabular-nums; margin-left: auto; }
+  .leg-title { font-weight: 600; font-size: 15px; line-height: 1.4; margin-bottom: 12px; }
+  .leg-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .leg-tags .tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-muted); border: 1px solid var(--border); padding: 2px 7px; }
+  .leg-synopsis { font-size: 13.5px; line-height: 1.7; margin-bottom: 10px; }
+  .leg-why { font-size: 13px; color: var(--fg); margin-bottom: 12px; }
+  .leg-why strong { color: var(--accent); font-weight: 600; }
+  .leg-foot { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline; font-size: 11px; color: var(--fg-muted); border-top: 1px solid var(--border); padding-top: 10px; }
+  .leg-foot a { color: var(--fg-muted); text-decoration: none; border-bottom: 1px dotted var(--fg-muted); transition: color 0.2s, border-color 0.2s; }
+  .leg-foot a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  .leg-eff { color: var(--fg); }
+  .leg-disclaimer { margin-left: auto; font-style: italic; }
+  .leg-empty { color: var(--fg-muted); font-size: 13px; border: 1px dashed var(--border); padding: 20px; line-height: 1.7; }
+  @media (max-width: 600px) { .leg-date, .leg-disclaimer { margin-left: 0; } }
+  @media print { .leg { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<div class="container">
+
+  <div class="topbar">
+    <span class="topbar-prompt"><a href="/">~ horowitz.law</a>/legislation</span>
+    <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false" aria-label="Toggle light or dark theme">[ light ]</button>
+  </div>
+
+  <main id="main-content">
+
+    <h1 class="page-title">Georgia Legislative Watch</h1>
+    <div class="subtitle">// law that moved, not just cases</div>
+
+    <p class="intro">The appellate watch reads decisions; this reads <strong>statutes</strong>. It watches the Georgia General Assembly for bills that became law — signed by the Governor, or allowed to become law without signature — and vetoes, and drafts a plain-English card for the ones that touch a civil-litigation and insurance-defense practice: tort reform, damages, civil procedure, evidence, insurance, premises, and motor-carrier law.</p>
+    <p class="intro" style="margin-top:-6px;">Unlike the case feed, <strong>every entry here is confirmed by a person before it appears</strong> — enactments are rare and consequential, so nothing publishes on the machine alone. Each summary is AI-drafted; the <a href="https://legiscan.com/">enrolled bill</a> is the authority. Machine-readable too: this is an <a href="/legislation.xml">RSS feed</a>. The case feed lives at <a href="/opinions">the watch</a>.</p>
+
+    <!-- legislation:start (generated by scripts/render.py from legislation.json; do not edit by hand) -->
+      <div class="leg-empty">No enacted legislation is carded yet. This watch fills as the Georgia General Assembly acts — each entry is a bill that became law (signed, or allowed to become law without signature) or was vetoed, read for civil-litigation impact and confirmed by hand before it appears here.</div>
+    <!-- legislation:end -->
+
+  </main>
+
+  <footer>
+    <span>© 2026 · Hand-coded by <span data-cfg-text="name">Devin R. Horowitz</span></span>
+    <span><a href="/opinions">← back to the watch</a></span>
+  </footer>
+
+</div>
+
+<script src="/app.js?v=92092578f8" defer></script>
+
+</body>
+</html>

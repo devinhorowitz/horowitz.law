@@ -109,6 +109,7 @@ PUBLISHER_NAME   = NAME
 PAGES = [
     ("/",          "",           "monthly", "1.0", "2026-05-30"),
     ("/opinions",  "opinions/",  "weekly",  "0.8", ""),
+    ("/legislation", "legislation", "weekly", "0.6", "2026-07-17"),
     ("/archive",   "archive/",   "weekly",  "0.5", ""),
     ("/changes",   "changes",    "weekly",  "0.5", ""),
     ("/stats",     "stats",      "weekly",  "0.3", ""),

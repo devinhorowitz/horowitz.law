@@ -52,6 +52,12 @@ RESUME_MD_PATH = os.path.join(REPO, "resume.md")
 SECURITY_TXT_PATH = os.path.join(WEB, ".well-known", "security.txt")
 VCARD_PATH = os.path.join(WEB, "devin-horowitz.vcf")
 NOTFOUND_PATH = os.path.join(WEB, "404.html")
+# Legislative Watch (a sibling feed to opinions; see scripts/legislation.py and docs/LEGISLATION.md).
+# legislation.json is pipeline data at the repo root, like opinions.json; the page and feed are
+# generated under WEB and owned by render (in OUTPUT_PATHS below).
+LEG_JSON_PATH = os.path.join(REPO, "legislation.json")
+LEG_HTML_PATH = os.path.join(WEB, "legislation.html")
+LEG_XML_PATH  = os.path.join(WEB, "legislation.xml")
 # Pages outside the marker-injection set whose footer year would otherwise rot on
 # Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
 # place, writing only when the year actually changed, so it is a no-op all year;
@@ -76,6 +82,7 @@ def _rel(p):
 OUTPUT_PATHS = sorted({_rel(p) for p in (
     STATIC_PAGES + [HTML_PATH, ARCHIVE_PATH, XML_PATH, SITEMAP_PATH, CHANGES_PATH, STATS_PATH,
                     CHANGES_XML_PATH, DIGESTS_PATH, SECURITY_TXT_PATH, VCARD_PATH,
+                    LEG_HTML_PATH, LEG_XML_PATH,
                     PERMA_DIR, AREAS_DIR])})
 
 _YEAR_RE = re.compile(r'(&copy;|\u00a9)\s*\d{4}')
@@ -942,6 +949,142 @@ def rss_item(e):
     lines += [f"      <description><![CDATA[{desc}]]></description>", "    </item>"]
     return "\n".join(lines)
 
+
+# ============================== legislative watch ==============================
+# A sibling feed to opinions: Georgia bills that became law (or were vetoed), read for a
+# civil-litigation practice (scripts/legislation.py; docs/LEGISLATION.md). Same house style,
+# but human-confirmed -- no auto lane -- so this renderer only ever projects legislation.json.
+
+_LEG_STATUS_LABEL = {"enacted": "Enacted", "vetoed": "Vetoed"}
+_LEG_EMPTY = ('      <div class="leg-empty">No enacted legislation is carded yet. This watch fills as '
+              'the Georgia General Assembly acts — each entry is a bill that became law (signed, or '
+              'allowed to become law without signature) or was vetoed, read for civil-litigation impact '
+              'and confirmed by hand before it appears here.</div>')
+
+
+def load_legislation():
+    """The legislation source of truth (a list of card objects), or [] if absent/unreadable."""
+    try:
+        with open(LEG_JSON_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except FileNotFoundError:
+        return []
+    except Exception:
+        return []
+
+
+def _leg_sorted(cards):
+    return sorted(cards, key=lambda c: (str(c.get("status_date") or ""), int(c.get("bill_id") or 0)),
+                  reverse=True)
+
+
+def legislation_card_html(c):
+    status = (c.get("status") or "").strip().lower()
+    status_class = status if status in _LEG_STATUS_LABEL else "other"
+    slabel = _LEG_STATUS_LABEL.get(status, (status.title() or "—"))
+    areas = [a for a in (c.get("areas") or []) if a in AREA_LABELS]
+    tags = "".join(f'<span class="tag">{_esc(AREA_LABELS[a])}</span>' for a in areas)
+    date = c.get("status_date") or ""
+    date_lbl = _date_label(date) if _valid_date(date) else date
+    impact = (c.get("impact") or "").strip()
+    impact_html = (f'        <p class="leg-why"><strong>Why it matters:</strong> {_esc(impact)}</p>\n'
+                   if impact else "")
+    eff = (c.get("effective_date") or "").strip()
+    eff_html = (f'          <span class="leg-eff">Effective {_esc(_date_label(eff) if _valid_date(eff) else eff)}</span>\n'
+                if eff else "")
+    url = _safe_url(c.get("url") or "")
+    state_link = _safe_url(c.get("state_link") or "")
+    src = (f'<a href="{_attr(url)}" target="_blank" rel="noopener noreferrer">LegiScan record →</a>'
+           if url else "")
+    official = (f' · <a href="{_attr(state_link)}" target="_blank" rel="noopener noreferrer">state page</a>'
+                if state_link else "")
+    return (
+        f'      <article id="leg-{int(c["bill_id"])}" class="leg" data-status="{status_class}" '
+        f'data-areas="{",".join(areas)}" data-date="{_attr(date)}">\n'
+        f'        <div class="leg-head"><span class="leg-status leg-{status_class}">{_esc(slabel)}</span>'
+        f'<span class="leg-number">{_esc(c.get("number") or "")}</span>'
+        f'<span class="leg-date">{_esc(date_lbl)}</span></div>\n'
+        f'        <div class="leg-title">{_esc((c.get("title") or "").strip())}</div>\n'
+        + (f'        <div class="leg-tags">{tags}</div>\n' if tags else "")
+        + f'        <p class="leg-synopsis">{_esc((c.get("synopsis") or "").strip())}</p>\n'
+        + impact_html
+        + '        <div class="leg-foot">\n'
+        + (f'          <span class="leg-source">{src}{official}</span>\n' if (src or official) else "")
+        + eff_html
+        + '          <span class="leg-disclaimer">AI-drafted summary · verify against the enrolled bill</span>\n'
+        + '        </div>\n'
+        + '      </article>'
+    )
+
+
+def legislation_rss_item(c):
+    status = (c.get("status") or "").strip().lower()
+    slabel = _LEG_STATUS_LABEL.get(status, status.title() or "Update")
+    cats = [slabel] + [AREA_LABELS[a] for a in (c.get("areas") or []) if a in AREA_LABELS]
+    desc = str(c.get("synopsis") or "")
+    impact = (c.get("impact") or "").strip()
+    if impact:
+        desc += " Why it matters: " + impact
+    eff = (c.get("effective_date") or "").strip()
+    if eff:
+        desc += " Effective %s." % eff
+    desc += " AI-drafted summary. Verify against the enrolled bill."
+    url = c.get("url") or ""
+    if url:
+        desc += " " + url
+    desc = _xml_safe(desc).replace("]]>", "]]]]><![CDATA[>")
+    title = ("%s — %s" % (c.get("number") or "", (c.get("title") or "").strip())).strip(" —")
+    guid = url or ("urn:legiscan:%s" % c.get("bill_id"))
+    date = c.get("status_date") or ""
+    pub = _rfc822(date) if _valid_date(date) else _rfc822(datetime.date.today().isoformat())
+    lines = ["    <item>",
+             f"      <title>{xml_escape(_xml_safe(title))} ({xml_escape(slabel)})</title>",
+             f"      <link>{xml_escape(url)}</link>",
+             f'      <guid isPermaLink="{"true" if url else "false"}">{xml_escape(guid)}</guid>',
+             f"      <pubDate>{pub}</pubDate>"]
+    lines += [f"      <category>{xml_escape(cat)}</category>" for cat in cats]
+    lines += [f"      <description><![CDATA[{desc}]]></description>", "    </item>"]
+    return "\n".join(lines)
+
+
+def render_legislation():
+    """Project legislation.json onto the /legislation page (between the legislation markers) and
+    legislation.xml. Deterministic from legislation.json so the CI idempotency gate covers it.
+    No-ops the page injection if legislation.html is absent; always (re)writes the feed."""
+    cards = _leg_sorted([c for c in load_legislation()
+                         if isinstance(c, dict) and c.get("bill_id") is not None])
+    if os.path.exists(LEG_HTML_PATH):
+        body = "\n\n".join(legislation_card_html(c) for c in cards) if cards else _LEG_EMPTY
+        _inject(LEG_HTML_PATH, "legislation", body)
+        # Self-contained stamp (tokens + footer year + identity hooks), like the STATIC_PAGES loop
+        # does for the hand-authored pages; this page is neither injected-only nor fully static.
+        doc = open(LEG_HTML_PATH, encoding="utf-8").read()
+        stamped = _stamp_tokens(_stamp_year(_stamp_identity(doc)))
+        if stamped != doc:
+            safeio.atomic_write_text(LEG_HTML_PATH, stamped)
+
+    build = (_rfc822(cards[0]["status_date"])
+             if (cards and _valid_date(cards[0].get("status_date") or ""))
+             else _rfc822(datetime.date.today().isoformat()))
+    desc = ("Georgia legislation that became law (signed, or allowed to become law without signature) "
+            "or was vetoed, read for a civil-litigation and insurance-defense practice. Each summary is "
+            "AI-drafted and human-confirmed; the enrolled bill is the authority.")
+    out = ['<?xml version="1.0" encoding="UTF-8"?>',
+           '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
+           '  <channel>',
+           '    <title>horowitz.law: Georgia Legislative Watch</title>',
+           f'    <link>{SITE}/legislation</link>',
+           f'    <atom:link href="{SITE}/legislation.xml" rel="self" type="application/rss+xml" />',
+           f'    <description>{xml_escape(desc)}</description>',
+           '    <language>en-us</language>',
+           f'    <lastBuildDate>{build}</lastBuildDate>',
+           '    <generator>horowitz.law Georgia Legislative Watch (prototype)</generator>']
+    out += [legislation_rss_item(c) for c in cards]
+    out += ['  </channel>', '</rss>', '']
+    safeio.atomic_write_text(LEG_XML_PATH, "\n".join(out))
+
+
 def archive_html(entries):
     """All entries, grouped by decision year (desc), with a year jump-nav."""
     by_year = {}
@@ -1458,6 +1601,10 @@ def render(entries=None):
     out += [rss_item(e) for e in recent]
     out += ['  </channel>', '</rss>', '']
     safeio.atomic_write_text(XML_PATH, "\n".join(out))
+
+    # The Legislative Watch page + feed: a sibling projection, from legislation.json (see
+    # scripts/legislation.py). Independent of the opinion entries above; self-stamping.
+    render_legislation()
 
     # The treatment ledger, its feed, the stats page, and the permalinks: all
     # deterministic projections of the same opinions.json the cards come from.

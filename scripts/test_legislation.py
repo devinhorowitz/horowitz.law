@@ -170,8 +170,8 @@ def main():
           L.write_card(sb68, make_ai({"leg-write": {"keep": False}})) is None)
     check("writer declines (None) on an empty synopsis",
           L.write_card(sb68, make_ai({"leg-write": {"keep": True, "synopsis": "  "}})) is None)
-    check("writer FAILS CLOSED on a model error (None, never a partial card)",
-          L.write_card(sb68, make_ai({"leg-write": boom})) is None)
+    check("writer signals a TRANSIENT error distinctly (WRITER_ERROR, not None)",
+          L.write_card(sb68, make_ai({"leg-write": boom})) is L.WRITER_ERROR)
 
     # --- card assembly ---
     card = L.build_card(sb68, good_v, today=__import__("datetime").date(2026, 7, 17))
@@ -185,8 +185,9 @@ def main():
     check("card blanks a malformed effective_date", bad_eff["effective_date"] == "")
 
     # --- full run: no key is a clean no-op ---
-    cards, notes = L.run(key="", fetch=fake_fetch, ai=make_ai({}))
-    check("run with no key is a fail-open no-op", cards == [] and any("no LEGISCAN_API_KEY" in n for n in notes))
+    cards, notes, seen = L.run(key="", fetch=fake_fetch, ai=make_ai({}))
+    check("run with no key is a fail-open no-op",
+          cards == [] and seen == {} and any("no LEGISCAN_API_KEY" in n for n in notes))
 
     # --- full run: end to end, screen drops the appropriations bill, writer cards the rest ---
     def screen_router(body):
@@ -200,16 +201,28 @@ def main():
                 "impact": "It matters.", "effective_date": ""}
 
     ai = make_ai({"leg-screen": screen_router, "leg-write": write_router})
-    cards, notes = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai,
-                         today=__import__("datetime").date(2026, 7, 17))
+    cards, notes, seen = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai,
+                               today=__import__("datetime").date(2026, 7, 17))
     got = {c["bill_id"] for c in cards}
     check("run cards the enacted tort bill and the vetoed bill", 111 in got and 222 in got)
     check("run's screen dropped the appropriations bill", 444 not in got)
     check("run never cards an introduced bill", 333 not in got)
+    check("run records a carded bill as seen (its change_hash)", seen.get("111") == "h-sb68-v1")
+    check("run records a screen-dropped bill as seen (won't re-screen unless it changes)",
+          seen.get("444") == "h-hb900-v1")
+    check("run never records an introduced bill in seen", "333" not in seen)
+
+    # a transient writer error must NOT be recorded seen (so it retries next run)
+    err_ai = make_ai({"leg-screen": {"relevant": True, "areas": [], "reason": "x"},
+                      "leg-write": boom})
+    _, _, seen_err = L.run(key="GOODKEY", fetch=fake_fetch, ai=err_ai,
+                           today=__import__("datetime").date(2026, 7, 17))
+    check("a transient writer error leaves the bill un-seen (retries next run)",
+          "111" not in seen_err and "222" not in seen_err)
 
     # --- run honors LEGISLATION_MAX ---
-    capped, cnotes = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, max_run=1,
-                           today=__import__("datetime").date(2026, 7, 17))
+    capped, cnotes, _ = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, max_run=1,
+                              today=__import__("datetime").date(2026, 7, 17))
     check("run honors max_run and says remaining bills retry",
           len(capped) == 1 and any("LEGISLATION_MAX" in n for n in cnotes))
 
