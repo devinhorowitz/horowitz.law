@@ -6,8 +6,17 @@
     <atom:link href="https://horowitz.law/opinions.xml" rel="self" type="application/rss+xml" />
     <description>AI-assisted synopses of new Georgia appellate, Eleventh Circuit, and U.S. Supreme Court opinions, filtered for civil litigation and insurance practice. Each synopsis is AI-drafted; the linked opinion is the authority. A curated core, not a complete docket. This feed covers the most recent two years; older opinions are archived by year at https://horowitz.law/archive.</description>
     <language>en-us</language>
-    <lastBuildDate>Wed, 15 Jul 2026 12:00:00 -0400</lastBuildDate>
+    <lastBuildDate>Fri, 17 Jul 2026 12:00:00 -0400</lastBuildDate>
     <generator>horowitz.law Georgia Appellate Watch (prototype)</generator>
+    <item>
+      <title>Christie v. Publix Super Markets, Inc. (Fla. DCA)</title>
+      <link>https://www.courtlistener.com/opinion/10932338/deana-christie-v-publix-super-markets-inc/</link>
+      <guid isPermaLink="true">https://www.courtlistener.com/opinion/10932338/deana-christie-v-publix-super-markets-inc/</guid>
+      <pubDate>Fri, 17 Jul 2026 12:00:00 -0400</pubDate>
+      <category>District Court of Appeal of Florida</category>
+      <category>premises</category>
+      <description><![CDATA[In a slip and fall case governed by section 768.0755, Florida Statutes, plaintiff slipped in a large puddle of water in the water and soda aisle. The court held that evidence of the puddle's size, described as about four feet by four feet, combined with testimony of a leaking float and water drops down the aisle and the presence of a store employee in the immediate vicinity, created a genuine dispute of material fact on constructive knowledge. The court reversed summary judgment on the constructive knowledge claim and affirmed summary judgment on the actual knowledge claim. Why it matters: The decision reiterates that the size and source of a transitory substance, together with an employee's proximity to the hazard, can supply the circumstantial evidence needed to reach a jury on constructive notice under section 768.0755. Also: The court affirmed, without further comment, the entry of summary judgment for the store on plaintiff's actual knowledge claim. Why it matters: The disposition confirms that the actual knowledge theory failed even as the constructive knowledge theory survived. AI-drafted summary. Verify against the opinion. https://www.courtlistener.com/opinion/10932338/deana-christie-v-publix-super-markets-inc/]]></description>
+    </item>
     <item>
       <title>Annesser Armenteros, PLLC v. Joseph C. Caparo Jr. (Fla. DCA)</title>
       <link>https://www.courtlistener.com/opinion/10928205/annesser-armenteros-pllc-v-joseph-c-caparo-jr/</link>

@@ -1,8 +1,25 @@
 {
   "area": "premises",
   "label": "premises",
-  "count": 13,
+  "count": 14,
   "opinions": [
+    {
+      "cluster_id": 10932338,
+      "name": "Christie v. Publix Super Markets, Inc.",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-07-17",
+      "disposition": "affirmed in part, reversed in part, and remanded",
+      "areas": [
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10932338/deana-christie-v-publix-super-markets-inc/",
+      "synopsis": "In a slip and fall case governed by section 768.0755, Florida Statutes, plaintiff slipped in a large puddle of water in the water and soda aisle. The court held that evidence of the puddle's size, described as about four feet by four feet, combined with testimony of a leaking float and water drops down the aisle and the presence of a store employee in the immediate vicinity, created a genuine dispute of material fact on constructive knowledge. The court reversed summary judgment on the constructive knowledge claim and affirmed summary judgment on the actual knowledge claim.",
+      "why": "The decision reiterates that the size and source of a transitory substance, together with an employee's proximity to the hazard, can supply the circumstantial evidence needed to reach a jury on constructive notice under section 768.0755.",
+      "dockets": [
+        "5D2025-1184"
+      ]
+    },
     {
       "cluster_id": 10925105,
       "name": "Publix Supermarkets, Inc. v. Goga",
