@@ -63,6 +63,9 @@ LEG_XML_PATH  = os.path.join(WEB, "legislation.xml")
 # "law that moved" for this practice); regulations.json is the source, regulations.xml the feed.
 REG_JSON_PATH = os.path.join(REPO, "regulations.json")
 REG_XML_PATH  = os.path.join(WEB, "regulations.xml")
+# Court-rules watch (FRCP/FRE amendments; see scripts/courtrules.py). A third section of the
+# /legislation page, page-only (no feed): a few items a year, so the section is the right surface.
+CR_JSON_PATH  = os.path.join(REPO, "courtrules.json")
 # Pages outside the marker-injection set whose footer year would otherwise rot on
 # Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
 # place, writing only when the year actually changed, so it is a no-op all year;
@@ -1217,12 +1220,81 @@ def render_regulations():
     safeio.atomic_write_text(REG_XML_PATH, "\n".join(out))
 
 
+# ---- Federal court rules (a third section on the /legislation page; page-only, no feed) ----
+_CR_EMPTY = ('      <div class="leg-empty">No Federal Rules amendments are carded yet. This section '
+             'fills as the Federal Rules of Civil Procedure, Evidence, and Appellate Procedure are '
+             'amended (they take effect December 1 under the Rules Enabling Act) — read for '
+             'civil-practice impact and confirmed by hand.</div>')
+_CR_SETS = {"FRCP": "Fed. R. Civ. P.", "FRE": "Fed. R. Evid.",
+            "FRAP": "Fed. R. App. P.", "FRBP": "Fed. R. Bankr. P."}
+
+
+def load_courtrules():
+    try:
+        with open(CR_JSON_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except FileNotFoundError:
+        return []
+    except Exception:
+        return []
+
+
+def _cr_sorted(cards):
+    return sorted(cards, key=lambda c: (str(c.get("effective_date") or ""), str(c.get("rule_set") or ""),
+                                        str(c.get("rule") or "")), reverse=True)
+
+
+def courtrules_card_html(c):
+    rs = (c.get("rule_set") or "").strip().upper()
+    status = (c.get("status") or "pending").strip().lower()
+    status_class = "final" if status == "effective" else "proposed"
+    status_label = "Effective" if status == "effective" else "Pending"
+    areas = ""  # court rules are not tagged with the practice-area taxonomy
+    eff = (c.get("effective_date") or "").strip()
+    eff_html = (f'          <span class="leg-eff">Effective {_esc(_date_label(eff) if _valid_date(eff) else eff)}</span>\n'
+                if eff else "")
+    impact = (c.get("impact") or "").strip()
+    impact_html = (f'        <p class="leg-why"><strong>Why it matters:</strong> {_esc(impact)}</p>\n'
+                   if impact else "")
+    url = _safe_url(c.get("url") or "")
+    src = (f'<a href="{_attr(url)}" target="_blank" rel="noopener noreferrer">uscourts.gov →</a>'
+           if url else "")
+    title = ("%s — %s" % (rs, c.get("rule") or "")).strip(" —") if (rs or c.get("rule")) else ""
+    long_set = _CR_SETS.get(rs, "")
+    return (
+        f'      <article id="cr-{_attr(str(c.get("id") or ""))}" class="leg" '
+        f'data-ruleset="{_attr(rs.lower())}" data-status="{status_class}">\n'
+        f'        <div class="leg-head"><span class="leg-type leg-type-{status_class}">{_esc(status_label)}</span>'
+        f'<span class="leg-juris">{_esc(rs)}</span><span class="leg-number">{_esc(c.get("rule") or "")}</span></div>\n'
+        + (f'        <div class="leg-title">{_esc(title)}{(" · " + _esc(long_set)) if long_set else ""}</div>\n')
+        + f'        <p class="leg-synopsis">{_esc((c.get("summary") or "").strip())}</p>\n'
+        + impact_html
+        + '        <div class="leg-foot">\n'
+        + (f'          <span class="leg-source">{src}</span>\n' if src else "")
+        + eff_html
+        + '          <span class="leg-disclaimer">AI-extracted · verify against the rule text</span>\n'
+        + '        </div>\n'
+        + '      </article>' + (areas or "")
+    )
+
+
+def render_courtrules():
+    """Project courtrules.json onto the /legislation page (between the courtrules markers).
+    Page-only (no feed). The page itself is stamped once by render_legislation_page()."""
+    cards = _cr_sorted([c for c in load_courtrules() if isinstance(c, dict) and c.get("id")])
+    if os.path.exists(LEG_HTML_PATH):
+        body = "\n\n".join(courtrules_card_html(c) for c in cards) if cards else _CR_EMPTY
+        _inject(LEG_HTML_PATH, "courtrules", body)
+
+
 def render_legislation_page():
-    """Render both sections of the /legislation page (statutes + federal regulations) and their two
-    feeds, then stamp the page once (tokens + footer year + identity hooks). Deterministic; the CI
-    idempotency gate covers legislation.html, legislation.xml, and regulations.xml."""
+    """Render the three sections of the /legislation page (statutes + federal regulations + court
+    rules) and the two feeds, then stamp the page once (tokens + footer year + identity hooks).
+    Deterministic; the CI idempotency gate covers legislation.html, legislation.xml, regulations.xml."""
     render_legislation()
     render_regulations()
+    render_courtrules()
     if os.path.exists(LEG_HTML_PATH):
         doc = open(LEG_HTML_PATH, encoding="utf-8").read()
         stamped = _stamp_tokens(_stamp_year(_stamp_identity(doc)))

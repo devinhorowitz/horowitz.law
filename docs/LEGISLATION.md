@@ -16,9 +16,10 @@ Case law, regulations, and statutes are three different watches, not one:
   (49 CFR 350–399), not in any legislature. A different source (the Federal Register API), a
   different cadence — **now shipped** as a sibling watch (`scripts/regulations.py`), rendered in
   its own "Federal regulations" section of the /legislation page. See below.
-- **Court rules** — the **FRCP / FRE**, which change through the Rules Enabling Act on a slow
-  annual cycle and are published by uscourts.gov, not enacted as ordinary statutes. Lowest ROI to
-  automate; a manual once-a-year check is often the right tool. Not in v1.
+- **Court rules** — the **FRCP / FRE / FRAP**, which change through the Rules Enabling Act on a slow
+  annual cycle (amendments take effect December 1) and are published by uscourts.gov, not enacted as
+  ordinary statutes. **Now shipped** as the lightest-touch watch (`scripts/courtrules.py`), by
+  resilient AI *extraction* over the page text rather than fragile scraping. See below.
 
 Congress matters to this practice mainly through a handful of statutes — the **FAAAA**
 preemption that governs motor-carrier claims, the statutes that authorize FMCSA, the federal
@@ -127,16 +128,35 @@ their own `regulations.xml` feed), because statutes and regulations are the two 
 moved" for this practice. The card schema keys on `document_number` and carries the agency, rule
 type (Final/Proposed), CFR references, RIN, and effective date.
 
+## The court-rules watch (the lightest-touch source)
+
+`scripts/courtrules.py` watches amendments to the **Federal Rules** — Civil Procedure, Evidence,
+Appellate Procedure, Bankruptcy — which are neither statutes nor agency regulations: they change
+through the Rules Enabling Act (28 U.S.C. § 2072), adopted by the Supreme Court by about May 1 and
+effective the following **December 1**. The source is **uscourts.gov** (keyless), a web page rather
+than an API, so the design trades cleverness for resilience:
+
+- It reads each page as **text** and hands it to the model to **extract** the amendments (rule,
+  summary, status, effective date), rather than scraping a CSS structure that breaks on a redesign.
+- It **content-hashes** each page; an unchanged page skips the model call entirely, so a run costs
+  one cheap fetch until the rules actually move.
+- It **fails open** and holds every card for a human, like the others.
+
+Cards render in a **"Court rules"** section of the /legislation page. There is deliberately **no
+separate feed** here — at a handful of items a year, the page section is the right surface. The card
+keys on a stable synthetic id (`rule_set|rule|effective_date`) and carries the rule set, rule number,
+status (pending/effective), and effective date.
+
 ## The workflow
 
 `.github/workflows/legislation.yml` — one **Legislative & Regulatory Watch** job — runs weekly
 (Sundays) under Harden-Runner block mode with `api.legiscan.com`, `www.federalregister.gov`,
-`api.anthropic.com`, and the install/GitHub hosts on its allowlist. It runs both watches, renders
-once, and mirrors the opinion pipeline's commit model:
+`www.uscourts.gov`, `api.anthropic.com`, and the install/GitHub hosts on its allowlist. It runs all
+three watches, renders once, and mirrors the opinion pipeline's commit model:
 
-- **New/updated cards in either watch** → re-render the shared page + both feeds and open (or
-  update) the one `bot/legislation-review` PR (a combined body) for a person to confirm. Merge to
-  publish; edit `legislation.json` / `regulations.json` on the branch to correct.
+- **New/updated cards in any watch** → re-render the shared page + both feeds and open (or update)
+  the one `bot/legislation-review` PR (a combined body) for a person to confirm. Merge to publish;
+  edit `legislation.json` / `regulations.json` / `courtrules.json` on the branch to correct.
 - **Nothing new** → commit only the advanced seen-state and run logs straight to `main` with
   `[skip ci]`.
 
@@ -173,5 +193,8 @@ comma list of LegiScan jurisdictions; set to `GA` to drop the federal overlay), 
 - **Shipped (regulations):** the **FMCSA regulatory watch** (`scripts/regulations.py` +
   `test_regulations.py`) — Federal Register final rules in 49 CFR, keyless, rendered in the
   "Federal regulations" section with its own `regulations.xml` feed, run by the same weekly workflow.
-- **Later, by source:** the FRCP/FRE rules check (uscourts.gov, low-frequency); additional agencies
-  (NHTSA vehicle-safety, PHMSA hazmat) — one entry in the `REGULATION_AGENCIES` Variable each.
+- **Shipped (court rules):** the **FRCP/FRE court-rules watch** (`scripts/courtrules.py` +
+  `test_courtrules.py`) — Federal Rules amendments extracted from uscourts.gov, rendered in the
+  "Court rules" section, run by the same weekly workflow.
+- **Later:** additional regulatory agencies (NHTSA vehicle-safety, PHMSA hazmat) — one entry in the
+  `REGULATION_AGENCIES` Variable each; and additional court-rule source pages via `COURTRULES_URLS`.
