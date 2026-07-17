@@ -1089,6 +1089,8 @@ def render_legislation():
            f'    <atom:link href="{SITE}/legislation.xml" rel="self" type="application/rss+xml" />',
            f'    <description>{xml_escape(desc)}</description>',
            '    <language>en-us</language>',
+           # Bill data is sourced from LegiScan under CC BY 4.0, which requires attribution.
+           '    <copyright>Legislative bill data via LegiScan (https://legiscan.com/), licensed CC BY 4.0.</copyright>',
            f'    <lastBuildDate>{build}</lastBuildDate>',
            '    <generator>horowitz.law Georgia Legislative Watch (prototype)</generator>']
     out += [legislation_rss_item(c) for c in cards]
