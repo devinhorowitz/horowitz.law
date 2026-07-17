@@ -310,6 +310,37 @@ def main():
           next(c for c in merged if c["bill_id"] == 111)["first_seen"] == "2025-04-22")
     check("merge sorts newest status_date first", merged[0]["status_date"] >= merged[-1]["status_date"])
 
+    # --- courtesy pacer (fake clock; no real sleeping) ---
+    import unittest.mock as _mock
+    clock = [1000.0]
+    slept = []
+
+    class _FakeTime:
+        @staticmethod
+        def monotonic():
+            return clock[0]
+
+        @staticmethod
+        def sleep(s):
+            slept.append(s)
+            clock[0] += s
+
+    with _mock.patch.object(L, "time", _FakeTime), _mock.patch.object(L, "MIN_INTERVAL", 1.0):
+        L._last_call[0] = clock[0]           # a call just happened at t=1000
+        clock[0] = 1000.3                    # 0.3s later
+        L._pace()
+        check("pacer waits the remainder of the interval", slept and abs(slept[-1] - 0.7) < 1e-6)
+        slept.clear()
+        L._last_call[0] = 0.0                # last call far in the past
+        clock[0] = 5000.0
+        L._pace()
+        check("pacer does not wait once the interval has already elapsed", slept == [])
+    with _mock.patch.object(L, "time", _FakeTime), _mock.patch.object(L, "MIN_INTERVAL", 0.0):
+        slept.clear()
+        L._last_call[0] = clock[0]
+        L._pace()
+        check("pacer is disabled at LEGISCAN_MIN_INTERVAL=0", slept == [])
+
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1

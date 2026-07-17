@@ -49,11 +49,14 @@ Environment:
   LEGISLATION_SCREEN_MODEL relevance screen model (default claude-haiku-4-5)
   LEGISLATION_MODEL       card writer model (default claude-opus-4-8)
   LEGISLATION_MAX         cap on bills sent to the writer per run (default 40)
+  LEGISCAN_MIN_INTERVAL   min seconds between real LegiScan calls (default 1.0; 0 disables). Courtesy
+                          pacing per LegiScan's "play nice" guidance; applies only to live calls.
   LEGISLATION_DEBUG       if 1, log each step
 """
 import os
 import sys
 import json
+import time
 import datetime
 import urllib.request
 import urllib.parse
@@ -95,6 +98,13 @@ API_BASE   = "https://api.legiscan.com/"
 UA         = "horowitz.law Georgia Legislative Watch (contact: via horowitz.law)"
 TIMEOUT    = 45
 MAX_BYTES  = 25 * 1024 * 1024   # cap any single LegiScan read; bounds memory vs a hostile response
+# Courtesy pacing: keep at least this many seconds between real LegiScan calls, per LegiScan's
+# "play nice, respect the free public service" guidance. Our volume is already tiny (a couple of
+# calls per run, change_hash-gated), so this is politeness insurance, not a throughput lever. It
+# applies only to the default network seam (_http_get); an injected test `fetch` is never paced.
+# Set LEGISCAN_MIN_INTERVAL=0 to disable.
+MIN_INTERVAL = float(os.environ.get("LEGISCAN_MIN_INTERVAL", "1.0"))
+_last_call = [0.0]   # monotonic timestamp of the last real request, in a 1-cell list for closure write
 
 # LegiScan normalized bill.status -> our normalized posture. We card only these two;
 # everything else (introduced, engrossed, enrolled-but-not-yet-enacted, failed) is skipped.
@@ -113,9 +123,22 @@ def _dbg(msg):
 # --------------------------------------------------------------------------- #
 # Network seam: LegiScan RPC.                                                  #
 # --------------------------------------------------------------------------- #
+def _pace():
+    """Block until at least MIN_INTERVAL seconds have elapsed since the last real request. The
+    first call never waits; disabled when MIN_INTERVAL <= 0."""
+    if MIN_INTERVAL <= 0:
+        return
+    wait = MIN_INTERVAL - (time.monotonic() - _last_call[0])
+    if 0 < wait <= MIN_INTERVAL:   # bound the wait so a clock jump cannot stall the run
+        time.sleep(wait)
+    _last_call[0] = time.monotonic()
+
+
 def _http_get(url):
-    """Default fetch seam: GET a URL, return decoded text. Byte-capped. Tests
-    inject their own callable of the same shape, so no test ever hits the network."""
+    """Default fetch seam: GET a URL, return decoded text. Byte-capped, and paced to at least
+    MIN_INTERVAL seconds between calls (LegiScan courtesy). Tests inject their own callable of the
+    same shape, so no test ever hits the network -- or the pacer."""
+    _pace()
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
         return r.read(MAX_BYTES + 1)[:MAX_BYTES].decode("utf-8", "replace")
