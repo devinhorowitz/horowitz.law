@@ -43,7 +43,8 @@ Environment:
   REGULATION_LOOKBACK_DAYS how many days back to scan on each run (default 45)
   REGULATION_SCREEN_MODEL  relevance screen model (default claude-haiku-4-5)
   REGULATION_MODEL         card writer model (default claude-opus-4-8)
-  REGULATION_MAX           cap on rules sent to the writer per run (default 40)
+  REGULATION_MAX           cap on CARDS drafted per run (default 40); a run stops once this many
+                           rules have been carded (FMCSA's low volume needs no separate screen cap)
   REGULATION_DEBUG         if 1, log each step
 """
 import os

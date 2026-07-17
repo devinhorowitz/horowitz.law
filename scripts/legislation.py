@@ -240,7 +240,11 @@ def masterlist_bills(payload):
 # "HR" and are skipped with the rest; they are ratified at the ballot, not enacted as statutes.)
 _RESOLUTION_PREFIX = {
     "GA": ("HR", "SR"),
-    "US": ("HRES", "SRES", "HCONRES", "SCONRES"),
+    # Congress simple/concurrent resolutions never become law. Both the THOMAS/GPO style
+    # (HRES/SRES/HCONRES/SCONRES) and the shorter HCR/SCR style are listed so the pre-screen
+    # filter catches them whichever way LegiScan normalizes the number. Joint resolutions
+    # (HJRES/SJRES) are deliberately NOT listed -- those can be enacted.
+    "US": ("HRES", "SRES", "HCONRES", "SCONRES", "HCR", "SCR"),
 }
 
 
@@ -269,7 +273,10 @@ def enacted_candidates(bills, seen, state=None):
         if state and is_resolution(b.get("number") or b.get("bill_number"), state):
             continue
         bid = str(b.get("bill_id"))
-        if seen.get(bid) and seen.get(bid) == b.get("change_hash"):
+        # Membership test (not truthiness) and a normalized change_hash, so a bill LegiScan returns
+        # with an empty/absent change_hash is still deduped once seen instead of re-screened forever
+        # (seen stores "" for a missing hash; "" is falsy, which the old `seen.get(bid) and ...` missed).
+        if bid in seen and seen[bid] == (b.get("change_hash") or ""):
             continue
         out.append(b)
     return out
@@ -281,23 +288,11 @@ def bill_detail(bill_id, key, fetch=None):
     so a single unreachable bill drops out of the run instead of failing it."""
     try:
         data = api("getBill", key, fetch=fetch, id=bill_id)
-    except (LegiScanError, urllib.error.URLError, TimeoutError, Exception) as e:
+    except Exception as e:   # fail-open: any error (LegiScan, transport, parse) drops this bill
         _dbg("getBill %s failed: %s" % (bill_id, e))
         return {}
     bill = data.get("bill")
     return bill if isinstance(bill, dict) else {}
-
-
-def act_number(bill):
-    """The chapter/act number a bill received on enactment, from its progress trail.
-    LegiScan progress events include 8 = 'Chapter/Act/Statute'. Returns '' if none
-    is recorded yet (LegiScan often carries the Act number in the last_action instead)."""
-    for ev in (bill.get("progress") or []):
-        if isinstance(ev, dict) and int(ev.get("event") or 0) == 8:
-            # LegiScan does not always split the act number out; the date is what it
-            # reliably carries. Callers use this only as a presence signal.
-            return str(ev.get("date") or "")
-    return ""
 
 
 # --------------------------------------------------------------------------- #

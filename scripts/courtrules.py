@@ -136,7 +136,7 @@ def fetch_text(url, fetch=None):
     fetch = fetch or _http_get
     try:
         return strip_html(fetch(url))
-    except (urllib.error.URLError, TimeoutError, Exception) as e:
+    except Exception as e:   # fail-open: any fetch error yields empty text (page treated unreachable)
         _dbg("fetch %s failed: %s" % (url, e))
         return ""
 
@@ -180,15 +180,19 @@ def extract(text, ai, model=None, label="courtrules"):
     return [a for a in ams if isinstance(a, dict)]
 
 
-def _card_id(rule_set, rule, effective_date):
-    key = "%s|%s|%s" % ((rule_set or "").upper(), (rule or "").strip(), (effective_date or "").strip())
+def _card_id(rule_set, rule):
+    # Identity is (rule set, rule number) -- NOT the effective date. A rule's amendment progresses
+    # pending -> effective (and its date may be firmed up along the way); keying on the date too
+    # would mint a second card for the same amendment instead of updating the first. One card per
+    # rule, updated in place as its status/date settle.
+    key = "%s|%s" % ((rule_set or "").upper(), (rule or "").strip())
     return hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
 
 
 def build_card(amendment, url, today=None):
     """Assemble a court-rule card from one extracted amendment. Keyed on a stable synthetic id
-    (rule_set|rule|effective_date), since a rule amendment has no natural document number. Returns
-    None if the amendment names no recognizable rule set (guards against a stray extraction)."""
+    (rule_set|rule), since a rule amendment has no natural document number. Returns None if the
+    amendment names no recognizable rule set (guards against a stray extraction)."""
     rule_set = (amendment.get("rule_set") or "").strip().upper()
     if rule_set not in _RULE_SETS:
         return None
@@ -200,7 +204,7 @@ def build_card(amendment, url, today=None):
     status = status if status in ("pending", "effective") else "pending"
     rule = str(amendment.get("rule") or "").strip()
     return {
-        "id": _card_id(rule_set, rule, eff),
+        "id": _card_id(rule_set, rule),
         "rule_set": rule_set,
         "rule": rule,
         "status": status,
@@ -248,6 +252,7 @@ def run(fetch=None, ai=None, today=None, sources=None):
             notes.append("COURTRULES: %s extraction failed; will retry." % label)
             continue                       # do NOT record the hash: retry next run
         new_pages[url] = h                 # page read + extracted: record it
+        added_here = 0
         for a in ams:
             card = build_card(a, url, today=today)
             if not card:
@@ -257,7 +262,8 @@ def run(fetch=None, ai=None, today=None, sources=None):
                 continue
             cards.append(card)
             new_cards[cid] = today_iso
-        notes.append("COURTRULES: %s changed; %d amendment(s), %d new." % (label, len(ams), len(new_cards)))
+            added_here += 1
+        notes.append("COURTRULES: %s changed; %d amendment(s), %d new." % (label, len(ams), added_here))
     notes.append("COURTRULES: drafted %d card(s)." % len(cards))
     return cards, notes, {"pages": new_pages, "cards": new_cards}
 

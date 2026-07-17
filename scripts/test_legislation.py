@@ -173,6 +173,13 @@ def main():
     moved = L.enacted_candidates(bills, seen={"111": "h-sb68-OLD"})
     check("enacted_candidates re-includes a bill whose change_hash moved",
           111 in {b["bill_id"] for b in moved})
+    # A bill LegiScan returns with no change_hash normalizes to "" and must still dedup once seen
+    # (the old truthiness test re-screened it forever).
+    nohash = [{"bill_id": 55, "number": "SB 5", "status": 4}]  # no change_hash key
+    check("enacted_candidates dedups a hash-less bill once seen (stored as \"\")",
+          55 not in {b["bill_id"] for b in L.enacted_candidates(nohash, seen={"55": ""})})
+    check("enacted_candidates still screens a hash-less bill that is unseen",
+          55 in {b["bill_id"] for b in L.enacted_candidates(nohash, seen={})})
 
     # --- resolution filter (jurisdiction-aware): ceremonial resolutions must not consume budget ---
     check("GA HR is a (skippable) resolution", L.is_resolution("HR 61", "GA"))
@@ -181,6 +188,10 @@ def main():
     check("US HR is a BILL, not a resolution (must be kept)", not L.is_resolution("HR 100", "US"))
     check("US S is a BILL, not a resolution", not L.is_resolution("S 1234", "US"))
     check("US HRES/HCONRES ARE resolutions", L.is_resolution("HRES 5", "US") and L.is_resolution("HCONRES 2", "US"))
+    check("US HCR/SCR (short-style concurrent resolutions) are also skipped",
+          L.is_resolution("HCR 10", "US") and L.is_resolution("SCR 4", "US"))
+    check("US joint resolutions (HJRES/SJRES) are NOT skipped -- they can be enacted",
+          not L.is_resolution("HJRES 1", "US") and not L.is_resolution("SJRES 2", "US"))
     check("an unknown jurisdiction never skips (fail-open to screening)", not L.is_resolution("HR 1", "ZZ"))
     ga_bills = [{"bill_id": 900, "number": "HR 61", "status": 4, "change_hash": "z"},
                 {"bill_id": 901, "number": "SB 68", "status": 4, "change_hash": "z"}]
