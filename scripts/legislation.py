@@ -48,7 +48,9 @@ Environment:
                           single-state alias LEGISLATION_STATE is still accepted.
   LEGISLATION_SCREEN_MODEL relevance screen model (default claude-haiku-4-5)
   LEGISLATION_MODEL       card writer model (default claude-opus-4-8)
-  LEGISLATION_MAX         cap on bills sent to the writer per run (default 40)
+  LEGISLATION_MAX         cap on CARDS drafted per run (default 40)
+  LEGISLATION_SCREEN_MAX  cap on bills SCREENED per run (default 60); bounds a cold-start, the
+                          remainder rolls into the next run. Progress streams to stdout as it goes.
   LEGISCAN_MIN_INTERVAL   min seconds between real LegiScan calls (default 1.0; 0 disables). Courtesy
                           pacing per LegiScan's "play nice" guidance; applies only to live calls.
   LEGISLATION_DEBUG       if 1, log each step
@@ -91,7 +93,12 @@ def _states():
 LEGISLATION_STATES = _states()
 SCREEN_MODEL = os.environ.get("LEGISLATION_SCREEN_MODEL", "claude-haiku-4-5")
 WRITE_MODEL  = os.environ.get("LEGISLATION_MODEL", "claude-opus-4-8")
-MAX_RUN      = int(os.environ.get("LEGISLATION_MAX", "40"))
+MAX_RUN      = int(os.environ.get("LEGISLATION_MAX", "40"))     # cap on CARDS drafted per run
+# Cap on bills SCREENED per run. The cold-start problem: with an empty change_hash state every
+# enacted/vetoed bill in the whole biennium (plus US Congress) is "new", so an unbounded first run
+# screens hundreds serially. Bounding screens keeps every run short; the unscreened remainder is
+# left un-seen and simply rolls into the next weekly run, draining the backlog over a few Sundays.
+SCREEN_MAX   = int(os.environ.get("LEGISLATION_SCREEN_MAX", "60"))
 DEBUG        = os.environ.get("LEGISLATION_DEBUG", "") == "1"
 
 API_BASE   = "https://api.legiscan.com/"
@@ -461,32 +468,49 @@ def _default_ai(body, label="call"):
     return update.anthropic_json(body, label)
 
 
-def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None):
+def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, screen_max=None):
     """Full funnel over every configured jurisdiction: discover moved enacted/vetoed bills, screen
     (permissive for Georgia, strict for the federal overlay), fetch detail, write. Returns
     (cards, notes, seen_updates). `seen_updates` maps str(bill_id) -> change_hash for every bill
     that reached a DEFINITIVE outcome this run (carded, or read and declined by the screen or the
     writer), so the caller can record it as seen and never re-pay to screen it unless it changes.
-    A bill that only hit a transient error is deliberately absent, so it retries next run. Writes
-    nothing itself. Fail-open throughout."""
+    A bill that only hit a transient error is deliberately absent, so it retries next run. Bounded
+    by max_run (cards) and screen_max (screens) so a cold-start stays short. Streams progress to
+    stdout as it goes (flushed) so a long run is never silent. Writes nothing itself. Fail-open."""
     key = KEY_LEGISCAN if key is None else key
     ai = ai or _default_ai
     max_run = MAX_RUN if max_run is None else max_run
+    screen_max = SCREEN_MAX if screen_max is None else screen_max
     states = states or LEGISLATION_STATES
     notes = []
     seen_updates = {}
     cards = []
+
+    def note(msg):
+        notes.append(msg)
+        print(msg, flush=True)     # stream live so a long cold-start shows progress, not silence
+
     if not key:
-        notes.append("LEGISLATION: no LEGISCAN_API_KEY; skipping (fail-open no-op).")
+        note("LEGISLATION: no LEGISCAN_API_KEY; skipping (fail-open no-op).")
         return [], notes, seen_updates
     seen = _load_seen()
+    screened = 0
+    stop = False
     for state in states:
+        if stop:
+            break
         cands = discover(key, state=state, fetch=fetch, today=today, seen=seen)
-        notes.append("LEGISLATION[%s]: %d enacted/vetoed bill(s) moved since last run." % (state, len(cands)))
+        note("LEGISLATION[%s]: %d enacted/vetoed bill(s) moved since last run." % (state, len(cands)))
         for b, _sess in cands:
             if len(cards) >= max_run:
-                notes.append("LEGISLATION: hit LEGISLATION_MAX=%d; remaining bills retry next run." % max_run)
+                note("LEGISLATION: hit LEGISLATION_MAX=%d cards; remaining bills retry next run." % max_run)
+                stop = True
                 break
+            if screened >= screen_max:
+                note("LEGISLATION: hit LEGISLATION_SCREEN_MAX=%d; remaining bills retry next run." % screen_max)
+                stop = True
+                break
+            screened += 1
             bid, ch = str(b.get("bill_id")), (b.get("change_hash") or "")
             keep, areas, reason = screen_bill(b, ai, state=state)
             if not keep:
@@ -506,12 +530,12 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None):
             # let the screen's areas fill in if the writer returned none
             if not verdict.get("areas") and areas:
                 verdict["areas"] = areas
-            cards.append(build_card(detail, verdict, state=state, today=today))
+            card = build_card(detail, verdict, state=state, today=today)
+            cards.append(card)
             seen_updates[bid] = ch
-        else:
-            continue
-        break   # inner loop hit max_run and broke; stop scanning further states this run
-    notes.append("LEGISLATION: drafted %d card(s)." % len(cards))
+            print("  + [%s] %s %s  %s" % (state, card.get("number") or "?", card.get("status") or "?",
+                                          (card.get("title") or "")[:60]), flush=True)
+    note("LEGISLATION: screened %d, drafted %d card(s)." % (screened, len(cards)))
     return cards, notes, seen_updates
 
 
@@ -621,9 +645,7 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     as_json = "--json" in argv
     apply = "--apply" in argv
-    cards, notes, seen_updates = run()
-    for n in notes:
-        print(n)
+    cards, notes, seen_updates = run()   # run() streams its notes live; do not reprint them here
 
     if apply and not KEY_LEGISCAN:
         # Nothing ran (fail-open no-op); do not touch any file.

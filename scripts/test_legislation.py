@@ -297,7 +297,15 @@ def main():
     capped, cnotes, _ = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, max_run=1, states=["GA"],
                               today=__import__("datetime").date(2026, 7, 17))
     check("run honors max_run and says remaining bills retry",
-          len(capped) == 1 and any("LEGISLATION_MAX" in n for n in cnotes))
+          len(capped) == 1 and any("hit LEGISLATION_MAX" in n for n in cnotes))
+
+    # --- run honors the screen cap (bounds a cold-start; the rest rolls to next run) ---
+    scapped, snotes, sseen = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, screen_max=1, states=["GA"],
+                                   today=__import__("datetime").date(2026, 7, 17))
+    check("run honors screen_max and stops after screening the cap",
+          any("LEGISLATION_SCREEN_MAX=1" in n for n in snotes) and len(sseen) <= 1)
+    check("run's final note reports screened and drafted counts",
+          any(n.startswith("LEGISLATION: screened ") for n in snotes))
 
     # --- merge_cards: add vs update, first_seen preserved, sorted by status_date desc ---
     c1 = L.build_card(BILLS[222], {"keep": True, "areas": [], "synopsis": "s", "impact": "i", "effective_date": ""})
