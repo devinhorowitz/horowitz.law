@@ -447,7 +447,11 @@ def discover(key, state=DEFAULT_STATE, fetch=None, today=None, seen=None):
     except Exception as e:
         _dbg("getSessionList %s failed: %s" % (state, e))
         return []
-    sessions = sessions_to_watch(sess_payload.get("sessions"), today=today)
+    all_sessions = sess_payload.get("sessions") or []
+    sessions = sessions_to_watch(all_sessions, today=today)
+    _dbg("%s: getSessionList -> %d session(s); %d in watch window: %s"
+         % (state, len(all_sessions), len(sessions),
+            [(s.get("session_id"), s.get("session_name") or s.get("year_start")) for s in sessions]))
     cands = []
     for s in sessions:
         try:
@@ -455,7 +459,14 @@ def discover(key, state=DEFAULT_STATE, fetch=None, today=None, seen=None):
         except Exception as e:
             _dbg("getMasterList %s failed: %s" % (s.get("session_id"), e))
             continue
-        for b in enacted_candidates(masterlist_bills(ml), seen):
+        bills = masterlist_bills(ml)
+        cand = enacted_candidates(bills, seen)
+        if DEBUG:
+            import collections
+            dist = collections.Counter(int(b.get("status") or 0) for b in bills)
+            _dbg("%s session %s: %d bills, status counts %s, %d enacted/vetoed candidate(s)"
+                 % (state, s.get("session_id"), len(bills), dict(dist), len(cand)))
+        for b in cand:
             cands.append((b, s))
     return cands
 
