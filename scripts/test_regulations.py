@@ -180,6 +180,52 @@ def main():
     check("run honors max_run and says remaining rules retry",
           len(capped) == 1 and any("REGULATION_MAX" in n for n in cnotes))
 
+    # --- batched write pass (REGULATION_BATCH): screen synchronous, Opus writes as ONE batch job.
+    #     Stub batch.run; assert the verdict space matches the sync path. ---
+    import batch as _B
+    _real_run = _B.run
+
+    def _fake_batch(reqs, deadline=None, interval=20.0, label="batch"):
+        # custom_id is the document_number: HOS kept, INS declined, anything else errored.
+        out = {}
+        for r in reqs:
+            cid = r["custom_id"]
+            if cid == "2025-11111":
+                out[cid] = {"ok": True, "text": json.dumps(
+                    {"keep": True, "areas": ["auto"], "synopsis": "Synopsis.", "impact": "Matters.",
+                     "effective_date": ""})}
+            elif cid == "2025-33333":
+                out[cid] = {"ok": True, "text": json.dumps({"keep": False})}
+            else:
+                out[cid] = {"ok": False, "type": "errored"}
+        return out
+
+    _B.run = _fake_batch
+    try:
+        bcards, bnotes, bseen = R.run(fetch=fake_fetch, ai=ai, batch_enabled=True,
+                                      today=__import__("datetime").date(2026, 7, 17))
+    finally:
+        _B.run = _real_run
+    bgot = {c["document_number"] for c in bcards}
+    check("batch write cards the kept rule", "2025-11111" in bgot)
+    check("batch write does not card the declined rule", "2025-33333" not in bgot)
+    check("batch write records the declined rule seen (definitive)", "2025-33333" in bseen)
+    check("batch write records the screen-dropped fee rule seen", "2025-22222" in bseen)
+    check("batch run announces the batch", any("batching" in n for n in bnotes))
+
+    def _timeout_batch(reqs, deadline=None, interval=20.0, label="batch"):
+        raise _B.BatchTimeout("bid", "still running")
+
+    _B.run = _timeout_batch
+    try:
+        tcards, _, tseen = R.run(fetch=fake_fetch, ai=ai, batch_enabled=True,
+                                 today=__import__("datetime").date(2026, 7, 17))
+    finally:
+        _B.run = _real_run
+    check("batch timeout drafts no cards", tcards == [])
+    check("batch timeout leaves the writes un-seen (retry); only the screen drop is seen",
+          "2025-11111" not in tseen and "2025-33333" not in tseen and "2025-22222" in tseen)
+
     # --- agency-slug catalog validation (a silent-zero guard: a renamed slug matches nothing) ---
     CATALOG = json.dumps([
         {"id": 1, "name": "Federal Motor Carrier Safety Administration",

@@ -45,11 +45,15 @@ Environment:
   REGULATION_MODEL         card writer model (default claude-opus-4-8)
   REGULATION_MAX           cap on CARDS drafted per run (default 40); a run stops once this many
                            rules have been carded (FMCSA's low volume needs no separate screen cap)
+  REGULATION_BATCH         batch the Opus card-write pass via the Message Batches API (default OFF --
+                           low FMCSA volume; set 1 for a busy rulemaking stretch). REGULATION_BATCH_SEC
+                           bounds the in-run wait (default 1800).
   REGULATION_DEBUG         if 1, log each step
 """
 import os
 import sys
 import json
+import time
 import datetime
 import urllib.request
 import urllib.parse
@@ -78,6 +82,12 @@ WRITE_MODEL   = os.environ.get("REGULATION_MODEL", "claude-opus-4-8")
 MAX_RUN       = int(os.environ.get("REGULATION_MAX", "40"))
 DEBUG         = os.environ.get("REGULATION_DEBUG", "") == "1"
 PAGES_MAX     = int(os.environ.get("REGULATION_PAGES_MAX", "10"))  # safety cap on pagination
+# Batch the (Opus) card-WRITE pass through the 50%-priced Message Batches API, like legislation. OFF
+# by default: FMCSA's final-rule volume in a 45-day window is small, so the async batch rarely pays
+# for itself here -- but it's wired identically, so a busy rulemaking stretch can turn it on with
+# REGULATION_BATCH=1. BATCH_SEC bounds the in-run wait before an unfinished batch defers.
+REGULATION_BATCH = os.environ.get("REGULATION_BATCH", "").strip().lower() in ("1", "true", "yes", "on")
+BATCH_SEC     = int(os.environ.get("REGULATION_BATCH_SEC", "1800"))
 
 # The Federal Register returns type "Rule" for a final rule and "Proposed Rule" for an NPRM; the
 # query FILTER uses RULE / PRORULE. Normalize the returned value to a display label.
@@ -319,21 +329,32 @@ def screen_doc(doc, ai, model=None):
 WRITER_ERROR = object()
 
 
-def write_card(doc, ai, model=None):
-    """The card writer. Returns a verdict dict on a keep, None on a DEFINITIVE decline, or the
-    WRITER_ERROR sentinel on a transient model/parse error. Never a partial card."""
-    model = model or WRITE_MODEL
-    try:
-        v = ai({"model": model, "max_tokens": 900, "system": WRITE_SYSTEM,
-                "messages": [{"role": "user", "content": _doc_brief(doc)}]}, "reg-write")
-    except Exception as e:
-        _dbg("write failed: %s" % e)
-        return WRITER_ERROR
+def _write_body(doc, model=None):
+    """The Messages body for one card write. Shared by the synchronous write_card() and the batch
+    path (batch.from_body), so both build byte-identical requests."""
+    return {"model": model or WRITE_MODEL, "max_tokens": 900, "system": WRITE_SYSTEM,
+            "messages": [{"role": "user", "content": _doc_brief(doc)}]}
+
+
+def _write_verdict(v):
+    """Parse a writer response into a verdict: the dict on a keep, None on a DEFINITIVE decline (read
+    it and said no, or an empty synopsis). Shared by the sync and batch paths."""
     if v.get("keep") is not True:
         return None
     if not str(v.get("synopsis") or "").strip():
         return None
     return v
+
+
+def write_card(doc, ai, model=None):
+    """The card writer. Returns a verdict dict on a keep, None on a DEFINITIVE decline, or the
+    WRITER_ERROR sentinel on a transient model/parse error. Never a partial card."""
+    try:
+        v = ai(_write_body(doc, model), "reg-write")
+    except Exception as e:
+        _dbg("write failed: %s" % e)
+        return WRITER_ERROR
+    return _write_verdict(v)
 
 
 def build_card(doc, verdict, today=None):
@@ -381,7 +402,38 @@ def _default_ai(body, label="call"):
     return update.anthropic_json(body, label)
 
 
-def run(fetch=None, ai=None, today=None, max_run=None, lookback=None):
+def _draft_cards(pending, deadline=None):
+    """Write the cards for the screened-relevant rules in `pending` as ONE 50%-priced Message Batches
+    job (REGULATION_BATCH), mirroring legislation._draft_cards. `pending` is a list of dicts each with
+    `dn` (str document_number) and `doc`. Returns {dn: verdict|None|WRITER_ERROR}, the SAME verdict
+    space write_card produces, so run()'s downstream (seen / card) logic does not branch. A whole-batch
+    timeout/transport failure defers ALL (retry next run); a per-request error or unparseable body is
+    that one rule's WRITER_ERROR; a success parses through _write_verdict."""
+    import batch
+    import update
+    reqs = [batch.from_body(p["dn"], _write_body(p["doc"])) for p in pending]
+    try:
+        results = batch.run(reqs, deadline=deadline, label="regulation-write")
+    except (batch.BatchTimeout, batch.BatchError) as e:
+        print("  ! regulation write batch deferred (%s); %d draft(s) roll to next run"
+              % (e, len(pending)), flush=True)
+        return {p["dn"]: WRITER_ERROR for p in pending}
+    out = {}
+    for p in pending:
+        res = results.get(p["dn"])
+        if not res or not res.get("ok"):
+            out[p["dn"]] = WRITER_ERROR
+            continue
+        try:
+            v = update.parse_json(res["text"])
+        except Exception:
+            out[p["dn"]] = WRITER_ERROR
+            continue
+        out[p["dn"]] = _write_verdict(v)
+    return out
+
+
+def run(fetch=None, ai=None, today=None, max_run=None, lookback=None, batch_enabled=False):
     """Full funnel: fetch recent agency rules, screen, write. Returns (cards, notes, seen_updates).
     `seen_updates` maps document_number -> publication_date for every rule that reached a DEFINITIVE
     outcome (carded, or read and declined). A transient error leaves it absent so it retries next
@@ -406,8 +458,12 @@ def run(fetch=None, ai=None, today=None, max_run=None, lookback=None):
             notes.append("REGULATION: WARNING -- configured agency slug(s) not in the Federal "
                          "Register catalog: %s. A renamed/mistyped slug silently matches zero rules; "
                          "verify at %s" % (", ".join(bad), FR_AGENCIES_API))
+    # Screened-relevant rules awaiting a card write, in window order. The write pass runs after the
+    # screen loop -- one batch (batch_enabled) or a synchronous loop -- so both share the exact
+    # downstream seen/card logic. max_run bounds the rules queued for a write.
+    pending = []
     for d in fresh:
-        if len(cards) >= max_run:
+        if len(pending) >= max_run:
             notes.append("REGULATION: hit REGULATION_MAX=%d; remaining rules retry next run." % max_run)
             break
         dn, pub = str(d.get("document_number")), (d.get("publication_date") or "")
@@ -416,7 +472,17 @@ def run(fetch=None, ai=None, today=None, max_run=None, lookback=None):
             _dbg("screen dropped %s: %s" % (dn, reason))
             seen_updates[dn] = pub
             continue
-        verdict = write_card(d, ai)
+        pending.append({"dn": dn, "pub": pub, "doc": d, "areas": areas})
+
+    if batch_enabled and pending:
+        notes.append("REGULATION: batching %d card write(s) (REGULATION_BATCH)." % len(pending))
+        verdicts = _draft_cards(pending, deadline=time.time() + BATCH_SEC)
+    else:
+        verdicts = {p["dn"]: write_card(p["doc"], ai) for p in pending}
+
+    for p in pending:
+        dn, pub, d, areas = p["dn"], p["pub"], p["doc"], p["areas"]
+        verdict = verdicts.get(dn, WRITER_ERROR)
         if verdict is WRITER_ERROR:
             continue
         if verdict is None:
@@ -527,7 +593,7 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     as_json = "--json" in argv
     apply = "--apply" in argv
-    cards, notes, seen_updates = run()
+    cards, notes, seen_updates = run(batch_enabled=REGULATION_BATCH)   # REGULATION_BATCH default off
     for n in notes:
         print(n)
 
