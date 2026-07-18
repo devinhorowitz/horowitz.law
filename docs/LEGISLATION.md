@@ -166,6 +166,21 @@ separate feed** here — at a handful of items a year, the page section is the r
 keys on a stable synthetic id (`rule_set|rule|effective_date`) and carries the rule set, rule number,
 status (pending/effective), and effective date.
 
+## The email digest (opt-in, separate from opinions)
+
+Beyond the RSS feeds and the page, subscribers can get a **weekly "Legislative & Regulatory Watch"
+email** — a *separate* Resend broadcast from the Georgia Appellate Watch opinions digest, with its
+own audience, Topic, and unsubscribe. It is sent **only in weeks with new legislation/regulation
+cards** (a quiet week sends nothing), built by `scripts/digest.py` (`send_legislation_digest`) from
+`legislation.json` + `regulations.json`, folding both streams into one email.
+
+The `/subscribe` page carries a **"legislation & regulations"** checkbox. It rides the existing
+`area` field, so `confirm.js` maps it through `RESEND_AREA_TOPICS` with no backend change. The
+feature ships **dormant**: with `RESEND_LEGISLATION_SEGMENT_ID` unset the digest previews but never
+sends. To activate: create a Resend Topic + Segment for legislation, set
+`RESEND_LEGISLATION_SEGMENT_ID` / `RESEND_LEGISLATION_TOPIC_ID` (repo Variables, wired in
+`digest.yml`), and map `"legislation"` → that Topic in `RESEND_AREA_TOPICS`.
+
 ## The workflow
 
 `.github/workflows/legislation.yml` — one **Legislative & Regulatory Watch** job — runs weekly

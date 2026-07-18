@@ -36,6 +36,16 @@ Environment:
   DIGEST_DISCLAIMER  Optional footer line (e.g. not-legal-advice / attorney-advertising).
   DIGEST_PREHEADER   Inbox preview line.
   DIGEST_PREVIEW     Where to write the rendered HTML in a dry run. Default digest_preview.html.
+
+  --- Legislative & Regulatory Watch (a SEPARATE broadcast; all OFF until configured) ---
+  RESEND_LEGISLATION_SEGMENT_ID  Segment of legislation opt-ins. Empty -> the legislation digest
+                     previews but never sends (inert), so this feature ships dormant.
+  RESEND_LEGISLATION_TOPIC_ID    Topic scoping the legislation send + its unsubscribe. Recommended.
+  LEGISLATION_SITE_URL           Base page URL for the legislation email. Default
+                     'https://horowitz.law/legislation'.
+  DIGEST_LEG_PREVIEW             Where to write the legislation preview in a dry run.
+  (The /subscribe "legislation & regulations" checkbox rides the existing `area` field, so mapping
+  the "legislation" token in RESEND_AREA_TOPICS to the Topic above wires opt-in with no code change.)
 """
 import os, json, time, html, datetime, textwrap
 import urllib.request, urllib.error
@@ -58,6 +68,17 @@ POSTAL     = os.environ.get("DIGEST_POSTAL") or ""            # optional physica
 DISCLAIMER = os.environ.get("DIGEST_DISCLAIMER") or ""        # optional not-legal-advice / advertising line
 PREHEADER  = os.environ.get("DIGEST_PREHEADER") or f"New {siteconfig.COVERAGE} decisions in civil litigation and insurance practice."
 PREVIEW    = os.environ.get("DIGEST_PREVIEW") or os.path.join(REPO, "digest_preview.html")
+
+# --- Legislative & Regulatory Watch digest: a SEPARATE weekly broadcast to its own opt-in audience
+# and Topic, independent of the opinions digest above. OFF by default and structurally identical to
+# the per-area topics: with no segment configured it previews only and sends nothing, so behavior is
+# unchanged until the Resend audience/topic are wired. Reads the same card files the watch writes.
+LEG_JSON_PATH  = os.path.join(REPO, "legislation.json")
+REG_JSON_PATH  = os.path.join(REPO, "regulations.json")
+LEG_SEGMENT_ID = os.environ.get("RESEND_LEGISLATION_SEGMENT_ID") or ""   # legislation opt-in recipients
+LEG_TOPIC_ID   = os.environ.get("RESEND_LEGISLATION_TOPIC_ID") or ""     # scopes the send + unsubscribe
+LEG_SITE       = (os.environ.get("LEGISLATION_SITE_URL") or "https://horowitz.law/legislation").rstrip("/")
+LEG_PREVIEW    = os.environ.get("DIGEST_LEG_PREVIEW") or os.path.join(REPO, "digest_legislation_preview.html")
 
 # Per-area sends. RESEND_AREA_TOPICS maps area code -> Resend Topic id, e.g.
 #   {"coverage":"top_...","premises":"top_..."}
@@ -345,8 +366,11 @@ def send_existing_broadcast(bid):
     raise RuntimeError(last or "broadcast send failed")
 
 
-def send_broadcast(subject, html_body, text_body, name, topic_id=None):
+def send_broadcast(subject, html_body, text_body, name, topic_id=None, segment_id=None):
     """Create the day's broadcast and (unless DRAFT) send it, duplicate-proof.
+
+    `segment_id` defaults to the opinions SEGMENT_ID; the legislation digest passes its own audience
+    so it reaches only legislation opt-ins, not every opinions subscriber.
 
     Create and send are deliberately separate calls: the create is guarded by the
     name lookup (before the first attempt and again before every retry), and the
@@ -366,7 +390,7 @@ def send_broadcast(subject, html_body, text_body, name, topic_id=None):
             "subject": subject,
             "html": html_body,
             "text": text_body,
-            "segment_id": SEGMENT_ID,
+            "segment_id": segment_id or SEGMENT_ID,
             "name": name,
             "send": False,
         }
@@ -422,7 +446,221 @@ def send_broadcast(subject, html_body, text_body, name, topic_id=None):
     return {"id": bid, "sent": True}
 
 
+# --------------------------------------------------------------------------- #
+# Legislative & Regulatory Watch digest (a separate broadcast).               #
+# --------------------------------------------------------------------------- #
+_LEG_STATUS = {"enacted": "Enacted", "vetoed": "Vetoed"}
+
+
+def _load_leg_cards(path):
+    """Load a watch's card list (legislation.json / regulations.json); [] on any error (fail-open)."""
+    try:
+        data = json.load(open(path, encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except (OSError, ValueError, TypeError):
+        return []
+
+
+def select_leg(cards, days):
+    """Cards first seen within the window, newest first. Both card types carry `first_seen` (discovery
+    date) and a display date (status_date for a law, publication_date for a rule)."""
+    since = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+    new = [c for c in cards if (c.get("first_seen") or "") >= since]
+    new.sort(key=lambda c: (c.get("first_seen") or "",
+                            c.get("status_date") or c.get("publication_date") or ""), reverse=True)
+    return new, since
+
+
+def leg_subject_line(leg, reg):
+    today = fmt_date(datetime.date.today().isoformat())
+    n = len(leg) + len(reg)
+    what = "1 update" if n == 1 else "%d updates" % n
+    return "Legislative & Regulatory Watch: %s (week of %s)" % (what, today)
+
+
+def _leg_row(title, meta, body, tags, url):
+    """One card row, shared by the law and rule blocks; url is the authoritative source page."""
+    body_html = ('<div style="font:14px/1.55 Georgia,&#39;Times New Roman&#39;,serif;color:%s;'
+                 'margin-top:7px;">%s</div>' % (FG, esc(body))) if body else ""
+    tags_html = ("".join(
+        '<span style="display:inline-block;font:11px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;'
+        'color:%s;border:1px solid %s;border-radius:999px;padding:1px 9px;margin:3px 5px 0 0;">%s</span>'
+        % (MUTED, BORDER, esc(t)) for t in tags))
+    head = (('<a href="%s" style="font:600 17px/1.35 Georgia,&#39;Times New Roman&#39;,serif;'
+             'color:%s;text-decoration:none;">%s</a>' % (url, ACCENT, esc(title))) if url
+            else '<div style="font:600 17px/1.35 Georgia,serif;color:%s;">%s</div>' % (ACCENT, esc(title)))
+    return ('<tr><td style="padding:15px 0;border-bottom:1px solid %s;">' % BORDER + head
+            + '<div style="font:13px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:%s;'
+              'margin-top:5px;">%s</div>' % (MUTED, esc(meta))
+            + body_html
+            + ('<div style="margin-top:9px;">%s</div>' % tags_html if tags_html else "")
+            + '</td></tr>')
+
+
+def law_block(c):
+    num, title = (c.get("number") or "").strip(), (c.get("title") or "").strip()
+    heading = ("%s — %s" % (num, title)).strip(" —") or title or num or "(untitled)"
+    st = _LEG_STATUS.get((c.get("status") or "").lower(), (c.get("status") or "").title())
+    juris = "U.S." if (c.get("state") == "US") else "Georgia"
+    bits = [b for b in (juris, st, ("effective %s" % fmt_date(c["effective_date"])) if c.get("effective_date") else "") if b]
+    body = " ".join(x for x in [(c.get("synopsis") or "").strip(),
+                                ("Why it matters: " + c["impact"].strip()) if (c.get("impact") or "").strip() else ""] if x)
+    tags = [render.AREA_LABELS.get(a, a) for a in (c.get("areas") or []) if a in render.AREA_LABELS]
+    return _leg_row(heading, " · ".join(bits), body, tags, (c.get("url") or "").strip())
+
+
+def rule_block(c):
+    ag, title = (c.get("agency") or "").strip(), (c.get("title") or "").strip()
+    heading = ("%s — %s" % (ag, title)).strip(" —") or title or "(untitled)"
+    bits = [b for b in ((c.get("type") or "Rule").strip(), (c.get("cfr") or "").strip(),
+                        ("effective %s" % fmt_date(c["effective_date"])) if c.get("effective_date") else "") if b]
+    body = " ".join(x for x in [(c.get("synopsis") or "").strip(),
+                                ("Why it matters: " + c["impact"].strip()) if (c.get("impact") or "").strip() else ""] if x)
+    tags = [render.AREA_LABELS.get(a, a) for a in (c.get("areas") or []) if a in render.AREA_LABELS]
+    return _leg_row(heading, " · ".join(bits), body, tags, (c.get("url") or "").strip())
+
+
+def _leg_section(label, rows_html):
+    return ('<tr><td style="padding:18px 28px 0;">'
+            '<div style="font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;color:%s;'
+            'border-top:1px solid %s;padding-top:16px;">// %s</div></td></tr>' % (ACCENT, BORDER, esc(label))
+            + '<tr><td style="padding:2px 28px 0;"><table role="presentation" width="100%%" '
+              'cellpadding="0" cellspacing="0">%s</table></td></tr>' % rows_html)
+
+
+def build_leg_html(leg, reg):
+    foot = ["You are receiving this because you subscribed to the horowitz.law Legislative & "
+            "Regulatory Watch.",
+            'To stop receiving it, <a href="%s" style="color:%s;">unsubscribe</a>.' % (UNSUB_TAG, MUTED)]
+    if POSTAL:
+        foot.append(esc(POSTAL))
+    if DISCLAIMER:
+        foot.append(esc(DISCLAIMER))
+    sections = ""
+    if leg:
+        sections += _leg_section("Georgia legislation", "".join(law_block(c) for c in leg))
+    if reg:
+        sections += _leg_section("Federal regulations", "".join(rule_block(c) for c in reg))
+    intro = ("%d new law%s and %d new rule%s this week. Each links to the source; the site carries "
+             "the plain-English summary." % (len(leg), "" if len(leg) == 1 else "s",
+                                             len(reg), "" if len(reg) == 1 else "s"))
+    return (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta name="color-scheme" content="light only"><title>Legislative &amp; Regulatory Watch</title></head>'
+        '<body style="margin:0;padding:0;background:%s;">' % BG
+        + '<table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="background:%s;">' % BG
+        + '<tr><td align="center" style="padding:28px 16px;">'
+        + '<table role="presentation" width="600" cellpadding="0" cellspacing="0" '
+          'style="max-width:600px;width:100%%;background:%s;border:1px solid %s;border-radius:10px;">' % (CARD, BORDER)
+        + '<tr><td style="padding:24px 28px 6px;">'
+        + '<div style="font:700 15px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:%s;'
+          'letter-spacing:.5px;">horowitz.law</div>' % FG
+        + '<div style="font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;color:%s;margin-top:6px;">'
+          '// Legislative &amp; Regulatory Watch</div>' % ACCENT
+        + '</td></tr>'
+        + '<tr><td style="padding:6px 28px 0;font:15px/1.6 Georgia,&#39;Times New Roman&#39;,serif;color:%s;">' % FG
+        + '<p style="margin:12px 0 2px;">%s</p></td></tr>' % esc(intro)
+        + sections
+        + '<tr><td align="center" style="padding:24px 28px 28px;">'
+        + '<a href="%s" style="display:inline-block;background:%s;color:%s;'
+          'font:600 14px/1 -apple-system,Segoe UI,Roboto,sans-serif;text-decoration:none;'
+          'padding:13px 24px;border-radius:8px;">Read the summaries &rarr;</a></td></tr>' % (LEG_SITE, ACCENT, BG)
+        + '<tr><td style="padding:16px 28px 24px;border-top:1px solid %s;'
+          'font:12px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:%s;">%s</td></tr>' % (BORDER, MUTED, "<br>".join(foot))
+        + '</table>'
+        + '<div style="font:11px/1.5 -apple-system,sans-serif;color:%s;margin-top:14px;">%s</div>' % (MUTED, esc(LEG_SITE))
+        + '</td></tr></table></body></html>'
+    )
+
+
+def build_leg_text(leg, reg):
+    lines = ["horowitz.law — Legislative & Regulatory Watch",
+             "%d new law(s) and %d new rule(s) this week." % (len(leg), len(reg)),
+             "", "Read the summaries: %s" % LEG_SITE, ""]
+    if leg:
+        lines += ["Georgia legislation:", ""]
+        for c in leg:
+            heading = ("%s — %s" % ((c.get("number") or "").strip(), (c.get("title") or "").strip())).strip(" —")
+            st = _LEG_STATUS.get((c.get("status") or "").lower(), c.get("status") or "")
+            lines += ["- %s" % heading, "  %s" % st]
+            syn = (c.get("synopsis") or "").strip()
+            if syn:
+                lines += ["  %s" % ln for ln in textwrap.wrap(syn, 76)]
+            if (c.get("url") or "").strip():
+                lines.append("  %s" % c["url"].strip())
+            lines.append("")
+    if reg:
+        lines += ["Federal regulations:", ""]
+        for c in reg:
+            heading = ("%s — %s" % ((c.get("agency") or "").strip(), (c.get("title") or "").strip())).strip(" —")
+            lines += ["- %s" % heading, "  %s" % (c.get("type") or "Rule").strip()]
+            syn = (c.get("synopsis") or "").strip()
+            if syn:
+                lines += ["  %s" % ln for ln in textwrap.wrap(syn, 76)]
+            if (c.get("url") or "").strip():
+                lines.append("  %s" % c["url"].strip())
+            lines.append("")
+    lines.append("You are receiving this because you subscribed to the horowitz.law "
+                 "Legislative & Regulatory Watch.")
+    lines.append("Unsubscribe: %s" % UNSUB_TAG)
+    if POSTAL:
+        lines.append(POSTAL)
+    if DISCLAIMER:
+        lines.append(DISCLAIMER)
+    return "\n".join(lines)
+
+
+def send_legislation_digest():
+    """The Legislative & Regulatory Watch broadcast: a SEPARATE email to its own opt-in audience
+    (RESEND_LEGISLATION_SEGMENT_ID) and Topic, sent only in weeks with new legislation/regulation
+    cards. Fully independent of the opinions digest -- an opinions subscriber is not mailed this, and
+    a quiet opinions week does not suppress it. Fail-safe: with no key/segment it previews and sends
+    nothing, exactly like the opinions path, so it is inert until the Resend audience is wired."""
+    leg, _ = select_leg(_load_leg_cards(LEG_JSON_PATH), DAYS)
+    reg, _ = select_leg(_load_leg_cards(REG_JSON_PATH), DAYS)
+    if not leg and not reg:
+        print("legislation digest: nothing new in the window; not sending.")
+        return
+    subject = leg_subject_line(leg, reg)
+    html_body, text_body = build_leg_html(leg, reg), build_leg_text(leg, reg)
+    if DRY_RUN or not API_KEY:
+        open(LEG_PREVIEW, "w", encoding="utf-8").write(html_body)
+        why = "DIGEST_DRY_RUN" if DRY_RUN else "no RESEND_API_KEY"
+        print("[%s] legislation preview -> %s (%d law(s), %d rule(s))"
+              % (why, LEG_PREVIEW, len(leg), len(reg)))
+        print("  subject: %s" % subject)
+        print("  target segment: %s | topic: %s" % (LEG_SEGMENT_ID or "(unset)", LEG_TOPIC_ID or "(unset)"))
+        return
+    if not LEG_SEGMENT_ID:
+        print("legislation digest: RESEND_LEGISLATION_SEGMENT_ID is empty; nothing to send "
+              "(configure the Resend audience to enable it).")
+        return
+    # Same CAN-SPAM postal gate as the opinions digest, but a skip (not a crash): the opinions send
+    # already enforces it hard, and legislation must never abort a run that otherwise succeeded.
+    if not POSTAL and (os.environ.get("DIGEST_ALLOW_NO_POSTAL") or "").lower() not in ("1", "true", "yes"):
+        print("legislation digest: REFUSING TO SEND -- DIGEST_POSTAL is empty (CAN-SPAM). "
+              "Set DIGEST_POSTAL, or DIGEST_ALLOW_NO_POSTAL=1 to send anyway.")
+        return
+    name = "Legislative & Regulatory Watch digest %s" % datetime.date.today().isoformat()
+    try:
+        res = send_broadcast(subject, html_body, text_body, name,
+                             topic_id=LEG_TOPIC_ID, segment_id=LEG_SEGMENT_ID) or {}
+    except Exception as ex:
+        print("legislation digest FAILED to create/send: %s" % ex)
+        return
+    print("legislation digest: %s broadcast id=%s to segment %s (topic %s)."
+          % ("drafted" if DRAFT else "sent", res.get("id", "?"), LEG_SEGMENT_ID, LEG_TOPIC_ID or "none"))
+    safeio.step_summary("## Legislative & Regulatory Watch · weekly digest\n\n"
+                        "%s %d new law(s) and %d new rule(s)."
+                        % ("Drafted" if DRAFT else "Sent", len(leg), len(reg)))
+
+
 def main():
+    # The Legislative & Regulatory Watch is a separate broadcast to its own audience; run it first so
+    # a quiet opinions week (which returns early below) never suppresses it. It is inert until its
+    # Resend audience is configured.
+    send_legislation_digest()
     entries = json.load(open(JSON_PATH, encoding="utf-8"))
     new, since = select(entries, DAYS)
     corrections = select_corrections(entries, DAYS)

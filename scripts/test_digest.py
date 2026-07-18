@@ -104,6 +104,55 @@ def test_build_smoke():
     check("build_html handles an empty week", "No new decisions this week." in digest.build_html([], []))
 
 
+def law_card(number, status, first_seen, **extra):
+    d = {"number": number, "title": "A bill", "status": status, "status_date": first_seen,
+         "synopsis": "Does a thing.", "areas": ["damages"], "url": "https://legiscan.com/x",
+         "state": "GA", "first_seen": first_seen}
+    d.update(extra)
+    return d
+
+
+def rule_card(agency, first_seen, **extra):
+    d = {"agency": agency, "title": "A rule", "type": "Final Rule", "cfr": "49 CFR 395",
+         "synopsis": "Adjusts a standard.", "areas": ["auto"], "url": "https://federalregister.gov/x",
+         "document_number": "2026-1", "first_seen": first_seen}
+    d.update(extra)
+    return d
+
+
+def test_legislation_digest():
+    # select_leg: window membership, newest-first, drops the stale one.
+    cards = [law_card("HB 1", "enacted", days_ago(1)), law_card("HB 2", "vetoed", days_ago(20))]
+    new, since = digest.select_leg(cards, 7)
+    nums = [c["number"] for c in new]
+    check("select_leg keeps a card first-seen in the window", "HB 1" in nums)
+    check("select_leg drops a card older than the window", "HB 2" not in nums)
+    check("select_leg returns the since cutoff", since == days_ago(7))
+
+    # subject line pluralization across both streams.
+    check("leg subject: singular", "1 update" in digest.leg_subject_line([law_card("HB 9", "enacted", days_ago(1))], []))
+    check("leg subject: plural counts law+rule",
+          "2 updates" in digest.leg_subject_line([law_card("HB 9", "enacted", days_ago(1))],
+                                                 [rule_card("FMCSA", days_ago(1))]))
+
+    leg = [law_card("HB 100", "enacted", days_ago(1), effective_date="2026-07-01")]
+    reg = [rule_card("FMCSA", days_ago(1))]
+    html = digest.build_leg_html(leg, reg)
+    check("build_leg_html is a full document", html.startswith("<!doctype html>") and html.endswith("</html>"))
+    check("build_leg_html carries the law and the rule", "HB 100" in html and "FMCSA" in html)
+    check("build_leg_html labels an enacted law", "Enacted" in html)
+    check("build_leg_html links to the legislation site", digest.LEG_SITE in html)
+    check("build_leg_html has an unsubscribe link + tag", "unsubscribe" in html.lower() and digest.UNSUB_TAG in html)
+    text = digest.build_leg_text(leg, reg)
+    check("build_leg_text carries both streams", "HB 100" in text and "FMCSA" in text)
+    check("build_leg_text names the source links", "legiscan.com" in text and "federalregister.gov" in text)
+
+    # A stream with only one side renders that side and omits the empty one.
+    only_leg = digest.build_leg_html(leg, [])
+    check("build_leg_html omits an empty regulations section", "Federal regulations" not in only_leg
+          and "Georgia legislation" in only_leg)
+
+
 def main():
     print("digest selection + rendering:")
     test_labels_and_esc()
@@ -112,10 +161,11 @@ def main():
     test_in_area()
     test_subject_line()
     test_build_smoke()
+    test_legislation_digest()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (%d checks)" % 25)
+    print("\nALL TESTS PASSED (%d checks)" % 38)
     return 0
 
 
