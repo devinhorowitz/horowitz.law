@@ -184,6 +184,18 @@ footer a:hover {
 .op-treatment-caution { border-left-color: #d9a23a; }
 .op-treatment-negative,
 .op-treatment-superseded { border-left-color: #e0645f; }
+/* On the light theme the dark-theme amber/red fall below the 3:1 non-text-contrast minimum against
+   #f5ede0, so the meaning carried by the left rule is lost to low vision. Darken both (severity is
+   also in the text label, so this hardens a latent case). Covers the explicit toggle and the
+   first-visit OS-light path, mirroring how the theme vars are set above. */
+[data-theme="light"] .op-treatment-caution { border-left-color: #b5730a; }
+[data-theme="light"] .op-treatment-negative,
+[data-theme="light"] .op-treatment-superseded { border-left-color: #c0392b; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .op-treatment-caution { border-left-color: #b5730a; }
+  :root:not([data-theme="dark"]) .op-treatment-negative,
+  :root:not([data-theme="dark"]) .op-treatment-superseded { border-left-color: #c0392b; }
+}
 .opinion[data-treatment="superseded"] { opacity: 0.72; }
 .opinion[data-treatment="superseded"] .op-name {
   text-decoration: line-through;
