@@ -53,6 +53,9 @@ Environment:
                           remainder rolls into the next run. Progress streams to stdout as it goes.
   LEGISCAN_MIN_INTERVAL   min seconds between real LegiScan calls (default 1.0; 0 disables). Courtesy
                           pacing per LegiScan's "play nice" guidance; applies only to live calls.
+  LEGISLATION_BATCH       batch the Opus card-write pass via the 50%-priced Message Batches API
+                          (default on; screening stays synchronous). Set 0 for the synchronous
+                          rollback. LEGISLATION_BATCH_SEC bounds the in-run wait (default 1800).
   LEGISLATION_DEBUG       if 1, log each step
 """
 import os
@@ -101,6 +104,14 @@ MAX_RUN      = int(os.environ.get("LEGISLATION_MAX", "40"))     # cap on CARDS d
 # left un-seen and simply rolls into the next weekly run, draining the backlog over a few Sundays.
 SCREEN_MAX   = int(os.environ.get("LEGISLATION_SCREEN_MAX", "60"))
 DEBUG        = os.environ.get("LEGISLATION_DEBUG", "") == "1"
+
+# Batch the (Opus) card-WRITE pass through the 50%-priced Message Batches API, mirroring the opinion
+# funnel's OPINIONS_BATCH. Screening stays synchronous (Haiku, cheap, and its fail-open keep should be
+# instant); only the write -- one Opus call per screened-relevant bill -- is batched, which is where
+# the cost sits on a busy session or a cold start. LEGISLATION_BATCH=0 is the instant synchronous
+# rollback. BATCH_SEC bounds the in-run wait before an unfinished batch defers to the next run.
+LEGISLATION_BATCH = os.environ.get("LEGISLATION_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
+BATCH_SEC = int(os.environ.get("LEGISLATION_BATCH_SEC", "1800"))
 
 # LegiScan's page-7 "API Operations" timing table: the MINIMUM resolution at which each operation's
 # data can change. Polling faster than this returns unchanged, cached data that STILL spends a query
@@ -417,21 +428,32 @@ def screen_bill(bill, ai, state=DEFAULT_STATE, model=None):
 WRITER_ERROR = object()
 
 
-def write_card(bill, ai, state=DEFAULT_STATE, model=None):
-    """The card writer, jurisdiction-aware. Returns a verdict dict on a keep, None on a DEFINITIVE
-    decline, or the WRITER_ERROR sentinel on a transient model/parse error. Never a partial card."""
-    model = model or WRITE_MODEL
-    try:
-        v = ai({"model": model, "max_tokens": 900, "system": _write_system(state),
-                "messages": [{"role": "user", "content": _bill_brief(bill, state)}]}, "leg-write")
-    except Exception as e:
-        _dbg("write failed: %s" % e)
-        return WRITER_ERROR
+def _write_body(bill, state=DEFAULT_STATE, model=None):
+    """The Messages body for one card write. Shared by the synchronous write_card() and the batch
+    path (batch.from_body), so both build byte-identical requests."""
+    return {"model": model or WRITE_MODEL, "max_tokens": 900, "system": _write_system(state),
+            "messages": [{"role": "user", "content": _bill_brief(bill, state)}]}
+
+
+def _write_verdict(v):
+    """Parse a writer response dict into a verdict: the dict on a keep, None on a DEFINITIVE decline
+    (read it and said no, or an empty synopsis). Shared by the sync and batch paths."""
     if v.get("keep") is not True:
         return None
     if not str(v.get("synopsis") or "").strip():
         return None
     return v
+
+
+def write_card(bill, ai, state=DEFAULT_STATE, model=None):
+    """The card writer, jurisdiction-aware. Returns a verdict dict on a keep, None on a DEFINITIVE
+    decline, or the WRITER_ERROR sentinel on a transient model/parse error. Never a partial card."""
+    try:
+        v = ai(_write_body(bill, state, model), "leg-write")
+    except Exception as e:
+        _dbg("write failed: %s" % e)
+        return WRITER_ERROR
+    return _write_verdict(v)
 
 
 def build_card(bill, verdict, state=DEFAULT_STATE, today=None):
@@ -560,16 +582,56 @@ def _default_ai(body, label="call"):
     return update.anthropic_json(body, label)
 
 
+def _draft_cards(pending, deadline=None):
+    """Write the cards for the screened-relevant bills in `pending` as ONE 50%-priced Message Batches
+    job (LEGISLATION_BATCH), mirroring the funnel's _draft_pending. `pending` is a list of dicts each
+    with `bid` (str) and `detail` (the bill object) and `state`. Returns {bid: verdict|None|
+    WRITER_ERROR}, the SAME verdict space the synchronous write_card produces, so run()'s downstream
+    (seen / card) logic is identical either way. Recovery mirrors the sync per-bill error:
+
+      * a whole-batch timeout or transport failure -> every bill WRITER_ERROR (defer, retry next run);
+      * a per-request batch error or an unparseable body -> that one bill WRITER_ERROR (retries);
+      * a success parses through _write_verdict to a keep-verdict or a definitive decline (None).
+    """
+    import batch
+    import update
+    reqs = [batch.from_body(str(p["bid"]), _write_body(p["detail"], p["state"])) for p in pending]
+    try:
+        results = batch.run(reqs, deadline=deadline, label="legislation-write")
+    except (batch.BatchTimeout, batch.BatchError) as e:
+        print("  ! legislation write batch deferred (%s); %d draft(s) roll to next run"
+              % (e, len(pending)), flush=True)
+        return {p["bid"]: WRITER_ERROR for p in pending}
+    out = {}
+    for p in pending:
+        res = results.get(str(p["bid"]))
+        if not res or not res.get("ok"):
+            out[p["bid"]] = WRITER_ERROR       # unavailable / errored line -> retry next run
+            continue
+        try:
+            v = update.parse_json(res["text"])
+        except Exception:
+            out[p["bid"]] = WRITER_ERROR       # unparseable body -> retry next run
+            continue
+        out[p["bid"]] = _write_verdict(v)
+    return out
+
+
 def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, screen_max=None,
-        pollstate=None, now=None):
+        pollstate=None, now=None, batch_enabled=False):
     """Full funnel over every configured jurisdiction: discover moved enacted/vetoed bills, screen
     (permissive for Georgia, strict for the federal overlay), fetch detail, write. Returns
     (cards, notes, seen_updates). `seen_updates` maps str(bill_id) -> change_hash for every bill
     that reached a DEFINITIVE outcome this run (carded, or read and declined by the screen or the
     writer), so the caller can record it as seen and never re-pay to screen it unless it changes.
     A bill that only hit a transient error is deliberately absent, so it retries next run. Bounded
-    by max_run (cards) and screen_max (screens) so a cold-start stays short. Streams progress to
-    stdout as it goes (flushed) so a long run is never silent. Writes nothing itself. Fail-open."""
+    by max_run (bills queued for a card write) and screen_max (screens) so a cold-start stays short.
+
+    `batch_enabled` routes the Opus write pass through the 50%-priced Message Batches API in ONE job
+    (screening stays synchronous); it defaults False so a direct/test caller with an injected `ai`
+    gets the synchronous path unchanged, and main() passes LEGISLATION_BATCH. The verdict space is
+    identical either way, so the seen/card bookkeeping below does not branch on it. Streams progress
+    to stdout (flushed) so a long run is never silent. Writes nothing itself. Fail-open."""
     key = KEY_LEGISCAN if key is None else key
     ai = ai or _default_ai
     max_run = MAX_RUN if max_run is None else max_run
@@ -594,6 +656,10 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
     now = now or datetime.datetime.now()
     screened = 0
     stop = False
+    # Screened-relevant bills awaiting a card write, in discovery order. The write pass runs after
+    # this loop -- as one batch (batch_enabled) or a synchronous loop -- so both share the exact
+    # downstream seen/card logic. `areas` carries the screen's areas as the writer's fallback.
+    pending = []
     for state in states:
         if stop:
             break
@@ -601,7 +667,7 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
                          pollstate=pollstate, now=now)
         note("LEGISLATION[%s]: %d enacted/vetoed bill(s) moved since last run." % (state, len(cands)))
         for b, _sess in cands:
-            if len(cards) >= max_run:
+            if len(pending) >= max_run:
                 note("LEGISLATION: hit LEGISLATION_MAX=%d cards; remaining bills retry next run." % max_run)
                 stop = True
                 break
@@ -620,20 +686,30 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
             # carry the freshest change_hash (the master list's) onto the detail for carding
             if b.get("change_hash"):
                 detail["change_hash"] = b.get("change_hash")
-            verdict = write_card(detail, ai, state=state)
-            if verdict is WRITER_ERROR:
-                continue                    # transient: no seen record, retry next run
-            if verdict is None:
-                seen_updates[bid] = ch      # writer read it and declined: definitive
-                continue
-            # let the screen's areas fill in if the writer returned none
-            if not verdict.get("areas") and areas:
-                verdict["areas"] = areas
-            card = build_card(detail, verdict, state=state, today=today)
-            cards.append(card)
-            seen_updates[bid] = ch
-            print("  + [%s] %s %s  %s" % (state, card.get("number") or "?", card.get("status") or "?",
-                                          (card.get("title") or "")[:60]), flush=True)
+            pending.append({"bid": bid, "ch": ch, "detail": detail, "state": state, "areas": areas})
+
+    # Write pass: one batch job, or the synchronous per-bill path. Same verdict space either way.
+    if batch_enabled and pending:
+        note("LEGISLATION: batching %d card write(s) (LEGISLATION_BATCH)." % len(pending))
+        verdicts = _draft_cards(pending, deadline=time.time() + BATCH_SEC)
+    else:
+        verdicts = {p["bid"]: write_card(p["detail"], ai, state=p["state"]) for p in pending}
+
+    for p in pending:
+        bid, ch, detail, state, areas = p["bid"], p["ch"], p["detail"], p["state"], p["areas"]
+        verdict = verdicts.get(bid, WRITER_ERROR)
+        if verdict is WRITER_ERROR:
+            continue                        # transient: no seen record, retry next run
+        if verdict is None:
+            seen_updates[bid] = ch          # writer read it and declined: definitive
+            continue
+        if not verdict.get("areas") and areas:
+            verdict["areas"] = areas        # let the screen's areas fill in if the writer returned none
+        card = build_card(detail, verdict, state=state, today=today)
+        cards.append(card)
+        seen_updates[bid] = ch
+        print("  + [%s] %s %s  %s" % (state, card.get("number") or "?", card.get("status") or "?",
+                                      (card.get("title") or "")[:60]), flush=True)
     note("LEGISLATION: screened %d, drafted %d card(s)." % (screened, len(cards)))
     return cards, notes, seen_updates
 
@@ -772,7 +848,9 @@ def main(argv=None):
     # Load the LegiScan timing guard here so run() can update it in place and we can persist it
     # below: a re-run inside an operation's min-resolution window must not spend a cache-hit query.
     pollstate = _load_pollstate()
-    cards, notes, seen_updates = run(pollstate=pollstate)   # run() streams its notes live; do not reprint them here
+    # run() streams its notes live; do not reprint them here. Production batches the write pass
+    # (LEGISLATION_BATCH, default on); LEGISLATION_BATCH=0 is the synchronous rollback.
+    cards, notes, seen_updates = run(pollstate=pollstate, batch_enabled=LEGISLATION_BATCH)
 
     if apply and not KEY_LEGISCAN:
         # Nothing ran (fail-open no-op); do not touch any file.

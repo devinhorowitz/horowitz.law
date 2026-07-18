@@ -469,6 +469,56 @@ def main():
     check("run() threads the timing guard: a rapid re-run makes zero LegiScan calls", runops2 == [])
     check("run()'s guarded re-run drafts no cards", c_re == [])
 
+    # --- batched write pass (LEGISLATION_BATCH): screen stays synchronous, the Opus writes go as ONE
+    #     Message Batches job. Stub batch.run so no network; assert the verdict space matches the sync
+    #     path (keep -> card+seen, decline -> seen, per-request error / whole-batch defer -> un-seen). ---
+    import batch as _B
+    _real_run = _B.run
+    screen_keep = make_ai({"leg-screen": screen_router})   # drops the appropriations bill (444), keeps 111/222
+
+    def _fake_batch(reqs, deadline=None, interval=20.0, label="batch"):
+        # custom_id is the bill_id: 111 kept, 222 declined, anything else an errored line.
+        out = {}
+        for r in reqs:
+            cid = r["custom_id"]
+            if cid == "111":
+                out[cid] = {"ok": True, "text": json.dumps(
+                    {"keep": True, "areas": ["damages"], "synopsis": "Changes apportionment.",
+                     "impact": "It matters.", "effective_date": ""})}
+            elif cid == "222":
+                out[cid] = {"ok": True, "text": json.dumps({"keep": False})}
+            else:
+                out[cid] = {"ok": False, "type": "errored"}
+        return out
+
+    _B.run = _fake_batch
+    try:
+        bcards, bnotes, bseen = L.run(key="GOODKEY", fetch=fake_fetch, ai=screen_keep, states=["GA"],
+                                      today=__import__("datetime").date(2026, 7, 17), batch_enabled=True)
+    finally:
+        _B.run = _real_run
+    bids = {c["bill_id"] for c in bcards}
+    check("batch write cards the kept bill", 111 in bids)
+    check("batch write does not card the declined bill", 222 not in bids)
+    check("batch write records the carded bill seen", bseen.get("111") == "h-sb68-v1")
+    check("batch write records the declined bill seen (definitive)", "222" in bseen)
+    check("batch write records the screen-dropped appropriations bill seen", "444" in bseen)
+    check("batch run announces the batch", any("batching" in n for n in bnotes))
+
+    # A whole-batch timeout defers EVERY write (all un-seen, retry next run); only the screen drop stays seen.
+    def _timeout_batch(reqs, deadline=None, interval=20.0, label="batch"):
+        raise _B.BatchTimeout("bid", "still running")
+
+    _B.run = _timeout_batch
+    try:
+        tcards, _, tseen = L.run(key="GOODKEY", fetch=fake_fetch, ai=screen_keep, states=["GA"],
+                                 today=__import__("datetime").date(2026, 7, 17), batch_enabled=True)
+    finally:
+        _B.run = _real_run
+    check("batch timeout drafts no cards", tcards == [])
+    check("batch timeout leaves the writes un-seen (retry); only the screen drop is seen",
+          "111" not in tseen and "222" not in tseen and "444" in tseen)
+
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1

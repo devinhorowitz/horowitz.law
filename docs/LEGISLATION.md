@@ -71,7 +71,12 @@ card.
 3. **Detail** — `getBill` for each survivor (title, description, progress, `state_link`).
 4. **Write (Opus)** — a tight, neutral, plain-English card: what the law changes and why a civil
    litigator should care, grounded in the provided text (no invented code sections or dollar
-   figures). **Fails closed**: a decline or an error yields no card, never a partial one.
+   figures). **Fails closed**: a decline or an error yields no card, never a partial one. This
+   Opus pass is **batched** through the 50%-priced Message Batches API (`LEGISLATION_BATCH`, default
+   on) — one job per run, mirroring the opinion funnel's `OPINIONS_BATCH`; the cheap Haiku screen
+   stays synchronous. A whole-batch timeout or transport failure defers the writes to the next run
+   (the survivors stay un-seen); `LEGISLATION_BATCH=0` is the instant synchronous rollback. The
+   regulations watch has the same switch (`REGULATION_BATCH`), default **off** given its low volume.
 5. **Card** — assembled and keyed on LegiScan `bill_id` (unique, stable, the permalink slug).
 
 Practice areas reuse `siteconfig.AREA_CODES` (the opinion taxonomy transfers cleanly: tort reform →
