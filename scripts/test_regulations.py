@@ -180,6 +180,46 @@ def main():
     check("run honors max_run and says remaining rules retry",
           len(capped) == 1 and any("REGULATION_MAX" in n for n in cnotes))
 
+    # --- agency-slug catalog validation (a silent-zero guard: a renamed slug matches nothing) ---
+    CATALOG = json.dumps([
+        {"id": 1, "name": "Federal Motor Carrier Safety Administration",
+         "slug": "federal-motor-carrier-safety-administration"},
+        {"id": 2, "name": "National Highway Traffic Safety Administration",
+         "slug": "national-highway-traffic-safety-administration"},
+    ])
+
+    def catalog_fetch(cards_page):
+        """A fetch that serves the agencies catalog for the /agencies URL and `cards_page` otherwise."""
+        def f(url):
+            return CATALOG if "agencies.json" in url else cards_page
+        return f
+
+    check("known_agency_slugs parses the catalog",
+          R.known_agency_slugs(fetch=catalog_fetch("{}")) ==
+          {"federal-motor-carrier-safety-administration", "national-highway-traffic-safety-administration"})
+    check("unknown_agency_slugs flags a slug absent from the catalog",
+          R.unknown_agency_slugs(["not-a-real-agency"], fetch=catalog_fetch("{}")) == ["not-a-real-agency"])
+    check("unknown_agency_slugs clears a slug present in the catalog",
+          R.unknown_agency_slugs(["federal-motor-carrier-safety-administration"], fetch=catalog_fetch("{}")) == [])
+    check("unknown_agency_slugs fails open when the catalog can't be read (no false alarm)",
+          R.unknown_agency_slugs(["anything"], fetch=lambda u: (_ for _ in ()).throw(RuntimeError("down"))) == [])
+
+    # run(): only when the window is EMPTY do we validate the slug against the catalog.
+    empty = json.dumps({"count": 0, "total_pages": 1, "next_page_url": None, "results": []})
+    # A valid configured slug + empty window -> no warning (a genuinely quiet stretch, don't cry wolf).
+    _, znotes, _ = R.run(fetch=catalog_fetch(empty), ai=ai, today=__import__("datetime").date(2026, 7, 17))
+    check("an empty window with a valid slug does not cry wolf",
+          not any("WARNING" in n for n in znotes))
+    # A DRIFTED configured slug + empty window -> a loud WARNING that names the bad slug.
+    saved_ag = R.AGENCIES
+    R.AGENCIES = ["federal-motor-carrier-safety-administration-RENAMED"]
+    try:
+        _, wnotes, _ = R.run(fetch=catalog_fetch(empty), ai=ai, today=__import__("datetime").date(2026, 7, 17))
+    finally:
+        R.AGENCIES = saved_ag
+    check("an empty window with a drifted slug surfaces a WARNING naming it",
+          any("WARNING" in n and "RENAMED" in n for n in wnotes))
+
     # --- merge_cards ---
     c_ins = R.build_card(INS, good, today=__import__("datetime").date(2026, 7, 17))
     existing = [dict(card, first_seen="2026-06-01")]

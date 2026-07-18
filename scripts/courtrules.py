@@ -89,6 +89,25 @@ DEBUG = os.environ.get("COURTRULES_DEBUG", "") == "1"
 # Rule sets a civil litigator cares about; the extractor is told to ignore criminal-only rules.
 _RULE_SETS = {"FRCP", "FRE", "FRAP", "FRBP"}
 
+# Weak content markers that the real pending-amendments page always carries (the acronyms or the
+# spelled-out rule names, plus the word "rule"). Used to tell "page fetched, genuinely no amendments"
+# (markers present, an empty extraction is trustworthy and recorded seen) from "page fetched but
+# contentless" -- a JS-only shell, a redesign, or a moved page (markers absent). The latter must NOT
+# be recorded seen off an empty extraction, or the stable shell hash sticks and the page is never
+# re-examined even when the real amendments (which land every December) are live.
+_PAGE_MARKERS = tuple(s.lower() for s in _RULE_SETS) + (
+    "federal rules of civil procedure", "rules of evidence", "appellate procedure",
+    "bankruptcy procedure", "rules enabling act", "pending amendment",
+)
+
+
+def has_rules_markers(text):
+    """True if `text` looks like the Federal Rules amendments content (mentions a rule set and the
+    word 'rule'), vs. a contentless shell/redesign. Deliberately lenient -- structure-agnostic, like
+    strip_html -- to avoid flagging a genuine page whose wording shifts."""
+    low = (text or "").lower()
+    return ("rule" in low) and any(m in low for m in _PAGE_MARKERS)
+
 
 def _dbg(msg):
     if DEBUG:
@@ -246,6 +265,14 @@ def run(fetch=None, ai=None, today=None, sources=None):
         if seen_pages.get(url) == h:
             notes.append("COURTRULES: %s unchanged." % label)
             new_pages[url] = h
+            continue
+        if not has_rules_markers(text):
+            # Fetched, but it does not look like the amendments content (a JS-only shell, a redesign,
+            # or a moved page). Recording an empty extraction here as seen would stick the shell hash
+            # and the page would never be re-examined. Treat it like a transient failure: do NOT hash
+            # it, and surface it so a silent stall becomes a visible, recurring note.
+            notes.append("COURTRULES: %s fetched but shows no Federal Rules markers "
+                         "(shell/redesign/moved?); not recording, will retry." % label)
             continue
         ams = extract(text, ai)
         if ams is None:

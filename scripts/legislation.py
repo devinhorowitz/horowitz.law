@@ -512,6 +512,15 @@ def discover(key, state=DEFAULT_STATE, fetch=None, today=None, seen=None, pollst
         all_sessions = sess_payload.get("sessions") or []
         polls[skey] = now.isoformat()
         scache[state] = all_sessions
+        if not all_sessions:
+            # A SUCCESSFUL getSessionList that lists zero sessions for a configured jurisdiction is a
+            # config/shape anomaly, not a quiet week: every valid LegiScan state has sessions. The
+            # likely cause is a renamed/invalid state code or a changed response shape -- which would
+            # otherwise read as a silent "0 moved" green run indefinitely. Surface it loudly, matching
+            # the getSessionList-FAILED path above.
+            print("LEGISLATION[%s]: getSessionList returned OK but listed ZERO sessions -- a valid "
+                  "jurisdiction always has sessions, so verify the state code %r and the response "
+                  "shape (a silent zero here otherwise hides a broken filter)." % (state, state), flush=True)
     sessions = sessions_to_watch(all_sessions, today=today)
     _dbg("%s: getSessionList -> %d session(s); %d in watch window: %s"
          % (state, len(all_sessions), len(sessions),

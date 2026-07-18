@@ -115,6 +115,20 @@ def main():
     check("an unreachable page fails open (no cards, no hash)",
           upd5["pages"] == {} and any("unreachable" in n for n in notes5))
 
+    # --- marker guard: a fetched-but-contentless shell must NOT be recorded seen off an empty
+    #     extraction (else the stable shell hash sticks and the page is never re-examined) ---
+    check("has_rules_markers accepts the real amendments page", C.has_rules_markers(C.strip_html(PAGE_V1)))
+    check("has_rules_markers rejects a contentless shell",
+          not C.has_rules_markers("<html><body><div id=app></div>Loading…</body></html>"))
+    shell = "<html><head><title>Rules</title></head><body><div id='root'></div><p>Enable JavaScript.</p></body></html>"
+    cardsS, notesS, updS = C.run(fetch=lambda url: shell, ai=ai_boom, sources=[("Pending", "u")],
+                                 today=__import__("datetime").date(2026, 7, 17))
+    check("a shell page draws no cards and is NOT hashed (will retry)",
+          cardsS == [] and updS["pages"] == {})
+    check("a shell page surfaces a visible marker note (not a silent 'unchanged')",
+          any("no Federal Rules markers" in n for n in notesS))
+    check("the shell guard never called the model (ai_boom would have raised)", True)
+
     # --- multiple amendments on one page ---
     multi, _, _ = C.run(fetch=lambda url: PAGE_V2, ai=ai_returning(AMEND_26, AMEND_702),
                         today=__import__("datetime").date(2026, 7, 17))

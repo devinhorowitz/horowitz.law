@@ -64,6 +64,7 @@ STATE_PATH = os.path.join(REPO, "regulations_state.json")
 LOG_PATH   = os.path.join(REPO, "regulations_log.jsonl")
 
 FR_API     = "https://www.federalregister.gov/api/v1/documents.json"
+FR_AGENCIES_API = "https://www.federalregister.gov/api/v1/agencies.json"
 UA         = "horowitz.law Federal Regulatory Watch (contact: via horowitz.law)"
 TIMEOUT    = 45
 MAX_BYTES  = 25 * 1024 * 1024
@@ -161,6 +162,30 @@ def new_documents(docs, seen):
     """Documents not yet processed. `seen` maps document_number -> publication_date (any truthy
     membership counts). A Federal Register document is immutable, so once seen it never returns."""
     return [d for d in docs if str(d.get("document_number")) not in seen]
+
+
+def known_agency_slugs(fetch=None):
+    """The set of agency slugs the Federal Register currently publishes (its /agencies catalog).
+    Empty set on any error -- fail-open: an unreachable catalog must never itself raise an alarm."""
+    fetch = fetch or _http_get
+    try:
+        data = json.loads(fetch(FR_AGENCIES_API))
+    except Exception as e:  # network, decode, anything
+        _dbg("agencies catalog fetch failed: %s" % e)
+        return set()
+    return {str(a["slug"]) for a in (data if isinstance(data, list) else [])
+            if isinstance(a, dict) and a.get("slug")}
+
+
+def unknown_agency_slugs(agencies=None, fetch=None):
+    """Configured agency slugs the Federal Register does NOT list -- a renamed or mistyped slug, which
+    the server-side filter silently matches zero documents for, forever. Empty when all are recognized
+    OR the catalog could not be read (fail-open: verify only when we actually have a catalog)."""
+    agencies = AGENCIES if agencies is None else agencies
+    known = known_agency_slugs(fetch=fetch)
+    if not known:
+        return []  # couldn't verify -> don't cry wolf
+    return [a for a in agencies if a not in known]
 
 
 # --------------------------------------------------------------------------- #
@@ -370,6 +395,17 @@ def run(fetch=None, ai=None, today=None, max_run=None, lookback=None):
     docs = fetch_documents(since=_since(today, lookback), fetch=fetch)
     fresh = new_documents(docs, seen)
     notes.append("REGULATION: %d document(s) in window, %d new." % (len(docs), len(fresh)))
+    if not docs:
+        # An empty window is USUALLY a genuinely quiet stretch -- but it is also exactly how a renamed
+        # agency slug looks: the server-side filter matches nothing, indefinitely, with a green run.
+        # Distinguish the two only when the window is empty (no extra call on a normal run): verify the
+        # configured slugs against the Federal Register's own /agencies catalog and, if one has
+        # drifted, surface a loud, specific note instead of a silent zero. Fail-open otherwise.
+        bad = unknown_agency_slugs(fetch=fetch)
+        if bad:
+            notes.append("REGULATION: WARNING -- configured agency slug(s) not in the Federal "
+                         "Register catalog: %s. A renamed/mistyped slug silently matches zero rules; "
+                         "verify at %s" % (", ".join(bad), FR_AGENCIES_API))
     for d in fresh:
         if len(cards) >= max_run:
             notes.append("REGULATION: hit REGULATION_MAX=%d; remaining rules retry next run." % max_run)

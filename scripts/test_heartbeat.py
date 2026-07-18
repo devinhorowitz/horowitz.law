@@ -96,6 +96,16 @@ def main():
     code = run({"scanned_at": stamp(0.1)}, [])
     check("fresh scan + empty opinions.json -> 0", code == 0, "got %r" % code)
 
+    # opinions.json that isn't a list of cards (corrupt / reshaped) must NOT pass silently: the
+    # freshness net reads this file, so a malformed payload is content-stale, not OK -> exit 4.
+    code = run({"scanned_at": stamp(0.1)}, {"reshaped": "not a list"})
+    check("fresh scan + non-list opinions.json -> 4", code == 4, "got %r" % code)
+
+    # Entries present but NONE carries a parseable date (e.g. the date format drifted) -> exit 4,
+    # not a silent OK (the bug: a None `newest` skipped the check and returned 0).
+    code = run({"scanned_at": stamp(0.1)}, [{"first_seen": "07/18/2026"}, {"date": "n/a"}])
+    check("entries with no parseable date -> 4", code == 4, "got %r" % code)
+
     # A bare-date scanned_at (no time component) must still parse -- this is the slice-width bug
     # the first cut had: keying the slice to "T in ts" left the date form unreachable.
     code = run({"scanned_at": stamp(0.1, with_time=False)}, [{"first_seen": stamp(2, with_time=False)}])
@@ -108,7 +118,7 @@ def main():
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (9 checks)")
+    print("\nALL TESTS PASSED (11 checks)")
     return 0
 
 
