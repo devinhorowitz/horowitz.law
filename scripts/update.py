@@ -148,6 +148,15 @@ SEARCH_BUDGET= int(os.environ.get("OPINIONS_SEARCH_BUDGET_SEC", "120"))
 # OPINIONS_BATCH=0 for the synchronous path (the instant rollback if a run ever looks wrong).
 FUNNEL_BATCH = os.environ.get("OPINIONS_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
 SUMMARIZE_BATCH_SEC = int(os.environ.get("OPINIONS_SUMMARIZE_BATCH_SEC", "1500"))  # wait budget for the tier-3 batch; fits the 45-min funnel job after the loop's BUDGET_SEC
+# The finish-time fidelity guards (cross-check + completeness, both Sonnet) run as ONE post-draft
+# Message Batches job at 50% price (OPINIONS_GUARD_BATCH, default on) instead of a synchronous call
+# per card. Like the maintenance re-validation's batch, a batched guard is a single GROUNDED attempt
+# (no majority-of-N consensus) -- the safe direction for a flag-and-surface guard that a human then
+# reviews: it surfaces MORE candidate flags, never fewer. On a batch timeout/failure the run falls
+# back to the synchronous consensus guards, so a card is never shipped un-guarded. OPINIONS_GUARD_BATCH=0
+# forces the synchronous guards (the rollback, e.g. to debug against the live model).
+GUARD_BATCH = os.environ.get("OPINIONS_GUARD_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
+GUARD_BATCH_SEC = int(os.environ.get("OPINIONS_GUARD_BATCH_SEC", "1500"))  # wait budget for the guard batch; runs after the summarize batch, within the funnel job's window
 STATUS_URL   = os.environ.get("ANTHROPIC_STATUS_URL", "https://status.claude.com/api/v2/summary.json")
 STATUS_MODE  = (os.environ.get("ANTHROPIC_STATUS", "on") or "on").strip().lower()  # on | warn | off
 
@@ -1362,6 +1371,45 @@ def guard_verdict(kind, r, ground):
     return {"verdict": clear, "reason": clear_reason, "tries": 1, "flag_count": 0}
 
 
+def guard_cards_batch(items, crosschecks, completeness, deadline=None):
+    """Run the finish-time fidelity guards (cross-check + completeness) for a set of freshly drafted
+    cards as ONE 50%-priced Message Batches job, populating crosschecks[cid] / completeness[cid] in
+    place with the SAME verdict shape the synchronous guards produce (via guard_request/guard_verdict,
+    a single grounded attempt each -- the maintenance-batch precedent). `items` is a list of
+    {cid, name, text, entry}. Returns True on success; on a whole-batch timeout or transport failure
+    returns False WITHOUT populating, so the caller can fall back to the synchronous guards -- a card
+    is never shipped un-guarded. A per-line error or unparseable body yields an 'unavailable' verdict
+    for that one guard (the card still surfaces, exactly like a synchronous guard failure)."""
+    reqs, meta = [], {}    # custom_id -> (kind, cid, ground)
+    for it in items:
+        for kind, enabled in (("fidelity", CROSSCHECK_MODEL), ("completeness", COMPLETENESS_MODEL)):
+            if not enabled:
+                continue
+            body, ground = guard_request(kind, it["name"], it["text"], it["entry"])
+            # custom_id must match ^[a-zA-Z0-9_-]{1,64}$ (no colon), so hyphen-join the id and kind.
+            ckey = "%s-%s" % (it["cid"], kind)
+            reqs.append(batch.from_body(ckey, body))
+            meta[ckey] = (kind, it["cid"], ground)
+    if not reqs:
+        return True
+    try:
+        results = batch.run(reqs, deadline=deadline, label="funnel-guards")
+    except (batch.BatchTimeout, batch.BatchError) as e:
+        print("  ! finish-guard batch deferred (%s); falling back to the synchronous guards" % e)
+        return False
+    for ckey, (kind, cid, ground) in meta.items():
+        res = results.get(ckey)
+        if not res or not res.get("ok"):
+            v = {"verdict": "unavailable", "reason": "guard batch result unavailable"}
+        else:
+            try:
+                v = guard_verdict(kind, parse_json(res["text"]), ground)
+            except Exception:
+                v = {"verdict": "unavailable", "reason": "unparseable guard result"}
+        (crosschecks if kind == "fidelity" else completeness)[cid] = v
+    return True
+
+
 # Party-name matching for the screen override in the candidate loop. A case can
 # return to the feed at a higher court under the same caption (the Supreme Court
 # reviewing a decision we carded from the Court of Appeals), and the caption can
@@ -2065,6 +2113,7 @@ def main():
     crosschecks = {}   # cluster_id -> {"verdict", "reason"} from the fidelity guard; surfaced in the PR, not written to opinions.json
     completeness = {}  # cluster_id -> {"verdict", "reason"} from the completeness guard; surfaced in the PR, not written to opinions.json
     texts = {}         # cluster_id -> opinion text, kept so the Fable held-case review can verify a flag without re-fetching
+    guard_pending = []  # {cid, name, text, entry} per drafted card, guarded as ONE post-draft batch (OPINIONS_GUARD_BATCH)
     treat_flags, audit_notes = [], []          # adverse treatment of existing cards (forward escalation)
     treat_events = []      # every new-citer treatment change, staged to the REVIEW lane (existing-card change)
     overruling_cids = set()  # candidates whose opinion caused a treatment change; held with that change if they card
@@ -2134,12 +2183,17 @@ def main():
             reasons.append("empty synopsis or reason")
         if reasons:
             flagged.append((entry["name"], reasons))
-        cc = crosscheck(entry["name"], text, entry)
-        if cc:
-            crosschecks[cid] = cc
-        cp = completeness_check(entry["name"], text, entry)
-        if cp:
-            completeness[cid] = cp
+        # Fidelity guards: defer to the one post-draft batch (OPINIONS_GUARD_BATCH), or run the
+        # synchronous consensus guards inline. Same crosschecks/completeness dicts either way.
+        if GUARD_BATCH:
+            guard_pending.append({"cid": cid, "name": entry["name"], "text": text, "entry": entry})
+        else:
+            cc = crosscheck(entry["name"], text, entry)
+            if cc:
+                crosschecks[cid] = cc
+            cp = completeness_check(entry["name"], text, entry)
+            if cp:
+                completeness[cid] = cp
         added.append(entry)
         texts[cid] = text
         dedup_index.append((_dup_sig(entry["court"], entry["date"], entry["dockets"], entry["name"]),
@@ -2398,6 +2452,20 @@ def main():
         except ConfigError as ce:
             print("  ! configuration error finishing a batched draft (nothing committed): %s" % ce)
             cfg_error = True
+
+    # Post-draft: run the fidelity guards for every drafted card as ONE 50%-priced batch job
+    # (OPINIONS_GUARD_BATCH). On a batch timeout/failure, fall back to the synchronous consensus
+    # guards so no card ships un-guarded. Populates the same crosschecks/completeness the PR body reads.
+    if GUARD_BATCH and guard_pending:
+        print("  . guarding %d drafted card(s) as one batch (fidelity + completeness)" % len(guard_pending), flush=True)
+        if not guard_cards_batch(guard_pending, crosschecks, completeness, deadline=time.time() + GUARD_BATCH_SEC):
+            for it in guard_pending:
+                cc = crosscheck(it["name"], it["text"], it["entry"])
+                if cc:
+                    crosschecks[it["cid"]] = cc
+                cp = completeness_check(it["name"], it["text"], it["entry"])
+                if cp:
+                    completeness[it["cid"]] = cp
 
     pr_body = _funnel_pr_body(added, flagged, crosschecks, completeness, treat_flags, audit_notes, sa_events, skipped)
     funnel = "screened %d, pretriaged %d, triaged %d, summarized %d, audited %d" % (n_screen, n_pretriage, n_triage, n_opus, n_audit)
