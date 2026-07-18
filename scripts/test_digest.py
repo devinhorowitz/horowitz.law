@@ -145,7 +145,7 @@ def test_legislation_digest():
     check("build_leg_html has an unsubscribe link + tag", "unsubscribe" in html.lower() and digest.UNSUB_TAG in html)
     text = digest.build_leg_text(leg, reg)
     check("build_leg_text carries both streams", "HB 100" in text and "FMCSA" in text)
-    check("build_leg_text names the source links", "legiscan.com" in text and "federalregister.gov" in text)
+    check("build_leg_text names the source links", leg[0]["url"] in text and reg[0]["url"] in text)
 
     # A stream with only one side renders that side and omits the empty one.
     only_leg = digest.build_leg_html(leg, [])
