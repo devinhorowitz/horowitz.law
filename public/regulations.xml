@@ -6,7 +6,6 @@
     <atom:link href="https://horowitz.law/regulations.xml" rel="self" type="application/rss+xml" />
     <description>Federal agency rulemaking (FMCSA and kindred agencies) that reaches a Georgia trucking / civil-litigation practice: safety standards, carrier and broker liability, and financial-responsibility minimums in 49 CFR. From the Federal Register. Each summary is AI-drafted and human-confirmed; the Federal Register document is the authority.</description>
     <language>en-us</language>
-    <lastBuildDate>Sat, 18 Jul 2026 12:00:00 -0400</lastBuildDate>
     <generator>horowitz.law Federal Regulatory Watch (prototype)</generator>
   </channel>
 </rss>

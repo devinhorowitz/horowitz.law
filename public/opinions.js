@@ -95,7 +95,12 @@
 
     var empty = document.getElementById('empty');
     if (empty) empty.hidden = shown > 0;
-    if (searchCount) searchCount.textContent = query ? (shown + ' of ' + cards.length) : '';
+    // Announce the result count to the live region whenever ANY filter is active, not only a text
+    // query -- otherwise toggling a court/area/jurisdiction chip changes the visible set silently for
+    // a screen reader (the aria-pressed state flips, but the count never speaks).
+    var filtered = query || systemFilter !== 'all' || areaFilter !== 'all' ||
+      jurisdictionFilter !== jurisDefault;
+    if (searchCount) searchCount.textContent = filtered ? (shown + ' of ' + cards.length) : '';
     syncURL();
   }
 

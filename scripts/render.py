@@ -1054,12 +1054,14 @@ def legislation_rss_item(c):
     title = ("%s — %s" % (c.get("number") or "", (c.get("title") or "").strip())).strip(" —")
     guid = url or ("urn:legiscan:%s" % c.get("bill_id"))
     date = c.get("status_date") or ""
-    pub = _rfc822(date) if _valid_date(date) else _rfc822(datetime.date.today().isoformat())
     lines = ["    <item>",
              f"      <title>{xml_escape(_xml_safe(title))} ({xml_escape(slabel)})</title>",
              f"      <link>{xml_escape(url)}</link>",
-             f'      <guid isPermaLink="{"true" if url else "false"}">{xml_escape(guid)}</guid>',
-             f"      <pubDate>{pub}</pubDate>"]
+             f'      <guid isPermaLink="{"true" if url else "false"}">{xml_escape(guid)}</guid>']
+    # pubDate is optional in RSS 2.0; omit it rather than stamp a render-time clock, which would
+    # break the CI idempotency gate for a card carrying a missing or invalid date.
+    if _valid_date(date):
+        lines.append(f"      <pubDate>{_rfc822(date)}</pubDate>")
     lines += [f"      <category>{xml_escape(cat)}</category>" for cat in cats]
     lines += [f"      <description><![CDATA[{desc}]]></description>", "    </item>"]
     return "\n".join(lines)
@@ -1075,9 +1077,11 @@ def render_legislation():
         body = "\n\n".join(legislation_card_html(c) for c in cards) if cards else _LEG_EMPTY
         _inject(LEG_HTML_PATH, "legislation", body)  # the page is stamped once, after both sections
 
+    # lastBuildDate is optional in RSS 2.0. Derive it from the newest card's date; when there are no
+    # cards (or none carries a valid date) OMIT it rather than fall back to a render-time clock, which
+    # would make an empty feed non-idempotent and break the CI byte-comparison gate.
     build = (_rfc822(cards[0]["status_date"])
-             if (cards and _valid_date(cards[0].get("status_date") or ""))
-             else _rfc822(datetime.date.today().isoformat()))
+             if (cards and _valid_date(cards[0].get("status_date") or "")) else "")
     desc = ("Georgia legislation that became law (signed, or allowed to become law without signature) "
             "or was vetoed, read for a civil-litigation and insurance-defense practice. Each summary is "
             "AI-drafted and human-confirmed; the enrolled bill is the authority.")
@@ -1091,7 +1095,7 @@ def render_legislation():
            '    <language>en-us</language>',
            # Bill data is sourced from LegiScan under CC BY 4.0, which requires attribution.
            '    <copyright>Legislative bill data via LegiScan (https://legiscan.com/), licensed CC BY 4.0.</copyright>',
-           f'    <lastBuildDate>{build}</lastBuildDate>',
+           *([f'    <lastBuildDate>{build}</lastBuildDate>'] if build else []),
            '    <generator>horowitz.law Georgia Legislative Watch (prototype)</generator>']
     out += [legislation_rss_item(c) for c in cards]
     out += ['  </channel>', '</rss>', '']
@@ -1179,12 +1183,13 @@ def regulation_rss_item(c):
     title = ("%s — %s" % (c.get("agency") or "", (c.get("title") or "").strip())).strip(" —")
     guid = url or ("urn:federalregister:%s" % c.get("document_number"))
     date = c.get("publication_date") or ""
-    pub = _rfc822(date) if _valid_date(date) else _rfc822(datetime.date.today().isoformat())
     lines = ["    <item>",
              f"      <title>{xml_escape(_xml_safe(title))} ({xml_escape(typ)})</title>",
              f"      <link>{xml_escape(url)}</link>",
-             f'      <guid isPermaLink="{"true" if url else "false"}">{xml_escape(guid)}</guid>',
-             f"      <pubDate>{pub}</pubDate>"]
+             f'      <guid isPermaLink="{"true" if url else "false"}">{xml_escape(guid)}</guid>']
+    # pubDate is optional in RSS 2.0; omit it rather than stamp a render-time clock (idempotency).
+    if _valid_date(date):
+        lines.append(f"      <pubDate>{_rfc822(date)}</pubDate>")
     lines += [f"      <category>{xml_escape(cat)}</category>" for cat in cats]
     lines += [f"      <description><![CDATA[{desc}]]></description>", "    </item>"]
     return "\n".join(lines)
@@ -1200,9 +1205,10 @@ def render_regulations():
         body = "\n\n".join(regulation_card_html(c) for c in cards) if cards else _REG_EMPTY
         _inject(LEG_HTML_PATH, "regulations", body)
 
+    # Omit lastBuildDate on an empty (or undated) feed rather than stamp a render-time clock, which
+    # would break the CI idempotency gate; it is optional in RSS 2.0.
     build = (_rfc822(cards[0]["publication_date"])
-             if (cards and _valid_date(cards[0].get("publication_date") or ""))
-             else _rfc822(datetime.date.today().isoformat()))
+             if (cards and _valid_date(cards[0].get("publication_date") or "")) else "")
     desc = ("Federal agency rulemaking (FMCSA and kindred agencies) that reaches a Georgia trucking / "
             "civil-litigation practice: safety standards, carrier and broker liability, and financial-"
             "responsibility minimums in 49 CFR. From the Federal Register. Each summary is AI-drafted "
@@ -1215,7 +1221,7 @@ def render_regulations():
            f'    <atom:link href="{SITE}/regulations.xml" rel="self" type="application/rss+xml" />',
            f'    <description>{xml_escape(desc)}</description>',
            '    <language>en-us</language>',
-           f'    <lastBuildDate>{build}</lastBuildDate>',
+           *([f'    <lastBuildDate>{build}</lastBuildDate>'] if build else []),
            '    <generator>horowitz.law Federal Regulatory Watch (prototype)</generator>']
     out += [regulation_rss_item(c) for c in cards]
     out += ['  </channel>', '</rss>', '']
@@ -1290,6 +1296,16 @@ def render_courtrules():
         _inject(LEG_HTML_PATH, "courtrules", body)
 
 
+def _legislation_has_cards():
+    """True if any of the three /legislation subsections (statutes, regulations, court rules) holds a
+    card. Drives the page's noindex meta and its sitemap presence: while all three are empty the page
+    is a stub, so it is held out of the index and the sitemap, then re-enters automatically on the
+    next render once real content lands. Data-driven, so no manual toggle to remember to flip."""
+    return bool([c for c in load_legislation() if isinstance(c, dict) and c.get("bill_id") is not None]
+                or [c for c in load_regulations() if isinstance(c, dict) and c.get("document_number")]
+                or [c for c in load_courtrules() if isinstance(c, dict) and c.get("id")])
+
+
 def render_legislation_page():
     """Render the three sections of the /legislation page (statutes + federal regulations + court
     rules) and the two feeds, then stamp the page once (tokens + footer year + identity hooks).
@@ -1298,6 +1314,11 @@ def render_legislation_page():
     render_regulations()
     render_courtrules()
     if os.path.exists(LEG_HTML_PATH):
+        # Hold an all-empty page out of the search index (noindex, follow: links still flow), so the
+        # stub does not get indexed as thin content. Self-heals: the meta clears when the first card
+        # lands. Paired with the sitemap exclusion in _update_sitemap.
+        robots = "" if _legislation_has_cards() else '<meta name="robots" content="noindex, follow">'
+        _inject(LEG_HTML_PATH, "robots", robots)
         doc = open(LEG_HTML_PATH, encoding="utf-8").read()
         stamped = _stamp_tokens(_stamp_year(_stamp_identity(doc)))
         if stamped != doc:
@@ -1902,10 +1923,13 @@ def _update_sitemap(recent, entries):
         "/digests":  newest_seen,
         "/changes":  (flagged[0].get("treatment_date") or flagged[0]["date"]) if flagged else newest,
     }
+    # An all-empty /legislation is a stub; keep it out of the sitemap (and noindexed on the page)
+    # until the first card lands, then it re-enters automatically on the next render.
+    skip = set() if _legislation_has_cards() else {"/legislation"}
     rows = ["  <url>\n    <loc>%s%s</loc>\n    <lastmod>%s</lastmod>\n"
             "    <changefreq>%s</changefreq>\n    <priority>%s</priority>\n  </url>"
             % (SITE, path, lm or dyn.get(path) or newest, freq, prio)
-            for path, label, freq, prio, lm in siteconfig.PAGES]
+            for path, label, freq, prio, lm in siteconfig.PAGES if path not in skip]
     new = re.sub(r"([ \t]*)(<!-- pages:start.*?-->).*?<!-- pages:end -->",
                  lambda m: m.group(1) + m.group(2) + "\n" + "\n".join(rows) + "\n" + m.group(1) + "<!-- pages:end -->",
                  doc, count=1, flags=re.S)

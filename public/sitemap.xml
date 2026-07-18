@@ -14,12 +14,6 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://horowitz.law/legislation</loc>
-    <lastmod>2026-07-17</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://horowitz.law/archive</loc>
     <lastmod>2026-07-17</lastmod>
     <changefreq>weekly</changefreq>
