@@ -98,6 +98,18 @@ def _vkey(model_id):
     return (nums[0] if nums else 0, nums[1] if len(nums) > 1 else 0)
 
 
+_DATE_SNAPSHOT = re.compile(r"-\d{8}$")
+
+
+def _canon(model_id):
+    """The model id with any trailing ``-YYYYMMDD`` snapshot stripped, so an undated alias and its
+    dated snapshot compare equal: both ``claude-haiku-4-5`` and ``claude-haiku-4-5-20251001`` ->
+    ``claude-haiku-4-5``. The funnel pins the undated alias on purpose (no snapshot-retirement
+    expiry), but the Models API may list only the dated snapshot; matching on the canonical form
+    keeps that from reading as a deprecation, or the snapshot from reading as an upgrade."""
+    return _DATE_SNAPSHOT.sub("", model_id or "")
+
+
 def _parse_dt(s):
     if not s:
         return None
@@ -160,12 +172,22 @@ def detect(models, pins=None):
     by_id = {m["id"]: m for m in models}
     upgrades, notes = [], []
     for tier, pinned_id in pins.items():
-        pinned_entry = by_id.get(pinned_id)
-        if pinned_entry is None:
+        pin_canon = _canon(pinned_id)
+        # The pin is "still offered" if the API lists the same model under ANY snapshot form. The
+        # funnel pins the undated alias (e.g. claude-haiku-4-5), but the Models API may list only its
+        # dated snapshot (claude-haiku-4-5-20251001); match on the date-stripped id so an undated pin
+        # is not misread as deprecated. Use the exact entry for its created_at when present, else any
+        # same-canon listing (so the recency compare below still has a date to work with).
+        same = [m for m in models if _canon(m["id"]) == pin_canon]
+        pinned_entry = by_id.get(pinned_id) or (same[0] if same else None)
+        if not same:
             notes.append("DEPRECATION: pinned %s model %r is no longer listed by the API; "
                          "the funnel will fail on it. Migrate." % (tier, pinned_id))
         newest = _newest_in_tier(models, tier)
-        if newest and newest["id"] != pinned_id and _is_newer(newest, pinned_entry, pinned_id):
+        # Compare canonical ids: a dated snapshot of the SAME model the pin already names is not an
+        # upgrade (bumping to it would re-introduce the snapshot expiry the undated pin exists to
+        # avoid); only a genuinely different version is.
+        if newest and _canon(newest["id"]) != pin_canon and _is_newer(newest, pinned_entry, pinned_id):
             upgrades.append({"tier": tier, "old": pinned_id, "new": newest["id"],
                              "old_dt": pinned_entry["dt"] if pinned_entry else None,
                              "new_dt": newest["dt"], "display": newest["display_name"]})
