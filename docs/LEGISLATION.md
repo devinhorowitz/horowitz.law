@@ -76,7 +76,9 @@ card.
    on) — one job per run, mirroring the opinion funnel's `OPINIONS_BATCH`; the cheap Haiku screen
    stays synchronous. A whole-batch timeout or transport failure defers the writes to the next run
    (the survivors stay un-seen); `LEGISLATION_BATCH=0` is the instant synchronous rollback. The
-   regulations watch has the same switch (`REGULATION_BATCH`), default **off** given its low volume.
+   regulations watch batches its writes the same way (`REGULATION_BATCH`) and the court-rules watch
+   batches its page extraction (`COURTRULES_BATCH`) — all default on, since the 50% discount is
+   unconditional and this weekly subsystem is latency-tolerant.
 5. **Card** — assembled and keyed on LegiScan `bill_id` (unique, stable, the permalink slug).
 
 Practice areas reuse `siteconfig.AREA_CODES` (the opinion taxonomy transfers cleanly: tort reform →

@@ -34,12 +34,16 @@ Environment:
   COURTRULES_URLS          comma list of "label|url" (or bare url) sources to read
                            (default: the uscourts.gov pending-amendments page)
   COURTRULES_MODEL         extraction model (default claude-opus-4-8)
+  COURTRULES_BATCH         batch the Opus page-extraction pass via the 50%-priced Message Batches API
+                           (default on; set 0 for the synchronous rollback). COURTRULES_BATCH_SEC
+                           bounds the in-run wait (default 1800).
   COURTRULES_DEBUG         if 1, log each step
 """
 import os
 import sys
 import re
 import json
+import time
 import html as _html
 import hashlib
 import datetime
@@ -85,6 +89,13 @@ MODEL = os.environ.get("COURTRULES_MODEL", "claude-opus-4-8")
 # extraction JSON needs generous room; 1500 truncated mid-list. Configurable for a heavy year.
 EXTRACT_MAX_TOKENS = int(os.environ.get("COURTRULES_MAX_TOKENS", "8000"))
 DEBUG = os.environ.get("COURTRULES_DEBUG", "") == "1"
+# Batch the (Opus) page-extraction pass through the 50%-priced Message Batches API, like the other
+# watches (COURTRULES_BATCH, default on). Volume is tiny -- most runs make zero calls (the page is
+# content-hashed) and the amendment cycle is a handful of pages a year -- but the 50% discount is
+# unconditional and latency does not matter here, so there is no reason to pay full price. Set
+# COURTRULES_BATCH=0 for the synchronous path. BATCH_SEC bounds the in-run wait before deferring.
+COURTRULES_BATCH = os.environ.get("COURTRULES_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
+BATCH_SEC = int(os.environ.get("COURTRULES_BATCH_SEC", "1800"))
 
 # Rule sets a civil litigator cares about; the extractor is told to ignore criminal-only rules.
 _RULE_SETS = {"FRCP", "FRE", "FRAP", "FRBP"}
@@ -179,24 +190,66 @@ EXTRACT_SYSTEM = (
 )
 
 
-def extract(text, ai, model=None, label="courtrules"):
-    """Extract amendments from one page's text. Returns a list of dicts, or None on a model/parse
-    error (so the caller can leave the page un-hashed and retry next run). [] means 'read fine, no
-    relevant amendments named'."""
-    model = model or MODEL
-    text = (text or "")[:MAX_TEXT]
-    if not text.strip():
-        return []
-    try:
-        v = ai({"model": model, "max_tokens": EXTRACT_MAX_TOKENS, "system": EXTRACT_SYSTEM,
-                "messages": [{"role": "user", "content": "PAGE TEXT:\n" + text}]}, label)
-    except Exception as e:
-        _dbg("extract failed: %s" % e)
-        return None
+def _extract_body(text, model=None):
+    """Messages body for one page's amendment extraction. Shared by the synchronous extract() and the
+    batch path, so both build byte-identical requests."""
+    return {"model": model or MODEL, "max_tokens": EXTRACT_MAX_TOKENS, "system": EXTRACT_SYSTEM,
+            "messages": [{"role": "user", "content": "PAGE TEXT:\n" + (text or "")[:MAX_TEXT]}]}
+
+
+def _extract_parse(v):
+    """Parse an extraction response into a list of amendment dicts; [] when none are named. Shared by
+    the sync and batch paths."""
     ams = v.get("amendments")
     if not isinstance(ams, list):
         return []
     return [a for a in ams if isinstance(a, dict)]
+
+
+def extract(text, ai, model=None, label="courtrules"):
+    """Extract amendments from one page's text. Returns a list of dicts, or None on a model/parse
+    error (so the caller can leave the page un-hashed and retry next run). [] means 'read fine, no
+    relevant amendments named'."""
+    if not (text or "").strip():
+        return []
+    try:
+        v = ai(_extract_body(text, model), label)
+    except Exception as e:
+        _dbg("extract failed: %s" % e)
+        return None
+    return _extract_parse(v)
+
+
+def _draft_extractions(pending, deadline=None):
+    """Extract the amendments for the CHANGED pages in `pending` (each {url, text, ...}) as ONE
+    50%-priced Message Batches job (COURTRULES_BATCH). Returns {url: [amendments] | None}, the SAME
+    per-page space extract() produces, so run()'s downstream (hash + card) logic does not branch.
+    A whole-batch timeout/transport failure -> every page None (retry next run, un-hashed); a
+    per-line error or unparseable body -> that one page None."""
+    import batch
+    import update
+    reqs, meta = [], {}    # custom_id -> url
+    for i, p in enumerate(pending):
+        cid = "cr-%d" % i   # url is not a valid custom_id (^[A-Za-z0-9_-]{1,64}$); index and map back
+        reqs.append(batch.from_body(cid, _extract_body(p["text"])))
+        meta[cid] = p["url"]
+    try:
+        results = batch.run(reqs, deadline=deadline, label="courtrules-extract")
+    except (batch.BatchTimeout, batch.BatchError) as e:
+        print("  ! courtrules extract batch deferred (%s); %d page(s) retry next run"
+              % (e, len(pending)), flush=True)
+        return {p["url"]: None for p in pending}
+    out = {}
+    for cid, url in meta.items():
+        res = results.get(cid)
+        if not res or not res.get("ok"):
+            out[url] = None
+            continue
+        try:
+            out[url] = _extract_parse(update.parse_json(res["text"]))
+        except Exception:
+            out[url] = None
+    return out
 
 
 def _card_id(rule_set, rule):
@@ -243,11 +296,13 @@ def _default_ai(body, label="call"):
     return update.anthropic_json(body, label)
 
 
-def run(fetch=None, ai=None, today=None, sources=None):
+def run(fetch=None, ai=None, today=None, sources=None, batch_enabled=False):
     """Read each source page; on a CHANGED page, extract amendments and card the new ones. Returns
     (cards, notes, seen_updates) where seen_updates = {"pages": {url: hash}, "cards": {id: date}}.
     A page is hashed as seen only after a SUCCESSFUL extraction, so a transient fetch/model error
-    retries next run. Writes nothing itself. Fail-open throughout."""
+    retries next run. `batch_enabled` runs the Opus extraction over all changed pages as ONE batch
+    job (COURTRULES_BATCH); it defaults False so a direct/test caller with an injected `ai` gets the
+    synchronous path unchanged, and main() passes the flag. Writes nothing itself. Fail-open."""
     ai = ai or _default_ai
     sources = sources or SOURCES
     notes = []
@@ -256,6 +311,9 @@ def run(fetch=None, ai=None, today=None, sources=None):
     seen_cards = seen.get("cards") or {}
     new_pages, new_cards, cards = {}, {}, []
     today_iso = (today or datetime.date.today()).isoformat()
+
+    # Phase 1: fetch + hash + marker-check each source; collect the CHANGED, content-valid pages.
+    pending = []   # {label, url, text, h}
     for label, url in sources:
         text = fetch_text(url, fetch)
         if not text:
@@ -274,7 +332,20 @@ def run(fetch=None, ai=None, today=None, sources=None):
             notes.append("COURTRULES: %s fetched but shows no Federal Rules markers "
                          "(shell/redesign/moved?); not recording, will retry." % label)
             continue
-        ams = extract(text, ai)
+        pending.append({"label": label, "url": url, "text": text, "h": h})
+
+    # Phase 2: extract the changed pages -- one batch job, or synchronously per page. Same {url: ams}
+    # space either way (ams is a list, or None on a transient error that must retry un-hashed).
+    if batch_enabled and pending:
+        notes.append("COURTRULES: batching %d page extraction(s) (COURTRULES_BATCH)." % len(pending))
+        extractions = _draft_extractions(pending, deadline=time.time() + BATCH_SEC)
+    else:
+        extractions = {p["url"]: extract(p["text"], ai) for p in pending}
+
+    # Phase 3: card the amendments from each successfully-extracted page.
+    for p in pending:
+        label, url, h = p["label"], p["url"], p["h"]
+        ams = extractions.get(url)
         if ams is None:
             notes.append("COURTRULES: %s extraction failed; will retry." % label)
             continue                       # do NOT record the hash: retry next run
@@ -400,7 +471,7 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     as_json = "--json" in argv
     apply = "--apply" in argv
-    cards, notes, seen_updates = run()
+    cards, notes, seen_updates = run(batch_enabled=COURTRULES_BATCH)   # COURTRULES_BATCH default on
     for n in notes:
         print(n)
 

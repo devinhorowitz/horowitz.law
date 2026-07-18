@@ -148,6 +148,39 @@ def main():
                           {"pages": {"b": "2"}, "cards": {"y": "e"}})
     check("merge_seen unions pages and cards", folded["pages"] == {"a": "1", "b": "2"} and folded["cards"] == {"x": "d", "y": "e"})
 
+    # --- batched extraction (COURTRULES_BATCH): the Opus page extraction runs as ONE batch job.
+    #     Stub batch.run so no network; assert the {url: amendments|None} space matches the sync path
+    #     (extract cards + hashes the page; a whole-batch timeout leaves it un-hashed to retry). ---
+    import batch as _B
+    _real_run = _B.run
+
+    def _fake_batch(reqs, deadline=None, interval=20.0, label="batch"):
+        assert [r["custom_id"] for r in reqs] == ["cr-0"], [r["custom_id"] for r in reqs]
+        return {"cr-0": {"ok": True, "text": __import__("json").dumps({"amendments": [AMEND_26]})}}
+
+    _B.run = _fake_batch
+    try:
+        bcards, bnotes, bupd = C.run(fetch=lambda url: PAGE_V1, ai=ai_boom, sources=[("Pending", "u")],
+                                     today=__import__("datetime").date(2026, 7, 17), batch_enabled=True)
+    finally:
+        _B.run = _real_run
+    check("batch extract cards the amendment (ai_boom never called -> batch path used)",
+          len(bcards) == 1 and bcards[0]["rule"] == "Rule 26")
+    check("batch extract hashes the page seen", bupd["pages"].get("u"))
+    check("batch run announces the batch", any("batching" in n for n in bnotes))
+
+    def _timeout_batch(reqs, deadline=None, interval=20.0, label="batch"):
+        raise _B.BatchTimeout("bid", "still running")
+
+    _B.run = _timeout_batch
+    try:
+        tcards, _, tupd = C.run(fetch=lambda url: PAGE_V1, ai=ai_boom, sources=[("Pending", "u")],
+                                today=__import__("datetime").date(2026, 7, 17), batch_enabled=True)
+    finally:
+        _B.run = _real_run
+    check("batch extract timeout: no cards, page left un-hashed (retry next run)",
+          tcards == [] and tupd["pages"] == {})
+
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1

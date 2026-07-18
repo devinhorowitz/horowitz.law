@@ -45,8 +45,8 @@ Environment:
   REGULATION_MODEL         card writer model (default claude-opus-4-8)
   REGULATION_MAX           cap on CARDS drafted per run (default 40); a run stops once this many
                            rules have been carded (FMCSA's low volume needs no separate screen cap)
-  REGULATION_BATCH         batch the Opus card-write pass via the Message Batches API (default OFF --
-                           low FMCSA volume; set 1 for a busy rulemaking stretch). REGULATION_BATCH_SEC
+  REGULATION_BATCH         batch the Opus card-write pass via the 50%-priced Message Batches API
+                           (default on; set 0 for the synchronous rollback). REGULATION_BATCH_SEC
                            bounds the in-run wait (default 1800).
   REGULATION_DEBUG         if 1, log each step
 """
@@ -82,11 +82,12 @@ WRITE_MODEL   = os.environ.get("REGULATION_MODEL", "claude-opus-4-8")
 MAX_RUN       = int(os.environ.get("REGULATION_MAX", "40"))
 DEBUG         = os.environ.get("REGULATION_DEBUG", "") == "1"
 PAGES_MAX     = int(os.environ.get("REGULATION_PAGES_MAX", "10"))  # safety cap on pagination
-# Batch the (Opus) card-WRITE pass through the 50%-priced Message Batches API, like legislation. OFF
-# by default: FMCSA's final-rule volume in a 45-day window is small, so the async batch rarely pays
-# for itself here -- but it's wired identically, so a busy rulemaking stretch can turn it on with
-# REGULATION_BATCH=1. BATCH_SEC bounds the in-run wait before an unfinished batch defers.
-REGULATION_BATCH = os.environ.get("REGULATION_BATCH", "").strip().lower() in ("1", "true", "yes", "on")
+# Batch the (Opus) card-WRITE pass through the 50%-priced Message Batches API, like legislation.
+# Default ON: FMCSA's final-rule volume is small, but the 50% discount is unconditional (even a
+# one-rule batch bills at half price) and latency does not matter for this weekly watch, so there is
+# no reason to pay full price. Set REGULATION_BATCH=0 for the synchronous rollback. BATCH_SEC bounds
+# the in-run wait before an unfinished batch defers to the next run.
+REGULATION_BATCH = os.environ.get("REGULATION_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
 BATCH_SEC     = int(os.environ.get("REGULATION_BATCH_SEC", "1800"))
 
 # The Federal Register returns type "Rule" for a final rule and "Proposed Rule" for an NPRM; the
