@@ -87,6 +87,23 @@ PER_RUN       = int(os.environ.get("TREATMENT_PER_RUN", "25"))
 PAGES         = int(os.environ.get("TREATMENT_PAGES", "2"))
 BUDGET_SEC    = int(os.environ.get("TREATMENT_BUDGET_SEC", "900"))
 MAXCHARS      = int(os.environ.get("TREATMENT_MAXCHARS", "9000"))
+# When passage() cannot locate the cited case in the citing opinion by a distinctive party name, it
+# hands the classifier a WIDE contiguous slice (this many chars) instead of only the opening. The
+# opening rarely contains the discussion of the cited case, so classifying it yields a false
+# "neutral" -- which then marks the citer seen forever and silently misses a real overruling. A wide
+# slice makes a "neutral" from the not-located path trustworthy. Bounded so a very long opinion does
+# not blow the token budget.
+WIDE_MAXCHARS = int(os.environ.get("TREATMENT_WIDE_MAXCHARS", str(3 * MAXCHARS)))
+# Ubiquitous case-caption words that must NOT be used to anchor the passage window: they match the
+# first occurrence of an everyday word (the opinion says "state"/"city"/"in re" constantly), pinning
+# the window on noise unrelated to the cited case. We anchor on the first DISTINCTIVE token per side
+# instead (typically a party surname), and if none is present fall back to the wide slice above.
+_CAPTION_STOP = frozenset((
+    "the", "of", "and", "for", "in", "re", "ex", "rel", "state", "states", "city", "county",
+    "town", "village", "estate", "matter", "interest", "united", "people", "commonwealth",
+    "department", "dept", "board", "commission", "authority", "company", "co", "inc", "llc",
+    "corp", "corporation", "ltd", "lp", "llp",
+))
 PDF_MIN_CHARS = int(os.environ.get("TREATMENT_PDF_MIN_CHARS", "500"))
 BREAKER       = int(os.environ.get("TREATMENT_BREAKER", "4"))   # stop after this many consecutive API failures
 PENDING_TRIES = int(os.environ.get("TREATMENT_PENDING_TRIES", "4"))  # give up on a citer after this many failed classify runs
@@ -197,24 +214,37 @@ def citer_text(r, deadline):
         return ""
 
 
-def passage(text, name):
-    """A window of the citing opinion around where the cited case is discussed,
-    keyed on the cited case's party surnames. Falls back to the opening."""
-    if not text:
-        return ""
-    toks = []
-    for side in re.split(r"\bv\.?\b", name, maxsplit=1):
-        w = re.findall(r"[A-Z][A-Za-z'&.-]{2,}", side)
-        if w:
-            toks.append(w[0])
+def _anchor_spans(text, name):
+    """Char spans in `text` around where the cited case is discussed, located by the first DISTINCTIVE
+    party token on each side of the caption's "v." -- distinctive meaning not a ubiquitous caption
+    word (_CAPTION_STOP), which would pin the window on the first everyday "state"/"in re"/"co." in
+    the opinion rather than on the cited case. Empty when no distinctive token is present in the text
+    (e.g. the citer refers to the case only by reporter citation or a mangled name)."""
     low = text.lower()
     spans = []
-    for t in toks:
-        i = low.find(t.lower())
-        if i >= 0:
-            spans.append((max(0, i - 1200), min(len(text), i + 1800)))
+    for side in re.split(r"\bv\.?\b", name, maxsplit=1):
+        for w in re.findall(r"[A-Z][A-Za-z'&.-]{2,}", side):
+            if w.lower().strip(".") in _CAPTION_STOP:
+                continue
+            i = low.find(w.lower())
+            if i >= 0:
+                spans.append((max(0, i - 1200), min(len(text), i + 1800)))
+                break  # this side is anchored; don't add spurious spans for its other tokens
+    return spans
+
+
+def passage(text, name):
+    """A window of the citing opinion around where the cited case is discussed, located by the cited
+    case's distinctive party name(s). When the case cannot be located that way, return a WIDE
+    contiguous slice (not merely the opening): the opening rarely contains the discussion of the
+    cited case, so classifying it produces a false 'neutral' that then marks the citer permanently
+    seen and silently misses a real overruling. The wide slice keeps a not-located 'neutral'
+    trustworthy. `located()` exposes which path was taken for the caller's observability."""
+    if not text:
+        return ""
+    spans = _anchor_spans(text, name)
     if not spans:
-        return text[:MAXCHARS]
+        return text[:WIDE_MAXCHARS]
     spans.sort()
     chunks, used = [], 0
     for a, b in spans:
@@ -224,6 +254,13 @@ def passage(text, name):
         chunks.append(seg)
         used += len(seg)
     return ("\n...\n".join(chunks))[:MAXCHARS]
+
+
+def located(text, name):
+    """True if passage() could anchor on the cited case's distinctive party name in `text` (vs. having
+    to fall back to the wide slice). The sweep logs the not-located citers so the residual risk -- a
+    long opinion whose adverse discussion sits past the wide-slice cap -- is observable, not silent."""
+    return bool(text) and bool(_anchor_spans(text, name))
 
 
 def classify_request(card, citing_name, citing_text):
@@ -501,6 +538,12 @@ def main():
             seen.add(ccid)
             classified += 1
             t = (v.get("treatment") or "neutral").lower()
+            # Observability for the residual not-located case: a 'neutral' reached on the wide-slice
+            # fallback (the cited case's distinctive name was not found in this citer's text) is the
+            # one place a long opinion could hide adverse treatment past the cap. Surface it so a
+            # silent miss becomes a visible line rather than an invisible "ok".
+            if t == "neutral" and not located(c["ctext"], card.get("name", "")):
+                print("  ~ neutral on wide fallback (cited case not located by name) citing=%s" % ccid)
             kind = (v.get("kind") or "").lower().strip() or None
             note = (v.get("note") or "").strip()
             conf = (v.get("confidence") or "").lower()
