@@ -224,6 +224,26 @@ def main():
     payload = L.api("getSessionList", "GOODKEY", fetch=fake_fetch, state="GA")
     check("api returns the parsed OK payload", payload.get("status") == "OK" and "sessions" in payload)
 
+    # --- silent-zero guard: a SUCCESSFUL getSessionList listing ZERO sessions is a config anomaly
+    #     (every valid state has sessions), not a quiet week, and must be surfaced loudly ---
+    import io as _io
+    import contextlib as _cl
+
+    def empty_sessions_fetch(url):
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        if q.get("op", [""])[0] == "getSessionList":
+            return json.dumps({"status": "OK", "sessions": []})
+        return json.dumps({"status": "OK"})
+
+    _buf = _io.StringIO()
+    with _cl.redirect_stdout(_buf):
+        cands0 = L.discover("GOODKEY", state="GA", fetch=empty_sessions_fetch,
+                            today=__import__("datetime").date(2026, 7, 17), seen={})
+    _out = _buf.getvalue()
+    check("zero sessions yields no candidates", cands0 == [])
+    check("a zero-session getSessionList prints a loud config-anomaly warning",
+          "ZERO sessions" in _out and "GA" in _out)
+
     # --- relevance screen: fail-open, area filtering, drop ---
     sb68 = BILLS[111]
     keep, areas, _ = L.screen_bill(sb68, make_ai({"leg-screen": {"relevant": True, "areas": ["damages", "bogus"], "reason": "tort"}}))

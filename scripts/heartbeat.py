@@ -19,7 +19,9 @@ Two independent signals, thresholds overridable by env:
     opinions.json is older than HEARTBEAT_CONTENT_DAYS (default 30). A softer signal: a real quiet
     stretch is possible, but it is also how feed-shape drift looks (discovery silently returns
     nothing). Exit 4.
-Fresh on both -> exit 0. A missing/unparseable status.json is treated as funnel-stale (exit 3).
+Fresh on both -> exit 0. A missing/unparseable status.json is treated as funnel-stale (exit 3). An
+opinions.json that can't be read as a list, or has entries but no parseable dates, is treated as
+content-stale (exit 4): the freshness net must not silently pass when the data it reads is malformed.
 
 Prints a one-paragraph diagnosis and writes it to scripts/heartbeat_alert.md for the issue body.
 """
@@ -95,14 +97,33 @@ def check():
         return 3
 
     # --- content freshness: funnel is running, but is it still finding new cards? ---
-    newest = None
+    # A read/parse error, a non-list payload, or entries present with ZERO parseable date stamps is
+    # itself an alert: the file this freshness check relies on is broken or its date format drifted --
+    # exactly the silent-drift state this net exists to catch. Do NOT fall through to "OK" (the old
+    # bug: a None `newest` skipped the check and returned 0, disabling the net precisely when the data
+    # was malformed). Only a genuinely EMPTY list is benign (a fresh deploy with no cards yet).
     try:
-        entries = json.load(open(JSON_PATH, encoding="utf-8"))
-        stamps = [_parse(e.get("first_seen") or e.get("date")) for e in entries]
-        stamps = [s for s in stamps if s]
-        newest = max(stamps) if stamps else None
+        loaded = json.load(open(JSON_PATH, encoding="utf-8"))
+        entries = loaded if isinstance(loaded, list) else None
     except (OSError, ValueError, TypeError):
-        newest = None
+        entries = None
+    if entries is None:
+        body = ("Heartbeat: the funnel is running (last scan %.0fh ago) but `opinions.json` could not "
+                "be read as a list of cards, so content freshness can't be confirmed -- the file may "
+                "be corrupt, truncated, or reshaped. Check the funnel's most recent commit." % scan_age_h)
+        print(body)
+        _write_alert(body)
+        return 4
+    stamps = [s for s in (_parse(e.get("first_seen") or e.get("date")) for e in entries) if s]
+    if entries and not stamps:
+        body = ("Heartbeat: the funnel is running (last scan %.0fh ago) and `opinions.json` has %d "
+                "entries, but NONE carries a parseable date, so content freshness can't be confirmed "
+                "-- the `first_seen`/`date` format may have drifted. Spot-check the file."
+                % (scan_age_h, len(entries)))
+        print(body)
+        _write_alert(body)
+        return 4
+    newest = max(stamps) if stamps else None
     if newest is not None:
         content_age_d = (now - newest).total_seconds() / 86400.0
         if content_age_d > CONTENT_DAYS:
