@@ -27,17 +27,34 @@ def check(name, cond, detail=""):
 
 def test_passage():
     check("empty text -> empty", treatment.passage("", "Smith v. Jones") == "")
-    # No party surname present -> falls back to the opening, capped at MAXCHARS.
+    # No distinctive party name present -> the WIDE fallback (not just the opening). A short body is
+    # returned whole (it is shorter than the wide cap).
     body = "a plain paragraph with no matching party names in it at all"
-    check("no-match falls back to opening", treatment.passage(body, "Smith v. Jones") == body)
-    # Surname present -> a window around it that includes the surname, still capped.
+    check("no-match returns the (short) body via the wide fallback",
+          treatment.passage(body, "Smith v. Jones") == body)
+    # Distinctive surname present -> a window around it that includes the surname, capped at MAXCHARS.
     doc = ("x" * 3000) + " Smith " + ("y" * 3000)
     p = treatment.passage(doc, "Smith v. Jones")
-    check("match returns a window containing the surname", "Smith" in p)
-    check("window never exceeds MAXCHARS", len(p) <= treatment.MAXCHARS)
-    # A very long opening is truncated to MAXCHARS even on the fallback path.
-    check("fallback is truncated to MAXCHARS",
-          len(treatment.passage("z" * (treatment.MAXCHARS + 5000), "No v. Match")) == treatment.MAXCHARS)
+    check("distinctive surname returns a window containing it", "Smith" in p)
+    check("located window never exceeds MAXCHARS", len(p) <= treatment.MAXCHARS)
+    # The not-located fallback is bounded by WIDE_MAXCHARS (wider than the old opening-only cap), so a
+    # 'neutral' read off it saw far more of the opinion than just the caption.
+    check("wide fallback is wider than the old MAXCHARS cap", treatment.WIDE_MAXCHARS > treatment.MAXCHARS)
+    check("wide fallback is capped at WIDE_MAXCHARS",
+          len(treatment.passage("z" * (treatment.WIDE_MAXCHARS + 5000), "No v. Match")) == treatment.WIDE_MAXCHARS)
+
+    # The core bug: a caption whose first token is a ubiquitous word ('State') must NOT anchor on the
+    # opinion's first everyday 'state' -- with no distinctive party token present, it is not located.
+    noise = "the state of the record on this matter " * 400
+    check("does not anchor on the caption stopword 'state'",
+          not treatment.located(noise, "State Farm Mut. Ins. Co. v. Barnor-Cooper"))
+    # ...and the distinctive second-party surname IS located even deep in the text (past MAXCHARS),
+    # exactly where the old opening-only fallback silently missed the overruling.
+    deep = ("state " * 4000) + " Barnor-Cooper overruled that holding. " + ("q" * 100)
+    check("locates the distinctive party name deep in the text (past MAXCHARS)",
+          treatment.located(deep, "State Farm Mut. Ins. Co. v. Barnor-Cooper"))
+    check("the deep distinctive-name window carries the treatment discussion",
+          "Barnor-Cooper" in treatment.passage(deep, "State Farm Mut. Ins. Co. v. Barnor-Cooper"))
 
 
 def test_sweep_since():

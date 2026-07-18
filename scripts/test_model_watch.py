@@ -84,6 +84,44 @@ def test_alias_same_date_not_upgrade():
     print("  ok  an alias with the same release date is not treated as an upgrade")
 
 
+def test_canon():
+    assert model_watch._canon("claude-haiku-4-5-20251001") == "claude-haiku-4-5", "date snapshot stripped"
+    assert model_watch._canon("claude-haiku-4-5") == "claude-haiku-4-5", "undated id unchanged"
+    assert model_watch._canon("claude-opus-4-8") == "claude-opus-4-8"
+    assert model_watch._canon("claude-haiku-4-5-20251001") == model_watch._canon("claude-haiku-4-5")
+    print("  ok  canonical id strips the -YYYYMMDD snapshot (undated alias == dated snapshot)")
+
+
+def test_undated_pin_dated_listing_is_current():
+    """The production scenario: the funnel pins the UNDATED alias (claude-haiku-4-5), but the Models
+    API lists Haiku only under its DATED snapshot (claude-haiku-4-5-20251001). This must NOT read as
+    a deprecation, and the snapshot must NOT read as an upgrade (bumping to it would re-pin the
+    expiry the undated alias exists to avoid). Opus/Sonnet are listed undated and stay quiet."""
+    models = [
+        _m("claude-opus-4-8", 2026, 5, 1),
+        _m("claude-sonnet-5", 2026, 6, 30),
+        _m("claude-haiku-4-5-20251001", 2025, 10, 15),   # dated snapshot only; no undated alias listed
+    ]
+    pins = {"opus": "claude-opus-4-8", "sonnet": "claude-sonnet-5", "haiku": "claude-haiku-4-5"}
+    up, notes = model_watch.detect(models, pins)
+    assert not any(n.startswith("DEPRECATION") for n in notes), notes
+    assert up == [], "the dated snapshot of the pinned model is not an upgrade: %r" % up
+    print("  ok  an undated pin matched only by its dated snapshot is current (no false deprecation/upgrade)")
+
+
+def test_undated_pin_real_upgrade_still_fires():
+    """The canon match must not mask a genuine new version: pin claude-haiku-4-5, a newer
+    claude-haiku-5 appears -> that IS an upgrade (different canonical id)."""
+    models = [
+        _m("claude-haiku-4-5-20251001", 2025, 10, 15),
+        _m("claude-haiku-5", 2026, 6, 1, "Claude Haiku 5"),
+    ]
+    up, notes = model_watch.detect(models, {"haiku": "claude-haiku-4-5"})
+    assert len(up) == 1 and up[0]["new"] == "claude-haiku-5", up
+    assert not any(n.startswith("DEPRECATION") for n in notes), notes
+    print("  ok  a genuinely newer version still fires for an undated pin")
+
+
 def test_higher_tier_reported_not_proposed():
     models = [
         _m("claude-opus-4-8", 2026, 5, 1),
@@ -143,8 +181,9 @@ def test_parse_dt():
     print("  ok  created_at parsing (Z and offset forms, bad input -> None)")
 
 
-TESTS = [test_tier, test_vkey, test_detect_one_upgrade, test_detect_no_upgrade_when_current,
-         test_alias_same_date_not_upgrade, test_higher_tier_reported_not_proposed,
+TESTS = [test_tier, test_vkey, test_canon, test_detect_one_upgrade, test_detect_no_upgrade_when_current,
+         test_alias_same_date_not_upgrade, test_undated_pin_dated_listing_is_current,
+         test_undated_pin_real_upgrade_still_fires, test_higher_tier_reported_not_proposed,
          test_deprecation_note_and_replacement, test_version_fallback_when_no_dates,
          test_bump_text, test_parse_dt]
 
