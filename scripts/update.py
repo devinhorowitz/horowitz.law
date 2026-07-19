@@ -157,6 +157,16 @@ SUMMARIZE_BATCH_SEC = int(os.environ.get("OPINIONS_SUMMARIZE_BATCH_SEC", "1500")
 # forces the synchronous guards (the rollback, e.g. to debug against the live model).
 GUARD_BATCH = os.environ.get("OPINIONS_GUARD_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
 GUARD_BATCH_SEC = int(os.environ.get("OPINIONS_GUARD_BATCH_SEC", "1500"))  # wait budget for the guard batch; runs after the summarize batch, within the funnel job's window
+# Batch the tier-2 TRIAGE gate (Sonnet) too (OPINIONS_TRIAGE_BATCH, default on). Because triage is an
+# in-loop gate, this splits the candidate loop into phases: pass 1 does screen + pretriage + text
+# fetch and collects the survivors; ONE batch triages them; pass 2 applies each verdict (the treats
+# forward-escalation, the relevance gate, and the tier-3 summarize collect) exactly as the inline code
+# did. The batched verdict is IDENTICAL to what the synchronous triage() returns for the same request,
+# and on a batch timeout/transport failure -- or any missing/unparseable line -- the run falls back to
+# a synchronous triage() for that candidate, so the gate never silently changes. OPINIONS_TRIAGE_BATCH=0
+# forces the fully-synchronous per-candidate path (the instant rollback).
+TRIAGE_BATCH = os.environ.get("OPINIONS_TRIAGE_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
+TRIAGE_BATCH_SEC = int(os.environ.get("OPINIONS_TRIAGE_BATCH_SEC", "1500"))  # wait budget for the triage batch, before the summarize batch
 STATUS_URL   = os.environ.get("ANTHROPIC_STATUS_URL", "https://status.claude.com/api/v2/summary.json")
 STATUS_MODE  = (os.environ.get("ANTHROPIC_STATUS", "on") or "on").strip().lower()  # on | warn | off
 
@@ -1029,14 +1039,52 @@ def pretriage(name, docket, text):
                            "messages": [{"role": "user", "content": user}]}, "pretriage")
 
 
-def triage(name, docket, text, feed_index=""):
+def triage_request(name, docket, text, feed_index=""):
+    """The Messages body for the tier-2 triage gate. One source of truth for the prompt, shared by the
+    synchronous triage() and the batch path (batch.from_body), so both build byte-identical requests."""
     user = "Case name: %s\nDocket: %s\n\nFULL OPINION:\n%s" % (name, docket, clip(text))
     if feed_index:
         user += ("\n\nCASES TO WATCH (id: name). If THIS opinion treats any of them "
                  "negatively, report them in `treats` (low threshold; a later step confirms):\n"
                  + feed_index)
-    return anthropic_json({"model": TRIAGE_MODEL, "max_tokens": 1024, "system": TRIAGE_SYSTEM,
-                           "messages": [{"role": "user", "content": user}]}, "triage")
+    return {"model": TRIAGE_MODEL, "max_tokens": 1024, "system": TRIAGE_SYSTEM,
+            "messages": [{"role": "user", "content": user}]}
+
+
+def triage(name, docket, text, feed_index=""):
+    return anthropic_json(triage_request(name, docket, text, feed_index), "triage")
+
+
+def _triage_batch(items, feed_index, deadline=None):
+    """Triage the pass-1 survivors in `items` (each {cid, name, docket, text}) as ONE 50%-priced
+    Message Batches job (OPINIONS_TRIAGE_BATCH), returning {cid: verdict} with the SAME verdict a
+    synchronous triage() produces. It is a transparent optimization: any candidate the batch does not
+    return a usable line for -- a whole-batch timeout/transport failure, a per-line error, or an
+    unparseable body -- FALLS BACK to a synchronous triage() call, so the gate is never silently
+    changed. Raises only ConfigError (auth/model), which must abort the run like any tier."""
+    verdicts, missing = {}, list(items)
+    reqs = [batch.from_body(str(p["cid"]), triage_request(p["name"], p["docket"], p["text"], feed_index))
+            for p in items]
+    try:
+        results = batch.run(reqs, deadline=deadline, label="funnel-triage")
+    except (batch.BatchTimeout, batch.BatchError) as e:
+        print("  ! triage batch deferred (%s); triaging %d candidate(s) synchronously this run"
+              % (e, len(items)), flush=True)
+        results = {}
+    if results:
+        still = []
+        for p in missing:
+            res = results.get(str(p["cid"]))
+            if not res or not res.get("ok"):
+                still.append(p); continue
+            try:
+                verdicts[p["cid"]] = parse_json(res["text"])
+            except Exception:
+                still.append(p)
+        missing = still
+    for p in missing:      # batch unavailable/unparseable for these -> synchronous triage (never skip)
+        verdicts[p["cid"]] = triage(p["name"], p["docket"], p["text"], feed_index)
+    return verdicts
 
 
 def summarize_request(court_id, name, docket, date_filed, text, note, cl_status=""):
@@ -2201,6 +2249,10 @@ def main():
         hold_note = (", %d holdings" % (1 + len(additional_holdings))) if additional_holdings else ""
         print("  + %s [%s] %s (sig=%s%s)" % (entry["name"], ",".join(areas), disp, v.get("significance"), hold_note))
 
+    # PASS 1 -- the cheap Haiku gates + the one text fetch each + the docket dedup, per candidate.
+    # Triage (the Sonnet gate) is batched as ONE job AFTER this pass (OPINIONS_TRIAGE_BATCH), so it is
+    # no longer a synchronous call per candidate; survivors that reach triage are collected here.
+    triage_pending = []   # {r, cid, name, court_id, docket, date_filed, url, text, csig}
     for r in cand:
         if time.time() - run_start > BUDGET_SEC:
             print("  ! time budget reached (%ds) after %d evaluated; finalizing with what is collected"
@@ -2306,11 +2358,75 @@ def main():
                                            "date": date_filed, "url": url, "reason": (ps.get("reason") or "").strip()})
                         consec = 0; evaluated.add(cid); continue
                 time.sleep(0.4)
-            # Tier 2: full-read relevance gate
+            # Survivor: collect for the tier-2 triage gate (pass 2 applies each verdict).
+            triage_pending.append({"r": r, "cid": cid, "name": name, "court_id": court_id, "docket": docket,
+                                   "date_filed": date_filed, "url": url, "text": text, "csig": csig})
+            consec = 0
+        except ConfigError as e:
+            print("  ! configuration error, stopping this run so it surfaces (nothing committed): %s" % e)
+            cfg_error = True
+            break
+        except Exception as e:
+            print("  ! error on cluster %s (%s): %s" % (cid, name, e))
+            consec += 1
+            if consec >= BREAKER:
+                print("  ! %d consecutive failures; stopping early (API likely rate-limited). "
+                      "Unevaluated candidates roll to the next run." % consec)
+                break
+            continue  # leave unseen so it is retried next run
+
+    # Tier 2, batched: triage every pass-1 survivor as ONE 50%-priced job (OPINIONS_TRIAGE_BATCH), or
+    # synchronously per candidate. _triage_batch returns the SAME verdict a synchronous triage() would,
+    # falling back to a sync call for any line the batch does not return, so the gate never silently
+    # changes. A candidate left without a verdict (triage genuinely unavailable) is DEFERRED in pass 2
+    # -- left unevaluated to retry next run -- exactly as a synchronous triage error already was.
+    triage_verdicts = {}
+    if TRIAGE_MODEL and triage_pending and not cfg_error:
+        n_triage += len(triage_pending)
+        try:
+            if TRIAGE_BATCH:
+                triage_verdicts = _triage_batch(triage_pending, feed_index, time.time() + TRIAGE_BATCH_SEC)
+            else:
+                for p in triage_pending:
+                    try:
+                        triage_verdicts[p["cid"]] = triage(p["name"], p["docket"], p["text"], feed_index)
+                    except Exception as te:
+                        print("  ! triage unavailable for %s (%s); rolls to next run" % (p["name"][:50], te))
+        except ConfigError as e:
+            print("  ! configuration error triaging (nothing committed): %s" % e)
+            cfg_error = True
+
+    # PASS 2 -- apply each triage verdict: the forward treatment escalation, the relevance gate, and
+    # the tier-3 summarize collect. Byte-identical to the old inline code, just reading the batched
+    # verdict instead of calling triage() here.
+    for p in triage_pending:
+        if cfg_error:
+            break
+        if time.time() - run_start > BUDGET_SEC:
+            print("  ! time budget reached (%ds) after %d evaluated; finalizing with what is collected"
+                  % (BUDGET_SEC, len(evaluated)))
+            break
+        r, cid, name = p["r"], p["cid"], p["name"]
+        court_id, docket, date_filed = p["court_id"], p["docket"], p["date_filed"]
+        url, text, csig = p["url"], p["text"], p["csig"]
+        # In-run duplicate recheck: pass 1 deduped against CARDED cases; catch here an in-run twin --
+        # a survivor of the same new case added earlier in THIS pass -- before any further work, so its
+        # treatment audit and summary never run, exactly as the old loop-top dedup guaranteed.
+        dup = next((nm for sig, nm in dedup_index if _same_case(csig, sig)), None)
+        if dup:
+            skipped.append((name, "duplicate of carded case %r (same court and shared docket or "
+                                  "same-day parties; cluster %s is a twin or a corrected republish)"
+                                  % (dup[:60], cid)))
+            print("  ~ duplicate skip: %s  ==  %s  (cluster %s)" % (name[:50], dup[:50], cid))
+            evaluated.add(cid); consec = 0
+            continue
+        t = triage_verdicts.get(cid)
+        if TRIAGE_MODEL and t is None:
+            continue  # triage genuinely unavailable this run -> leave unevaluated, retry next run
+        try:
+            # Tier 2: full-read relevance gate (verdict from the batch above)
             note = ""
             if TRIAGE_MODEL:
-                n_triage += 1
-                t = triage(name, docket, text, feed_index)
                 # Forward escalation: if this opinion appears to treat a carded case
                 # negatively, that is a high-risk event for the feed. Confirm each
                 # with an Opus audit (which also re-checks the existing card), whether

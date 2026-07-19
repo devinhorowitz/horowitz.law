@@ -317,6 +317,58 @@ def test_guard_cards_batch():
     print("  ok  a whole-batch failure returns False without populating (caller falls back to sync)")
 
 
+def test_triage_batch():
+    """The tier-2 triage-batch orchestration (OPINIONS_TRIAGE_BATCH, update._triage_batch): result
+    mapping by custom_id, and -- unlike the summarize batch -- a SYNCHRONOUS FALLBACK for any line the
+    batch does not usably return, so the returned {cid: verdict} space is always complete and the gate
+    is never silently changed. Exercises the ok line, the per-line errored + unparseable-body fallbacks,
+    and a whole-batch timeout/error fallback. Stubs batch.run and update.triage (the sync path), so it
+    runs the real triage_request + batch.from_body building with no network."""
+    print("tier-2 triage batch (_triage_batch):")
+    items = [{"cid": 111, "name": "A v. B", "docket": "A111", "text": "t111"},
+             {"cid": 222, "name": "C v. D", "docket": "A222", "text": "t222"},
+             {"cid": 333, "name": "E v. F", "docket": "A333", "text": "t333"}]
+    real_run, real_triage = update.batch.run, update.triage
+    sync_calls = []
+
+    def fake_triage(name, docket, text, feed_index=""):
+        sync_calls.append(name)
+        return {"relevant": True, "significance": "high", "note": "sync:%s" % name}
+
+    # 111 ok from the batch; 222 errored line -> sync fallback; 333 unparseable body -> sync fallback.
+    def mixed_run(reqs, deadline=None, interval=20.0, label="batch"):
+        assert sorted(rq["custom_id"] for rq in reqs) == ["111", "222", "333"], [rq["custom_id"] for rq in reqs]
+        return {"111": {"ok": True, "text": '{"relevant": true, "significance": "high", "note": "batch"}'},
+                "222": {"ok": False, "type": "errored", "error": "x"},
+                "333": {"ok": True, "text": "not json {{{"}}
+    update.batch.run, update.triage = mixed_run, fake_triage
+    try:
+        verdicts = update._triage_batch(items, "", deadline=123.0)
+    finally:
+        update.batch.run, update.triage = real_run, real_triage
+    assert set(verdicts) == {111, 222, 333}, verdicts                 # every candidate has a verdict
+    assert verdicts[111]["note"] == "batch", verdicts[111]            # ok line came from the batch
+    assert verdicts[222]["note"] == "sync:C v. D", verdicts[222]      # errored line fell back to sync
+    assert verdicts[333]["note"] == "sync:E v. F", verdicts[333]      # unparseable body fell back to sync
+    assert sorted(sync_calls) == ["C v. D", "E v. F"], sync_calls     # only the two missing lines
+    print("  ok  ok line from batch; errored and unparseable lines fall back to synchronous triage")
+
+    for label, exc in (("timeout", update.batch.BatchTimeout("bid", "still running")),
+                       ("transport error", update.batch.BatchError("submit failed"))):
+        sync_calls.clear()
+
+        def raiser(reqs, deadline=None, interval=20.0, label="batch", _e=exc):
+            raise _e
+        update.batch.run, update.triage = raiser, fake_triage
+        try:
+            verdicts = update._triage_batch(items, "", deadline=123.0)
+        finally:
+            update.batch.run, update.triage = real_run, real_triage
+        assert set(verdicts) == {111, 222, 333}, (label, verdicts)          # whole set still triaged
+        assert sorted(sync_calls) == ["A v. B", "C v. D", "E v. F"], (label, sync_calls)
+        print("  ok  batch %s: every candidate falls back to synchronous triage (gate unchanged)" % label)
+
+
 def test_treatment_citer_seen():
     """Claim-1 regression (the vetoed-treatment loop): route_and_publish marks a treatment citer SEEN,
     not held-out like a card. Held out, a vetoed treatment finding was redraft-logged, re-discovered,
@@ -460,8 +512,9 @@ def main():
     test_today_eastern()
     test_draft_pending()
     test_guard_cards_batch()
+    test_triage_batch()
     test_funnel_pr_body()
-    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 3))
+    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 4))
     return 0
 
 
