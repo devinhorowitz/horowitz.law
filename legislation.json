@@ -1,1 +1,39 @@
-[]
+[
+  {
+    "bill_id": 1929066,
+    "state": "GA",
+    "number": "HB114",
+    "title": "Motor vehicles; federal regulations regarding safe operation of commercial motor vehicle and carriers; update reference date",
+    "status": "enacted",
+    "status_date": "2025-05-08",
+    "effective_date": "",
+    "areas": [
+      "auto",
+      "negsec"
+    ],
+    "synopsis": "HB114 amends O.C.G.A. § 40-1-8 to update the reference date for incorporating federal safety regulations governing motor carriers, commercial motor vehicles, drivers, and hazardous-materials transport, and revises a definition within that section. The effect is to align Georgia's adopted federal safety standards with a more current version of the federal regulations. The bill text does not specify the new reference date or which definition is revised.",
+    "impact": "Updated federal safety standards now apply as the negligence-per-se benchmark in commercial motor vehicle and trucking cases.",
+    "url": "https://legiscan.com/GA/bill/HB114/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/69467",
+    "change_hash": "453d31ee7f42da9812bc5b1257051263",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "bill_id": 1929422,
+    "state": "GA",
+    "number": "HB94",
+    "title": "Insurance; medically necessary expenses for standard fertility preservation services when a medically necessary treatment for cancer, sickle cell disease, or lupus may directly or indirectly cause an impairment of fertility; require coverage",
+    "status": "enacted",
+    "status_date": "2025-05-01",
+    "effective_date": "",
+    "areas": [
+      "coverage"
+    ],
+    "synopsis": "Amends Chapter 24 of Title 33 to require certain insurance policies to cover medically necessary expenses for standard fertility preservation services when a medically necessary treatment for cancer, sickle cell disease, or lupus may directly or indirectly impair fertility. The Act provides definitions, exclusions, permissible cost-sharing, and authorizes implementing rules and regulations. The prior rule did not mandate this specific coverage; the text does not spell out the full scope of affected policies here.",
+    "impact": "Expands mandated insurance coverage, potentially generating coverage disputes over fertility-preservation benefits tied to cancer, sickle cell, or lupus treatment.",
+    "url": "https://legiscan.com/GA/bill/HB94/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/69447",
+    "change_hash": "52e1ba9a4213345e387aeb5be252d8cb",
+    "first_seen": "2026-07-19"
+  }
+]
