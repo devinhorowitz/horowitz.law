@@ -155,6 +155,20 @@ def make_ai(script):
 def main():
     print("legislation watch:")
 
+    # Hermetic seams. The funnel/batch L.run() calls below do NOT pass pollstate=/now=, so run()
+    # falls to _load_pollstate() and datetime.datetime.now() -- both of which read live state:
+    #   * _load_pollstate() reads the real committed legislation_state.json. Once the Legislative
+    #     Watch commits fresh "polls" timestamps, _fresh() returns True inside the 1h master window,
+    #     discover() SKIPS the getMasterList poll, 0 candidates flow, and the card-producing GA
+    #     assertions fail -- a schedule-phased flake that breaks CI for ~1h after every watch run.
+    #   * _load_seen() reads the real committed seen-map (7-digit bill ids; no collision with the
+    #     111/222 fixtures today, but stubbed for the same hygiene as the sibling watches).
+    # Stub both to empty so these runs are deterministic regardless of the state file and wall clock.
+    # The dedicated timing-guard tests below are unaffected: they pass explicit pollstate=/now=, and
+    # run() only calls _load_pollstate() when pollstate is None.
+    L._load_seen = lambda: {}
+    L._load_pollstate = lambda: {"polls": {}, "sessioncache": {}}
+
     # --- session resolution ---
     watched = L.sessions_to_watch(SESSIONS["sessions"], today=__import__("datetime").date(2026, 7, 17))
     ids = [s["session_id"] for s in watched]
