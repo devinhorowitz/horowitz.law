@@ -87,6 +87,13 @@ def boom(body):
 def main():
     print("regulatory watch:")
 
+    # Hermetic seam: every R.run() below assumes an EMPTY seen set. _load_seen() reads the real
+    # committed regulations_state.json (the watch commits it), so a fixture document_number that ever
+    # matched a real Federal Register doc number would be deduped as "already seen" and silently break
+    # the card-producing assertions. Stub it to {} so the tests never read on-disk state. (Dedup itself
+    # is covered directly via new_documents(seen=...), which takes the seen set as a parameter.)
+    R._load_seen = lambda: {}
+
     # --- query URL ---
     u = R._query_url(["federal-motor-carrier-safety-administration"], ["RULE", "PRORULE"], "2026-06-01", page=2)
     check("query encodes the agency condition",
