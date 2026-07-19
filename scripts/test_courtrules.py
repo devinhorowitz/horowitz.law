@@ -12,6 +12,7 @@ Run directly: `python scripts/test_courtrules.py`.
 """
 import os
 import sys
+import unittest.mock as _m
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import courtrules as C  # noqa: E402
@@ -80,17 +81,20 @@ def main():
           C.extract("   ", ai_boom) == [])
     check("extract signals a model error as None (retry)", C.extract("text", ai_boom) is None)
 
-    # --- run: a fresh page cards the amendment ---
+    # --- run: a fresh page cards the amendment. Patch _load_seen to an EMPTY state: the fixtures use
+    #     REAL rule ids (FRCP Rule 26, FRE Rule 702), so reading the on-disk courtrules_state.json --
+    #     which the watch commits and populates with those very rules -- would dedup the fixture as
+    #     "already seen" and card nothing. Empty seen keeps this hermetic regardless of the state file. ---
     fetch_v1 = lambda url: PAGE_V1
-    cards, notes, upd = C.run(fetch=fetch_v1, ai=ai_returning(AMEND_26),
-                              today=__import__("datetime").date(2026, 7, 17))
+    with _m.patch.object(C, "_load_seen", lambda: {"pages": {}, "cards": {}}):
+        cards, notes, upd = C.run(fetch=fetch_v1, ai=ai_returning(AMEND_26), sources=[("Pending", "u")],
+                                  today=__import__("datetime").date(2026, 7, 17))
     check("run cards a newly-seen amendment", len(cards) == 1 and cards[0]["rule"] == "Rule 26")
     check("run records the page hash and the card id in seen_updates",
           upd["pages"] and upd["cards"] and len(upd["cards"]) == 1)
 
     # --- run: an UNCHANGED page skips the model entirely ---
     h = C.page_hash(C.strip_html(PAGE_V1))
-    import unittest.mock as _m
     with _m.patch.object(C, "_load_seen", lambda: {"pages": {"u": h}, "cards": {}}):
         cards2, notes2, _ = C.run(fetch=lambda url: PAGE_V1, ai=ai_boom, sources=[("Pending", "u")],
                                   today=__import__("datetime").date(2026, 7, 17))
@@ -129,14 +133,17 @@ def main():
           any("no Federal Rules markers" in n for n in notesS))
     check("the shell guard never called the model (ai_boom would have raised)", True)
 
-    # --- multiple amendments on one page ---
-    multi, _, _ = C.run(fetch=lambda url: PAGE_V2, ai=ai_returning(AMEND_26, AMEND_702),
-                        today=__import__("datetime").date(2026, 7, 17))
+    # --- multiple amendments on one page (empty seen, so the real state file cannot dedup the
+    #     fixtures' real rule ids -- see the fresh-page test above) ---
+    with _m.patch.object(C, "_load_seen", lambda: {"pages": {}, "cards": {}}):
+        multi, _, _ = C.run(fetch=lambda url: PAGE_V2, ai=ai_returning(AMEND_26, AMEND_702),
+                            sources=[("Pending", "u")], today=__import__("datetime").date(2026, 7, 17))
     check("run cards multiple amendments from one page",
           {c["rule"] for c in multi} == {"Rule 26", "Rule 702"})
-    check("run drops a criminal-only amendment mixed in",
-          not C.run(fetch=lambda url: PAGE_V2, ai=ai_returning(AMEND_CRIM),
-                    today=__import__("datetime").date(2026, 7, 17))[0])
+    with _m.patch.object(C, "_load_seen", lambda: {"pages": {}, "cards": {}}):
+        crim_cards = C.run(fetch=lambda url: PAGE_V2, ai=ai_returning(AMEND_CRIM),
+                           sources=[("Pending", "u")], today=__import__("datetime").date(2026, 7, 17))[0]
+    check("run drops a criminal-only amendment mixed in", not crim_cards)
 
     # --- merge_cards + merge_seen ---
     merged, added, updated = C.merge_cards([dict(card, first_seen="2026-06-01")],
@@ -160,8 +167,10 @@ def main():
 
     _B.run = _fake_batch
     try:
-        bcards, bnotes, bupd = C.run(fetch=lambda url: PAGE_V1, ai=ai_boom, sources=[("Pending", "u")],
-                                     today=__import__("datetime").date(2026, 7, 17), batch_enabled=True)
+        # Empty seen, so the on-disk state file cannot dedup the fixture's real rule id (see above).
+        with _m.patch.object(C, "_load_seen", lambda: {"pages": {}, "cards": {}}):
+            bcards, bnotes, bupd = C.run(fetch=lambda url: PAGE_V1, ai=ai_boom, sources=[("Pending", "u")],
+                                         today=__import__("datetime").date(2026, 7, 17), batch_enabled=True)
     finally:
         _B.run = _real_run
     check("batch extract cards the amendment (ai_boom never called -> batch path used)",
