@@ -1,1 +1,189 @@
-[]
+[
+  {
+    "id": "893b86d51179",
+    "rule_set": "FRE",
+    "rule": "Rule 707",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "A new Evidence Rule 707 is being added effective December 1, 2027.",
+    "impact": "A new evidence rule could create additional requirements affecting proof at trial.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "3578e04f4528",
+    "rule_set": "FRE",
+    "rule": "Rule 609",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "Evidence Rule 609 is being amended effective December 1, 2027.",
+    "impact": "Changes to impeachment by evidence of a criminal conviction may affect witness examination.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "f0435a2fd390",
+    "rule_set": "FRCP",
+    "rule": "Rule 81",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "Civil Rule 81 is being amended effective December 1, 2027.",
+    "impact": "Litigators should track changes to the applicability of the civil rules to certain proceedings.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "9760171cb81f",
+    "rule_set": "FRCP",
+    "rule": "Rule 7.1",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "Civil Rule 7.1 is being amended effective December 1, 2027.",
+    "impact": "Litigators should review updated disclosure statement requirements for parties.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "ee872de89d96",
+    "rule_set": "FRCP",
+    "rule": "Rule 45",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "Civil Rule 45 is being amended effective December 1, 2027.",
+    "impact": "Changes to subpoena practice may affect how litigators obtain discovery from nonparties.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "fb1d7fa557a1",
+    "rule_set": "FRCP",
+    "rule": "Rule 41",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "Civil Rule 41 is being amended effective December 1, 2027.",
+    "impact": "Litigators should note revisions governing dismissal of actions.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "c2b02558ee2e",
+    "rule_set": "FRCP",
+    "rule": "Rule 26",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "Civil Rule 26 is being amended effective December 1, 2027.",
+    "impact": "Changes to discovery and disclosure obligations directly affect litigation strategy and costs.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "57567ea1e1a6",
+    "rule_set": "FRBP",
+    "rule": "Rule 2002",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "Bankruptcy Rule 2002 is being amended as part of the December 1, 2027 rules package.",
+    "impact": "Changes to notice requirements in bankruptcy cases may affect service and deadlines.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "2f9d43f48d1f",
+    "rule_set": "FRAP",
+    "rule": "Rule 15",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "Appellate Rule 15 is being amended as part of the December 1, 2027 rules package.",
+    "impact": "Litigators reviewing or enforcing agency orders on appeal should track this revision.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "c9daa89c354e",
+    "rule_set": "FRE",
+    "rule": "Rule 801",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "Evidence Rule 801 (hearsay definitions) is being amended effective December 1, 2026.",
+    "impact": "Any litigator should note changes to what qualifies as hearsay at trial.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "887b3e363805",
+    "rule_set": "FRBP",
+    "rule": "Rule 9017",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "Bankruptcy Rule 9017 is being amended as part of the December 1, 2026 rules package.",
+    "impact": "Changes concerning evidence in bankruptcy proceedings may affect trial practice.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "dfaaf4e3af5c",
+    "rule_set": "FRBP",
+    "rule": "Rule 9014",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "Bankruptcy Rule 9014 is being amended as part of the December 1, 2026 rules package.",
+    "impact": "Litigators handling contested matters should track these procedural revisions.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "c01d5c34f3c4",
+    "rule_set": "FRBP",
+    "rule": "Rule 9006",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "Bankruptcy Rule 9006 is being amended as part of the December 1, 2026 rules package.",
+    "impact": "Changes to time computation and extensions may affect deadlines in bankruptcy matters.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "5baab94a20b4",
+    "rule_set": "FRBP",
+    "rule": "Rule 7043",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "A new Bankruptcy Rule 7043 is being added as part of the December 1, 2026 rules package.",
+    "impact": "A new rule in the adversary-proceeding series could create new procedural requirements for bankruptcy litigators.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "a13de42eb8fd",
+    "rule_set": "FRBP",
+    "rule": "Rule 5009",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "Bankruptcy Rule 5009 is being amended as part of the December 1, 2026 rules package.",
+    "impact": "Bankruptcy litigators should review changes affecting closing of cases.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "02176a974ade",
+    "rule_set": "FRBP",
+    "rule": "Rule 3018",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "Bankruptcy Rule 3018 is being amended as part of the December 1, 2026 rules package.",
+    "impact": "Practitioners handling plan acceptances or rejections should note the coming revisions.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  },
+  {
+    "id": "d4ad203fb1d4",
+    "rule_set": "FRBP",
+    "rule": "Rule 1007",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "Bankruptcy Rule 1007 is being amended as part of the December 1, 2026 rules package.",
+    "impact": "Bankruptcy practitioners should track changes to lists, schedules, statements, and filing deadlines governed by this rule.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-19"
+  }
+]
