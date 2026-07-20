@@ -134,6 +134,11 @@ PDF_MIN_CHARS= int(os.environ.get("OPINIONS_PDF_MIN_CHARS", "500"))  # below thi
 FEED_MAX_BYTES = int(os.environ.get("OPINIONS_FEED_MAX_BYTES", str(25 * 1024 * 1024)))
 PDF_MAX_BYTES  = int(os.environ.get("OPINIONS_PDF_MAX_BYTES", str(75 * 1024 * 1024)))
 OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
+# Tier-2 triage output budget. Was a hardcoded 1024, which a verbose model (Sonnet 5) can overflow
+# on an opinion with a substantive `note` plus several `treats` entries -- the anthropic_json guard
+# then (correctly) raises on the truncated JSON rather than card a partial verdict, which crashed the
+# maintenance golden check and would stall that candidate in the live funnel. 2x headroom, env-tunable.
+TRIAGE_TOKENS = int(os.environ.get("OPINIONS_TRIAGE_MAX_TOKENS", "2048"))
 DRY_RUN      = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "yes")
 BUDGET_SEC   = int(os.environ.get("OPINIONS_BUDGET_SEC", "480"))
@@ -918,7 +923,7 @@ def anthropic_json(body, label="call"):
             # which would then be treated as a real verdict, silently dropping fields (a card scored
             # on a partial answer). Treat truncation as a hard failure instead of trusting the
             # fragment: raise so the run surfaces it rather than acting on half a response. This
-            # is the guard for the tight-budget calls (triage max_tokens=1024) as they age into
+            # is the guard for the tighter-budget calls (triage, TRIAGE_TOKENS) as they age into
             # longer model outputs.
             if data.get("stop_reason") == "max_tokens":
                 raise RuntimeError("%s %s hit max_tokens (%s); response truncated -- raise its "
@@ -1047,7 +1052,7 @@ def triage_request(name, docket, text, feed_index=""):
         user += ("\n\nCASES TO WATCH (id: name). If THIS opinion treats any of them "
                  "negatively, report them in `treats` (low threshold; a later step confirms):\n"
                  + feed_index)
-    return {"model": TRIAGE_MODEL, "max_tokens": 1024, "system": TRIAGE_SYSTEM,
+    return {"model": TRIAGE_MODEL, "max_tokens": TRIAGE_TOKENS, "system": TRIAGE_SYSTEM,
             "messages": [{"role": "user", "content": user}]}
 
 
