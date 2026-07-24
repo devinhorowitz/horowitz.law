@@ -1,8 +1,25 @@
 {
   "area": "coverage",
   "label": "coverage",
-  "count": 16,
+  "count": 17,
   "opinions": [
+    {
+      "cluster_id": 10934682,
+      "name": "Universal Property & Casualty Insurance Company v. King",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-07-24",
+      "disposition": "affirmed",
+      "areas": [
+        "coverage"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10934682/universal-property-casualty-insurance-company-v-reese-f-king-and-janice/",
+      "synopsis": "The insurer appealed a final judgment allowing the insureds to recover the replacement cost value of their insured loss under a property policy. The Sixth District Court of Appeal affirmed for the reasons stated in its prior decision in Rodriguez and certified conflict with the Fourth District Court of Appeal's decision in Qureshi on the same coverage issue.",
+      "why": "It reinforces a district split on whether an insured may recover replacement cost value under a property policy, a coverage question now positioned for possible resolution by the Florida Supreme Court.",
+      "dockets": [
+        "6D2024-0241"
+      ]
+    },
     {
       "cluster_id": 10918352,
       "name": "Clayton v. Essentia Insurance Company",
