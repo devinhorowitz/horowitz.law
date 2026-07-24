@@ -227,5 +227,15 @@
     "expect_areas": [],
     "note": "Florida negative control (family/domestic). Confirms supplementary Florida still drops out-of-area cases. From the Florida DCA feed.",
     "text": "DISTRICT COURT OF APPEAL OF FLORIDA\n SECOND DISTRICT\n\n\n VIVIANE COTTON-BETTERIDGE,\n\n Appellant,\n\n v.\n MATTHEW COTTON-BETTERIDGE,\n\n Appellee.\n\n\n No. 2D2025-0459\n\n\n June 19, 2026\n\nAppeal from the Circuit Court for Hillsborough County; Wesley D.\nTibbals, Judge.\n\nCurt Sanchez of The Law Offices of Curt Sanchez, P.A., West Palm\nBeach, for Appellant.\n\nKristin A. Norse, Brandon K. Breslow, and Molly Schindler of Kynes,\nMarkman & Felman, P.A., Tampa, for Appellee.\n\nPER CURIAM.\n\n Affirmed.\n\n\nLUCAS, C.J., and VILLANTI and GUARD, JJ., Concur.\n\n\nOpinion subject to revision prior to official publication."
+  },
+  {
+    "cluster_id": 10785227,
+    "name": "Giles v. Greenhouse Apartments, LLC",
+    "docket": "A25A2143",
+    "expect_relevant": true,
+    "expect_areas": [
+      "negsec"
+    ],
+    "note": "second negsec thin-area anchor, seated after the taxonomy gloss (PR #182). The dispositive division decides negligent-security CAUSATION: the tenant identified no specific security measure that would more likely than not have prevented the targeted attack (Stadterman; George v. Hercules; Walker v. Aderhold) -- squarely within the glossed negsec definition's 'adequacy or causal effect of security measures' clause. Anchored once before and went 0/4 under the UNGLOSSED opus-4-8 prompt (the opinion reserves foreseeability in fn. 18, concedes duty, and never says 'negligent security', so a bare-token model filed it under premises); re-seated only after the glossed opus-5 summarizer passed it in a pre-merge branch dispatch. If this anchor regresses, suspect the gloss, not the case."
   }
 ]
