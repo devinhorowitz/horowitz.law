@@ -116,7 +116,7 @@ jobs:
           # Same three-tier funnel as the daily pipeline; same repo Variables.
           OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5' }}
           OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-5' }}
-          OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-4-8' }}
+          OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-5' }}
         run: python scripts/backfill.py
 
       # In a dry run the script writes nothing, so this finds no changes and opens

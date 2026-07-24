@@ -31,7 +31,7 @@ Run from the repo root: `python scripts/update.py`. No third-party packages.
 Environment:
   ANTHROPIC_API_KEY        required
   COURTLISTENER_TOKEN      optional (raises CourtListener rate limits)
-  OPINIONS_MODEL           Tier 3 summarizer (default claude-opus-4-8)
+  OPINIONS_MODEL           Tier 3 summarizer (default claude-opus-5)
   OPINIONS_TRIAGE_MODEL    Tier 2 full-read gate (default claude-sonnet-5). "" disables it.
   OPINIONS_SCREEN_MODEL    Tier 1 excerpt screen (default claude-haiku-4-5). "" disables it.
   OPINIONS_PRETRIAGE_MODEL Tier 1.5 full-read screen (default claude-haiku-4-5); a cheap full read before triage. "" disables it.
@@ -99,7 +99,7 @@ REVIEW_PR_PATH = os.path.join(REPO, "scripts", "pr_body_review.md") # review-lan
 
 KEY          = os.environ.get("ANTHROPIC_API_KEY", "")
 CL_TOKEN     = os.environ.get("COURTLISTENER_TOKEN", "")
-MODEL        = os.environ.get("OPINIONS_MODEL", "claude-opus-4-8")
+MODEL        = os.environ.get("OPINIONS_MODEL", "claude-opus-5")
 AUDIT_MODEL  = os.environ.get("OPINIONS_AUDIT_MODEL", MODEL)  # escalated treatment audit; Opus by default
 TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-5")
 # Defaults are the undated canonical ids (claude-haiku-4-5), like every other tier (opus-4-8,

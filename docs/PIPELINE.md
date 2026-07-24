@@ -320,7 +320,7 @@ When adding an entry by hand, copy an existing one for shape.
 Set these as repository Variables, as `env:` on the funnel step in the workflow, or export them when
 running locally:
 
-- `OPINIONS_MODEL` (default `claude-opus-4-8`): the Tier 3 summarizer.
+- `OPINIONS_MODEL` (default `claude-opus-5`): the Tier 3 summarizer.
 - `OPINIONS_TRIAGE_MODEL` (default `claude-sonnet-5`): the Tier 2 full-read gate. `""` disables it.
 - `OPINIONS_SCREEN_MODEL` (default `claude-haiku-4-5-20251001`): the Tier 1 excerpt screen. `""`
   disables it.

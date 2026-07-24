@@ -47,7 +47,7 @@ Environment:
                           sets "GA,US"). "US" is the federal overlay, screened strictly. The legacy
                           single-state alias LEGISLATION_STATE is still accepted.
   LEGISLATION_SCREEN_MODEL relevance screen model (default claude-haiku-4-5)
-  LEGISLATION_MODEL       card writer model (default claude-opus-4-8)
+  LEGISLATION_MODEL       card writer model (default claude-opus-5)
   LEGISLATION_MAX         cap on CARDS drafted per run (default 40)
   LEGISLATION_SCREEN_MAX  cap on bills SCREENED per run (default 60); bounds a cold-start, the
                           remainder rolls into the next run. Progress streams to stdout as it goes.
@@ -96,7 +96,7 @@ def _states():
 
 LEGISLATION_STATES = _states()
 SCREEN_MODEL = os.environ.get("LEGISLATION_SCREEN_MODEL", "claude-haiku-4-5")
-WRITE_MODEL  = os.environ.get("LEGISLATION_MODEL", "claude-opus-4-8")
+WRITE_MODEL  = os.environ.get("LEGISLATION_MODEL", "claude-opus-5")
 MAX_RUN      = int(os.environ.get("LEGISLATION_MAX", "40"))     # cap on CARDS drafted per run
 # Cap on bills SCREENED per run. The cold-start problem: with an empty change_hash state every
 # enacted/vetoed bill in the whole biennium (plus US Congress) is "new", so an unbounded first run

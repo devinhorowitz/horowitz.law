@@ -33,7 +33,7 @@ Environment:
   ANTHROPIC_API_KEY        required for the extraction call
   COURTRULES_URLS          comma list of "label|url" (or bare url) sources to read
                            (default: the uscourts.gov pending-amendments page)
-  COURTRULES_MODEL         extraction model (default claude-opus-4-8)
+  COURTRULES_MODEL         extraction model (default claude-opus-5)
   COURTRULES_BATCH         batch the Opus page-extraction pass via the 50%-priced Message Batches API
                            (default on; set 0 for the synchronous rollback). COURTRULES_BATCH_SEC
                            bounds the in-run wait (default 1800).
@@ -84,7 +84,7 @@ def _sources():
 
 
 SOURCES = _sources()
-MODEL = os.environ.get("COURTRULES_MODEL", "claude-opus-4-8")
+MODEL = os.environ.get("COURTRULES_MODEL", "claude-opus-5")
 # The pending-amendments page can list many rules at once (a full FRCP/FRE/FRAP/FRBP cycle), so the
 # extraction JSON needs generous room; 1500 truncated mid-list. Configurable for a heavy year.
 EXTRACT_MAX_TOKENS = int(os.environ.get("COURTRULES_MAX_TOKENS", "8000"))

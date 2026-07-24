@@ -42,7 +42,7 @@ Environment:
                            (default "RULE")
   REGULATION_LOOKBACK_DAYS how many days back to scan on each run (default 45)
   REGULATION_SCREEN_MODEL  relevance screen model (default claude-haiku-4-5)
-  REGULATION_MODEL         card writer model (default claude-opus-4-8)
+  REGULATION_MODEL         card writer model (default claude-opus-5)
   REGULATION_MAX           cap on CARDS drafted per run (default 40); a run stops once this many
                            rules have been carded (FMCSA's low volume needs no separate screen cap)
   REGULATION_BATCH         batch the Opus card-write pass via the 50%-priced Message Batches API
@@ -78,7 +78,7 @@ AGENCIES = [s.strip() for s in os.environ.get(
 TYPES = [s.strip().upper() for s in os.environ.get("REGULATION_TYPES", "RULE").split(",") if s.strip()]
 LOOKBACK_DAYS = int(os.environ.get("REGULATION_LOOKBACK_DAYS", "45"))
 SCREEN_MODEL  = os.environ.get("REGULATION_SCREEN_MODEL", "claude-haiku-4-5")
-WRITE_MODEL   = os.environ.get("REGULATION_MODEL", "claude-opus-4-8")
+WRITE_MODEL   = os.environ.get("REGULATION_MODEL", "claude-opus-5")
 MAX_RUN       = int(os.environ.get("REGULATION_MAX", "40"))
 DEBUG         = os.environ.get("REGULATION_DEBUG", "") == "1"
 PAGES_MAX     = int(os.environ.get("REGULATION_PAGES_MAX", "10"))  # safety cap on pagination

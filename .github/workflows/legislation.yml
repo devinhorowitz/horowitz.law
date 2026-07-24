@@ -80,15 +80,15 @@ jobs:
           # LEGISLATION_STATES repo Variable to narrow (e.g. 'GA') or widen without editing this file.
           LEGISLATION_STATES: ${{ vars.LEGISLATION_STATES || 'GA,US' }}
           LEGISLATION_SCREEN_MODEL: ${{ vars.LEGISLATION_SCREEN_MODEL || 'claude-haiku-4-5' }}
-          LEGISLATION_MODEL: ${{ vars.LEGISLATION_MODEL || 'claude-opus-4-8' }}
+          LEGISLATION_MODEL: ${{ vars.LEGISLATION_MODEL || 'claude-opus-5' }}
           LEGISLATION_MAX: ${{ vars.LEGISLATION_MAX || '40' }}
           # FMCSA rulemaking; add agencies (comma list of Federal Register slugs) via the repo Variable.
           REGULATION_AGENCIES: ${{ vars.REGULATION_AGENCIES || 'federal-motor-carrier-safety-administration' }}
           REGULATION_SCREEN_MODEL: ${{ vars.REGULATION_SCREEN_MODEL || 'claude-haiku-4-5' }}
-          REGULATION_MODEL: ${{ vars.REGULATION_MODEL || 'claude-opus-4-8' }}
+          REGULATION_MODEL: ${{ vars.REGULATION_MODEL || 'claude-opus-5' }}
           # Federal Rules amendments; override the source page list via the repo Variable if it moves.
           COURTRULES_URLS: ${{ vars.COURTRULES_URLS }}
-          COURTRULES_MODEL: ${{ vars.COURTRULES_MODEL || 'claude-opus-4-8' }}
+          COURTRULES_MODEL: ${{ vars.COURTRULES_MODEL || 'claude-opus-5' }}
           # Flip these repo Variables to '1' to trace a run (per-session bill/status/resolution counts).
           LEGISLATION_DEBUG: ${{ vars.LEGISLATION_DEBUG }}
           REGULATION_DEBUG: ${{ vars.REGULATION_DEBUG }}
