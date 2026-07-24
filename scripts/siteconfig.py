@@ -139,3 +139,34 @@ AREA_LABELS = {
 }
 AREA_CODES = list(AREA_LABELS)   # ["coverage", "badfaith", ...] for prompt text
 
+# One-line gloss per code, prompt-injected by update.py so the classifier tags by the
+# curated meaning of each code instead of guessing from a bare token. Written to the
+# decides-under discipline: a code fits a holding only when the court decides a question
+# OF that body of law, not when the facts merely involve its subject (the boundary that
+# separated Martin v. Six Flags, a true negligent-security holding, from cases that only
+# arise from a crime -- see the golden-set notes for Venetian Hills and the Kinsale retag).
+# Keys must exactly match AREA_LABELS; update.py raises at import if they drift.
+AREA_GLOSSES = {
+    "coverage": ("insurance policy interpretation and scope: exclusions, UM/UIM coverage, duty to "
+                 "defend or indemnify, declaratory rulings on coverage"),
+    "badfaith": ("insurer bad faith and settlement conduct: O.C.G.A. 33-4-6 / 33-4-7 penalties, "
+                 "Holt-type failure-to-settle excess exposure, and equivalent non-Georgia bad-faith law"),
+    "auto": ("motor-vehicle tort liability: collisions and rules of the road, plus trucking and "
+             "motor-carrier liability (including FAAAA preemption and broker claims)"),
+    "premises": ("owner/occupier liability for the premises: O.C.G.A. 51-3-1 duties, invitee status "
+                 "and superior knowledge, hazards, and the possession boundary with out-of-possession "
+                 "landlord liability under O.C.G.A. 44-7-14"),
+    "negsec": ("negligent security -- liability for third-party criminal attacks: the duty to protect, "
+               "foreseeability of crime (prior similar crimes, totality of the circumstances), and the "
+               "adequacy or causal effect of security measures, under the Sturbridge line and O.C.G.A. "
+               "51-3-50 et seq.; use only when the court decides such a question, never merely because "
+               "the injury came from a crime"),
+    "expert": ("expert opinion evidence: admissibility and methodology under O.C.G.A. 24-7-702 / "
+               "Daubert, expert qualification, and expert-affidavit requirements"),
+    "procedure": ("civil procedure and appellate practice: summary judgment, JNOV, and new-trial "
+                  "standards, jury charges, discovery, service and limitations, appellate "
+                  "jurisdiction and preservation"),
+    "damages": ("measure and recoverability of damages: caps, punitive damages, apportionment of "
+                "fault under O.C.G.A. 51-12-33, wrongful-death full value, attorney fees, remittitur"),
+}
+

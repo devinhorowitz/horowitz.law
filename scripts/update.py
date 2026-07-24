@@ -64,6 +64,11 @@ import xml.etree.ElementTree as ET
 import siteconfig        # shared practice-area taxonomy and site config
 
 AREA_CODES_STR = ", ".join(siteconfig.AREA_CODES)  # prompt-injected; single source of truth
+# The glossed taxonomy block, one line per code, injected into both TRIAGE_SYSTEM and SYSTEM so
+# the classifier tags by each code's curated meaning rather than a bare token. Indexing by
+# AREA_CODES makes a siteconfig drift (a code without a gloss) fail at import, which CI's
+# import-every-module check catches.
+AREA_GLOSS_STR = "".join("    %s: %s.\n" % (c, siteconfig.AREA_GLOSSES[c]) for c in siteconfig.AREA_CODES)
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
@@ -267,12 +272,15 @@ TRIAGE_SYSTEM = (
     "it, because a later step confirms. List each as {id (the listed integer id), kind, note (a "
     "few words)}.\n\n"
     "Output ONLY a JSON object with keys: relevant (true or false), significance ('high', "
-    "'medium', or 'low'), areas (a list of codes from: " + AREA_CODES_STR + "), note (one or two sentences telling the next reviewer "
+    "'medium', or 'low'), areas (a list of codes from: " + AREA_CODES_STR + ", per the definitions "
+    "below), note (one or two sentences telling the next reviewer "
     "exactly what in the opinion is relevant and worth summarizing, especially if it is buried, "
     "and flagging when the opinion decides more than one distinct salient holding), treats (a "
     "list of negatively-treated feed cases as described above, or an empty "
     "list), reason (a few words). If relevant is false, areas and note may be empty, but still "
-    "fill treats when the opinion negatively treats a listed case."
+    "fill treats when the opinion negatively treats a listed case.\n\n"
+    "AREA DEFINITIONS (a code fits only when the opinion decides a question OF that body of law, "
+    "not when the facts merely involve its subject matter):\n" + AREA_GLOSS_STR
 )
 
 SYSTEM = (
@@ -340,7 +348,9 @@ SYSTEM = (
     "example 'First Division'), otherwise null. Florida, Alabama, and federal opinions have no division.\n"
     "  - dockets: a list of docket numbers as strings.\n"
     "  - disposition: a short lowercase phrase.\n"
-    "  - areas: one or more codes from EXACTLY this set, using only codes that genuinely fit: " + AREA_CODES_STR + ".\n"
+    "  - areas: one or more codes from EXACTLY this set, using only codes that genuinely fit. "
+    "A code fits a holding only when the court decides a question OF that body of law, not when "
+    "the facts merely involve its subject matter:\n" + AREA_GLOSS_STR +
     "  - additional_holdings: an empty list when the opinion decides only one material holding; otherwise a list "
     "of objects, one per salient holding beyond the first, each with 'areas' (codes from the same set), "
     "'synopsis' (2 to 4 sentences), and 'why' (one sentence), all under the same rules as above.\n"
