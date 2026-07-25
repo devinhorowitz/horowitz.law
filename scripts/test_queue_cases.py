@@ -70,16 +70,55 @@ def test_force_and_inline_comment():
     check("entry keeps the original raw line", entry("12345 # note")["raw"] == "12345 # note")
 
 
+def test_rewrite_queue():
+    # A representative queue: header comment, blank, and four entries fated to each
+    # outcome -- carded (remove), parked (unresolved), kept (deferred), and untouched
+    # (no recorded outcome, e.g. resolve-only). The park and keep paths crashed in
+    # production (2026-07-25, issue #186) because the entry payload is the parse dict,
+    # not a string; this pins the payload["raw"] handling for every branch.
+    raw_lines = [
+        "# curated queue",
+        "",
+        "11111  # carded last run",
+        "22222:ca11 !  # forced entry that failed to resolve",
+        "33333  # deferred until text is up",
+        "44444",
+    ]
+    parsed = [queue_cases.parse_line(l) for l in raw_lines]
+    outcomes = {
+        2: ("remove", None),
+        3: ("park", "could not resolve cluster 22222: timeout"),
+        4: ("keep", None),
+        # index 5 intentionally absent: default outcome must keep the line verbatim
+    }
+    text = queue_cases.rewrite_queue(parsed, outcomes)
+    lines = text.splitlines()
+    check("comment survives verbatim", lines[0] == "# curated queue")
+    check("blank line survives", lines[1] == "")
+    check("removed (carded) line is gone", all("11111" not in l for l in lines))
+    check("parked line becomes an annotated comment",
+          lines[2] == "# 22222:ca11 !  # forced entry that failed to resolve   "
+                      "-- could not resolve cluster 22222: timeout",
+          detail=repr(lines[2]))
+    check("kept (deferred) line survives verbatim", lines[3] == "33333  # deferred until text is up")
+    check("line with no recorded outcome survives verbatim", lines[4] == "44444")
+    check("text ends with exactly one newline", text.endswith("\n") and not text.endswith("\n\n"))
+    check("all lines removed -> empty text",
+          queue_cases.rewrite_queue([queue_cases.parse_line("11111")], {0: ("remove", None)}) == "")
+
+
 def main():
     print("queue_cases.parse_line:")
     test_blank_and_comment()
     test_url_forms()
     test_bare_and_pair()
     test_force_and_inline_comment()
+    print("queue_cases.rewrite_queue:")
+    test_rewrite_queue()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (%d checks)" % 18)
+    print("\nALL TESTS PASSED (%d checks)" % 26)
     return 0
 
 

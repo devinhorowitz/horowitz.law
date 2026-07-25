@@ -119,6 +119,30 @@ def parse_line(raw):
     return ("entry", {"cid": cid, "token": token, "court": court, "force": force, "raw": line})
 
 
+def rewrite_queue(parsed, line_outcome):
+    """Rebuild queue.txt text from parse_line output and per-line outcomes.
+
+    parsed is the list of (kind, payload) tuples from parse_line; line_outcome maps a
+    line index to ("remove"|"park"|"keep", detail). Blank and comment lines pass
+    through untouched; an entry line's original text lives in payload["raw"] -- the
+    payload itself is the parse dict, never a string. Removed lines vanish, parked
+    lines become annotated comments the editor can fix, and everything else (kept,
+    deferred, or lines with no recorded outcome) survives verbatim.
+    """
+    new_lines = []
+    for i, (kind, payload) in enumerate(parsed):
+        if kind in ("blank", "comment"):
+            new_lines.append(payload); continue
+        action, detail = line_outcome.get(i, ("keep", None))
+        if action == "remove":
+            continue
+        if action == "park":
+            new_lines.append("# %s   -- %s" % (payload["raw"].strip(), detail))
+            continue
+        new_lines.append(payload["raw"])           # keep (deferred) or untouched
+    return ("\n".join(new_lines).rstrip("\n") + "\n") if new_lines else ""
+
+
 def render_report(rows, added, treat_flags, audit_notes, aborted_cfg):
     L = []
     if aborted_cfg:
@@ -414,18 +438,7 @@ def run():
         return
 
     # Rewrite queue.txt from the per-line outcomes, preserving blank lines and comments.
-    new_lines = []
-    for i, (kind, payload) in enumerate(parsed):
-        if kind in ("blank", "comment"):
-            new_lines.append(payload); continue
-        action, detail = line_outcome.get(i, ("keep", None))
-        if action == "remove":
-            continue
-        if action == "park":
-            new_lines.append("# %s   -- %s" % (payload.strip(), detail))
-            continue
-        new_lines.append(payload)                  # keep (deferred) or untouched
-    new_text = ("\n".join(new_lines).rstrip("\n") + "\n") if new_lines else ""
+    new_text = rewrite_queue(parsed, line_outcome)
     queue_changed = new_text != open(QUEUE_PATH, encoding="utf-8").read()
 
     _write_pr(report)
