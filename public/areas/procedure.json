@@ -1,8 +1,27 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 55,
+  "count": 59,
   "opinions": [
+    {
+      "cluster_id": 10933716,
+      "name": "SFR Services, LLC, Wild Oak Bay Owners Association, Inc. v. American Coastal Insurance Company",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-07-22",
+      "disposition": "affirmed in part, reversed in part, and remanded; conflict certified",
+      "areas": [
+        "coverage",
+        "procedure",
+        "expert"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10933716/sfr-services-llc-wild-oak-bay-owners-association-inc-v-american/",
+      "synopsis": "In a hurricane property claim reported about 1,053 days after landfall, the Second District construed the policy's Duties in the Event of Loss or Damage provision, which stated the insurer has no duty to provide coverage if the failure to comply with the listed duties is prejudicial to it, and held that this language places the burden on the insurer to affirmatively prove prejudice rather than allowing it the common-law presumption of prejudice for late notice. Because the prompt-notice duty appears as one subparagraph among other listed duties that carry no presumption, all governed by the same prefatory prejudice condition, the court concluded the parties contracted out of the presumption. The court further held that the trial court improperly weighed the insured's expert engineer's opinion, which was based on a streamed roof inspection, weather data, and pressure calculations, and that the expert evidence created a genuine dispute on prejudice in any event, even under a presumption. Summary judgment on prejudice was reversed and conflict was certified with the Third District's decision in Arce.",
+      "why": "The decision holds that policy language conditioning denial on prejudice displaces the common-law presumption of prejudice for late notice, and it certifies conflict with a contrary Third District decision, setting up potential Florida Supreme Court review of which party bears the prejudice burden.",
+      "dockets": [
+        "2D2024-1947"
+      ]
+    },
     {
       "cluster_id": 10928205,
       "name": "Annesser Armenteros, PLLC v. Joseph C. Caparo Jr.",
@@ -42,6 +61,25 @@
       ]
     },
     {
+      "cluster_id": 10925355,
+      "name": "Angel v. White",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-07-10",
+      "disposition": "reversed and remanded for a new trial",
+      "areas": [
+        "procedure",
+        "expert",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10925355/angel-v-white-white/",
+      "synopsis": "In a multivehicle rear-end collision action, the trial court declared a mistrial after the jury deadlocked and then granted a directed verdict finding no negligence by one defendant driver, apportioning all liability to the other driver. The Second District held that the two accident-reconstruction experts gave directly conflicting accounts of the sequence of impacts, and that resolving that conflict by crediting the moving party's expert and rejecting the other driver's account as physically impossible was an improper weighing of evidence. Directed verdicts in negligence actions are rarely appropriate, and the evidence and reasonable inferences had to be viewed in the light most favorable to plaintiff. Reversed and remanded for a new trial.",
+      "why": "The decision reiterates that conflicting expert reconstruction testimony about the sequence of impacts presents a jury question that cannot be resolved on a directed verdict, even when one expert characterizes the opposing account as contrary to physics.",
+      "dockets": [
+        "2D2025-0703"
+      ]
+    },
+    {
       "cluster_id": 10925105,
       "name": "Publix Supermarkets, Inc. v. Goga",
       "court": "Supreme Court of Florida",
@@ -57,6 +95,24 @@
       "why": "The decision establishes the controlling appellate standard of review for fraud-on-the-court dismissals throughout Florida, disaggregating the inquiry into factual, legal, and discretionary components and eliminating the heightened abuse of discretion standard that district courts had applied.",
       "dockets": [
         "SC2024-0669"
+      ]
+    },
+    {
+      "cluster_id": 10883903,
+      "name": "Trace Elements, Inc. v. MacKensen",
+      "court": "Supreme Court of Florida",
+      "date": "2026-07-02",
+      "disposition": "decision of the fourth district quashed and remanded; second district decision approved",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10883903/trace-elements-inc-v-nadja-mackensen/",
+      "synopsis": "Two married plaintiffs served an unapportioned proposal for settlement offering to accept a lump sum of $10,000, then sought attorney's fees under section 768.79 after obtaining a larger verdict. Resolving a conflict between the Fourth and Second Districts, the Supreme Court of Florida held that Florida Rule of Civil Procedure 1.442(c)(3)'s command that a joint proposal state the amount and terms attributable to each party applies even to a joint proposal addressing a unified, single claim, and that no exception exists based on the parties' relationship, theory of liability, or the number or nature of the claims. The court reiterated that a 'joint proposal' means simply a proposal made by or to multiple parties, that strict compliance rather than absence of ambiguity is the test, and that Kuhajda's excusal of noncompliance is limited to rule provisions that do not implement a substantive requirement of section 768.79. The Fourth District's decision was quashed, the Second District's contrary decision was approved, and the cause was remanded; three justices dissented, urging a narrower reading of prior precedent.",
+      "why": "The decision sets a bright-line strict-compliance requirement that any settlement proposal made by or to more than one party must apportion amounts and terms, even where the claim and damages are legally undifferentiated, which determines entitlement to fees and costs under section 768.79.",
+      "dockets": [
+        "SC2024-1274"
       ]
     },
     {
@@ -151,6 +207,24 @@
       "why": "It clarifies the permissible scope of third-party discovery into a medical provider's billing data (charges, write-offs, adjustments, and payments accepted from other patients) used to assess the reasonableness of a plaintiff's medical charges and confirms a trial court may order multiple database reports when the provider's system makes a single report impractical.",
       "dockets": [
         "A26A0295"
+      ]
+    },
+    {
+      "cluster_id": 10879461,
+      "name": "Cecilia Vera v. Parkwood Condominium Association, Inc.",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-06-24",
+      "disposition": "affirmed",
+      "areas": [
+        "premises",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10879461/cecilia-vera-v-parkwood-condominium-association-inc/",
+      "synopsis": "A condominium unit owner slipped on water and sewage from a wastewater backup inside her own unit's bathroom and sued the association and its management company for premises liability, relying on Florida's transient-substance line of cases and evidence of recurring backups reported to the association. The Third District held that line of authority did not control because the fall occurred inside the unit, which the association did not solely possess or control, and because the backup could have originated in either the unit's plumbing, which the owner was responsible to maintain, or the building's sanitary stack pipes, which the association maintained. Because every deponent, including the plaintiff, her adult children, and the association's corporate representative, testified they did not know the source of the blockage, the plaintiff failed to produce evidence supporting a reasonable inference that it was more likely than not that the association's pipes caused the spillage. Summary judgment for the association was affirmed.",
+      "why": "The decision marks the limits of the transient-substance and notice framework by requiring, where a hazard could have arisen from plumbing maintained by either the unit owner or the association, evidence making it more likely than not that the component under the defendant's control caused the condition.",
+      "dockets": [
+        "3D2024-2149"
       ]
     },
     {

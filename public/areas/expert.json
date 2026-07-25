@@ -1,8 +1,46 @@
 {
   "area": "expert",
   "label": "expert",
-  "count": 8,
+  "count": 10,
   "opinions": [
+    {
+      "cluster_id": 10933716,
+      "name": "SFR Services, LLC, Wild Oak Bay Owners Association, Inc. v. American Coastal Insurance Company",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-07-22",
+      "disposition": "affirmed in part, reversed in part, and remanded; conflict certified",
+      "areas": [
+        "coverage",
+        "procedure",
+        "expert"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10933716/sfr-services-llc-wild-oak-bay-owners-association-inc-v-american/",
+      "synopsis": "In a hurricane property claim reported about 1,053 days after landfall, the Second District construed the policy's Duties in the Event of Loss or Damage provision, which stated the insurer has no duty to provide coverage if the failure to comply with the listed duties is prejudicial to it, and held that this language places the burden on the insurer to affirmatively prove prejudice rather than allowing it the common-law presumption of prejudice for late notice. Because the prompt-notice duty appears as one subparagraph among other listed duties that carry no presumption, all governed by the same prefatory prejudice condition, the court concluded the parties contracted out of the presumption. The court further held that the trial court improperly weighed the insured's expert engineer's opinion, which was based on a streamed roof inspection, weather data, and pressure calculations, and that the expert evidence created a genuine dispute on prejudice in any event, even under a presumption. Summary judgment on prejudice was reversed and conflict was certified with the Third District's decision in Arce.",
+      "why": "The decision holds that policy language conditioning denial on prejudice displaces the common-law presumption of prejudice for late notice, and it certifies conflict with a contrary Third District decision, setting up potential Florida Supreme Court review of which party bears the prejudice burden.",
+      "dockets": [
+        "2D2024-1947"
+      ]
+    },
+    {
+      "cluster_id": 10925355,
+      "name": "Angel v. White",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-07-10",
+      "disposition": "reversed and remanded for a new trial",
+      "areas": [
+        "procedure",
+        "expert",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10925355/angel-v-white-white/",
+      "synopsis": "In a multivehicle rear-end collision action, the trial court declared a mistrial after the jury deadlocked and then granted a directed verdict finding no negligence by one defendant driver, apportioning all liability to the other driver. The Second District held that the two accident-reconstruction experts gave directly conflicting accounts of the sequence of impacts, and that resolving that conflict by crediting the moving party's expert and rejecting the other driver's account as physically impossible was an improper weighing of evidence. Directed verdicts in negligence actions are rarely appropriate, and the evidence and reasonable inferences had to be viewed in the light most favorable to plaintiff. Reversed and remanded for a new trial.",
+      "why": "The decision reiterates that conflicting expert reconstruction testimony about the sequence of impacts presents a jury question that cannot be resolved on a directed verdict, even when one expert characterizes the opposing account as contrary to physics.",
+      "dockets": [
+        "2D2025-0703"
+      ]
+    },
     {
       "cluster_id": 10875605,
       "name": "Cayamcela v. Advocacy Trust, LLC",

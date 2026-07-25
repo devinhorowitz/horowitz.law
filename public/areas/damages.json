@@ -1,7 +1,7 @@
 {
   "area": "damages",
   "label": "damages",
-  "count": 32,
+  "count": 35,
   "opinions": [
     {
       "cluster_id": 10928205,
@@ -42,6 +42,24 @@
       ]
     },
     {
+      "cluster_id": 10883903,
+      "name": "Trace Elements, Inc. v. MacKensen",
+      "court": "Supreme Court of Florida",
+      "date": "2026-07-02",
+      "disposition": "decision of the fourth district quashed and remanded; second district decision approved",
+      "areas": [
+        "procedure",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10883903/trace-elements-inc-v-nadja-mackensen/",
+      "synopsis": "Two married plaintiffs served an unapportioned proposal for settlement offering to accept a lump sum of $10,000, then sought attorney's fees under section 768.79 after obtaining a larger verdict. Resolving a conflict between the Fourth and Second Districts, the Supreme Court of Florida held that Florida Rule of Civil Procedure 1.442(c)(3)'s command that a joint proposal state the amount and terms attributable to each party applies even to a joint proposal addressing a unified, single claim, and that no exception exists based on the parties' relationship, theory of liability, or the number or nature of the claims. The court reiterated that a 'joint proposal' means simply a proposal made by or to multiple parties, that strict compliance rather than absence of ambiguity is the test, and that Kuhajda's excusal of noncompliance is limited to rule provisions that do not implement a substantive requirement of section 768.79. The Fourth District's decision was quashed, the Second District's contrary decision was approved, and the cause was remanded; three justices dissented, urging a narrower reading of prior precedent.",
+      "why": "The decision sets a bright-line strict-compliance requirement that any settlement proposal made by or to more than one party must apportion amounts and terms, even where the claim and damages are legally undifferentiated, which determines entitlement to fees and costs under section 768.79.",
+      "dockets": [
+        "SC2024-1274"
+      ]
+    },
+    {
       "cluster_id": 10881685,
       "name": "McGovern v. Rowland",
       "court": "Court of Appeals of Georgia",
@@ -79,6 +97,24 @@
       "why": "The decision reaffirms that the good-faith inquiry under the offer-of-settlement statute turns on the offeror's subjective beliefs and places the burden on the offeree to disprove good faith.",
       "dockets": [
         "A26A0739"
+      ]
+    },
+    {
+      "cluster_id": 10880772,
+      "name": "Master Dry Out, Inc., a/a/o Abijana v. State Farm Florida Insurance Company",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-06-26",
+      "disposition": "affirmed",
+      "areas": [
+        "coverage",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10880772/master-dry-out-inc-abijana-v-state-farm-florida-insurance-company/",
+      "synopsis": "An assignee of residential property insurance benefits sued the insurer for breach of contract, settled the case with an express disclaimer of liability and a recital that the agreement compromised doubtful and disputed claims, dismissed the suit, and then moved for attorney's fees under section 627.7152(10)(a), Florida Statutes, arguing the settlement was the functional equivalent of a confession of judgment. The Second District held that the statute permits fees only based on the difference between the 'judgment obtained' and the presuit settlement offer, and that section 627.7152(1)(e) defines 'judgment obtained' as damages recovered. Applying the principle that settlement dollars are not synonymous with damages, the court concluded the settlement was not a 'judgment obtained' and affirmed the denial of fees.",
+      "why": "The decision construes the assignment-of-benefits fee provision to require an actual judgment, so a negotiated settlement without an admission of liability does not itself support a fee award under section 627.7152(10)(a).",
+      "dockets": [
+        "2D2024-2205"
       ]
     },
     {
@@ -154,6 +190,24 @@
       "why": "It clarifies the permissible scope of third-party discovery into a medical provider's billing data (charges, write-offs, adjustments, and payments accepted from other patients) used to assess the reasonableness of a plaintiff's medical charges and confirms a trial court may order multiple database reports when the provider's system makes a single report impractical.",
       "dockets": [
         "A26A0295"
+      ]
+    },
+    {
+      "cluster_id": 10879452,
+      "name": "Universal Property & Casualty Insurance Company v. Orlando Cisneros Dameras",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-06-24",
+      "disposition": "affirmed in part, reversed in part, and remanded with instructions",
+      "areas": [
+        "damages",
+        "coverage"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10879452/universal-property-casualty-insurance-company-v-orlando-cisneros-dameras/",
+      "synopsis": "After a settlement in a first-party property insurance case, the trial court awarded the insured a lodestar fee of $389,362.50 enhanced by a 2.5 contingency risk multiplier, for a total of $973,406.25, plus costs. The Third District affirmed the lodestar computation as supported by sufficient findings under Rowe and Quanstrom, but reversed the multiplier because the record contained no competent substantial evidence on the first Quanstrom factor. The court explained that counsel's own skill, experience, and willingness to try the case does not address whether other competent attorneys in the relevant market would have taken the case without the availability of a multiplier, and the fee expert's assertion that the case was risky and that \"nobody\" would take it did not supply that proof, particularly where the trial court acknowledged that numerous other south Florida property insurance firms could have obtained some recovery. The court remanded for entry of the lodestar without any multiplier.",
+      "why": "The decision reiterates and applies the evidentiary showing required before a contingency fee multiplier may be added to a lodestar award in insurance fee litigation, specifically proof about the availability of other competent counsel in the relevant market absent a multiplier.",
+      "dockets": [
+        "3D2024-2233"
       ]
     },
     {
