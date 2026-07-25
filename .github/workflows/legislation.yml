@@ -150,10 +150,26 @@ jobs:
             courtrules.json
             courtrules_state.json
             courtrules_log.jsonl
+            public/.well-known/security.txt
+            public/404.html
+            public/archive.html
+            public/areas
+            public/changes.html
+            public/changes.xml
+            public/colophon.html
+            public/devin-horowitz.vcf
+            public/digests.html
+            public/index.html
             public/legislation.html
             public/legislation.xml
+            public/o
+            public/opinions.html
+            public/opinions.xml
             public/regulations.xml
-
+            public/resume.html
+            public/sitemap.xml
+            public/stats.html
+            public/subscribe.html
       # Nothing new: the seen-state and run logs still advanced (a settled non-match must not be
       # re-screened), so commit only that bookkeeping straight to main, like the opinion no-op run.
       - name: Commit bookkeeping (nothing new)

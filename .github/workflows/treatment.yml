@@ -100,12 +100,26 @@ jobs:
           delete-branch: true
           add-paths: |
             opinions.json
-            public/opinions.xml
-            public/opinions.html
+            public/.well-known/security.txt
+            public/404.html
             public/archive.html
+            public/areas
+            public/changes.html
+            public/changes.xml
+            public/colophon.html
+            public/devin-horowitz.vcf
+            public/digests.html
+            public/index.html
+            public/legislation.html
+            public/legislation.xml
+            public/o
+            public/opinions.html
+            public/opinions.xml
+            public/regulations.xml
+            public/resume.html
             public/sitemap.xml
-            treatment_state.json
-
+            public/stats.html
+            public/subscribe.html
       # Surfaces a broken run instead of letting it fail silently: comments on the one
       # open tracking issue, or opens it the first time, so repeated failures collect
       # on a single issue rather than spamming new ones.
