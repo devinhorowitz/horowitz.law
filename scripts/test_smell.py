@@ -39,6 +39,9 @@ ITEMS = [
 def test_prompt_shape():
     body = update.smell_request(ITEMS)
     check("request uses the smell model", body["model"] == update.SMELL_MODEL)
+    check("request uses the tunable output budget", body["max_tokens"] == update.SMELL_TOKENS)
+    check("the budget clears ~200 tokens per chunk item",
+          update.SMELL_TOKENS >= update.SMELL_CHUNK * 200)
     user = body["messages"][0]["content"]
     check("items are numbered 1-based", "1. [ctapp 2026-07-01]" in user and "2. [ca11 2026-07-02]" in user)
     check("reason text reaches the prompt", "criminal appeal, out of scope" in user)
