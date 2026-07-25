@@ -125,12 +125,16 @@ the triage standard recognizes (a keep-shaped topic label, a ground like "unpubl
 standard does not use, a missing reason). A suspect drop is escalated to the tier-3 summarizer
 for one full read in the same run, which cards it or confirms the drop -- the same second
 opinion the queue's `!` force flag buys, automated, capped at
-`OPINIONS_SMELL_MAX_ESCALATIONS` per run (default 5). The pass is fail-open everywhere: any
-smell failure leaves every drop exactly as triage decided it, so it can only add recall. Each
-audited rejection record is stamped with the verdict (`smell`, `smell_note`, `smell_outcome`),
-and the weekly `smell.yml` job (`scripts/smell_check.py`) runs the same audit over the logged
-backlog, annotating the log and surfacing suspects on a tracking issue with ready-to-paste
-`queue.txt` force lines for editor review.
+`OPINIONS_SMELL_MAX_ESCALATIONS` per run (default 5) and twin-checked against the run's dedup
+index like every other route to the summarizer. The pass is fail-open in both senses: nothing
+in it -- including a misconfigured smell model -- ever aborts the run or changes a drop, and a
+drop the model never actually judged is left un-stamped rather than marked clean, so it stays
+visible downstream. Each genuinely audited rejection record is stamped with the verdict
+(`smell`, `smell_note`, `smell_outcome`; an escalation whose read never happened is stamped
+`deferred`), and the weekly `smell.yml` job (`scripts/smell_check.py`) closes the loop: it
+audits the logged backlog plus anything un-stamped or deferred, persisting progress after
+every chunk, and surfaces suspects on a tracking issue with ready-to-paste `queue.txt` force
+lines for editor review.
 
 ## Catching law that moves
 

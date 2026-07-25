@@ -93,8 +93,8 @@ def test_batch_path_and_fallback():
         def fake_run(reqs, deadline=None, interval=20.0, label="batch"):
             calls["batch"] += 1
             check("batch gets exactly one request", len(reqs) == 1)
-            check("batch request is keyed 'smell'", reqs[0]["custom_id"] == "smell")
-            return {"smell": {"ok": True, "text": payload}}
+            check("batch request is keyed 'smell-0'", reqs[0]["custom_id"] == "smell-0")
+            return {"smell-0": {"ok": True, "text": payload}}
         batch.run = fake_run
         update.anthropic_json = lambda body, label=None: calls.__setitem__("sync", calls["sync"] + 1) or {}
         out = update.smell_reasons(ITEMS)
@@ -109,7 +109,7 @@ def test_batch_path_and_fallback():
         check("batch error falls back to the synchronous call", out.get(0, {}).get("verdict") == "suspect")
 
         def failed_line_run(reqs, deadline=None, interval=20.0, label="batch"):
-            return {"smell": {"ok": False, "type": "errored", "error": "x"}}
+            return {"smell-0": {"ok": False, "type": "errored", "error": "x"}}
         batch.run = failed_line_run
         out = update.smell_reasons(ITEMS)
         check("a failed batch line falls back to the synchronous call",
@@ -133,7 +133,59 @@ def test_select():
     esc_zero, annot_zero = update.smell_select(drops, verdicts, cap=0)
     check("cap 0 escalates nothing but still annotates", esc_zero == [] and len(annot_zero) == 5)
     _, annot_missing = update.smell_select([{"reason": "something"}], {})
-    check("missing model verdict defaults to ok (fail-open)", annot_missing[0]["verdict"] == "ok")
+    check("an un-judged drop gets NO annotation (never a fabricated 'ok')", 0 not in annot_missing)
+    esc_none, annot_none = update.smell_select(drops, {})
+    check("with no verdicts at all, only the empty-reason drop is annotated",
+          list(annot_none) == [2] and esc_none == [2])
+
+
+def test_chunking():
+    real_json, real_batch_run, real_smell_batch = update.anthropic_json, batch.run, update.SMELL_BATCH
+    try:
+        many = [{"name": "N%d" % i, "court": "ctapp", "date": "2026-07-01", "reason": "r%d" % i}
+                for i in range(update.SMELL_CHUNK * 2 + 5)]
+        update.SMELL_BATCH = True
+
+        def fake_run(reqs, deadline=None, interval=20.0, label="batch"):
+            check("chunked batch: one request per SMELL_CHUNK slice", len(reqs) == 3)
+            check("chunk custom_ids are smell-<k>",
+                  [r["custom_id"] for r in reqs] == ["smell-0", "smell-1", "smell-2"])
+            # chunk 1 judges its second item (global index SMELL_CHUNK+1); chunk 2's line fails
+            return {"smell-0": {"ok": True, "text": json.dumps({"verdicts": []})},
+                    "smell-1": {"ok": True, "text": json.dumps(
+                        {"verdicts": [{"i": 2, "verdict": "suspect", "note": "x"}]})},
+                    "smell-2": {"ok": False, "type": "errored", "error": "boom"}}
+        sync_calls = []
+
+        def fake_sync(body, label=None):
+            sync_calls.append(body)
+            return {"verdicts": [{"i": 1, "verdict": "suspect", "note": "fallback"}]}
+        batch.run, update.anthropic_json = fake_run, fake_sync
+        out = update.smell_reasons(many)
+        check("chunk-local item numbers map to global indices",
+              out.get(update.SMELL_CHUNK + 1, {}).get("verdict") == "suspect")
+        check("only the failed chunk falls back to a synchronous call", len(sync_calls) == 1)
+        check("the fallback chunk's verdict lands at its global index",
+              out.get(update.SMELL_CHUNK * 2, {}).get("note") == "fallback")
+
+        def broken_sync(body, label=None):
+            raise RuntimeError("api down")
+        def dead_run(reqs, deadline=None, interval=20.0, label="batch"):
+            raise batch.BatchError("dead")
+        batch.run, update.anthropic_json = dead_run, broken_sync
+        check("total failure returns an EMPTY map (nothing judged, nothing invented)",
+              update.smell_reasons(ITEMS) == {})
+
+        def cfg_sync(body, label=None):
+            raise update.ConfigError("bad model")
+        update.anthropic_json = cfg_sync
+        try:
+            update.smell_reasons(ITEMS)
+            check("ConfigError propagates out of smell_reasons", False)
+        except update.ConfigError:
+            check("ConfigError propagates out of smell_reasons", True)
+    finally:
+        update.anthropic_json, batch.run, update.SMELL_BATCH = real_json, real_batch_run, real_smell_batch
 
 
 def test_retro_selection():
@@ -159,6 +211,49 @@ def test_retro_selection():
     ql = smell_check.queue_line({"cluster_id": 123, "name": "A v. B", "court": "ca11",
                                  "date": "2026-07-01"}, "keep-shaped")
     check("queue line is a forced bare cluster id", ql.startswith("123 !  # smell: keep-shaped"))
+    deferred = [json.dumps({"stage": "triage", "reason": "x", "smell": "suspect",
+                            "smell_outcome": "deferred"})]
+    picked_def, _ = smell_check.select_records(deferred, stages=["triage"], all_flag=False, limit=10)
+    check("a deferred in-run escalation is re-audited by the retro pass", len(picked_def) == 1)
+
+
+def test_retro_persistence():
+    import tempfile
+    real = (update.REJECT_PATH, update.KEY, update.SMELL_MODEL, smell_check.CHUNK,
+            smell_check.OUT, smell_check.DRY_RUN, update.smell_reasons)
+    tmp = tempfile.mkdtemp(prefix="smelltest")
+    try:
+        update.REJECT_PATH = os.path.join(tmp, "rej.jsonl")
+        smell_check.OUT = os.path.join(tmp, "suspects.md")
+        update.KEY, update.SMELL_MODEL = "test-key", "test-model"
+        smell_check.CHUNK, smell_check.DRY_RUN = 2, False
+        recs = [{"ts": "t", "stage": "triage", "cluster_id": 100 + i, "name": "Case %d" % i,
+                 "court": "ctapp", "docket": "", "date": "2026-07-01", "url": "",
+                 "reason": "reason %d" % i} for i in range(4)]
+        with open(update.REJECT_PATH, "w") as f:
+            f.write("\n".join(json.dumps(r) for r in recs) + "\n")
+
+        calls = [0]
+        def scripted(items, deadline=None):
+            calls[0] += 1
+            if calls[0] == 1:   # chunk 1: one suspect, one ok
+                return {0: {"verdict": "suspect", "note": "keep-shaped"},
+                        1: {"verdict": "ok", "note": ""}}
+            raise RuntimeError("api died mid-run")   # chunk 2: transport failure
+        update.smell_reasons = scripted
+        rc = smell_check.main()
+        check("retro run survives a mid-run failure (exit 0)", rc == 0)
+        lines = [json.loads(l) for l in open(update.REJECT_PATH) if l.strip()]
+        check("chunk 1's verdicts persisted despite the later failure",
+              lines[0].get("smell") == "suspect" and lines[1].get("smell") == "ok")
+        check("failed chunk's records stay un-audited",
+              "smell" not in lines[2] and "smell" not in lines[3])
+        check("suspect carries the review outcome", lines[0].get("smell_outcome") == "review")
+        check("suspects report exists with the queue line",
+              os.path.exists(smell_check.OUT) and "100 !" in open(smell_check.OUT).read())
+    finally:
+        (update.REJECT_PATH, update.KEY, update.SMELL_MODEL, smell_check.CHUNK,
+         smell_check.OUT, smell_check.DRY_RUN, update.smell_reasons) = real
 
 
 def main():
@@ -168,8 +263,12 @@ def main():
     test_batch_path_and_fallback()
     print("smell selection:")
     test_select()
+    print("chunking:")
+    test_chunking()
     print("retro record selection:")
     test_retro_selection()
+    print("retro persistence:")
+    test_retro_persistence()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1

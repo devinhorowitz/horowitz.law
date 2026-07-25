@@ -1164,37 +1164,54 @@ def smell_request(items):
             "messages": [{"role": "user", "content": "CASES DROPPED AT TRIAGE:\n" + "\n".join(lines)}]}
 
 
+SMELL_CHUNK = 40   # reasons per request; keeps each verdict list well inside the 2000-token budget
+
+
 def smell_reasons(items, deadline=None):
     """Audit drop reasons with the smell model; returns {0-based index: {"verdict": "ok"|"suspect",
-    "note": str}}. Routed through the 50%-priced Message Batches API as a single-request job
-    (OPINIONS_SMELL_BATCH, default on) with a synchronous fallback, like every other batched pass.
-    A verdict the model omits or garbles is simply absent (the caller defaults it to "ok"): the
-    audit fails OPEN, per drop and as a whole -- on total failure the caller logs and moves on,
-    leaving every drop exactly as triage decided it."""
-    body = smell_request(items)
-    data = None
+    "note": str}} covering ONLY the items the model actually judged. Items go out in SMELL_CHUNK
+    slices -- one request each, submitted together as ONE 50%-priced Message Batches job
+    (OPINIONS_SMELL_BATCH, default on) -- with a per-chunk synchronous fallback, so a heavy-drop
+    run cannot truncate the whole audit. A chunk that fails, and any verdict the model omits or
+    garbles, contributes NOTHING to the result: fail-open here means the un-audited drop stays
+    UN-stamped and therefore visible to the weekly retro audit, never that a verdict is invented
+    for it. Raises only ConfigError (a misconfigured model must surface to the caller)."""
+    chunks = [items[i:i + SMELL_CHUNK] for i in range(0, len(items), SMELL_CHUNK)]
+    datas = {}    # chunk index -> parsed verdicts object
     if SMELL_BATCH:
         try:
-            res = batch.run([batch.from_body("smell", body)], deadline=deadline, label="funnel-smell")
-            line = res.get("smell")
-            if line and line.get("ok"):
-                data = parse_json(line["text"])
+            reqs = [batch.from_body("smell-%d" % k, smell_request(c)) for k, c in enumerate(chunks)]
+            res = batch.run(reqs, deadline=deadline, label="funnel-smell")
+            for k in range(len(chunks)):
+                line = res.get("smell-%d" % k)
+                if line and line.get("ok"):
+                    try:
+                        datas[k] = parse_json(line["text"])
+                    except Exception:
+                        pass   # unparseable line -> that chunk takes the synchronous fallback
         except (batch.BatchTimeout, batch.BatchError) as e:
-            print("  . smell batch unavailable (%s); falling back to a synchronous call" % e)
-        except Exception as e:
-            print("  . smell batch result unusable (%s); falling back to a synchronous call" % e)
-    if data is None:
-        data = anthropic_json(body, "smell")
+            print("  . smell batch unavailable (%s); falling back to synchronous calls" % e)
     out = {}
-    for v in (data.get("verdicts") or []):
-        try:
-            i = int(v.get("i")) - 1
-        except (TypeError, ValueError):
-            continue
-        if 0 <= i < len(items) and i not in out:
-            verdict = (v.get("verdict") or "").strip().lower()
-            out[i] = {"verdict": "suspect" if verdict == "suspect" else "ok",
-                      "note": (v.get("note") or "").strip()}
+    for k, chunk in enumerate(chunks):
+        data = datas.get(k)
+        if data is None:
+            try:
+                data = anthropic_json(smell_request(chunk), "smell")
+            except ConfigError:
+                raise
+            except Exception as e:
+                print("  . smell audit unavailable for %d reason(s) (%s); they stay un-audited"
+                      % (len(chunk), e))
+                continue
+        for v in (data.get("verdicts") or []):
+            try:
+                i = int(v.get("i")) - 1
+            except (TypeError, ValueError):
+                continue
+            if 0 <= i < len(chunk) and (k * SMELL_CHUNK + i) not in out:
+                verdict = (v.get("verdict") or "").strip().lower()
+                out[k * SMELL_CHUNK + i] = {"verdict": "suspect" if verdict == "suspect" else "ok",
+                                            "note": (v.get("note") or "").strip()}
     return out
 
 
@@ -1204,15 +1221,19 @@ def smell_select(drops, verdicts, cap=None):
     outright -- there is nothing to audit, which is itself the defect this audit exists to
     catch. Returns (escalate, annot): escalate = the suspect indices in order, capped at cap
     (default OPINIONS_SMELL_MAX_ESCALATIONS) so a noisy audit cannot multiply the Opus spend;
-    annot = {index: {"verdict", "note"}} for EVERY drop, with a missing model verdict
-    defaulting to "ok" (fail-open)."""
+    annot = {index: {"verdict", "note"}} covering ONLY the drops that actually have a verdict
+    (a model-judged one, or the empty-reason rule). A drop the model never judged gets NO
+    annotation: stamping it "ok" would hide it from the weekly retro audit behind a verdict
+    nobody produced."""
     cap = SMELL_MAX_ESCALATIONS if cap is None else cap
     annot, suspects = {}, []
     for i, d in enumerate(drops):
         if not (d.get("reason") or "").strip():
             annot[i] = {"verdict": "suspect", "note": "no reason recorded"}
+        elif i in verdicts:
+            annot[i] = verdicts[i]
         else:
-            annot[i] = verdicts.get(i) or {"verdict": "ok", "note": ""}
+            continue   # un-audited: leave it un-stamped for the retro audit
         if annot[i]["verdict"] == "suspect":
             suspects.append(i)
     return suspects[:max(cap, 0)], annot
@@ -2635,7 +2656,8 @@ def main():
                                        "court": COURT_MAP.get(court_id) or court_id, "docket": docket,
                                        "date": date_filed, "url": url, "reason": (t.get("reason") or "").strip()})
                     if SMELL_MODEL:  # hold for the tier-2.5 reason audit; the drop itself is final as-is
-                        smell_pending.append({"rej": rejections[-1], "p": p, "note": t.get("note") or ""})
+                        smell_pending.append({"rej": rejections[-1], "p": p, "note": t.get("note") or "",
+                                              "skip_i": len(skipped) - 1})
                     consec = 0; evaluated.add(cid); continue
                 note = t.get("note") or ""
                 time.sleep(0.4)
@@ -2684,65 +2706,82 @@ def main():
     # itself a defect worth one more look. Suspect drops get the same second opinion the queue's
     # "!" force flag buys -- a full read by the tier-3 summarizer, which may card or decline -- in
     # THIS run: they join the summarize batch below (or run synchronously when OPINIONS_BATCH is
-    # off). Fail-open at every step: a smell failure, a deferred batch, or the escalation cap
-    # leaves each drop exactly as triage decided it (already marked evaluated above), so this pass
-    # can only ADD recall. The verdict is stamped onto the rejection record ("smell", "smell_note",
-    # "smell_outcome") so the recall log shows which reasons were audited and what came of it.
+    # off). Fail-open, in BOTH senses. First, nothing here aborts the run or changes a drop: even
+    # a ConfigError (a mistyped OPINIONS_SMELL_MODEL Variable) only skips the pass, loudly --
+    # this is bonus recall, and a broken bonus pass must not cost the funnel a publish (the
+    # fable_review_pass discipline, not the load-bearing-tier one). Second, a drop the model
+    # never actually judged is left UN-stamped, so the weekly retro audit (smell_check.py) still
+    # sees it; a verdict is recorded on the rejection log ("smell", "smell_note",
+    # "smell_outcome") only when one was actually produced.
     n_smell = n_smell_suspect = smell_recovered = 0
     smell_escalated = []            # escalated pending-shaped items; outcomes resolved post-draft
+    drafted_cids = set()            # what the tier-3 batch actually drafted (outcome resolution)
     if SMELL_MODEL and smell_pending and not cfg_error:
-        n_smell = len(smell_pending)
         verdicts = {}
         if any((d["rej"].get("reason") or "").strip() for d in smell_pending):
-            print("  . smelling %d triage-drop reason(s)" % n_smell, flush=True)
+            print("  . smelling %d triage-drop reason(s)" % len(smell_pending), flush=True)
             try:
                 items = [{"name": d["rej"]["name"], "court": d["rej"]["court"],
                           "date": d["rej"]["date"], "reason": d["rej"]["reason"]}
                          for d in smell_pending]
                 verdicts = smell_reasons(items, deadline=time.time() + SMELL_BATCH_SEC)
             except ConfigError as e:
-                print("  ! configuration error in the smell pass (nothing committed): %s" % e)
-                cfg_error = True
+                print("  ! smell model misconfigured (%s); skipping the smell pass. Fix "
+                      "OPINIONS_SMELL_MODEL (or set it to 'off'); the un-stamped drops stay "
+                      "covered by the weekly retro audit meanwhile." % e)
             except Exception as e:
                 print("  . smell pass unavailable (%s); drops stand as triaged" % e)
-        if not cfg_error:
-            escalate, annot = smell_select([d["rej"] for d in smell_pending], verdicts)
-            n_smell_suspect = sum(1 for a in annot.values() if a["verdict"] == "suspect")
-            for i, d in enumerate(smell_pending):
-                d["rej"]["smell"] = annot[i]["verdict"]
-                if annot[i]["note"]:
-                    d["rej"]["smell_note"] = annot[i]["note"]
-                if annot[i]["verdict"] == "suspect":
-                    d["rej"]["smell_outcome"] = "escalated" if i in escalate else "capped"
-            for i in escalate:
-                d = smell_pending[i]; sp = d["p"]
-                print("  ~ smell: escalating %s (%s)"
-                      % (sp["name"][:50], annot[i]["note"] or "suspect reason"), flush=True)
+        escalate, annot = smell_select([d["rej"] for d in smell_pending], verdicts)
+        n_smell = len(annot)
+        n_smell_suspect = sum(1 for a in annot.values() if a["verdict"] == "suspect")
+        for i, a in annot.items():
+            d = smell_pending[i]
+            d["rej"]["smell"] = a["verdict"]
+            if a["note"]:
+                d["rej"]["smell_note"] = a["note"]
+            if a["verdict"] == "suspect":
+                d["rej"]["smell_outcome"] = "escalated" if i in escalate else "capped"
+        for i in escalate:
+            d = smell_pending[i]; sp = d["p"]
+            # The same in-run twin recheck every other route to the summarizer passes through:
+            # a case already carded or queued for drafting THIS run under a twin cluster id
+            # must not be drafted again from here.
+            dup = next((nm for sig, nm in dedup_index if _same_case(sp["csig"], sig)), None)
+            if dup:
+                d["rej"]["smell_outcome"] = "in-run twin of %s; not escalated" % dup[:60]
+                print("  ~ smell: NOT escalating %s (in-run twin of %s)"
+                      % (sp["name"][:40], dup[:40]))
+                continue
+            print("  ~ smell: escalating %s (%s)"
+                  % (sp["name"][:50], annot[i]["note"] or "suspect reason"), flush=True)
+            try:
+                sp_status = enriched(sp["r"], since, deadline=time.time() + 60).get("status") \
+                    or cluster_precedential_status(sp["r"], deadline=time.time() + 60)
+            except Exception:
+                sp_status = ""   # publication status is a hint; never let it block the escalation
+            item = {"r": sp["r"], "cid": sp["cid"], "name": sp["name"], "court_id": sp["court_id"],
+                    "docket": sp["docket"], "date_filed": sp["date_filed"], "url": sp["url"],
+                    "text": sp["text"], "note": d["note"], "cl_status": sp_status,
+                    "rej": d["rej"], "skip_i": d.get("skip_i")}
+            n_opus += 1
+            if FUNNEL_BATCH:
+                pending.append(item)
+                dedup_index.append((sp["csig"], sp["name"]))
+            else:
                 try:
-                    sp_status = enriched(sp["r"], since, deadline=time.time() + 60).get("status") \
-                        or cluster_precedential_status(sp["r"], deadline=time.time() + 60)
-                except Exception:
-                    sp_status = ""   # publication status is a hint; never let it block the escalation
-                item = {"r": sp["r"], "cid": sp["cid"], "name": sp["name"], "court_id": sp["court_id"],
-                        "docket": sp["docket"], "date_filed": sp["date_filed"], "url": sp["url"],
-                        "text": sp["text"], "note": d["note"], "cl_status": sp_status, "rej": d["rej"]}
-                n_opus += 1
-                if FUNNEL_BATCH:
-                    pending.append(item)
-                    dedup_index.append((sp["csig"], sp["name"]))
-                else:
-                    try:
-                        v = summarize(sp["court_id"], sp["name"], sp["docket"], sp["date_filed"],
-                                      sp["text"], d["note"], cl_status=sp_status)
-                        finish_card(v, sp["r"], sp["cid"], sp["name"], sp["court_id"], sp["docket"],
-                                    sp["date_filed"], sp["url"], sp["text"], time.time() + 120)
-                    except ConfigError as e:
-                        print("  ! configuration error escalating a smelled drop (nothing committed): %s" % e)
-                        cfg_error = True
-                        break
-                    except Exception as e:
-                        print("  . smell escalation failed for %s (%s); the drop stands" % (sp["name"][:40], e))
-                smell_escalated.append(item)
+                    v = summarize(sp["court_id"], sp["name"], sp["docket"], sp["date_filed"],
+                                  sp["text"], d["note"], cl_status=sp_status)
+                    finish_card(v, sp["r"], sp["cid"], sp["name"], sp["court_id"], sp["docket"],
+                                sp["date_filed"], sp["url"], sp["text"], time.time() + 120)
+                    item["read_done"] = True   # the summarizer actually read it (card or decline)
+                except ConfigError as e:
+                    print("  ! configuration error escalating a smelled drop; smell escalations "
+                          "stop here, the run continues: %s" % e)
+                    smell_escalated.append(item)
+                    break
+                except Exception as e:
+                    print("  . smell escalation failed for %s (%s); the drop stands" % (sp["name"][:40], e))
+            smell_escalated.append(item)
 
     # Tier 3, batched: draft every candidate that passed triage as ONE 50%-priced job, then finish
     # each exactly as the synchronous path would (finish_card). A batch that does not end within the
@@ -2763,7 +2802,8 @@ def main():
                 print("  ! finishing card failed for %s: %s" % (p["name"][:50], fe))
 
         try:
-            evaluated |= _draft_pending(pending, time.time() + SUMMARIZE_BATCH_SEC, _finish)
+            drafted_cids = _draft_pending(pending, time.time() + SUMMARIZE_BATCH_SEC, _finish)
+            evaluated |= drafted_cids
         except ConfigError as ce:
             print("  ! configuration error finishing a batched draft (nothing committed): %s" % ce)
             cfg_error = True
@@ -2782,20 +2822,30 @@ def main():
                 if cp:
                     completeness[it["cid"]] = cp
 
-    # Resolve each smell escalation's outcome now that drafting is done: carded (recall recovered)
-    # or drop-stands (the summarizer declined, its draft failed, or the batch deferred -- the drop
-    # was already final either way). Stamped on the rejection record for the recall log.
+    # Resolve each smell escalation's outcome now that drafting is done, on the rejection record:
+    #   carded      -- the summarizer read it and carded it (recall recovered); the case's stale
+    #                  "triage: ..." drop row is retired from the run accounting below.
+    #   drop-stands -- the summarizer actually read it and declined; the drop is settled.
+    #   deferred    -- the promised read never happened (the batch deferred, or the call failed).
+    #                  The drop is still final this run, but the weekly retro audit re-audits
+    #                  records marked deferred, so the second opinion is only postponed, not lost.
     if smell_escalated:
         carded_cids = {int(e.get("cluster_id") or 0) for e in added}
         for it in smell_escalated:
+            read_done = it.pop("read_done", False) or (FUNNEL_BATCH and it["cid"] in drafted_cids)
             if it["cid"] in carded_cids:
                 smell_recovered += 1
                 it["rej"]["smell_outcome"] = "carded"
-            else:
+                if it.get("skip_i") is not None:
+                    skipped[it["skip_i"]] = None   # drop row retired: the case is on the site now
+            elif read_done:
                 it["rej"]["smell_outcome"] = "drop-stands"
-    if n_smell:
-        print("  . smell: %d reason(s) audited, %d suspect, %d escalated, %d recovered"
-              % (n_smell, n_smell_suspect, len(smell_escalated), smell_recovered))
+            else:
+                it["rej"]["smell_outcome"] = "deferred"
+        skipped = [s for s in skipped if s is not None]
+    if n_smell or smell_pending:
+        print("  . smell: %d of %d drop reason(s) audited, %d suspect, %d escalated, %d recovered"
+              % (n_smell, len(smell_pending), n_smell_suspect, len(smell_escalated), smell_recovered))
 
     pr_body = _funnel_pr_body(added, flagged, crosschecks, completeness, treat_flags, audit_notes, sa_events, skipped)
     funnel = "screened %d, pretriaged %d, triaged %d, summarized %d, audited %d" % (n_screen, n_pretriage, n_triage, n_opus, n_audit)
