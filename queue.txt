@@ -26,4 +26,3 @@
 # with the reason, for you to fix or delete.
 #
 # --- queue below this line ---
-10934677:ca11 !  # Queen v. Berkley Assurance Co. (CA11 2026-07-24, Georgia duty-to-defend under a professional-services policy). Dropped by the PRE-GLOSS triage on 7/24 with a keep-shaped reason ("Georgia insurance coverage duty-to-defend analysis...") -- a significance=low false negative; forced past the gate for editor review.
