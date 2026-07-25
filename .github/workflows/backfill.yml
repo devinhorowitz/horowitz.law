@@ -133,16 +133,26 @@ jobs:
           delete-branch: true
           add-paths: |
             opinions.json
-            public/opinions.xml
-            public/opinions.html
+            public/.well-known/security.txt
+            public/404.html
             public/archive.html
-            public/sitemap.xml
+            public/areas
             public/changes.html
             public/changes.xml
-            public/stats.html
+            public/colophon.html
+            public/devin-horowitz.vcf
             public/digests.html
+            public/index.html
+            public/legislation.html
+            public/legislation.xml
             public/o
-
+            public/opinions.html
+            public/opinions.xml
+            public/regulations.xml
+            public/resume.html
+            public/sitemap.xml
+            public/stats.html
+            public/subscribe.html
       - name: Report a failed run
         if: failure()
         env:

@@ -261,23 +261,25 @@ def check_links():
     return 4 if unreachable else 0
 
 
-def check_render_outputs(errors):
-    """render-sync.yml's add-paths must name the exact set render owns (render.OUTPUT_PATHS).
-    render() writes every path in that set; if the workflow's list omits one, a file render
-    re-stamps (the Jan-1 footer year, a security.txt Expires renewal) silently drifts on main
-    until someone notices -- the class of bug that stranded a working tree and broke a push. If it
-    lists an extra, render-sync stages a path render never writes. Either is caught here at push
-    time. (opinions.yml no longer hard-codes the set: its publish step derives it from
-    render.OUTPUT_PATHS via scripts/publish.py, so only this one workflow copy can drift.)"""
-    import render  # OUTPUT_PATHS: the authoritative render-owned set
-    wf = os.path.join(REPO, ".github", "workflows", "render-sync.yml")
-    try:
-        text = open(wf, encoding="utf-8").read()
-    except OSError as e:
-        errors.append("render-sync.yml unreadable, cannot check add-paths (%s)" % e)
-        return
-    # Line-based parse of the `add-paths: |` block scalar: collect the deeper-indented lines under
-    # it until a dedent ends the block. More robust than a regex against YAML indentation.
+# Every workflow that runs render.py and commits the result through a hard-coded add-paths list.
+# render-sync stages ONLY render outputs, so its list must EQUAL render.OUTPUT_PATHS; the others
+# stage their own data files too, so their lists must be a SUPERSET of OUTPUT_PATHS. A list that
+# omits a render output ships a PR whose committed pages disagree with a fresh render -- main then
+# fails CI's idempotency diff until a render-sync heals it, which is exactly how queue.yml's
+# hand-picked list broke main on 2026-07-25 (six recovered cards changed stats.html and
+# public/areas, neither of which the queue PR carried). opinions.yml is not listed: its publish
+# step derives the set from render.OUTPUT_PATHS via scripts/publish.py, so it cannot drift.
+RENDER_COMMIT_WORKFLOWS = [("render-sync.yml", True),   # (filename, must_be_exact)
+                           ("queue.yml", False),
+                           ("backfill.yml", False),
+                           ("treatment.yml", False),
+                           ("legislation.yml", False)]
+
+
+def _addpaths_block(text):
+    """The entries of the first `add-paths: |` block scalar in a workflow file. Line-based:
+    collect the deeper-indented lines under it until a dedent ends the block -- more robust
+    than a regex against YAML indentation."""
     listed, in_block, base_indent = [], False, None
     for ln in text.splitlines():
         if not in_block:
@@ -291,18 +293,35 @@ def check_render_outputs(errors):
         s = ln.strip()
         if not s.startswith("#"):
             listed.append(s)
-    if not listed:
-        errors.append("render-sync.yml: could not read the add-paths block")
-        return
+    return listed
+
+
+def check_render_outputs(errors):
+    """Each render-committing workflow's add-paths must cover the set render owns
+    (render.OUTPUT_PATHS) -- exactly for render-sync, at least for the workflows that also
+    stage their own data files. See RENDER_COMMIT_WORKFLOWS for the roster and the rationale."""
+    import render  # OUTPUT_PATHS: the authoritative render-owned set
     owned = set(render.OUTPUT_PATHS)
-    missing = sorted(owned - set(listed))
-    extra = sorted(set(listed) - owned)
-    if missing:
-        errors.append("render-sync.yml add-paths is MISSING render output(s) (drift risk): %s"
-                      % ", ".join(missing))
-    if extra:
-        errors.append("render-sync.yml add-paths lists path(s) render does not own: %s"
-                      % ", ".join(extra))
+    for fname, exact in RENDER_COMMIT_WORKFLOWS:
+        wf = os.path.join(REPO, ".github", "workflows", fname)
+        try:
+            text = open(wf, encoding="utf-8").read()
+        except OSError as e:
+            errors.append("%s unreadable, cannot check add-paths (%s)" % (fname, e))
+            continue
+        listed = _addpaths_block(text)
+        if not listed:
+            errors.append("%s: could not read the add-paths block" % fname)
+            continue
+        missing = sorted(owned - set(listed))
+        if missing:
+            errors.append("%s add-paths is MISSING render output(s) (drift risk): %s"
+                          % (fname, ", ".join(missing)))
+        if exact:
+            extra = sorted(set(listed) - owned)
+            if extra:
+                errors.append("%s add-paths lists path(s) render does not own: %s"
+                              % (fname, ", ".join(extra)))
 
 
 def main(argv):
