@@ -23,6 +23,7 @@ scripts/heartbeat_alert.md
 scripts/feed_check_alert.md
 scripts/diagnosis.md
 scripts/dep_review_comment.md
+scripts/smell_suspects.md
  
 # OS and editor cruft
 .DS_Store

@@ -1,0 +1,98 @@
+name: Drop-reason audit
+
+# The offline half of the drop-reason "smell test". The funnel audits each run's triage-drop
+# reasons in-line (update.py tier 2.5) and escalates suspects to the summarizer in the same run;
+# this weekly job covers what that pass cannot reach: the backlog logged before the in-run audit
+# existed, and any run where the fail-open pass was skipped. smell_check.py annotates the audited
+# records in opinions_rejections.jsonl (each record is audited once; the verdict travels with the
+# log) and writes scripts/smell_suspects.md when suspects turn up; the steps below commit the
+# annotations as bookkeeping and surface the suspects on one tracking issue with ready-to-paste
+# queue.txt force lines -- the same recovery path Queen v. Berkley took by hand (issue #186).
+# Scheduled Monday 13:43 UTC: offset from the funnel's :17 ticks, the daily maintenance at 13:37,
+# and the Monday digest at 13:00.
+
+on:
+  schedule:
+    - cron: '43 13 * * 1'
+  workflow_dispatch:
+    inputs:
+      all:
+        description: 'Re-audit records that already carry a smell verdict'
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Report only: no log annotation, no suspects file, no issue'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write        # commit the annotated rejections log (bookkeeping, [skip ci])
+  issues: write          # the suspects tracking issue
+
+concurrency:
+  group: opinions-smell
+  cancel-in-progress: false
+
+jobs:
+  smell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30     # watchdog: a few hundred short reasons is minutes of work
+    steps:
+      # Supply-chain hardening (block mode). Three-host surface: the audit model call, and
+      # checkout + the bookkeeping push + the gh issue steps. No CourtListener: this job reads
+      # reasons, never opinions. Cache/infra endpoints are auto-allowed.
+      - name: Harden the runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.anthropic.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            api.github.com:443
+            pypi.org:443
+            files.pythonhosted.org:443
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Audit logged drop reasons
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPINIONS_SMELL_MODEL: ${{ vars.OPINIONS_SMELL_MODEL || 'claude-opus-5' }}
+          SMELL_ALL: ${{ inputs.all && '1' || '' }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: python scripts/smell_check.py
+
+      # The annotations are bookkeeping, exactly like the run-state files the funnel pushes:
+      # [skip ci] and straight to main via the retrying rebase-push helper.
+      - name: Commit annotated log
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add opinions_rejections.jsonl
+          git commit -m "opinions: record drop-reason audit verdicts [skip ci]" \
+            || { echo "nothing to commit"; exit 0; }
+          bash scripts/push_main.sh
+
+      # Suspects collect on ONE tracking issue (the queue-failure pattern), so repeated audits
+      # never spam new issues. The body is the ready-to-paste report smell_check.py wrote.
+      - name: Surface suspect drops
+        if: ${{ hashFiles('scripts/smell_suspects.md') != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Drop-reason audit: suspect drops"
+          existing=$(gh issue list --state open --search "$title in:title" --json number,title \
+            --jq "[.[] | select(.title==\"$title\")] | .[0].number" 2>/dev/null || true)
+          if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+            gh issue comment "$existing" --body-file scripts/smell_suspects.md
+          else
+            gh issue create --title "$title" --body-file scripts/smell_suspects.md
+          fi

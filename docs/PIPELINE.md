@@ -117,6 +117,21 @@ quote is not present is dismissed, and on a flag each re-asks and stands only on
 attempts (`OPINIONS_CROSSCHECK_TRIES`, `OPINIONS_COMPLETENESS_TRIES`). Screen
 and triage drops are appended to `opinions_rejections.jsonl` for periodic recall review.
 
+The recall review of triage drops is itself automated (tier 2.5, the "smell test",
+`OPINIONS_SMELL_MODEL`, Opus by default; the repo Variable `off` disables it). The one-line
+triage reason is the only trace a drop leaves, so after each run the smell model reads that
+run's drop reasons on their face -- no opinion text -- and marks any that state no disqualifier
+the triage standard recognizes (a keep-shaped topic label, a ground like "unpublished" that the
+standard does not use, a missing reason). A suspect drop is escalated to the tier-3 summarizer
+for one full read in the same run, which cards it or confirms the drop -- the same second
+opinion the queue's `!` force flag buys, automated, capped at
+`OPINIONS_SMELL_MAX_ESCALATIONS` per run (default 5). The pass is fail-open everywhere: any
+smell failure leaves every drop exactly as triage decided it, so it can only add recall. Each
+audited rejection record is stamped with the verdict (`smell`, `smell_note`, `smell_outcome`),
+and the weekly `smell.yml` job (`scripts/smell_check.py`) runs the same audit over the logged
+backlog, annotating the log and surfacing suspects on a tracking issue with ready-to-paste
+`queue.txt` force lines for editor review.
+
 ## Catching law that moves
 
 A published card can be overtaken by a later decision. Two processes watch for it, and both
