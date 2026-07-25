@@ -191,6 +191,11 @@ if SMELL_MODEL.strip().lower() in ("", "off", "none", "0"):   # 'off' via the re
 SMELL_BATCH = os.environ.get("OPINIONS_SMELL_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
 SMELL_BATCH_SEC = int(os.environ.get("OPINIONS_SMELL_BATCH_SEC", "900"))  # wait budget for the (single-request) smell batch, between triage and summarize
 SMELL_MAX_ESCALATIONS = int(os.environ.get("OPINIONS_SMELL_MAX_ESCALATIONS", "5"))  # per-run cap on suspect drops sent to the summarizer, bounding the worst-case Opus spend
+# Output budget for one smell request (a SMELL_CHUNK-item verdict list). The first live run
+# proved 2000 too tight: Opus's per-item notes overflowed it on 40-item chunks, and both big
+# chunks correctly stayed un-audited (fail-open held; nothing was mis-stamped). ~200 tokens per
+# item of headroom; a raised cap costs nothing unless the model actually writes more.
+SMELL_TOKENS = int(os.environ.get("OPINIONS_SMELL_MAX_TOKENS", "8000"))
 STATUS_URL   = os.environ.get("ANTHROPIC_STATUS_URL", "https://status.claude.com/api/v2/summary.json")
 STATUS_MODE  = (os.environ.get("ANTHROPIC_STATUS", "on") or "on").strip().lower()  # on | warn | off
 
@@ -1160,7 +1165,7 @@ def smell_request(items):
              % (i + 1, it.get("court") or "?", it.get("date") or "?",
                 it.get("name") or "(unnamed)", (it.get("reason") or "").strip() or "(none given)")
              for i, it in enumerate(items)]
-    return {"model": SMELL_MODEL, "max_tokens": 2000, "system": SMELL_SYSTEM,
+    return {"model": SMELL_MODEL, "max_tokens": SMELL_TOKENS, "system": SMELL_SYSTEM,
             "messages": [{"role": "user", "content": "CASES DROPPED AT TRIAGE:\n" + "\n".join(lines)}]}
 
 
