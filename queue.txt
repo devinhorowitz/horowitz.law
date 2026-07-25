@@ -29,4 +29,3 @@
 # Smell-audit escalations (issue #191): 14 pre-gloss triage drops whose logged reasons
 # state no recognized disqualifier. Forced for a full summarizer read; the editorial
 # PR remains the review gate. See opinions_rejections.jsonl smell annotations.
-10933816 !  # smell: Universal Prop. v. Endrina (dcafl 7/22) -- reason admits it decides a coverage point
