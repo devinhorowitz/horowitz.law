@@ -152,7 +152,8 @@ AREA_GLOSSES = {
     "badfaith": ("insurer bad faith and settlement conduct: O.C.G.A. 33-4-6 / 33-4-7 penalties, "
                  "Holt-type failure-to-settle excess exposure, and equivalent non-Georgia bad-faith law"),
     "auto": ("motor-vehicle tort liability: collisions and rules of the road, plus trucking and "
-             "motor-carrier liability (including FAAAA preemption and broker claims)"),
+             "motor-carrier liability (including FAAAA preemption and broker claims); a UM/UIM or "
+             "other motor-vehicle insurance dispute carries auto ALONGSIDE coverage"),
     "premises": ("owner/occupier liability for the premises: O.C.G.A. 51-3-1 duties, invitee status "
                  "and superior knowledge, hazards, and the possession boundary with out-of-possession "
                  "landlord liability under O.C.G.A. 44-7-14"),
