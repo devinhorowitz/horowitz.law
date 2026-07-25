@@ -34,6 +34,7 @@ Thumbs.db
  
 # Digest dry-run preview, written locally by scripts/digest.py; never committed.
 digest_preview.html
+digest_legislation_preview.html
 alert_preview.html
  
 # Local secrets and Cloudflare dev files (never committed; secrets live in the

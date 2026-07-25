@@ -98,6 +98,21 @@ AUTHOR_NAME      = NAME
 AUTHOR_URL       = SITE_URL + "/"
 PUBLISHER_NAME   = NAME
 
+# ---- Email (weekly digest + instant alerts) ------------------------------
+# The repo is the master of its own configuration: these lived as GitHub repository Variables,
+# which nothing in the repo could read, review, or change by PR. Only true secrets stay in
+# Actions secrets (RESEND_API_KEY and friends). The matching env vars still win when set, so a
+# repo Variable remains available as a break-glass override -- but the committed value here is
+# the source of truth. The Resend ids are not secrets: they are inert without RESEND_API_KEY
+# and already ride in every sent email's unsubscribe plumbing.
+DIGEST_FROM   = "Georgia Appellate Watch <digest@horowitz.law>"
+# CAN-SPAM postal line for the email footer; the same address the home page's JSON-LD publishes.
+DIGEST_POSTAL = f"{NAME}, 365 Northridge Road, Suite 230, Atlanta, GA 30350"
+# Not-legal-advice / advertising footer line (compliance copy -- edit deliberately).
+DIGEST_DISCLAIMER = "NOT Legal Advice - You are advised to retain your own counsel."
+RESEND_SEGMENT_ID = "1ae517f5-5981-4f7b-bed1-606cfa5649ab"   # confirmed subscribers Segment
+RESEND_TOPIC_ID   = "52b81509-0230-4d3d-b5ff-393409df3b2c"   # send scope + per-topic unsubscribe
+
 # ---- Top-level page registry --------------------------------------------
 # The site's top-level pages, as (path, label, changefreq, priority, lastmod).
 # render.py drives both the /404 "ls /" listing and the sitemap's static URLs

@@ -100,9 +100,9 @@ touches confirmed keepers:
   non-matches.
 - Tier 1.5, pretriage (Haiku): reads the full opinion at the same permissive bar and drops
   only what the full text shows cannot belong, so the costly Sonnet read lands only on
-  plausible keepers. High-recall: anything in scope or in doubt passes. Off by default in the
-  workflow; enable via `OPINIONS_PRETRIAGE_MODEL` once `python scripts/golden_check.py recall`
-  passes.
+  plausible keepers. High-recall: anything in scope or in doubt passes. On by default in the
+  workflow (the `python scripts/golden_check.py recall` gate passed before it went live);
+  the `OPINIONS_PRETRIAGE_MODEL` repo Variable is a break-glass override, `""` disables.
 - Tier 2, triage (Sonnet): reads the full opinion and decides, against a narrow bar, whether
   it belongs in the feed.
 - Tier 3, summarize (Opus): reads the full opinion plus the triage note and writes the

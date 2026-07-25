@@ -24,16 +24,16 @@ Environment:
   RESEND_API_KEY     Resend API key with broadcast + contacts access (Full access). A
                      send-only key will not work here, unlike the old per-email send.
                      Without it (or with DIGEST_DRY_RUN), the script renders a preview only.
-  RESEND_SEGMENT_ID  The Segment confirmed subscribers are added to. Required to send.
-  RESEND_TOPIC_ID    The Topic to scope the send and the unsubscribe link. Recommended.
-  DIGEST_FROM        From header. Default 'Georgia Appellate Watch <digest@horowitz.law>'.
+  RESEND_SEGMENT_ID  The Segment confirmed subscribers are added to. Default in siteconfig.py.
+  RESEND_TOPIC_ID    The Topic to scope the send and the unsubscribe link. Default in siteconfig.py.
+  DIGEST_FROM        From header. Default in siteconfig.py.
   DIGEST_DAYS        Lookback window in days. Default 7.
   DIGEST_DRY_RUN     'true' to render a preview without creating anything. Default false.
   DIGEST_DRAFT       'true' to create the broadcast but NOT send it, so you can review and
                      send it from the Resend dashboard. Default false (create and send).
   SITE_URL           Base page URL. Default 'https://horowitz.law/opinions'.
-  DIGEST_POSTAL      Optional physical address line for the footer.
-  DIGEST_DISCLAIMER  Optional footer line (e.g. not-legal-advice / attorney-advertising).
+  DIGEST_POSTAL      Physical address line for the footer (CAN-SPAM). Default in siteconfig.py.
+  DIGEST_DISCLAIMER  Not-legal-advice / advertising footer line. Default in siteconfig.py.
   DIGEST_PREHEADER   Inbox preview line.
   DIGEST_PREVIEW     Where to write the rendered HTML in a dry run. Default digest_preview.html.
 
@@ -60,12 +60,14 @@ DAYS       = int((os.environ.get("DIGEST_DAYS") or "7"))
 DRY_RUN    = (os.environ.get("DIGEST_DRY_RUN") or "").lower() in ("1", "true", "yes")
 DRAFT      = (os.environ.get("DIGEST_DRAFT") or "").lower() in ("1", "true", "yes")  # create but do not send
 SITE       = (os.environ.get("SITE_URL") or "https://horowitz.law/opinions").rstrip("/")
-FROM       = os.environ.get("DIGEST_FROM") or "Georgia Appellate Watch <digest@horowitz.law>"
+# Defaults live in siteconfig.py (the repo is the master of its own configuration); the env
+# var -- a repo Variable, when one is set -- still wins, as a break-glass override.
+FROM       = os.environ.get("DIGEST_FROM") or siteconfig.DIGEST_FROM
 API_KEY    = os.environ.get("RESEND_API_KEY") or ""
-SEGMENT_ID = os.environ.get("RESEND_SEGMENT_ID") or ""        # broadcast recipients live here
-TOPIC_ID   = os.environ.get("RESEND_TOPIC_ID") or ""          # scopes the send + per-topic unsubscribe
-POSTAL     = os.environ.get("DIGEST_POSTAL") or ""            # optional physical address in the footer
-DISCLAIMER = os.environ.get("DIGEST_DISCLAIMER") or ""        # optional not-legal-advice / advertising line
+SEGMENT_ID = os.environ.get("RESEND_SEGMENT_ID") or siteconfig.RESEND_SEGMENT_ID   # broadcast recipients live here
+TOPIC_ID   = os.environ.get("RESEND_TOPIC_ID") or siteconfig.RESEND_TOPIC_ID       # scopes the send + per-topic unsubscribe
+POSTAL     = os.environ.get("DIGEST_POSTAL") or siteconfig.DIGEST_POSTAL           # physical address in the footer (CAN-SPAM)
+DISCLAIMER = os.environ.get("DIGEST_DISCLAIMER") or siteconfig.DIGEST_DISCLAIMER   # not-legal-advice / advertising line
 PREHEADER  = os.environ.get("DIGEST_PREHEADER") or f"New {siteconfig.COVERAGE} decisions in civil litigation and insurance practice."
 PREVIEW    = os.environ.get("DIGEST_PREVIEW") or os.path.join(REPO, "digest_preview.html")
 
@@ -701,11 +703,11 @@ def main():
     if not POSTAL:
         if (os.environ.get("DIGEST_ALLOW_NO_POSTAL") or "").lower() in ("1", "true", "yes"):
             print("  ! WARNING: DIGEST_POSTAL is empty; sending anyway because "
-                  "DIGEST_ALLOW_NO_POSTAL is set. Set the DIGEST_POSTAL repo Variable.")
+                  "DIGEST_ALLOW_NO_POSTAL is set. Set siteconfig.DIGEST_POSTAL.")
         else:
             print("REFUSING TO SEND: DIGEST_POSTAL is empty. A commercial email needs a "
-                  "physical postal address in the footer (CAN-SPAM); set the DIGEST_POSTAL "
-                  "repo Variable. To send anyway this once, set DIGEST_ALLOW_NO_POSTAL=1.")
+                  "physical postal address in the footer (CAN-SPAM); set "
+                  "siteconfig.DIGEST_POSTAL. To send anyway this once, set DIGEST_ALLOW_NO_POSTAL=1.")
             raise SystemExit(1)
     if not DISCLAIMER:
         print("  ! note: DIGEST_DISCLAIMER is empty; confirm no identification or "
