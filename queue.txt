@@ -29,17 +29,4 @@
 # Smell-audit escalations (issue #191): 14 pre-gloss triage drops whose logged reasons
 # state no recognized disqualifier. Forced for a full summarizer read; the editorial
 # PR remains the review gate. See opinions_rejections.jsonl smell annotations.
-10872982 !  # smell: Grimes v. State Farm (ca11 6/10) -- dropped as "Florida bad-faith/auto"; FL is in-scope
-10873662 !  # smell: J.G. v. Northfield Ins. (ca11 6/11) -- insurer Rule 24(a) intervention timeliness
-10876356 !  # smell: Rescigno v. Realmark (ctapp 6/17) -- GA Arbitration Code, manifest-disregard standard
-10877202 !  # smell: Hastings v. Thomas (ca11 6/18) -- reason concedes a finality point of broad importance
-10879461 !  # smell: Vera v. Parkwood Condo (dcafl 6/24) -- premises causation burden, "clarifying" per reason
-10879452 !  # smell: Universal Prop. v. Orlando C. (dcafl 6/24) -- reason calls it relevant coverage/fee authority
-10880772 !  # smell: Master Dry Out v. State Farm FL (dcafl 6/26) -- AOB attorney-fee ruling, dropped as FL-only
-10882269 !  # smell: Brown v. Morgan & Morgan (ctapp 6/30) -- arbitration clause dispute, bare-label denial
-10918353 !  # smell: Price v. Chicago Title (ca11 7/8) -- GA coverage + bad-faith holdings per its own reason
-10883903 !  # smell: Trace Elements v. MacKensen (scotfl 7/2) -- offer-of-judgment rule, dropped only as FL
-10925530 !  # smell: FIGA v. Broome (dcafl 7/10) -- coverage/fee dispute, dropped as non-Georgia
-10925355 !  # smell: Angel v. White (dcafl 7/10) -- expert testimony + rear-end presumption called relevant
-10933716 !  # smell: SFR Services (dcafl 7/22) -- coverage notice/prejudice ruling, dropped on FL origin
 10933816 !  # smell: Universal Prop. v. Endrina (dcafl 7/22) -- reason admits it decides a coverage point
