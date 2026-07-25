@@ -100,9 +100,9 @@ touches confirmed keepers:
   non-matches.
 - Tier 1.5, pretriage (Haiku): reads the full opinion at the same permissive bar and drops
   only what the full text shows cannot belong, so the costly Sonnet read lands only on
-  plausible keepers. High-recall: anything in scope or in doubt passes. Off by default in the
-  workflow; enable via `OPINIONS_PRETRIAGE_MODEL` once `python scripts/golden_check.py recall`
-  passes.
+  plausible keepers. High-recall: anything in scope or in doubt passes. On by default in the
+  workflow (the `python scripts/golden_check.py recall` gate passed before it went live);
+  the `OPINIONS_PRETRIAGE_MODEL` repo Variable is a break-glass override, `""` disables.
 - Tier 2, triage (Sonnet): reads the full opinion and decides, against a narrow bar, whether
   it belongs in the feed.
 - Tier 3, summarize (Opus): reads the full opinion plus the triage note and writes the
@@ -116,6 +116,25 @@ span it says is wrong, the completeness check the opinion span it says was omitt
 quote is not present is dismissed, and on a flag each re-asks and stands only on a majority of
 attempts (`OPINIONS_CROSSCHECK_TRIES`, `OPINIONS_COMPLETENESS_TRIES`). Screen
 and triage drops are appended to `opinions_rejections.jsonl` for periodic recall review.
+
+The recall review of triage drops is itself automated (tier 2.5, the "smell test",
+`OPINIONS_SMELL_MODEL`, Opus by default; the repo Variable `off` disables it). The one-line
+triage reason is the only trace a drop leaves, so after each run the smell model reads that
+run's drop reasons on their face -- no opinion text -- and marks any that state no disqualifier
+the triage standard recognizes (a keep-shaped topic label, a ground like "unpublished" that the
+standard does not use, a missing reason). A suspect drop is escalated to the tier-3 summarizer
+for one full read in the same run, which cards it or confirms the drop -- the same second
+opinion the queue's `!` force flag buys, automated, capped at
+`OPINIONS_SMELL_MAX_ESCALATIONS` per run (default 5) and twin-checked against the run's dedup
+index like every other route to the summarizer. The pass is fail-open in both senses: nothing
+in it -- including a misconfigured smell model -- ever aborts the run or changes a drop, and a
+drop the model never actually judged is left un-stamped rather than marked clean, so it stays
+visible downstream. Each genuinely audited rejection record is stamped with the verdict
+(`smell`, `smell_note`, `smell_outcome`; an escalation whose read never happened is stamped
+`deferred`), and the weekly `smell.yml` job (`scripts/smell_check.py`) closes the loop: it
+audits the logged backlog plus anything un-stamped or deferred, persisting progress after
+every chunk, and surfaces suspects on a tracking issue with ready-to-paste `queue.txt` force
+lines for editor review.
 
 ## Catching law that moves
 

@@ -177,6 +177,20 @@ GUARD_BATCH_SEC = int(os.environ.get("OPINIONS_GUARD_BATCH_SEC", "1500"))  # wai
 # forces the fully-synchronous per-candidate path (the instant rollback).
 TRIAGE_BATCH = os.environ.get("OPINIONS_TRIAGE_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
 TRIAGE_BATCH_SEC = int(os.environ.get("OPINIONS_TRIAGE_BATCH_SEC", "1500"))  # wait budget for the triage batch, before the summarize batch
+# Tier-2.5 drop-reason audit, the "smell test" (OPINIONS_SMELL_MODEL; "" disables). The one-line
+# triage reason is the only trace a drop leaves in the recall record, so the audit model reads each
+# run's triage-drop reasons ON THEIR FACE -- no opinion text -- and marks the ones that state no
+# recognized disqualifier (the keep-shaped label that sent Queen v. Berkley to a manual force-queue).
+# A suspect drop is escalated to the tier-3 summarizer for one full read in the SAME run: the same
+# second opinion the queue's "!" force flag buys, automated. Fail-open at every step: a smell
+# failure, a deferred batch, or the escalation cap leaves each drop exactly as triage decided it,
+# so the pass can only ADD recall, never lose a card.
+SMELL_MODEL = os.environ.get("OPINIONS_SMELL_MODEL", AUDIT_MODEL)
+if SMELL_MODEL.strip().lower() in ("", "off", "none", "0"):   # 'off' via the repo Variable is the kill switch
+    SMELL_MODEL = ""
+SMELL_BATCH = os.environ.get("OPINIONS_SMELL_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
+SMELL_BATCH_SEC = int(os.environ.get("OPINIONS_SMELL_BATCH_SEC", "900"))  # wait budget for the (single-request) smell batch, between triage and summarize
+SMELL_MAX_ESCALATIONS = int(os.environ.get("OPINIONS_SMELL_MAX_ESCALATIONS", "5"))  # per-run cap on suspect drops sent to the summarizer, bounding the worst-case Opus spend
 STATUS_URL   = os.environ.get("ANTHROPIC_STATUS_URL", "https://status.claude.com/api/v2/summary.json")
 STATUS_MODE  = (os.environ.get("ANTHROPIC_STATUS", "on") or "on").strip().lower()  # on | warn | off
 
@@ -230,15 +244,10 @@ PRETRIAGE_SYSTEM = (
     'Output ONLY a JSON object: {"pass": true or false, "reason": "a few words"}.'
 )
 
-TRIAGE_SYSTEM = (
-    "You are the second-stage reviewer for a CURATED, NARROW feed of court decisions for a "
-    "civil-litigation and insurance audience focused on Georgia. The feed covers the Georgia, Florida, and "
-    "Alabama appellate courts, the U.S. Court of Appeals for the Eleventh Circuit, and the U.S. "
-    "Supreme Court. Florida and Alabama are supplementary: keep such a decision when it decides a point in "
-    "the practice areas below, on the same terms as a Georgia one. A cheap first pass has already "
-    "removed the obviously unrelated cases. You are given "
-    "the FULL text of one opinion. Catch genuine relevance that a glance at the opening would "
-    "miss, while keeping the feed narrow.\n\n"
+# The include/exclude bar, factored out of TRIAGE_SYSTEM so the drop-reason audit below
+# (SMELL_SYSTEM) judges reasons against the SAME standard the triage applied -- one constant,
+# so the two prompts cannot drift apart.
+TRIAGE_CRITERIA = (
     "Mark relevant=true only if the opinion DECIDES or CLARIFIES a point in one of these "
     "areas, even if that point is not apparent from the caption or opening and even if it is a "
     "secondary holding: auto or UM/UIM, premises liability, negligent security, insurance "
@@ -263,6 +272,18 @@ TRIAGE_SYSTEM = (
     "application, is OUT even when the underlying case is an in-scope auto, premises, or tort "
     "matter, unless the order announces or clarifies a rule. Default to false on a close "
     "call.\n\n"
+)
+
+TRIAGE_SYSTEM = (
+    "You are the second-stage reviewer for a CURATED, NARROW feed of court decisions for a "
+    "civil-litigation and insurance audience focused on Georgia. The feed covers the Georgia, Florida, and "
+    "Alabama appellate courts, the U.S. Court of Appeals for the Eleventh Circuit, and the U.S. "
+    "Supreme Court. Florida and Alabama are supplementary: keep such a decision when it decides a point in "
+    "the practice areas below, on the same terms as a Georgia one. A cheap first pass has already "
+    "removed the obviously unrelated cases. You are given "
+    "the FULL text of one opinion. Catch genuine relevance that a glance at the opening would "
+    "miss, while keeping the feed narrow.\n\n"
+    + TRIAGE_CRITERIA +
     "ADVERSE TREATMENT OF THE FEED. You may also be given a list of CASES ALREADY IN THE FEED "
     "(each as 'id: name'). Independently of relevance, check whether THIS opinion treats any of "
     "those listed cases NEGATIVELY: overrules, reverses, abrogates, holds it superseded by "
@@ -1106,6 +1127,116 @@ def _triage_batch(items, feed_index, deadline=None):
     for p in missing:      # batch unavailable/unparseable for these -> synchronous triage (never skip)
         verdicts[p["cid"]] = triage(p["name"], p["docket"], p["text"], feed_index)
     return verdicts
+
+
+SMELL_SYSTEM = (
+    "You audit the drop decisions of a junior reviewer for a CURATED, NARROW feed of court "
+    "decisions for a civil-litigation and insurance audience focused on Georgia. Each numbered "
+    "item gives one dropped case's name, court, filing date, and the junior reviewer's one-line "
+    "reason for dropping it. You do NOT see the opinions: judge each REASON ON ITS FACE against "
+    "the feed's standard below. This is a recall audit of the stated reason, not a re-triage.\n\n"
+    "Verdict 'suspect' when the reason: reads like a keep (it asserts the opinion decides or "
+    "clarifies an in-scope point while stating no disqualifier); is a bare topic label with no "
+    "disqualifier; rests on a ground the standard does not recognize (for example that the "
+    "decision is unpublished, or that it comes from Florida or Alabama -- supplementary states "
+    "are kept on the same terms as Georgia); or contradicts itself. Verdict 'ok' when it states "
+    "a disqualifier the standard recognizes, however tersely: out-of-scope subject matter, an "
+    "in-scope topic mentioned only in passing, a routine fact-bound application of a settled "
+    "rule, a procedural disposition that announces no rule, and the like. A 'suspect' verdict "
+    "sends the full opinion to a senior reviewer for one more read, so flag genuine doubt about "
+    "the reason, but do not flag a reason that plainly states a recognized disqualifier.\n\n"
+    "THE FEED'S STANDARD (what the junior reviewer was applying; read 'relevant=true' as keep "
+    "and 'relevant=false' as drop):\n" + TRIAGE_CRITERIA +
+    "Output ONLY a JSON object: {\"verdicts\": [{\"i\": <item number>, \"verdict\": \"ok\" or "
+    "\"suspect\", \"note\": \"a few words\"}, ...]} covering every numbered item, in order."
+)
+
+
+def smell_request(items):
+    """The Messages body auditing a set of drop reasons as ONE request. items: [{"name",
+    "court", "date", "reason"}, ...]; the caller keeps the order, verdicts come back by
+    1-based item number."""
+    lines = ["%d. [%s %s] %s -- REASON FOR THE DROP: %s"
+             % (i + 1, it.get("court") or "?", it.get("date") or "?",
+                it.get("name") or "(unnamed)", (it.get("reason") or "").strip() or "(none given)")
+             for i, it in enumerate(items)]
+    return {"model": SMELL_MODEL, "max_tokens": 2000, "system": SMELL_SYSTEM,
+            "messages": [{"role": "user", "content": "CASES DROPPED AT TRIAGE:\n" + "\n".join(lines)}]}
+
+
+SMELL_CHUNK = 40   # reasons per request; keeps each verdict list well inside the 2000-token budget
+
+
+def smell_reasons(items, deadline=None):
+    """Audit drop reasons with the smell model; returns {0-based index: {"verdict": "ok"|"suspect",
+    "note": str}} covering ONLY the items the model actually judged. Items go out in SMELL_CHUNK
+    slices -- one request each, submitted together as ONE 50%-priced Message Batches job
+    (OPINIONS_SMELL_BATCH, default on) -- with a per-chunk synchronous fallback, so a heavy-drop
+    run cannot truncate the whole audit. A chunk that fails, and any verdict the model omits or
+    garbles, contributes NOTHING to the result: fail-open here means the un-audited drop stays
+    UN-stamped and therefore visible to the weekly retro audit, never that a verdict is invented
+    for it. Raises only ConfigError (a misconfigured model must surface to the caller)."""
+    chunks = [items[i:i + SMELL_CHUNK] for i in range(0, len(items), SMELL_CHUNK)]
+    datas = {}    # chunk index -> parsed verdicts object
+    if SMELL_BATCH:
+        try:
+            reqs = [batch.from_body("smell-%d" % k, smell_request(c)) for k, c in enumerate(chunks)]
+            res = batch.run(reqs, deadline=deadline, label="funnel-smell")
+            for k in range(len(chunks)):
+                line = res.get("smell-%d" % k)
+                if line and line.get("ok"):
+                    try:
+                        datas[k] = parse_json(line["text"])
+                    except Exception:
+                        pass   # unparseable line -> that chunk takes the synchronous fallback
+        except (batch.BatchTimeout, batch.BatchError) as e:
+            print("  . smell batch unavailable (%s); falling back to synchronous calls" % e)
+    out = {}
+    for k, chunk in enumerate(chunks):
+        data = datas.get(k)
+        if data is None:
+            try:
+                data = anthropic_json(smell_request(chunk), "smell")
+            except ConfigError:
+                raise
+            except Exception as e:
+                print("  . smell audit unavailable for %d reason(s) (%s); they stay un-audited"
+                      % (len(chunk), e))
+                continue
+        for v in (data.get("verdicts") or []):
+            try:
+                i = int(v.get("i")) - 1
+            except (TypeError, ValueError):
+                continue
+            if 0 <= i < len(chunk) and (k * SMELL_CHUNK + i) not in out:
+                verdict = (v.get("verdict") or "").strip().lower()
+                out[k * SMELL_CHUNK + i] = {"verdict": "suspect" if verdict == "suspect" else "ok",
+                                            "note": (v.get("note") or "").strip()}
+    return out
+
+
+def smell_select(drops, verdicts, cap=None):
+    """Decide which smelled drops escalate to the summarizer. drops: dicts each carrying a
+    "reason" key; verdicts: smell_reasons() output. A drop with an EMPTY reason is suspect
+    outright -- there is nothing to audit, which is itself the defect this audit exists to
+    catch. Returns (escalate, annot): escalate = the suspect indices in order, capped at cap
+    (default OPINIONS_SMELL_MAX_ESCALATIONS) so a noisy audit cannot multiply the Opus spend;
+    annot = {index: {"verdict", "note"}} covering ONLY the drops that actually have a verdict
+    (a model-judged one, or the empty-reason rule). A drop the model never judged gets NO
+    annotation: stamping it "ok" would hide it from the weekly retro audit behind a verdict
+    nobody produced."""
+    cap = SMELL_MAX_ESCALATIONS if cap is None else cap
+    annot, suspects = {}, []
+    for i, d in enumerate(drops):
+        if not (d.get("reason") or "").strip():
+            annot[i] = {"verdict": "suspect", "note": "no reason recorded"}
+        elif i in verdicts:
+            annot[i] = verdicts[i]
+        else:
+            continue   # un-audited: leave it un-stamped for the retro audit
+        if annot[i]["verdict"] == "suspect":
+            suspects.append(i)
+    return suspects[:max(cap, 0)], annot
 
 
 def summarize_request(court_id, name, docket, date_filed, text, note, cl_status=""):
@@ -2200,6 +2331,7 @@ def main():
     dedup_index = [(_dup_sig(e.get("court"), e.get("date"), e.get("dockets"), e.get("name")),
                     e.get("name", "?")) for e in entries]
     pending = []   # tier-3 drafts deferred to the post-loop summarize batch (OPINIONS_BATCH on)
+    smell_pending = []   # triage drops held for the tier-2.5 drop-reason audit (OPINIONS_SMELL_MODEL)
 
     def finish_card(v, r, cid, name, court_id, docket, date_filed, url, text, cl_deadline):
         """Tier-3 downstream: turn a summarize verdict into a published-card entry and append it (or
@@ -2523,6 +2655,9 @@ def main():
                     rejections.append({"ts": run_ts, "stage": "triage", "cluster_id": cid, "name": name,
                                        "court": COURT_MAP.get(court_id) or court_id, "docket": docket,
                                        "date": date_filed, "url": url, "reason": (t.get("reason") or "").strip()})
+                    if SMELL_MODEL:  # hold for the tier-2.5 reason audit; the drop itself is final as-is
+                        smell_pending.append({"rej": rejections[-1], "p": p, "note": t.get("note") or "",
+                                              "skip_i": len(skipped) - 1})
                     consec = 0; evaluated.add(cid); continue
                 note = t.get("note") or ""
                 time.sleep(0.4)
@@ -2566,6 +2701,88 @@ def main():
         # same collections, live loop budget for the official-link fetches.
         finish_card(v, r, cid, name, court_id, docket, date_filed, url, text, run_start + BUDGET_SEC)
 
+    # Tier 2.5: audit this run's triage-drop REASONS with the smell model. The reason string is
+    # the only trace a drop leaves, so a stated reason that names no recognized disqualifier is
+    # itself a defect worth one more look. Suspect drops get the same second opinion the queue's
+    # "!" force flag buys -- a full read by the tier-3 summarizer, which may card or decline -- in
+    # THIS run: they join the summarize batch below (or run synchronously when OPINIONS_BATCH is
+    # off). Fail-open, in BOTH senses. First, nothing here aborts the run or changes a drop: even
+    # a ConfigError (a mistyped OPINIONS_SMELL_MODEL Variable) only skips the pass, loudly --
+    # this is bonus recall, and a broken bonus pass must not cost the funnel a publish (the
+    # fable_review_pass discipline, not the load-bearing-tier one). Second, a drop the model
+    # never actually judged is left UN-stamped, so the weekly retro audit (smell_check.py) still
+    # sees it; a verdict is recorded on the rejection log ("smell", "smell_note",
+    # "smell_outcome") only when one was actually produced.
+    n_smell = n_smell_suspect = smell_recovered = 0
+    smell_escalated = []            # escalated pending-shaped items; outcomes resolved post-draft
+    drafted_cids = set()            # what the tier-3 batch actually drafted (outcome resolution)
+    if SMELL_MODEL and smell_pending and not cfg_error:
+        verdicts = {}
+        if any((d["rej"].get("reason") or "").strip() for d in smell_pending):
+            print("  . smelling %d triage-drop reason(s)" % len(smell_pending), flush=True)
+            try:
+                items = [{"name": d["rej"]["name"], "court": d["rej"]["court"],
+                          "date": d["rej"]["date"], "reason": d["rej"]["reason"]}
+                         for d in smell_pending]
+                verdicts = smell_reasons(items, deadline=time.time() + SMELL_BATCH_SEC)
+            except ConfigError as e:
+                print("  ! smell model misconfigured (%s); skipping the smell pass. Fix "
+                      "OPINIONS_SMELL_MODEL (or set it to 'off'); the un-stamped drops stay "
+                      "covered by the weekly retro audit meanwhile." % e)
+            except Exception as e:
+                print("  . smell pass unavailable (%s); drops stand as triaged" % e)
+        escalate, annot = smell_select([d["rej"] for d in smell_pending], verdicts)
+        n_smell = len(annot)
+        n_smell_suspect = sum(1 for a in annot.values() if a["verdict"] == "suspect")
+        for i, a in annot.items():
+            d = smell_pending[i]
+            d["rej"]["smell"] = a["verdict"]
+            if a["note"]:
+                d["rej"]["smell_note"] = a["note"]
+            if a["verdict"] == "suspect":
+                d["rej"]["smell_outcome"] = "escalated" if i in escalate else "capped"
+        for i in escalate:
+            d = smell_pending[i]; sp = d["p"]
+            # The same in-run twin recheck every other route to the summarizer passes through:
+            # a case already carded or queued for drafting THIS run under a twin cluster id
+            # must not be drafted again from here.
+            dup = next((nm for sig, nm in dedup_index if _same_case(sp["csig"], sig)), None)
+            if dup:
+                d["rej"]["smell_outcome"] = "in-run twin of %s; not escalated" % dup[:60]
+                print("  ~ smell: NOT escalating %s (in-run twin of %s)"
+                      % (sp["name"][:40], dup[:40]))
+                continue
+            print("  ~ smell: escalating %s (%s)"
+                  % (sp["name"][:50], annot[i]["note"] or "suspect reason"), flush=True)
+            try:
+                sp_status = enriched(sp["r"], since, deadline=time.time() + 60).get("status") \
+                    or cluster_precedential_status(sp["r"], deadline=time.time() + 60)
+            except Exception:
+                sp_status = ""   # publication status is a hint; never let it block the escalation
+            item = {"r": sp["r"], "cid": sp["cid"], "name": sp["name"], "court_id": sp["court_id"],
+                    "docket": sp["docket"], "date_filed": sp["date_filed"], "url": sp["url"],
+                    "text": sp["text"], "note": d["note"], "cl_status": sp_status,
+                    "rej": d["rej"], "skip_i": d.get("skip_i")}
+            n_opus += 1
+            if FUNNEL_BATCH:
+                pending.append(item)
+                dedup_index.append((sp["csig"], sp["name"]))
+            else:
+                try:
+                    v = summarize(sp["court_id"], sp["name"], sp["docket"], sp["date_filed"],
+                                  sp["text"], d["note"], cl_status=sp_status)
+                    finish_card(v, sp["r"], sp["cid"], sp["name"], sp["court_id"], sp["docket"],
+                                sp["date_filed"], sp["url"], sp["text"], time.time() + 120)
+                    item["read_done"] = True   # the summarizer actually read it (card or decline)
+                except ConfigError as e:
+                    print("  ! configuration error escalating a smelled drop; smell escalations "
+                          "stop here, the run continues: %s" % e)
+                    smell_escalated.append(item)
+                    break
+                except Exception as e:
+                    print("  . smell escalation failed for %s (%s); the drop stands" % (sp["name"][:40], e))
+            smell_escalated.append(item)
+
     # Tier 3, batched: draft every candidate that passed triage as ONE 50%-priced job, then finish
     # each exactly as the synchronous path would (finish_card). A batch that does not end within the
     # budget, or a transport failure, defers the whole draft set: those clusters stay unevaluated and
@@ -2585,7 +2802,8 @@ def main():
                 print("  ! finishing card failed for %s: %s" % (p["name"][:50], fe))
 
         try:
-            evaluated |= _draft_pending(pending, time.time() + SUMMARIZE_BATCH_SEC, _finish)
+            drafted_cids = _draft_pending(pending, time.time() + SUMMARIZE_BATCH_SEC, _finish)
+            evaluated |= drafted_cids
         except ConfigError as ce:
             print("  ! configuration error finishing a batched draft (nothing committed): %s" % ce)
             cfg_error = True
@@ -2603,6 +2821,31 @@ def main():
                 cp = completeness_check(it["name"], it["text"], it["entry"])
                 if cp:
                     completeness[it["cid"]] = cp
+
+    # Resolve each smell escalation's outcome now that drafting is done, on the rejection record:
+    #   carded      -- the summarizer read it and carded it (recall recovered); the case's stale
+    #                  "triage: ..." drop row is retired from the run accounting below.
+    #   drop-stands -- the summarizer actually read it and declined; the drop is settled.
+    #   deferred    -- the promised read never happened (the batch deferred, or the call failed).
+    #                  The drop is still final this run, but the weekly retro audit re-audits
+    #                  records marked deferred, so the second opinion is only postponed, not lost.
+    if smell_escalated:
+        carded_cids = {int(e.get("cluster_id") or 0) for e in added}
+        for it in smell_escalated:
+            read_done = it.pop("read_done", False) or (FUNNEL_BATCH and it["cid"] in drafted_cids)
+            if it["cid"] in carded_cids:
+                smell_recovered += 1
+                it["rej"]["smell_outcome"] = "carded"
+                if it.get("skip_i") is not None:
+                    skipped[it["skip_i"]] = None   # drop row retired: the case is on the site now
+            elif read_done:
+                it["rej"]["smell_outcome"] = "drop-stands"
+            else:
+                it["rej"]["smell_outcome"] = "deferred"
+        skipped = [s for s in skipped if s is not None]
+    if n_smell or smell_pending:
+        print("  . smell: %d of %d drop reason(s) audited, %d suspect, %d escalated, %d recovered"
+              % (n_smell, len(smell_pending), n_smell_suspect, len(smell_escalated), smell_recovered))
 
     pr_body = _funnel_pr_body(added, flagged, crosschecks, completeness, treat_flags, audit_notes, sa_events, skipped)
     funnel = "screened %d, pretriaged %d, triaged %d, summarized %d, audited %d" % (n_screen, n_pretriage, n_triage, n_opus, n_audit)
@@ -2644,6 +2887,7 @@ def main():
         "screened": n_screen, "pretriaged": n_pretriage, "triaged": n_triage, "summarized": n_opus, "audited": n_audit,
         "evaluated": len(evaluated), "carded": len(added), "flagged": len(flagged),
         "treatment": len(treat_flags), "dropped": len(skipped), "drops": _drop_counts(skipped),
+        "smelled": n_smell, "smell_suspect": n_smell_suspect, "smell_recovered": smell_recovered,
         "cl_calls": cl_rate.PACER.calls,
         "crosscheck_flags": sum(1 for c in crosschecks.values() if c["verdict"] == "flag"),
         "completeness_flags": sum(1 for c in completeness.values() if c["verdict"] == "flag"),

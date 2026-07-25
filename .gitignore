@@ -23,6 +23,7 @@ scripts/heartbeat_alert.md
 scripts/feed_check_alert.md
 scripts/diagnosis.md
 scripts/dep_review_comment.md
+scripts/smell_suspects.md
  
 # OS and editor cruft
 .DS_Store
@@ -33,6 +34,7 @@ Thumbs.db
  
 # Digest dry-run preview, written locally by scripts/digest.py; never committed.
 digest_preview.html
+digest_legislation_preview.html
 alert_preview.html
  
 # Local secrets and Cloudflare dev files (never committed; secrets live in the

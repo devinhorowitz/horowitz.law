@@ -74,9 +74,16 @@ jobs:
           CL_PER_DAY: ${{ vars.CL_PER_DAY }}
           CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
           OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5' }}
-          OPINIONS_PRETRIAGE_MODEL: ${{ vars.OPINIONS_PRETRIAGE_MODEL || '' }}
+          # Pretriage is ON by default (the golden recall gate passed and the tier went live
+          # 2026-07); the repo Variable remains a break-glass override, e.g. set it to a dated
+          # snapshot to reproduce a screen decision, or leave it unset for this default.
+          OPINIONS_PRETRIAGE_MODEL: ${{ vars.OPINIONS_PRETRIAGE_MODEL || 'claude-haiku-4-5' }}
           OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-5' }}
           OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-5' }}
+          # Tier-2.5 drop-reason audit: the smell model reads each triage drop's stated REASON
+          # (no opinion text) and escalates keep-shaped drops to the summarizer in the same run.
+          # Set the repo Variable to 'off' to disable the pass.
+          OPINIONS_SMELL_MODEL: ${{ vars.OPINIONS_SMELL_MODEL || 'claude-opus-5' }}
           OPINIONS_MAX: ${{ vars.OPINIONS_MAX || '80' }}
           # Senior Fable review of held cases: 'clear' auto-publishes a held card Fable is highly
           # confident is a false positive (fail-closed); set the repo Variable to 'advisory' to

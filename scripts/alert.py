@@ -150,7 +150,7 @@ def main():
         print("RESEND_API_KEY is set but RESEND_SEGMENT_ID is empty; nothing to send.")
         return
     if not digest.POSTAL and (os.environ.get("DIGEST_ALLOW_NO_POSTAL") or "").lower() not in ("1", "true", "yes"):
-        print("REFUSING TO SEND: DIGEST_POSTAL is empty (CAN-SPAM). Set the repo Variable, "
+        print("REFUSING TO SEND: DIGEST_POSTAL is empty (CAN-SPAM). Set siteconfig.DIGEST_POSTAL, "
               "or DIGEST_ALLOW_NO_POSTAL=1 to send this once.")
         raise SystemExit(1)
     # Same duplicate-proofing as the digest: a date+id-stamped name, looked up
