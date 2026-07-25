@@ -1,7 +1,7 @@
 {
   "area": "premises",
   "label": "premises",
-  "count": 14,
+  "count": 15,
   "opinions": [
     {
       "cluster_id": 10932338,
@@ -53,6 +53,24 @@
       "why": "The decision clarifies that the voluntary-exposure element of assumption of the risk is a subjective, fact-specific inquiry that can present a jury question even where actual knowledge of the hazard is established as a matter of law, and that conditions impairing perception of a hazard's exact location are material to that inquiry.",
       "dockets": [
         "A24A0886"
+      ]
+    },
+    {
+      "cluster_id": 10879461,
+      "name": "Cecilia Vera v. Parkwood Condominium Association, Inc.",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-06-24",
+      "disposition": "affirmed",
+      "areas": [
+        "premises",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10879461/cecilia-vera-v-parkwood-condominium-association-inc/",
+      "synopsis": "A condominium unit owner slipped on water and sewage from a wastewater backup inside her own unit's bathroom and sued the association and its management company for premises liability, relying on Florida's transient-substance line of cases and evidence of recurring backups reported to the association. The Third District held that line of authority did not control because the fall occurred inside the unit, which the association did not solely possess or control, and because the backup could have originated in either the unit's plumbing, which the owner was responsible to maintain, or the building's sanitary stack pipes, which the association maintained. Because every deponent, including the plaintiff, her adult children, and the association's corporate representative, testified they did not know the source of the blockage, the plaintiff failed to produce evidence supporting a reasonable inference that it was more likely than not that the association's pipes caused the spillage. Summary judgment for the association was affirmed.",
+      "why": "The decision marks the limits of the transient-substance and notice framework by requiring, where a hazard could have arisen from plumbing maintained by either the unit owner or the association, evidence making it more likely than not that the component under the defendant's control caused the condition.",
+      "dockets": [
+        "3D2024-2149"
       ]
     },
     {

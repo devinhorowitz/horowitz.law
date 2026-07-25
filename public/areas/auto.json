@@ -1,7 +1,7 @@
 {
   "area": "auto",
   "label": "auto",
-  "count": 26,
+  "count": 27,
   "opinions": [
     {
       "cluster_id": 10928157,
@@ -21,6 +21,25 @@
       "dockets": [
         "A25A2193",
         "A26A0122"
+      ]
+    },
+    {
+      "cluster_id": 10925355,
+      "name": "Angel v. White",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-07-10",
+      "disposition": "reversed and remanded for a new trial",
+      "areas": [
+        "procedure",
+        "expert",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10925355/angel-v-white-white/",
+      "synopsis": "In a multivehicle rear-end collision action, the trial court declared a mistrial after the jury deadlocked and then granted a directed verdict finding no negligence by one defendant driver, apportioning all liability to the other driver. The Second District held that the two accident-reconstruction experts gave directly conflicting accounts of the sequence of impacts, and that resolving that conflict by crediting the moving party's expert and rejecting the other driver's account as physically impossible was an improper weighing of evidence. Directed verdicts in negligence actions are rarely appropriate, and the evidence and reasonable inferences had to be viewed in the light most favorable to plaintiff. Reversed and remanded for a new trial.",
+      "why": "The decision reiterates that conflicting expert reconstruction testimony about the sequence of impacts presents a jury question that cannot be resolved on a directed verdict, even when one expert characterizes the opposing account as contrary to physics.",
+      "dockets": [
+        "2D2025-0703"
       ]
     },
     {
