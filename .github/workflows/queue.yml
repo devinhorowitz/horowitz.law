@@ -87,6 +87,12 @@ jobs:
           CL_PER_HOUR: ${{ vars.CL_PER_HOUR }}
           CL_PER_DAY: ${{ vars.CL_PER_DAY }}
           CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
+          # The queue is a curated, latency-insensitive path (<= QUEUE_MAX lines under a
+          # 45-minute watchdog), so give each cluster resolve a generous deadline instead
+          # of the 30s daily-pipeline default: one slow CourtListener response inside a
+          # 30s window killed the resolve twice on 2026-07-25 (cl_get's per-attempt read
+          # timeout is 20s, leaving no room for a single retry).
+          OPINIONS_CL_DEADLINE_SEC: '120'
           # Same models as the daily pipeline (same repo Variables). The queue skips the
           # Tier-1 Haiku screen, so OPINIONS_SCREEN_MODEL is not set here. The treatment
           # audit and status preflight use update.py's defaults unless their Variables are set.
