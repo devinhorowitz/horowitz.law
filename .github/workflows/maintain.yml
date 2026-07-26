@@ -236,3 +236,27 @@ jobs:
           else
             gh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body "$body"
           fi
+
+      # Symmetric with the step above, and with the two drift issues this workflow already
+      # self-heals: once a later run completes cleanly, close the findings issue so a transient
+      # failure (a network blip, an Anthropic credit lapse -- both of which have happened) does not
+      # leave a stale open issue on an unattended deployment. Issue #209 sat open for exactly that
+      # reason: this workflow could open the findings issue but never close it.
+      #
+      # The court-registry guard is not decoration. "Court registry validation error" opens THIS
+      # issue on a non-transient exit code WITHOUT failing the job, so success() alone would let one
+      # run open the issue and then immediately close it. The condition below is that step's
+      # condition negated: 0 clean, and 3 drift / 4 deferred both leave this issue untouched (3
+      # files its own "Court registry drift detected"); anything else means the error step fired.
+      # Best-effort so a gh hiccup here never fails an otherwise healthy run.
+      - name: Close the findings issue on a healthy run
+        if: ${{ success() && (steps.courts.outputs.code == '0' || steps.courts.outputs.code == '3' || steps.courts.outputs.code == '4') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Opinions maintenance findings"
+          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number,title \
+            --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
+            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: a later maintenance run completed cleanly. Closing automatically." || true
+            gh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
+          done
