@@ -114,6 +114,16 @@ TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-5")
 # such expiry, which is what an unattended deployment wants. Pin a dated snapshot via the repo
 # Variable only if you ever need to reproduce a specific screen decision.
 SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5")
+# Courts that skip the Tier 1 excerpt screen and go straight to the full-read tiers.
+# The screen is a volume optimization: it exists so a large docket does not cost a full read
+# per case. The Supreme Court has no large docket -- a handful of signed opinions a term --
+# so it buys nothing there, while the cost of a false drop is highest, since these are the
+# decisions most likely to be worth carrying. It is also the tier least able to judge them: a
+# caption plus 1500 characters is often the procedural posture and not the question presented,
+# which is how Keathley (judicial estoppel of an unscheduled personal-injury claim) read as a
+# bankruptcy case. Golden runs had it dropping and passing the screen on identical prompts.
+SCREEN_EXEMPT_COURTS = {c.strip() for c in
+                        os.environ.get("OPINIONS_SCREEN_EXEMPT_COURTS", "scotus").split(",") if c.strip()}
 PRETRIAGE_MODEL = os.environ.get("OPINIONS_PRETRIAGE_MODEL", "claude-haiku-4-5")  # tier 1.5: cheap full-read screen before the Sonnet triage; "" disables
 CROSSCHECK_MODEL = os.environ.get("OPINIONS_CROSSCHECK_MODEL", TRIAGE_MODEL)  # fidelity check on each card; a different model than the Opus summarizer so it is not grading its own work; "" disables
 CROSSCHECK_TRIES = int(os.environ.get("OPINIONS_CROSSCHECK_TRIES", "3"))  # on a substantiated flag, re-ask up to this many times; a flag stands only on a majority, damping one-roll noise at temperature 1. 1 keeps grounding but disables consensus
@@ -217,9 +227,16 @@ SCREEN_SYSTEM = (
     "'United States v.'), habeas or post-conviction (including 28 U.S.C. 2254 or 2255), "
     "immigration, prisoner civil rights, Social Security or veterans' benefits, family or "
     "domestic, juvenile or dependency ('In the Interest of'), probate or wills, tax, workers' "
-    "compensation, attorney discipline or bar admission, election, or landlord-tenant or "
-    "dispossessory; or it is a one-line order that merely grants or denies an application or "
-    "dismisses for failure to file, with no merits.\n\n"
+    "compensation, attorney discipline or bar admission, or election; or it is a one-line order "
+    "that merely grants or denies an application or dismisses for failure to file, with no "
+    "merits.\n\n"
+    "That list is CLOSED, and each entry means the DISPUTE is of that kind, not that the case "
+    "touches it. Your reason must name one of the categories above; if you cannot, PASS. Note what "
+    "is NOT on it: a landlord-tenant or dispossessory posture (a slip-and-fall at an apartment "
+    "complex is a premises case) and a bankruptcy posture (a debtor's schedules or plan often "
+    "appear in a case whose real subject is a personal-injury or insurance claim). Neither can be "
+    "told apart from an in-scope claim by a caption and an opening excerpt, so both are for the "
+    "later step that reads the whole opinion, not for you.\n\n"
     "PASS everything else, including any general civil case and anything you are not sure "
     "about. A later step reads the full opinion, so when in doubt, PASS. "
     "Output ONLY a JSON object: {\"pass\": true or false, \"reason\": \"a few words\"}."
@@ -261,7 +278,12 @@ TRIAGE_CRITERIA = (
     "causation, wrongful death, products liability, dram shop, spoliation, Georgia tort reform "
     "(SB 68), expert or Daubert issues, arbitration under the FAA, or a civil procedure or "
     "evidence rule of broad practical importance to civil litigators (including removal "
-    "and diversity jurisdiction, class actions, and punitive-damages due process).\n\n"
+    "and diversity jurisdiction, class actions, punitive-damages due process, and whether an "
+    "injured plaintiff may pursue their claim at all -- judicial estoppel, standing, capacity, "
+    "real party in interest, and a claim that belongs to a bankruptcy estate). That last group "
+    "counts because it decides whether a tort claim survives, which matters to this practice as "
+    "much as a rule about how it is tried; do not read the examples as the outer limit of the "
+    "category.\n\n"
     "For an Eleventh Circuit or U.S. Supreme Court opinion, apply this bar even more strictly: "
     "include it only if it decides or clarifies a point a Georgia civil-litigation or insurance practitioner would need to know in the areas above. "
     "Exclude the large federal docket that does not bear on this practice, including federal "
@@ -269,6 +291,14 @@ TRIAGE_CRITERIA = (
     "patent and other intellectual property, bankruptcy with no coverage or tort nexus, "
     "employment discrimination (unless it announces a broad evidentiary or procedural rule), "
     "and administrative or regulatory matters.\n\n"
+    "That strictness is about SUBJECT MATTER, not about whose law is applied. 'Would need to know' "
+    "means the opinion decides a point in the areas above that is of practical use to such a "
+    "practitioner -- NOT that it must change or bind Georgia law. Do not mark relevant=false "
+    "merely because a decision applies another state's law, construes another state's statute or "
+    "rule, is unpublished or non-precedential, or announces no new rule 'for Georgia "
+    "practitioners'; the same reasoning would exclude every Florida, Alabama, and federal decision "
+    "the feed exists to carry. Judge what it decides, then whether that point is in the areas "
+    "above.\n\n"
     "Mark relevant=false if the opinion only MENTIONS such a topic in passing without "
     "deciding anything about it, if it is a routine and fact-bound application of a settled "
     "rule, or if it is otherwise out of scope (ordinary commercial or contract disputes, "
@@ -2442,8 +2472,9 @@ def main():
             evaluated.add(cid); consec = 0
             continue
         try:
-            # Tier 1: cheap excerpt screen
-            if SCREEN_MODEL:
+            # Tier 1: cheap excerpt screen -- skipped entirely for the courts in
+            # SCREEN_EXEMPT_COURTS, whose volume never justified it (see the constant).
+            if SCREEN_MODEL and court_id not in SCREEN_EXEMPT_COURTS:
                 n_screen += 1
                 s = screen(name, docket, snippet_of(r))
                 if not s.get("pass"):
