@@ -324,6 +324,67 @@ def check_render_outputs(errors):
                               % (fname, ", ".join(extra)))
 
 
+# wrangler.toml [vars] key -> the siteconfig attribute it must equal. These values are read at
+# TWO runtimes that cannot import each other: the Cloudflare Functions (JS, at request time, from
+# wrangler.toml) and the Python pipeline (digest.py, via siteconfig). Neither can be generated from
+# the other, so the duplication is structural -- but drift is silent and expensive:
+# functions/api/subscribe/confirm.js WRITES a confirmed subscriber into RESEND_SEGMENT_ID and opts
+# them into RESEND_TOPIC_ID, while digest.py SENDS to those same ids. If the two copies disagree,
+# subscribers confirm successfully, see the success page, and never receive an email -- with no
+# error raised anywhere. Assert instead of remembering, the same discipline as the render-output
+# and .python-version checks above.
+WRANGLER_MIRRORED = {
+    "DIGEST_FROM": "DIGEST_FROM",
+    "RESEND_SEGMENT_ID": "RESEND_SEGMENT_ID",
+    "RESEND_TOPIC_ID": "RESEND_TOPIC_ID",
+    "SITE_URL": "SITE_URL",
+}
+# Vars that legitimately live only in wrangler.toml (no Python twin). Empty today; an entry here is
+# a deliberate statement that the Python side does not need the value.
+WRANGLER_LOCAL_ONLY = set()
+
+
+def check_wrangler_vars(errors):
+    """Every plaintext var in wrangler.toml's [vars] must either match its siteconfig twin or be
+    declared wrangler-only. A new var with neither is an error, so a fifth shared value cannot be
+    added without deciding which it is. Secrets are never in [vars] (they live in the Pages
+    dashboard), so nothing here reads a credential."""
+    import tomllib  # stdlib since 3.11; the pipeline requires newer
+    import siteconfig
+    path = os.path.join(REPO, "wrangler.toml")
+    try:
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        errors.append("wrangler.toml unreadable or not valid TOML (%s)" % e)
+        return
+    variables = data.get("vars")
+    if variables is None:
+        errors.append("wrangler.toml has no [vars] table; the Functions read their config from it")
+        return
+    for key, wrangler_value in sorted(variables.items()):
+        if key in WRANGLER_LOCAL_ONLY:
+            continue
+        attr = WRANGLER_MIRRORED.get(key)
+        if attr is None:
+            errors.append("wrangler.toml [vars] has %s, which check_site does not know about. "
+                          "Add it to WRANGLER_MIRRORED (with the siteconfig attribute it must "
+                          "equal) or to WRANGLER_LOCAL_ONLY." % key)
+            continue
+        expected = getattr(siteconfig, attr, None)
+        if expected is None:
+            errors.append("siteconfig has no %s, but wrangler.toml [vars] mirrors it as %s"
+                          % (attr, key))
+        elif wrangler_value != expected:
+            errors.append("wrangler.toml [vars] %s is %r but siteconfig.%s is %r; the Functions "
+                          "and the digest would disagree at runtime"
+                          % (key, wrangler_value, attr, expected))
+    for key, attr in sorted(WRANGLER_MIRRORED.items()):
+        if key not in variables:
+            errors.append("wrangler.toml [vars] is missing %s; the Functions read it at request "
+                          "time (siteconfig.%s holds the Python-side copy)" % (key, attr))
+
+
 def check_python_version(errors):
     """.python-version is the one place the interpreter version is stated, and ruff.toml's
     target-version must agree with it. The workflows no longer carry a literal (they read the
@@ -371,6 +432,7 @@ def main(argv):
     check_manifests(errors)
     check_render_outputs(errors)
     check_python_version(errors)
+    check_wrangler_vars(errors)
     if errors:
         print("check_site: %d problem(s)" % len(errors))
         for e in errors:

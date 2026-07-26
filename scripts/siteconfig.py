@@ -99,6 +99,11 @@ AUTHOR_URL       = SITE_URL + "/"
 PUBLISHER_NAME   = NAME
 
 # ---- Email (weekly digest + instant alerts) ------------------------------
+# MIRRORED in wrangler.toml [vars]: the four values below (DIGEST_FROM, RESEND_SEGMENT_ID,
+# RESEND_TOPIC_ID, and SITE_URL above) are also read by the Cloudflare Functions at request time,
+# which cannot import this module. check_site.py asserts the two copies agree, so a change here
+# without the matching wrangler.toml edit fails CI rather than silently splitting the subscribe
+# flow from the digest send.
 # The repo is the master of its own configuration: these lived as GitHub repository Variables,
 # which nothing in the repo could read, review, or change by PR. Only true secrets stay in
 # Actions secrets (RESEND_API_KEY and friends). The matching env vars still win when set, so a
