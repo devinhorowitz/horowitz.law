@@ -1776,7 +1776,12 @@
       <!-- opinions:end -->
     </div>
 
-    <p class="empty" id="empty" hidden>No matching opinions in this view.</p>
+    <!-- This page is the rolling two-year window, so a search that finds nothing here may
+         still match an older card. The archive holds every card and runs the same search;
+         opinions.js rewrites the href to carry the active query and filters, and the bare
+         link works without JS. -->
+    <p class="empty" id="empty" hidden>No matching opinions in this view.
+      <a id="archiveSearch" href="/archive">Search the full archive</a>.</p>
   </main>
 
   <footer>
@@ -1791,6 +1796,6 @@
 
 </div>
 <script src="/app.js?v=92092578f8" defer></script>
-<script src="/opinions.js?v=39cf4e84bb" defer></script>
+<script src="/opinions.js?v=378da28f44" defer></script>
 </body>
 </html>

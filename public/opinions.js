@@ -22,6 +22,9 @@
 
   var searchBox = document.getElementById('searchBox');
   var searchCount = document.getElementById('searchCount');
+  // Present on the windowed feed page only; the archive already holds every card, so it
+  // carries no hand-off link and this stays null there.
+  var archiveLink = document.getElementById('archiveSearch');
   var query = '';
   var yearBlocks = Array.prototype.slice.call(document.querySelectorAll('.archive-year-block'));
   var yearLinks = Array.prototype.slice.call(document.querySelectorAll('.year-nav a'));
@@ -41,15 +44,23 @@
   // view, not a history trail). Defaults are omitted so an unfiltered page has
   // a bare URL; params this script does not own are preserved; the #op- anchor
   // survives. A filtered view of the feed is thereby a sendable link.
+  // The live filter state as URL params. Shared by syncURL (this page's own URL) and
+  // the archive hand-off below, so the two can never describe the state differently.
+  // `base` seeds it, so syncURL preserves params this script does not own while the
+  // hand-off starts clean.
+  function filterParams(base) {
+    var p = new URLSearchParams(base || '');
+    ['q', 'court', 'area', 'juris'].forEach(function (k) { p.delete(k); });
+    if (rawQuery) p.set('q', rawQuery);
+    if (systemFilter !== 'all') p.set('court', systemFilter);
+    if (areaFilter !== 'all') p.set('area', areaFilter);
+    if (jurisdictionFilter !== jurisDefault) p.set('juris', jurisdictionFilter);
+    return p;
+  }
+
   function syncURL() {
     try {
-      var p = new URLSearchParams(location.search);
-      ['q', 'court', 'area', 'juris'].forEach(function (k) { p.delete(k); });
-      if (rawQuery) p.set('q', rawQuery);
-      if (systemFilter !== 'all') p.set('court', systemFilter);
-      if (areaFilter !== 'all') p.set('area', areaFilter);
-      if (jurisdictionFilter !== jurisDefault) p.set('juris', jurisdictionFilter);
-      var qs = p.toString();
+      var qs = filterParams(location.search).toString();
       history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
     } catch (e) {}
   }
@@ -95,6 +106,14 @@
 
     var empty = document.getElementById('empty');
     if (empty) empty.hidden = shown > 0;
+    // Hand the search off to the archive when this view comes up empty. The feed page shows
+    // only the rolling two-year window, so a miss here is not necessarily a miss in the
+    // record; the archive holds every card and runs this same script. Carry the active
+    // query and filters so the reader does not retype them. setAttribute only, per the CSP.
+    if (archiveLink) {
+      var qs = filterParams().toString();
+      archiveLink.setAttribute('href', '/archive' + (qs ? '?' + qs : ''));
+    }
     // Announce the result count to the live region whenever ANY filter is active, not only a text
     // query -- otherwise toggling a court/area/jurisdiction chip changes the visible set silently for
     // a screen reader (the aria-pressed state flips, but the count never speaks).
