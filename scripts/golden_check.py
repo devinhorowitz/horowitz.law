@@ -82,9 +82,12 @@ def _kept(c):
     name = c.get("name", "")
     docket = c.get("docket", "") or ""
     text = c.get("text") or ""
-    s = update.screen(name, docket, text[:SNIPPET_CHARS])
-    if not s.get("pass"):
-        return False, "screen dropped: %s" % (s.get("reason") or "not a fit")
+    # A case whose court skips the screen in production must skip it here too, or the gate
+    # would judge a funnel we do not run. Entries with no "court" run the screen, as before.
+    if (c.get("court") or "") not in update.SCREEN_EXEMPT_COURTS:
+        s = update.screen(name, docket, text[:SNIPPET_CHARS])
+        if not s.get("pass"):
+            return False, "screen dropped: %s" % (s.get("reason") or "not a fit")
     if update.PRETRIAGE_MODEL:
         p = update.pretriage(name, docket, text)
         if not p.get("pass"):

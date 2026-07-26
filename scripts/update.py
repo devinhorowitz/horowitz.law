@@ -114,6 +114,16 @@ TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-5")
 # such expiry, which is what an unattended deployment wants. Pin a dated snapshot via the repo
 # Variable only if you ever need to reproduce a specific screen decision.
 SCREEN_MODEL = os.environ.get("OPINIONS_SCREEN_MODEL", "claude-haiku-4-5")
+# Courts that skip the Tier 1 excerpt screen and go straight to the full-read tiers.
+# The screen is a volume optimization: it exists so a large docket does not cost a full read
+# per case. The Supreme Court has no large docket -- a handful of signed opinions a term --
+# so it buys nothing there, while the cost of a false drop is highest, since these are the
+# decisions most likely to be worth carrying. It is also the tier least able to judge them: a
+# caption plus 1500 characters is often the procedural posture and not the question presented,
+# which is how Keathley (judicial estoppel of an unscheduled personal-injury claim) read as a
+# bankruptcy case. Golden runs had it dropping and passing the screen on identical prompts.
+SCREEN_EXEMPT_COURTS = {c.strip() for c in
+                        os.environ.get("OPINIONS_SCREEN_EXEMPT_COURTS", "scotus").split(",") if c.strip()}
 PRETRIAGE_MODEL = os.environ.get("OPINIONS_PRETRIAGE_MODEL", "claude-haiku-4-5")  # tier 1.5: cheap full-read screen before the Sonnet triage; "" disables
 CROSSCHECK_MODEL = os.environ.get("OPINIONS_CROSSCHECK_MODEL", TRIAGE_MODEL)  # fidelity check on each card; a different model than the Opus summarizer so it is not grading its own work; "" disables
 CROSSCHECK_TRIES = int(os.environ.get("OPINIONS_CROSSCHECK_TRIES", "3"))  # on a substantiated flag, re-ask up to this many times; a flag stands only on a majority, damping one-roll noise at temperature 1. 1 keeps grounding but disables consensus
@@ -2457,8 +2467,9 @@ def main():
             evaluated.add(cid); consec = 0
             continue
         try:
-            # Tier 1: cheap excerpt screen
-            if SCREEN_MODEL:
+            # Tier 1: cheap excerpt screen -- skipped entirely for the courts in
+            # SCREEN_EXEMPT_COURTS, whose volume never justified it (see the constant).
+            if SCREEN_MODEL and court_id not in SCREEN_EXEMPT_COURTS:
                 n_screen += 1
                 s = screen(name, docket, snippet_of(r))
                 if not s.get("pass"):

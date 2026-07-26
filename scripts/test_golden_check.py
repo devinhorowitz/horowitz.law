@@ -104,11 +104,13 @@ def with_set(cases, fn):
         golden_check._load = orig
 
 
-def case(name, keep=True, areas=None, text="an opinion."):
+def case(name, keep=True, areas=None, text="an opinion.", court=None):
     c = {"cluster_id": abs(hash(name)) % 10**7, "name": name, "docket": "A00001",
          "expect_relevant": keep, "text": text, "note": "synthetic"}
     if areas:
         c["expect_areas"] = list(areas)
+    if court:
+        c["court"] = court
     return c
 
 
@@ -167,6 +169,17 @@ def test_check_verdicts():
     with Tiers(significance="LOW"):
         check("the low-significance drop is case-insensitive",
               with_set([keeper], golden_check.check) == 1)
+
+    # A court that skips the screen in production must skip it here, or the gate judges a
+    # funnel we do not run. Keathley is the case this exists for: the Supreme Court entry the
+    # excerpt screen dropped and passed on identical prompts.
+    exempt = sorted(update.SCREEN_EXEMPT_COURTS)
+    check("some court is screen-exempt (else this pair of checks proves nothing)", bool(exempt))
+    with Tiers(screen=False):
+        check("a screen-exempt court ignores a screen drop",
+              with_set([case("Fed v. Case", court=exempt[0])], golden_check.check) == 0)
+        check("and a court that is not exempt still honors it",
+              with_set([case("State v. Case", court="ctapp")], golden_check.check) == 1)
 
     # Mixed set: one regression among passing cases still fails the whole gate.
     with Tiers(relevant=lambda n: n != "Keep v. Me"):
@@ -283,6 +296,14 @@ def test_committed_set_integrity():
     # summarize_check skips controls, so expect_areas on one is dead weight that reads as coverage.
     ctrl_areas = [c.get("cluster_id") for c in controls if c.get("expect_areas")]
     check("no control carries expect_areas (summarize skips controls)", not ctrl_areas, str(ctrl_areas))
+
+    # A wrong or missing court silently changes which tiers a case runs through.
+    bad_court = [c.get("cluster_id") for c in cases
+                 if c.get("court") is not None and not (isinstance(c.get("court"), str) and c["court"].strip())]
+    check("any court code present is a non-empty string", not bad_court, str(bad_court))
+    keepers_no_court = [c.get("cluster_id") for c in keepers if not c.get("court")]
+    check("every keeper records its court (it decides whether the screen runs)",
+          not keepers_no_court, str(keepers_no_court))
 
     bad_text = [c.get("cluster_id") for c in cases
                 if c.get("text") is not None and not isinstance(c.get("text"), str)]
