@@ -1,5 +1,16 @@
 [
   {
+    "id": "08ca1e0d3ad9",
+    "rule_set": "FRE",
+    "rule": "Rule 707 (new)",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "A new Evidence Rule 707 is pending, with no substantive description given on the page.",
+    "impact": "A new rule in the expert-testimony article of the Evidence Rules could change how expert-related proof is admitted.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-26"
+  },
+  {
     "id": "893b86d51179",
     "rule_set": "FRE",
     "rule": "Rule 707",
@@ -143,6 +154,17 @@
     "first_seen": "2026-07-19"
   },
   {
+    "id": "c51df65e9fa2",
+    "rule_set": "FRBP",
+    "rule": "Rule 7043 (new)",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "A new Bankruptcy Rule 7043 is pending, with no substantive description given on the page.",
+    "impact": "A new rule in the Part VII adversary-proceeding series may change how testimony is taken in adversary litigation.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-26"
+  },
+  {
     "id": "5baab94a20b4",
     "rule_set": "FRBP",
     "rule": "Rule 7043",
@@ -185,5 +207,27 @@
     "impact": "Bankruptcy practitioners should track changes to lists, schedules, statements, and filing deadlines governed by this rule.",
     "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
     "first_seen": "2026-07-19"
+  },
+  {
+    "id": "1e880192c641",
+    "rule_set": "FRBP",
+    "rule": "Official Forms 101 and 106C",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "Amendments to Official Forms 101 and 106C are pending and, per the page's footnote, will become effective December 1, 2026, a year before the related Rule 2002 change.",
+    "impact": "Debtor's counsel must use the updated petition and exemption forms starting on the earlier effective date.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-26"
+  },
+  {
+    "id": "932aa68901f8",
+    "rule_set": "FRAP",
+    "rule": "Form 4",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "The page lists a pending amendment to Appellate Form 4 but does not describe its substance.",
+    "impact": "Appellate practitioners should watch for a revised version of the form used in appellate filings before the projected effective date.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-07-26"
   }
 ]
