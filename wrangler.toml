@@ -11,6 +11,14 @@ name = "horowitz-law"            # must match your Pages project name exactly (t
 pages_build_output_dir = "public"  # static site served from public/; root holds tooling/data. functions/ stays at the project root (Cloudflare requirement), NOT inside public/.
 compatibility_date = "2025-05-01"
 
+# MIRRORED, and asserted: every value below also exists in scripts/siteconfig.py, because it is
+# read at two runtimes that cannot import each other -- the Functions here (JS, at request time)
+# and the Python pipeline (digest.py). Drift is silent and expensive: confirm.js writes a new
+# subscriber into RESEND_SEGMENT_ID and opts them into RESEND_TOPIC_ID, while digest.py sends to
+# those same ids, so a mismatch means people subscribe, see the success page, and never receive an
+# email with nothing erroring. scripts/check_site.py fails CI if any value here disagrees with
+# siteconfig, if one goes missing, or if a NEW var is added without deciding whether it is mirrored
+# or wrangler-only. Edit a value in BOTH files, in the same commit.
 [vars]
 DIGEST_FROM = "Georgia Appellate Watch <digest@horowitz.law>"
 RESEND_SEGMENT_ID = "1ae517f5-5981-4f7b-bed1-606cfa5649ab"
