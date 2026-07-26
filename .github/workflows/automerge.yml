@@ -51,12 +51,14 @@ jobs:
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:
           egress-policy: block
-          # github.com/api.github.com for checkout + gh + the merge; the two *.githubusercontent
-          # hosts in case the runner image lacks Python 3.12 in the toolcache.
+          # github.com/api.github.com for checkout + gh + the merge; the *.githubusercontent hosts
+          # in case the runner image lacks Python 3.12 in the toolcache (raw.* = versions manifest,
+          # release-assets.* = the tarball itself, which github.com 302s to since April 2025).
           allowed-endpoints: >
             github.com:443
             api.github.com:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             raw.githubusercontent.com:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

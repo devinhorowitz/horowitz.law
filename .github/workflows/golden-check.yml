@@ -49,6 +49,7 @@ jobs:
             api.anthropic.com:443
             github.com:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             raw.githubusercontent.com:443
             api.github.com:443
             www.courtlistener.com:443

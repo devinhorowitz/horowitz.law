@@ -36,13 +36,16 @@ jobs:
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:
           egress-policy: block
-          # github.com/api.github.com for checkout + gh; the two *.githubusercontent hosts in case a
-          # runner image lacks Python 3.12 in the toolcache. If you set HEARTBEAT_PING_URL, add its
+          # github.com/api.github.com for checkout + gh; the *.githubusercontent hosts in case a
+          # runner image lacks Python 3.12 in the toolcache (raw.* = versions manifest,
+          # release-assets.* = the tarball, which github.com 302s to since April 2025).
+          # If you set HEARTBEAT_PING_URL, add its
           # host here too (e.g. hc-ping.com:443), or the ping step will be blocked (harmless).
           allowed-endpoints: >
             github.com:443
             api.github.com:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             raw.githubusercontent.com:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
