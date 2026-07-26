@@ -12,7 +12,12 @@
 # conflict fails loudly rather than force-pushing over the other run.
 #
 # The caller must have already committed; this only moves HEAD onto main and pushes.
+#
+# PUSH_MAIN_BACKOFF is the per-attempt backoff multiplier in seconds (default 3, so the
+# waits are 3/6/9/12s). scripts/test_push_main.py sets it to 0 to exercise the
+# retry-exhaustion path without spending 30 seconds; nothing else should change it.
 set -u
+BACKOFF="${PUSH_MAIN_BACKOFF:-3}"
 
 for i in 1 2 3 4 5; do
   git fetch origin main || true
@@ -25,7 +30,7 @@ for i in 1 2 3 4 5; do
     exit 0
   fi
   echo "push_main: attempt $i rejected (main advanced under us); refetching and retrying"
-  sleep $((i * 3))
+  sleep $((i * BACKOFF))
 done
 
 echo "::error::push_main: could not fast-forward main after 5 attempts"
