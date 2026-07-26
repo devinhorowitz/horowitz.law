@@ -7,7 +7,7 @@
 #   F541  f-string without a placeholder
 # B023 (loop-var closure) is kept ACTIVE: every current closure-in-a-loop binds its loop var via a
 # default arg, so a genuine late-binding closure bug is caught rather than muted.
-target-version = "py312"
+target-version = "py314"
 
 [lint]
 select = ["E9", "F", "B"]

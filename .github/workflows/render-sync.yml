@@ -59,8 +59,7 @@ jobs:
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
-
+          python-version-file: .python-version
       # Re-render the three output files from the committed opinions.json. Pure standard
       # library, no API keys and no network, so this is cheap and safe to run often.
       # render() is deterministic: on a repo whose pages already match opinions.json this
