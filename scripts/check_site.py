@@ -324,6 +324,38 @@ def check_render_outputs(errors):
                               % (fname, ", ".join(extra)))
 
 
+def check_python_version(errors):
+    """.python-version is the one place the interpreter version is stated, and ruff.toml's
+    target-version must agree with it. The workflows no longer carry a literal (they read the
+    file via setup-python's python-version-file), so these two are the only statements left --
+    and a stale ruff target silently lints against the wrong language version, accepting or
+    rejecting syntax the runtime does not. Same discipline as check_render_outputs: two places
+    that must agree, asserted rather than remembered."""
+    vpath = os.path.join(REPO, ".python-version")
+    try:
+        version = open(vpath, encoding="utf-8").read().strip()
+    except OSError as e:
+        errors.append(".python-version unreadable; the workflows resolve their interpreter "
+                      "from it (%s)" % e)
+        return
+    if not re.fullmatch(r"\d+\.\d+", version):
+        errors.append(".python-version should hold a bare MAJOR.MINOR (e.g. 3.14), not %r" % version)
+        return
+    try:
+        ruff = open(os.path.join(REPO, "ruff.toml"), encoding="utf-8").read()
+    except OSError as e:
+        errors.append("ruff.toml unreadable, cannot check target-version (%s)" % e)
+        return
+    m = re.search(r'^target-version\s*=\s*"py(\d+)"', ruff, re.M)
+    if not m:
+        errors.append("ruff.toml has no target-version to check against .python-version")
+        return
+    want = "py" + version.replace(".", "")
+    if m.group(1) != want[2:]:
+        errors.append("ruff.toml target-version is py%s but .python-version says %s (expected %s)"
+                      % (m.group(1), version, want))
+
+
 def main(argv):
     if "--links" in argv:
         return check_links()
@@ -338,6 +370,7 @@ def main(argv):
     check_xml(errors)
     check_manifests(errors)
     check_render_outputs(errors)
+    check_python_version(errors)
     if errors:
         print("check_site: %d problem(s)" % len(errors))
         for e in errors:

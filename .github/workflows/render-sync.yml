@@ -40,9 +40,11 @@ jobs:
       #                   if: failure()), so a clean no-diff run never reaches them, but
       #                   normal runs do. The job's pull-requests/issues:write scopes exist
       #                   for exactly these two REST paths.
-      # setup-python used the runner's cached 3.12 here, so it fetched nothing. If an image
-      #   ever lacks it, the tarball fetch annotates as Blocked; add objects.githubusercontent.com
-      #   and raw.githubusercontent.com then. Actions cache/infra endpoints are auto-allowed.
+      # setup-python uses the runner's cached 3.12 here, so it fetches nothing. The
+      #   *.githubusercontent hosts are pre-added to cover an image that ever lacks it:
+      #   raw.* serves the versions manifest and release-assets.* serves the tarball
+      #   (github.com 302s there; GitHub moved release assets off objects.* in April 2025).
+      #   Actions cache/infra endpoints are auto-allowed.
       - name: Harden the runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:
@@ -50,14 +52,14 @@ jobs:
           allowed-endpoints: >
             github.com:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             raw.githubusercontent.com:443
             api.github.com:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
-
+          python-version-file: .python-version
       # Re-render the three output files from the committed opinions.json. Pure standard
       # library, no API keys and no network, so this is cheap and safe to run often.
       # render() is deterministic: on a repo whose pages already match opinions.json this
