@@ -1,8 +1,25 @@
 {
   "area": "premises",
   "label": "premises",
-  "count": 15,
+  "count": 16,
   "opinions": [
+    {
+      "cluster_id": 10935349,
+      "name": "Patel v. Brim",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-07-27",
+      "disposition": "affirmed",
+      "areas": [
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10935349/vansh-patel-v-richard-t-brim-iii/",
+      "synopsis": "Plaintiffs sued a farm owner for negligence and under the Georgia Dram Shop Act after an underage guest became intoxicated at a graduation party on the property and then crashed a vehicle off the premises, injuring a passenger. Plaintiffs conceded the owner did not sell, furnish, or serve the alcohol, which underage attendees brought themselves, but argued liability should attach because he knew or should have known of the underage drinking and took no steps to prevent it or to stop intoxicated guests from driving. The Court of Appeals held that OCGA 51-1-40 is the exclusive remedy for claims against a third person arising from an intoxicated person's acts, that subsection (b) reaches only one who furnishes the alcohol itself and not one who merely furnishes the premises where alcohol is consumed, and that because the Act is in derogation of the common law it cannot be extended beyond its plain terms. The trial court's dismissal under OCGA 9-11-12(b)(6) was affirmed.",
+      "why": "The decision reaffirms that a premises owner who does not sell, furnish, or serve alcohol has no exposure under the Dram Shop Act, and that the Act displaces common-law theories such as failure to supervise minors or failure to prevent an intoxicated guest from driving.",
+      "dockets": [
+        "A26A1087"
+      ]
+    },
     {
       "cluster_id": 10932338,
       "name": "Christie v. Publix Super Markets, Inc.",
