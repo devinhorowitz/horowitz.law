@@ -1,12 +1,28 @@
 name: Link check
 
+# Two-strike link rot. A link that fails once is NOT reported: it is recorded as a suspect
+# in link_suspects.json with a timestamp. At least 24 hours later lychee re-checks that URL
+# alone, and only a link that fails BOTH times opens an issue.
+#
+# Why: the crawl's false positives are almost all transient -- the Georgia General Assembly
+# site timing out, CourtListener 5xx-ing mid-deploy, a court site rate-limiting the runner.
+# Filing on first sight turned each of those into a tracking issue that sat open on an
+# unattended deployment until someone read it and closed it by hand, so the backlog filled
+# with blips while genuine rot -- the thing that persists -- was indistinguishable in the
+# pile. Waiting a day costs nothing: rot does not heal, and a link that is still dead
+# tomorrow is exactly the one worth an issue.
+#
+#   Monday 07:00  full crawl -> record suspects (files nothing)
+#   daily  08:00  re-check suspects >=24h old -> open/update/close the issue
+# The Monday 08:00 confirm is a deliberate no-op: nothing recorded an hour earlier is due.
 on:
   schedule:
-    - cron: '0 7 * * 1'   # weekly, Monday 07:00 UTC; gentle on CourtListener, catches link rot
+    - cron: '0 7 * * 1'   # weekly full crawl; gentle on CourtListener, catches link rot
+    - cron: '0 8 * * *'   # daily confirmation pass over recorded suspects only
   workflow_dispatch: {}
 
 permissions:
-  contents: read
+  contents: write        # commits link_suspects.json, the 24h clock
   issues: write          # opens or updates a tracking issue when links break
 
 concurrency:
@@ -16,15 +32,39 @@ concurrency:
 jobs:
   links:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
+      # audit, not block: the whole job's purpose is reaching arbitrary third-party URLs
+      # found in the site's HTML, so an endpoint allowlist cannot be written in advance.
       - name: Harden the runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:
           egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+
+      # The full crawl runs on the weekly cron and on a manual dispatch. The daily cron
+      # skips straight to confirmation, so the daily pass costs a handful of requests
+      # against the suspects rather than re-crawling 2,400 links.
+      - name: Crawl?
+        id: mode
+        env:
+          # Interpolated into env, never into the script body: a ${{ }} expression expanded
+          # inside a run: block is textual substitution before bash ever sees it, so the
+          # value becomes shell source. As $SCHEDULE it is only ever data.
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          if [ "$SCHEDULE" = "0 8 * * *" ]; then
+            echo "crawl=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "crawl=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Lychee
         id: lychee
+        if: steps.mode.outputs.crawl == 'true'
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
           args: >-
@@ -35,23 +75,113 @@ jobs:
             --base-url https://horowitz.law
             --accept 200,202,206,403,405,429,999
             './**/*.html'
-          fail: false        # report via issue, do not fail the run
+          format: json
+          output: ./lychee/out.json
+          fail: false        # record, never fail the run
           # --base-url resolves root-relative internal links (/opinions, /o/*, /fonts/*)
           #   against the live site, where Cloudflare's .html-stripping makes them resolve.
           # accept codes are alive-but-non-200 bot responses, not rot:
           #   202 CourtListener async render, 403/405 court-site bot blocks, 999 LinkedIn.
           #   404/410/5xx/timeout/DNS still flag, so genuine rot is still caught.
-          # --max-retries/--retry-wait-time: a court site or CourtListener that briefly 5xx's or
-          #   times out is retried (3 attempts, 5s apart) before it counts as rot. Unattended, this
-          #   is the main false-positive source -- one transient blip would otherwise file a broken-
-          #   links issue for a link that is actually fine. Real rot fails all retries and still flags.
-      # Reuse the one open link-rot issue instead of filing a fresh one every Monday: unattended,
-      # a weekly cron would otherwise stack duplicate issues for the same unfixed broken link. Look
-      # up the existing open issue by exact title and hand its number to create-issue-from-file,
-      # which updates that issue (fresh body) when issue-number is set and creates one when it isn't.
+          #   The 24h re-check below runs the same binary with the same flags, so there is
+          #   no second opinion to keep in sync with this list.
+          # --max-retries/--retry-wait-time: the first line of defense against a blip. The
+          #   24h re-check is the second, for the blips that outlast three retries.
+
+      # Record, do not report. Merges this crawl's failures into link_suspects.json (new
+      # URLs get a clock, repeats keep theirs) and drops suspects the crawl now finds
+      # healthy -- those never become an issue and leave no trace but the git history.
+      - name: Record suspects
+        id: record
+        if: steps.mode.outputs.crawl == 'true'
+        env:
+          LYCHEE_EXIT: ${{ steps.lychee.outputs.exit_code }}
+        run: |
+          out=$(python scripts/link_suspects.py record \
+                  --report ./lychee/out.json \
+                  --exit-code "$LYCHEE_EXIT")
+          echo "$out"
+          echo "$out" | grep -q '^parser_ok=false$' && echo "parser_ok=false" >> "$GITHUB_OUTPUT" || true
+
+      # Safety valve. link_suspects.py prints parser_ok=false when lychee reported problems
+      # but nothing could be parsed out of its JSON -- i.e. the report shape changed under
+      # us. Silently recording nothing would turn "two strikes" into "never file an issue",
+      # so fall back to the old behavior and say why, loudly, in the issue itself.
+      - name: Report directly (lychee report unparseable)
+        if: steps.record.outputs.parser_ok == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SERVER_URL: ${{ github.server_url }}
+          REPO_NAME: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          run_url="$SERVER_URL/$REPO_NAME/actions/runs/$RUN_ID"
+          body="The link crawl reported failures, but scripts/link_suspects.py could not parse lychee's JSON report, so the 24-hour confirmation could not run. This is a TOOLING problem, not link rot: treat it as the two-strike rule being offline until the parser is fixed. ${run_url}"
+          title="Link checker found broken links"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" --label automated --label link-rot
+          fi
+
+      # Strike two, run by lychee itself over the suspect list -- same binary, same flags,
+      # same accepted codes as the crawl. A hand-rolled second checker would have to imitate
+      # all of that, and any drift would "confirm" links the crawl was happy with.
+      - name: List the suspects due for re-check
+        id: due
+        run: |
+          out=$(python scripts/link_suspects.py due --out ./due.txt)
+          echo "$out"
+          echo "$out" | grep '^due_count=' >> "$GITHUB_OUTPUT"
+
+      - name: Re-check the due suspects
+        id: recheck
+        if: steps.due.outputs.due_count != '0'
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: >-
+            --no-progress
+            --max-concurrency 4
+            --max-retries 3
+            --retry-wait-time 5
+            --accept 200,202,206,403,405,429,999
+            ./due.txt
+          format: json
+          output: ./lychee/recheck.json
+          fail: false
+          # No --base-url: due.txt holds absolute URLs already resolved by the crawl.
+
+      # With nothing due there is no report, and confirm settles nothing -- which is the
+      # correct outcome, not an error: every suspect is still inside its 24h window.
+      - name: Confirm suspects
+        id: confirm
+        env:
+          DUE_COUNT: ${{ steps.due.outputs.due_count }}
+        run: |
+          report=""
+          if [ "$DUE_COUNT" != "0" ]; then report="./lychee/recheck.json"; fi
+          out=$(python scripts/link_suspects.py confirm --report "$report" --body ./link_body.md)
+          echo "$out"
+          echo "$out" | grep '^confirmed=' >> "$GITHUB_OUTPUT"
+
+      - name: Persist the suspect clock
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain -- link_suspects.json)" ]; then
+            git add link_suspects.json
+            git commit -m "links: update the link-rot suspect clock [skip ci]"
+            bash scripts/push_main.sh
+          else
+            echo "no suspect changes to commit"
+          fi
+
+      # Reuse the one open issue rather than filing a fresh one each time: unattended, a
+      # daily cron would otherwise stack duplicates for the same unfixed link.
       - name: Find an existing link-rot issue
         id: existing
-        if: steps.lychee.outputs.exit_code != 0
+        if: steps.confirm.outputs.confirmed != '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -59,24 +189,25 @@ jobs:
           num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
           echo "number=$num" >> "$GITHUB_OUTPUT"
       - name: Open or update the broken-links issue
-        if: steps.lychee.outputs.exit_code != 0
+        if: steps.confirm.outputs.confirmed != '0'
         uses: peter-evans/create-issue-from-file@fca9117c27cdc29c6c4db3b86c48e4115a786710 # v6.0.0
         with:
           title: Link checker found broken links
-          content-filepath: ./lychee/out.md
+          content-filepath: ./link_body.md
           labels: automated, link-rot
           issue-number: ${{ steps.existing.outputs.number }}
-      # Symmetric with the open step: when the weekly check comes back clean (exit_code 0, no broken
-      # links after the retries added above), close the tracking issue so a link that was rotten and
-      # is now fixed -- or was only transiently down -- does not leave a stale issue open on an
-      # unattended deployment. No-op when none is open; best-effort so a gh hiccup never fails the run.
-      - name: Close the link-rot issue when the check is clean
-        if: steps.lychee.outputs.exit_code == 0
+
+      # Symmetric with the open step: a confirmed-dead link that comes back -- fixed, or a
+      # long outage that finally ended -- drops out of the suspect file on its next
+      # re-check, and with nothing left confirmed the issue closes itself. No-op when none
+      # is open; best-effort so a gh hiccup never fails the run.
+      - name: Close the link-rot issue when nothing is confirmed
+        if: steps.confirm.outputs.confirmed == '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           title="Link checker found broken links"
           for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number,title --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
-            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: the weekly link check found no broken links. Closing automatically." || true
+            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: no link is still failing 24 hours after it was first seen failing. Closing automatically." || true
             gh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
           done
