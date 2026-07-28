@@ -1,8 +1,8 @@
 name: Link check
 
 # Two-strike link rot. A link that fails once is NOT reported: it is recorded as a suspect
-# in link_suspects.json with a timestamp. At least 24 hours later a second, independent
-# check re-tests that URL alone, and only a link that fails BOTH times opens an issue.
+# in link_suspects.json with a timestamp. At least 24 hours later lychee re-checks that URL
+# alone, and only a link that fails BOTH times opens an issue.
 #
 # Why: the crawl's false positives are almost all transient -- the Georgia General Assembly
 # site timing out, CourtListener 5xx-ing mid-deploy, a court site rate-limiting the runner.
@@ -78,8 +78,8 @@ jobs:
           # accept codes are alive-but-non-200 bot responses, not rot:
           #   202 CourtListener async render, 403/405 court-site bot blocks, 999 LinkedIn.
           #   404/410/5xx/timeout/DNS still flag, so genuine rot is still caught.
-          #   scripts/link_suspects.py mirrors this list and test_link_suspects.py asserts
-          #   the two agree -- a re-check stricter than the crawl would confirm live links.
+          #   The 24h re-check below runs the same binary with the same flags, so there is
+          #   no second opinion to keep in sync with this list.
           # --max-retries/--retry-wait-time: the first line of defense against a blip. The
           #   24h re-check is the second, for the blips that outlast three retries.
 
@@ -115,12 +115,41 @@ jobs:
             gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" --label automated --label link-rot
           fi
 
-      # Strike two. Re-checks only the suspects that have been failing for 24h or more,
-      # one URL at a time, with the same accepted codes and retry budget the crawl uses.
+      # Strike two, run by lychee itself over the suspect list -- same binary, same flags,
+      # same accepted codes as the crawl. A hand-rolled second checker would have to imitate
+      # all of that, and any drift would "confirm" links the crawl was happy with.
+      - name: List the suspects due for re-check
+        id: due
+        run: |
+          out=$(python scripts/link_suspects.py due --out ./due.txt)
+          echo "$out"
+          echo "$out" | grep '^due_count=' >> "$GITHUB_OUTPUT"
+
+      - name: Re-check the due suspects
+        id: recheck
+        if: steps.due.outputs.due_count != '0'
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: >-
+            --no-progress
+            --max-concurrency 4
+            --max-retries 3
+            --retry-wait-time 5
+            --accept 200,202,206,403,405,429,999
+            ./due.txt
+          format: json
+          output: ./lychee/recheck.json
+          fail: false
+          # No --base-url: due.txt holds absolute URLs already resolved by the crawl.
+
+      # With nothing due there is no report, and confirm settles nothing -- which is the
+      # correct outcome, not an error: every suspect is still inside its 24h window.
       - name: Confirm suspects
         id: confirm
         run: |
-          out=$(python scripts/link_suspects.py confirm --body ./link_body.md)
+          report=""
+          if [ "${{ steps.due.outputs.due_count }}" != "0" ]; then report="./lychee/recheck.json"; fi
+          out=$(python scripts/link_suspects.py confirm --report "$report" --body ./link_body.md)
           echo "$out"
           echo "$out" | grep '^confirmed=' >> "$GITHUB_OUTPUT"
 

@@ -101,18 +101,13 @@ def test_confirm():
     t0 = 1000.0
     state = ls.record({"suspects": {}}, [fail("https://dead.test"), fail("https://blip.test")], t0)[0]
 
-    calls = []
-
-    def checker(url):
-        calls.append(url)
-        return (False, "HTTP 404") if url == "https://dead.test" else (True, "HTTP 200")
-
-    # Too early: the re-check must not run at all, or the 24h rule is decoration.
-    s_early, conf_early, rec_early = ls.confirm(state, t0 + 3600, checker=checker)
-    check("nothing is re-checked before 24h", calls == [] and conf_early == [] and rec_early == [])
+    # Too early: nothing is settled either way, or the 24h rule is decoration. Note the
+    # re-check report is IGNORED for a suspect that is not due yet -- even a failing one.
+    s_early, conf_early, rec_early = ls.confirm(state, t0 + 3600, ["https://dead.test"])
+    check("nothing is settled before 24h", conf_early == [] and rec_early == [])
     check("and no suspect is lost by looking early", len(s_early["suspects"]) == 2)
 
-    s, conf, rec = ls.confirm(state, t0 + DAY, checker=checker)
+    s, conf, rec = ls.confirm(state, t0 + DAY, ["https://dead.test"])
     check("a URL still failing after 24h is confirmed", conf == ["https://dead.test"])
     check("a URL that recovered is dropped, not reported", rec == ["https://blip.test"])
     check("the recovered one leaves the state", "https://blip.test" not in s["suspects"])
@@ -121,55 +116,15 @@ def test_confirm():
     check("and is stamped confirmed", s["suspects"]["https://dead.test"].get("confirmed_at") == t0 + DAY)
 
     # A confirmed link that later comes back must clear itself.
-    s2, conf2, rec2 = ls.confirm(s, t0 + 2 * DAY, checker=lambda u: (True, "HTTP 200"))
+    s2, conf2, rec2 = ls.confirm(s, t0 + 2 * DAY, [])
     check("a confirmed link that recovers is dropped", rec2 == ["https://dead.test"] and conf2 == [])
     check("leaving nothing to report", s2["suspects"] == {})
 
 
-# --- the URL re-check itself ---------------------------------------------
-def test_check_url():
-    LIVE = "https://u.test/x"      # a real scheme: safe_url now refuses bare placeholders
-    def opener(codes):
-        seq = list(codes)
-        def _o(url, method, timeout):
-            v = seq.pop(0) if seq else 200
-            if isinstance(v, Exception):
-                raise v
-            return v
-        return _o
-
-    ok, d = ls.check_url(LIVE, opener=opener([200]), sleep=lambda s: None)
-    check("200 is alive", ok, d)
-    for code in ls.ACCEPT_CODES:
-        ok, _ = ls.check_url(LIVE, opener=opener([code]), sleep=lambda s: None)
-        check("accepted code %s counts as alive (matches the crawl)" % code, ok)
-    ok, d = ls.check_url(LIVE, opener=opener([301]), sleep=lambda s: None)
-    check("a redirect is alive", ok, d)
-    ok, d = ls.check_url(LIVE, opener=opener([404, 404, 404, 404, 404, 404]), sleep=lambda s: None)
-    check("404 is dead", not ok and "404" in d, d)
-    ok, d = ls.check_url(LIVE, opener=opener([TimeoutError("slow")] * 8), sleep=lambda s: None)
-    check("a timeout is dead, and is named", not ok and "Timeout" in d, d)
-
-    # HEAD-hostile sites are common; refusing HEAD must not read as rot.
-    ok, d = ls.check_url(LIVE, opener=opener([405, 200]), sleep=lambda s: None)
-    check("a HEAD-refusing site falls back to GET", ok, d)
-
-    # The blip: fails twice, answers on the third attempt. The crawl retries 3x and so must
-    # this -- one request per attempt, since a 500 is not a method refusal worth a GET retry.
-    ok, d = ls.check_url(LIVE, opener=opener([500, 500, 200]), tries=3, sleep=lambda s: None)
-    check("a transient failure is retried, not called dead", ok, d)
-    ok, d = ls.check_url(LIVE, opener=opener([500, 500, 500, 200]), tries=3, sleep=lambda s: None)
-    check("but the retries stop at the budget rather than trying forever", not ok, d)
-
-    waits = []
-    ls.check_url(LIVE, opener=opener([404] * 12), tries=3, wait=5, sleep=waits.append)
-    check("retries are bounded by the try count", len(waits) == 2, str(waits))
-
-
 # --- the issue body -------------------------------------------------------
 def test_safe_url():
-    """urlopen honours whatever scheme it is handed. The URLs here come from a crawl report
-    and a state file, so file:// would turn a link re-check into a local file read."""
+    """Only http(s) is re-checkable. A mailto:, tel:, or file: entry that became a suspect
+    could never be confirmed or cleared, so it would sit in the state forever."""
     for good in ("https://a.test/x", "http://a.test", "https://a.test:8443/p?q=1#f"):
         check("http(s) URL is fetchable: %s" % good, ls.safe_url(good)[0])
     for bad in ("file:///etc/passwd", "file://localhost/etc/passwd", "mailto:a@b.test",
@@ -181,21 +136,7 @@ def test_safe_url():
     check("a URL with embedded credentials is refused (the status lands in a public issue)",
           not ok and "credential" in why, why)
 
-    # The sink must refuse on its own, not merely because a caller checked first.
-    hit = []
-    ok, why = ls.check_url("file:///etc/passwd",
-                           opener=lambda u, m, t: hit.append(u) or 200, sleep=lambda s: None)
-    check("check_url refuses a file: URL without opening it", not ok and hit == [], str(hit))
-    try:
-        ls._urlopen("file:///etc/passwd", "HEAD", 1)
-        raised = False
-    except ValueError:
-        raised = True
-    except Exception:
-        raised = False
-    check("_urlopen refuses a file: URL even when called directly", raised)
-
-    # And such a URL must never become a suspect in the first place.
+    # Such a URL must never become a suspect: nothing downstream could confirm or clear it.
     got = ls.parse_lychee({"fail_map": {"p.html": [
         {"url": "file:///etc/passwd"}, {"url": "mailto:a@b.test"}, {"url": "https://real.test"}]}})
     check("only http(s) failures become suspects",
@@ -205,7 +146,7 @@ def test_safe_url():
 def test_issue_body():
     t0 = 1000.0
     state = ls.record({"suspects": {}}, [fail("https://dead.test", "404", "public/o/1.html")], t0)[0]
-    state, conf, _ = ls.confirm(state, t0 + 2 * DAY, checker=lambda u: (False, "HTTP 404"))
+    state, conf, _ = ls.confirm(state, t0 + 2 * DAY, ["https://dead.test"])
     body = ls.issue_body(state, conf, t0 + 2 * DAY)
     check("the body names the URL", "https://dead.test" in body)
     check("it says how long it has been failing", "48h ago" in body or "2d ago" in body, body)
@@ -214,21 +155,46 @@ def test_issue_body():
           "24 hours" in body and "recovered" in body)
 
 
-# --- the re-check must not be stricter than the crawl --------------------
-def test_accept_codes_match_the_workflow():
-    """A re-check that rejects what the crawl accepts would 'confirm' healthy links. The
-    two lists live in different languages, so assert rather than trust."""
-    path = os.path.join(os.path.dirname(HERE), ".github", "workflows", "links.yml")
-    text = open(path, encoding="utf-8").read()
-    marker = "--accept "
-    i = text.find(marker)
-    check("the workflow still passes --accept to lychee", i >= 0)
-    if i < 0:
-        return
-    listed = text[i + len(marker):].split()[0].strip()
-    codes = tuple(int(c) for c in listed.split(",") if c.strip().isdigit())
-    check("the re-check accepts exactly what the crawl accepts",
-          codes == ls.ACCEPT_CODES, "workflow=%s module=%s" % (str(codes), str(ls.ACCEPT_CODES)))
+# --- the CLI handoff to lychee -------------------------------------------
+def test_cli_due_and_confirm():
+    """`due` hands lychee a URL list; `confirm` reads lychee's verdict back. The failure
+    that matters is an unreadable verdict: treating that as "everything passed" would drop
+    real rot on a hiccup, so it must confirm nothing and leave every clock running."""
+    import subprocess
+    with tempfile.TemporaryDirectory() as tmp:
+        st = os.path.join(tmp, "s.json")
+        lst = os.path.join(tmp, "due.txt")
+        old = ls.record({"suspects": {}}, [fail("https://dead.test")], 1000.0)[0]
+        old["suspects"]["https://dead.test"]["first_failed"] = 0.0    # long overdue
+        ls.save_state(old, st)
+
+        def run(*args):
+            return subprocess.run([sys.executable, os.path.join(HERE, "link_suspects.py")] + list(args),
+                                  capture_output=True, text=True)
+
+        r = run("due", "--state", st, "--out", lst)
+        check("due exits 0", r.returncode == 0, r.stderr[-200:])
+        check("due writes the URL list lychee will read",
+              open(lst).read().strip() == "https://dead.test", open(lst).read())
+        check("and reports the count for the workflow", "due_count=1" in r.stdout, r.stdout)
+
+        r = run("confirm", "--state", st, "--report", os.path.join(tmp, "nope.json"))
+        check("an unreadable re-check report confirms nothing", "confirmed=0" in r.stdout, r.stdout)
+        check("and does not silently drop the suspect",
+              "https://dead.test" in ls.load_state(st)["suspects"])
+
+        rep = os.path.join(tmp, "re.json")
+        json.dump({"fail_map": {"due.txt": [{"url": "https://dead.test", "status": "404"}]}},
+                  open(rep, "w"))
+        body = os.path.join(tmp, "b.md")
+        r = run("confirm", "--state", st, "--report", rep, "--body", body)
+        check("a failing re-check confirms the suspect", "confirmed=1" in r.stdout, r.stdout)
+        check("and writes the issue body", os.path.exists(body) and "https://dead.test" in open(body).read())
+
+        json.dump({"total": 1, "successful": 1}, open(rep, "w"))
+        r = run("confirm", "--state", st, "--report", rep)
+        check("a clean re-check clears it instead", "confirmed=0" in r.stdout, r.stdout)
+        check("and removes it from the state", ls.load_state(st)["suspects"] == {})
 
 
 # --- state file on disk ---------------------------------------------------
@@ -266,10 +232,9 @@ def main():
     test_record()
     test_due_window()
     test_confirm()
-    test_check_url()
     test_safe_url()
     test_issue_body()
-    test_accept_codes_match_the_workflow()
+    test_cli_due_and_confirm()
     test_state_roundtrip()
     test_committed_state_is_valid()
     if FAILS:

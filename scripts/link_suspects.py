@@ -21,20 +21,27 @@ went bad.
 Modes:
   record   read a lychee JSON report, merge its failures into the suspect file, and drop
            suspects the crawl now finds healthy. Files nothing.
-  confirm  re-check every suspect old enough to confirm; write an issue body for those
-           still failing and drop those that recovered. Exit 0 always; the workflow reads
-           the written files to decide whether to open, update, or close the issue.
+  due      write the suspects old enough to confirm, one URL per line, for lychee to re-check.
+  confirm  settle those suspects against lychee's re-check report: still failing becomes an
+           issue body, passing is dropped. Exit 0 always; the workflow reads the written
+           files to decide whether to open, update, or close the issue.
+
+The re-check is run by lychee over the `due` list, not by this module. That is deliberate:
+a hand-rolled HTTP client has to imitate the crawl's accepted status codes, retry budget,
+and HEAD/GET behaviour, and any drift between the two would "confirm" links the crawl was
+perfectly happy with. Using the same binary on a shorter input list removes the second
+opinion entirely -- and with it a URL-fetching sink that took its target from a state file.
 
   python scripts/link_suspects.py record  --report lychee/out.json
-  python scripts/link_suspects.py confirm --body /tmp/body.md
+  python scripts/link_suspects.py due     --out suspects.txt
+  python scripts/link_suspects.py confirm --report lychee/recheck.json --body body.md
 """
 import argparse
 import json
 import os
 import sys
 import time
-import urllib.error
-import urllib.request
+from urllib.parse import urlsplit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import safeio  # noqa: E402  (sys.path shim must run first)
@@ -42,17 +49,7 @@ import safeio  # noqa: E402  (sys.path shim must run first)
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE_PATH = os.path.join(REPO, "link_suspects.json")
 
-# Alive-but-non-200 responses that are not rot, mirroring the --accept list the crawl passes
-# to lychee: 202 CourtListener async render, 403/405 court-site bot blocks, 429 rate limit,
-# 999 LinkedIn. test_link_suspects.py asserts this stays identical to the workflow's list --
-# a re-check stricter than the crawl would "confirm" links the crawl was happy with.
-ACCEPT_CODES = (200, 202, 206, 403, 405, 429, 999)
-
 CONFIRM_AFTER_SEC = int(os.environ.get("LINK_CONFIRM_AFTER_SEC", str(24 * 3600)))
-RECHECK_TRIES = int(os.environ.get("LINK_RECHECK_TRIES", "3"))     # same 3 attempts the crawl makes
-RECHECK_WAIT_SEC = float(os.environ.get("LINK_RECHECK_WAIT_SEC", "5"))
-RECHECK_TIMEOUT_SEC = float(os.environ.get("LINK_RECHECK_TIMEOUT_SEC", "20"))
-UA = "horowitz.law-link-recheck/1.0 (+https://horowitz.law)"
 
 
 # --- state ----------------------------------------------------------------
@@ -150,19 +147,13 @@ def record(state, failures, now):
 
 # --- re-check -------------------------------------------------------------
 def safe_url(url):
-    """Is this a URL the re-check may fetch? Returns (ok, reason).
+    """Is this a URL the re-check can adjudicate? Returns (ok, reason).
 
-    The URLs here come out of a crawl report and a state file, not from a constant, and
-    urllib.request.urlopen honours whatever scheme it is given -- including file://, which
-    would turn "re-check a link" into "read a file off the runner and report whether it
-    exists". Nothing in the site's HTML is a file: link today (lychee excludes its 3 mailto:
-    and 1 tel: links, and there are no others), so this costs no coverage; it is the sink
-    guard that makes that stay true if the crawl config or the state file ever changes.
-
-    Embedded credentials are refused too: a re-check is logged and its status ends up in a
-    public issue body, so a http://user:pass@host URL would publish the secret."""
+    Only http(s) is re-checkable: a mailto:, tel:, or file: entry cannot be confirmed or
+    cleared by a link check, so it must never become a suspect that sits in the state
+    forever. Embedded credentials are refused separately -- a suspect's URL is written into
+    a public issue body, so http://user:pw@host would publish the secret."""
     try:
-        from urllib.parse import urlsplit
         p = urlsplit(url)
     except Exception as e:
         return False, "unparseable URL (%s)" % type(e).__name__
@@ -175,80 +166,39 @@ def safe_url(url):
     return True, ""
 
 
-def check_url(url, opener=None, tries=None, wait=None, timeout=None, sleep=time.sleep):
-    """Is this URL alive? Mirrors the crawl: same accepted codes, same 3 attempts.
-
-    A HEAD is tried first and a 4xx that looks like method refusal falls back to GET, since
-    plenty of sites reject HEAD outright. Returns (ok, detail)."""
-    allowed, why = safe_url(url)
-    if not allowed:
-        # Not "dead" -- unfetchable. Reported as-is rather than silently passing, so a URL
-        # the re-check cannot judge never masquerades as a confirmed-healthy link.
-        return False, why
-    tries = RECHECK_TRIES if tries is None else tries
-    wait = RECHECK_WAIT_SEC if wait is None else wait
-    timeout = RECHECK_TIMEOUT_SEC if timeout is None else timeout
-    opener = opener or _urlopen
-    last = ""
-    for attempt in range(max(1, tries)):
-        for method in ("HEAD", "GET"):
-            try:
-                code = opener(url, method, timeout)
-                if code in ACCEPT_CODES or 200 <= int(code) < 400:
-                    return True, "HTTP %s" % code
-                last = "HTTP %s" % code
-                # Only a method-refusal warrants the GET retry; a real 404 is a real 404.
-                if method == "HEAD" and int(code) in (400, 403, 405, 501):
-                    continue
-                break
-            except Exception as e:                      # network error, DNS, timeout, TLS
-                last = "%s: %s" % (type(e).__name__, str(e)[:120])
-                if method == "HEAD":
-                    continue
-                break
-        if attempt < max(1, tries) - 1:
-            sleep(wait)
-    return False, last or "no response"
-
-
-def _urlopen(url, method, timeout):
-    # Belt and braces with check_url's guard: this is the one function that actually opens a
-    # socket, so the scheme allowlist is re-asserted here rather than trusted from a caller.
-    allowed, why = safe_url(url)
-    if not allowed:
-        raise ValueError(why)
-    req = urllib.request.Request(url, method=method, headers={"User-Agent": UA})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.getcode()
-    except urllib.error.HTTPError as e:                 # a status IS an answer, not an error
-        return e.code
-
-
 def due(state, now, after=None):
     """Suspects first seen failing at least CONFIRM_AFTER_SEC ago -- the ones a re-check can
     actually confirm. A suspect younger than that is left alone; that wait is the point."""
     after = CONFIRM_AFTER_SEC if after is None else after
     return sorted(u for u, s in (state.get("suspects") or {}).items()
-                  if now - float(s.get("first_failed") or now) >= after)
+                  if now - _first(s, now) >= after)
 
 
-def confirm(state, now, checker=None, after=None):
-    """Re-check every due suspect. Returns (state, confirmed, recovered).
+def _first(suspect, default):
+    """A suspect's clock. Explicitly None-checked rather than `or default`: a first_failed of
+    0.0 is falsy but perfectly valid, and `or` would silently restart that suspect's 24h
+    every time it was read -- the one bug that makes a dead link never confirm."""
+    v = suspect.get("first_failed")
+    return float(default if v is None else v)
 
+
+def confirm(state, now, failed_urls, after=None):
+    """Settle every due suspect against a re-check the caller already ran.
+
+    `failed_urls` is the set of due URLs that failed again -- parsed from a second lychee
+    run over the suspects alone. Anything due and NOT in that set passed and is dropped.
     Confirmed suspects stay in the state so a later run can see them recover and close the
-    issue; recovered ones are dropped."""
-    checker = checker or (lambda u: check_url(u))
+    issue. Returns (state, confirmed, recovered)."""
+    failed = set(failed_urls or ())
     suspects = dict(state.get("suspects") or {})
     confirmed, recovered = [], []
     for url in due({"suspects": suspects}, now, after):
-        ok, detail = checker(url)
-        if ok:
+        if url not in failed:
             recovered.append(url)
             del suspects[url]
             continue
         s = dict(suspects[url])
-        s.update({"last_failed": now, "last_status": detail, "confirmed_at": now})
+        s.update({"last_failed": now, "confirmed_at": now})
         suspects[url] = s
         confirmed.append(url)
     return {"suspects": suspects}, confirmed, recovered
@@ -269,7 +219,7 @@ def issue_body(state, confirmed, now):
     lines.append("|---|---|---|---|")
     for url in confirmed:
         s = (state.get("suspects") or {}).get(url) or {}
-        first = float(s.get("first_failed") or now)
+        first = _first(s, now)
         lines.append("| %s | %s ago | %s | %s |"
                      % (url, _ago(now - first), s.get("first_status") or "?",
                         s.get("last_status") or "?"))
@@ -293,8 +243,12 @@ def main(argv=None):
     r.add_argument("--report", required=True, help="lychee --format json output")
     r.add_argument("--state", default=STATE_PATH)
     r.add_argument("--exit-code", default="0", help="lychee's exit code, for the parser check")
+    d = sub.add_parser("due")
+    d.add_argument("--state", default=STATE_PATH)
+    d.add_argument("--out", required=True, help="write the due URLs here, one per line, for lychee")
     c = sub.add_parser("confirm")
     c.add_argument("--state", default=STATE_PATH)
+    c.add_argument("--report", default="", help="lychee JSON from the re-check of the due URLs")
     c.add_argument("--body", default="", help="write the issue body here when anything is confirmed")
     a = p.parse_args(argv)
     now = time.time()
@@ -311,7 +265,7 @@ def main(argv=None):
         # Safety valve. If lychee says it found problems and this parser extracts none, the
         # report shape changed and every failure would be swallowed -- the two-strike rule
         # would silently become "never file an issue". Say so and let the workflow fall back
-        # to the old behavior rather than going quiet.
+        # to reporting directly rather than going quiet.
         if a.exit_code not in ("0", "") and not failures:
             print("::warning::link_suspects: lychee exited %s but no failures parsed; "
                   "report shape may have changed. Falling back to direct reporting." % a.exit_code)
@@ -328,9 +282,33 @@ def main(argv=None):
             print("  - recovered     %s" % u)
         return 0
 
+    if a.mode == "due":
+        urls = due(load_state(a.state), now)
+        _emit(a.out, "".join(u + "\n" for u in urls))
+        print("due: %d suspect(s) old enough to confirm" % len(urls))
+        for u in urls:
+            print("  ? re-checking   %s" % u)
+        print("due_count=%d" % len(urls))
+        return 0
+
+    # confirm. The re-check was run by lychee itself, over the `due` list -- the same tool,
+    # flags, and accept codes as the crawl, so there is no second opinion to keep in sync.
     state = load_state(a.state)
     pending = due(state, now)
-    state, confirmed, recovered = confirm(state, now)
+    failed = []
+    if a.report:
+        try:
+            with open(a.report, encoding="utf-8") as f:
+                failed = [f_["url"] for f_ in parse_lychee(json.load(f))]
+        except Exception as e:
+            # Fail SAFE, not silent: with no readable re-check, confirm nothing this round.
+            # A suspect keeps its clock and is re-checked tomorrow; the alternative -- treating
+            # an unreadable report as "everything passed" -- would drop real rot on a hiccup.
+            print("::warning::link_suspects: unreadable re-check report (%s); confirming "
+                  "nothing this round, suspects keep their clock" % e)
+            print("confirmed=0")
+            return 0
+    state, confirmed, recovered = confirm(state, now, failed)
     save_state(state, a.state)
     print("confirm: %d due, %d confirmed, %d recovered, %d still waiting out the 24h"
           % (len(pending), len(confirmed), len(recovered),
