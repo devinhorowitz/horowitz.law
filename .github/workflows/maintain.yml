@@ -192,7 +192,18 @@ jobs:
           # slice defers and the next daily run collects it, so nothing is lost.
           MAINTAIN_BATCH: ${{ vars.MAINTAIN_BATCH || '' }}
           OPINIONS_MAINT_BATCH_SEC: ${{ vars.OPINIONS_MAINT_BATCH_SEC || '1200' }}
-        run: python scripts/maintain.py
+        # Capture stdout as well as streaming it, so the failure step can put the ACTUAL
+        # finding in the issue body. maintain.py exits 1 to mean "a person should look" --
+        # a golden regression, a flagged card, a completeness gap -- and until now the issue
+        # said only "a finding or an error" plus a run URL, which meant every one of them
+        # required digging through a job log to learn what it found. Three were misread as
+        # transient crashes before anyone read one.
+        #
+        # pipefail is load-bearing: without it the pipeline reports tee's exit status, the
+        # step would SUCCEED on a real finding, and the issue would never be filed at all.
+        run: |
+          set -o pipefail
+          python scripts/maintain.py 2>&1 | tee ./maintain-out.txt
 
       # A one-glance record of the daily chore on the run page: keepalive, the court-registry
       # outcome (from the validate step's exit code), and that the golden cross-check ran.
@@ -229,12 +240,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          body="Opinions maintenance flagged a finding or hit an error. ${run_url}"
+          {
+            echo "Opinions maintenance flagged a finding or hit an error."
+            echo ""
+            echo "$run_url"
+            echo ""
+            echo "Last 100 lines of the run (a FAIL/GAP/FLAG line names what was found; a"
+            echo "traceback instead means it really was an error):"
+            echo ""
+            echo '```'
+            tail -n 100 ./maintain-out.txt 2>/dev/null || echo "(no output captured -- the step died before producing any)"
+            echo '```'
+          } > ./maintain-body.md
           num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Opinions maintenance findings' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
           if [ -n "$num" ]; then
-            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body-file ./maintain-body.md
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body "$body"
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body-file ./maintain-body.md
           fi
 
       # Symmetric with the step above, and with the two drift issues this workflow already
