@@ -33,13 +33,13 @@
     {
       "area": "expert",
       "label": "expert",
-      "count": 10,
+      "count": 11,
       "url": "https://horowitz.law/areas/expert.json"
     },
     {
       "area": "procedure",
       "label": "procedure",
-      "count": 59,
+      "count": 60,
       "url": "https://horowitz.law/areas/procedure.json"
     },
     {

@@ -2422,5 +2422,44 @@
         "why": "The opinion establishes that subsection (d) is purely an immunity provision and cannot be inverted to create liability based on a property owner's alleged implied consent to drinking on the premises."
       }
     ]
+  },
+  {
+    "cluster_id": 10935915,
+    "name": "Michael Davis v. Lockheed Martin Corporation",
+    "court": "ca11",
+    "division": null,
+    "date": "2026-07-28",
+    "dockets": [
+      "24-10080",
+      "24-10416"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "expert",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10935915/michael-davis-v-lockheed-martin-corporation/",
+    "synopsis": "Plaintiffs in two coordinated toxic-tort cases alleged that volatile organic compounds released from a manufacturing facility caused multiple sclerosis, Parkinson's, and other neurodegenerative diseases, and they offered two general-causation experts. The Eleventh Circuit affirmed exclusion of the first expert, holding that a district court does not abuse its discretion in finding a 'weight of the evidence' causation opinion unreliable where the expert failed to explain how he searched, sorted, and weighed the literature or ranked rival explanations, and separately failed to analyze the Bradford Hill factors in more than a conclusory sentence applied to a single study. Joining the First, Third, Sixth, and Seventh Circuits, the court held that an expert using the weight-of-the-evidence method must explain how he weighed the evidence, and that although the Bradford Hill factors are not always required, a court may require an expert who invokes them to address each in some depth. With no admissible general-causation testimony, summary judgment for the defendant was affirmed.",
+    "why": "The decision sets binding Circuit guidance on what a general-causation expert must show to survive Rule 702 review in toxic-tort litigation, specifically that the weight-of-the-evidence methodology must be explained rather than asserted and that a cursory Bradford Hill discussion can support exclusion.",
+    "precedential": "published",
+    "first_seen": "2026-07-28",
+    "law_applied": "federal",
+    "additional_holdings": [
+      {
+        "areas": [
+          "expert"
+        ],
+        "synopsis": "The court separately affirmed exclusion of the plaintiffs' second expert on two independent grounds. His general-causation opinion was unreliable because it merely adopted other experts' reports and 'the science' without explaining any methodology of his own, which the court characterized as the ipse dixit an expert may not substitute for analysis. His second opinion was not a valid background-risk assessment because it rested on a statistician's comparison of mortality rates in a zip code near the facility to rates in more distant areas, rather than comparing disease rates in exposed and unexposed populations, and neither expert knew the actual exposure levels of the compared groups.",
+        "why": "It clarifies that an expert cannot establish general causation by wholesale adoption of another expert's report, and it specifies that a background-risk methodology requires a comparison of disease rates between exposed and unexposed populations with known exposure levels, not a geographic proxy based on mortality data."
+      },
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "Addressing appellate jurisdiction, the court held the district court did not abuse its discretion in certifying under Federal Rule of Civil Procedure 54(b) a partial summary judgment that resolved all claims of a subset of plaintiffs in a multi-plaintiff case. The judgment was final as to those plaintiffs even though other plaintiffs' claims remained, and those remaining claims involved different illnesses unrelated to the general-causation evidence at issue. The court found no just reason for delay because the certified appeal raised the same issues, on a materially identical order, as a companion appeal, so requiring the plaintiffs to wait would force two identical appeals.",
+        "why": "It illustrates the standards for Rule 54(b) certification in multi-plaintiff mass-tort litigation, including that separability of the remaining claims and avoidance of duplicative appeals can support immediate review of a partial summary judgment."
+      }
+    ],
+    "official_url": "https://media.ca11.uscourts.gov/opinions/pub/files/202410080.pdf"
   }
 ]

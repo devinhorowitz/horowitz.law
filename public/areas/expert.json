@@ -1,8 +1,27 @@
 {
   "area": "expert",
   "label": "expert",
-  "count": 10,
+  "count": 11,
   "opinions": [
+    {
+      "cluster_id": 10935915,
+      "name": "Michael Davis v. Lockheed Martin Corporation",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2026-07-28",
+      "disposition": "affirmed",
+      "areas": [
+        "expert",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10935915/michael-davis-v-lockheed-martin-corporation/",
+      "synopsis": "Plaintiffs in two coordinated toxic-tort cases alleged that volatile organic compounds released from a manufacturing facility caused multiple sclerosis, Parkinson's, and other neurodegenerative diseases, and they offered two general-causation experts. The Eleventh Circuit affirmed exclusion of the first expert, holding that a district court does not abuse its discretion in finding a 'weight of the evidence' causation opinion unreliable where the expert failed to explain how he searched, sorted, and weighed the literature or ranked rival explanations, and separately failed to analyze the Bradford Hill factors in more than a conclusory sentence applied to a single study. Joining the First, Third, Sixth, and Seventh Circuits, the court held that an expert using the weight-of-the-evidence method must explain how he weighed the evidence, and that although the Bradford Hill factors are not always required, a court may require an expert who invokes them to address each in some depth. With no admissible general-causation testimony, summary judgment for the defendant was affirmed.",
+      "why": "The decision sets binding Circuit guidance on what a general-causation expert must show to survive Rule 702 review in toxic-tort litigation, specifically that the weight-of-the-evidence methodology must be explained rather than asserted and that a cursory Bradford Hill discussion can support exclusion.",
+      "dockets": [
+        "24-10080",
+        "24-10416"
+      ]
+    },
     {
       "cluster_id": 10933716,
       "name": "SFR Services, LLC, Wild Oak Bay Owners Association, Inc. v. American Coastal Insurance Company",
