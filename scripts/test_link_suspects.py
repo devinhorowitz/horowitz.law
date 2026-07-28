@@ -160,8 +160,11 @@ def test_cli_due_and_confirm():
     """`due` hands lychee a URL list; `confirm` reads lychee's verdict back. The failure
     that matters is an unreadable verdict: treating that as "everything passed" would drop
     real rot on a hiccup, so it must confirm nothing and leave every clock running."""
+    import shutil
     import subprocess
-    with tempfile.TemporaryDirectory() as tmp:
+    root = os.path.dirname(HERE)
+    tmp = tempfile.mkdtemp(prefix=".linktest-", dir=root)   # inside the repo: paths are confined
+    try:
         st = os.path.join(tmp, "s.json")
         lst = os.path.join(tmp, "due.txt")
         old = ls.record({"suspects": {}}, [fail("https://dead.test")], 1000.0)[0]
@@ -195,6 +198,18 @@ def test_cli_due_and_confirm():
         r = run("confirm", "--state", st, "--report", rep)
         check("a clean re-check clears it instead", "confirmed=0" in r.stdout, r.stdout)
         check("and removes it from the state", ls.load_state(st)["suspects"] == {})
+
+        # argv is this program's only untrusted-shaped input, and every value is a path.
+        r = run("due", "--state", st, "--out", "../../../tmp/escape.txt")
+        check("a path escaping the checkout is refused, not followed",
+              r.returncode != 0 and "outside the repository" in (r.stdout + r.stderr),
+              (r.stdout + r.stderr)[-160:])
+        r = run("due", "--state", st, "--out", "/etc/escape.txt")
+        check("an absolute path outside the checkout is refused too",
+              r.returncode != 0 and "outside the repository" in (r.stdout + r.stderr),
+              (r.stdout + r.stderr)[-160:])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 # --- state file on disk ---------------------------------------------------

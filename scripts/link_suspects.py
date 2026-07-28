@@ -231,6 +231,26 @@ def issue_body(state, confirmed, now):
 
 
 # --- CLI ------------------------------------------------------------------
+def _inside_repo(path, default=""):
+    """Resolve a caller-supplied path and confine it to the repository.
+
+    Every path this CLI touches is a file in the Actions workspace -- a lychee report, the
+    suspect state, a scratch list. None of them is ever outside the checkout, so the whole
+    range of paths worth accepting is "somewhere under REPO". Normalising first and then
+    checking containment means a value like ../../../etc/shadow, or an absolute path, is
+    refused rather than followed. Returns "" for an empty path, which callers treat as
+    "no file here".
+    """
+    raw = path or default
+    if not raw:
+        return ""
+    full = os.path.realpath(os.path.join(REPO, raw))
+    root = os.path.realpath(REPO)
+    if full != root and not full.startswith(root + os.sep):
+        raise SystemExit("link_suspects: refusing a path outside the repository: %r" % raw)
+    return full
+
+
 def _emit(path, text):
     if path:
         safeio.atomic_write_text(path, text)
@@ -252,6 +272,12 @@ def main(argv=None):
     c.add_argument("--body", default="", help="write the issue body here when anything is confirmed")
     a = p.parse_args(argv)
     now = time.time()
+    # argv is the only untrusted-shaped input this program has; confine it once, here, so no
+    # downstream open() or write is reached with a path that escaped the checkout.
+    a.state = _inside_repo(getattr(a, "state", ""), STATE_PATH)
+    for attr in ("report", "out", "body"):
+        if hasattr(a, attr):
+            setattr(a, attr, _inside_repo(getattr(a, attr)))
 
     if a.mode == "record":
         try:

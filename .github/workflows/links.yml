@@ -50,8 +50,13 @@ jobs:
       # against the suspects rather than re-crawling 2,400 links.
       - name: Crawl?
         id: mode
+        env:
+          # Interpolated into env, never into the script body: a ${{ }} expression expanded
+          # inside a run: block is textual substitution before bash ever sees it, so the
+          # value becomes shell source. As $SCHEDULE it is only ever data.
+          SCHEDULE: ${{ github.event.schedule }}
         run: |
-          if [ "${{ github.event.schedule }}" = "0 8 * * *" ]; then
+          if [ "$SCHEDULE" = "0 8 * * *" ]; then
             echo "crawl=false" >> "$GITHUB_OUTPUT"
           else
             echo "crawl=true" >> "$GITHUB_OUTPUT"
@@ -89,10 +94,12 @@ jobs:
       - name: Record suspects
         id: record
         if: steps.mode.outputs.crawl == 'true'
+        env:
+          LYCHEE_EXIT: ${{ steps.lychee.outputs.exit_code }}
         run: |
           out=$(python scripts/link_suspects.py record \
                   --report ./lychee/out.json \
-                  --exit-code "${{ steps.lychee.outputs.exit_code }}")
+                  --exit-code "$LYCHEE_EXIT")
           echo "$out"
           echo "$out" | grep -q '^parser_ok=false$' && echo "parser_ok=false" >> "$GITHUB_OUTPUT" || true
 
@@ -104,8 +111,11 @@ jobs:
         if: steps.record.outputs.parser_ok == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
+          SERVER_URL: ${{ github.server_url }}
+          REPO_NAME: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
         run: |
-          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          run_url="$SERVER_URL/$REPO_NAME/actions/runs/$RUN_ID"
           body="The link crawl reported failures, but scripts/link_suspects.py could not parse lychee's JSON report, so the 24-hour confirmation could not run. This is a TOOLING problem, not link rot: treat it as the two-strike rule being offline until the parser is fixed. ${run_url}"
           title="Link checker found broken links"
           num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
@@ -146,9 +156,11 @@ jobs:
       # correct outcome, not an error: every suspect is still inside its 24h window.
       - name: Confirm suspects
         id: confirm
+        env:
+          DUE_COUNT: ${{ steps.due.outputs.due_count }}
         run: |
           report=""
-          if [ "${{ steps.due.outputs.due_count }}" != "0" ]; then report="./lychee/recheck.json"; fi
+          if [ "$DUE_COUNT" != "0" ]; then report="./lychee/recheck.json"; fi
           out=$(python scripts/link_suspects.py confirm --report "$report" --body ./link_body.md)
           echo "$out"
           echo "$out" | grep '^confirmed=' >> "$GITHUB_OUTPUT"
