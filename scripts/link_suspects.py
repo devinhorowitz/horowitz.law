@@ -100,7 +100,10 @@ def parse_lychee(report):
                 if not isinstance(e, dict):
                     continue
                 url = (e.get("url") or e.get("uri") or "").strip()
-                if not url:
+                if not url or not safe_url(url)[0]:
+                    # Dropped at the door as well as at the sink: a mailto:, tel:, or file:
+                    # entry is not something a 24h HTTP re-check can adjudicate, so it must
+                    # not become a suspect that can never be confirmed or cleared.
                     continue
                 status = e.get("status")
                 if isinstance(status, dict):
@@ -146,11 +149,42 @@ def record(state, failures, now):
 
 
 # --- re-check -------------------------------------------------------------
+def safe_url(url):
+    """Is this a URL the re-check may fetch? Returns (ok, reason).
+
+    The URLs here come out of a crawl report and a state file, not from a constant, and
+    urllib.request.urlopen honours whatever scheme it is given -- including file://, which
+    would turn "re-check a link" into "read a file off the runner and report whether it
+    exists". Nothing in the site's HTML is a file: link today (lychee excludes its 3 mailto:
+    and 1 tel: links, and there are no others), so this costs no coverage; it is the sink
+    guard that makes that stay true if the crawl config or the state file ever changes.
+
+    Embedded credentials are refused too: a re-check is logged and its status ends up in a
+    public issue body, so a http://user:pass@host URL would publish the secret."""
+    try:
+        from urllib.parse import urlsplit
+        p = urlsplit(url)
+    except Exception as e:
+        return False, "unparseable URL (%s)" % type(e).__name__
+    if p.scheme not in ("http", "https"):
+        return False, "refused: scheme %r is not http(s)" % (p.scheme or "")
+    if not p.netloc:
+        return False, "refused: no host"
+    if "@" in p.netloc:
+        return False, "refused: URL carries embedded credentials"
+    return True, ""
+
+
 def check_url(url, opener=None, tries=None, wait=None, timeout=None, sleep=time.sleep):
     """Is this URL alive? Mirrors the crawl: same accepted codes, same 3 attempts.
 
     A HEAD is tried first and a 4xx that looks like method refusal falls back to GET, since
     plenty of sites reject HEAD outright. Returns (ok, detail)."""
+    allowed, why = safe_url(url)
+    if not allowed:
+        # Not "dead" -- unfetchable. Reported as-is rather than silently passing, so a URL
+        # the re-check cannot judge never masquerades as a confirmed-healthy link.
+        return False, why
     tries = RECHECK_TRIES if tries is None else tries
     wait = RECHECK_WAIT_SEC if wait is None else wait
     timeout = RECHECK_TIMEOUT_SEC if timeout is None else timeout
@@ -178,6 +212,11 @@ def check_url(url, opener=None, tries=None, wait=None, timeout=None, sleep=time.
 
 
 def _urlopen(url, method, timeout):
+    # Belt and braces with check_url's guard: this is the one function that actually opens a
+    # socket, so the scheme allowlist is re-asserted here rather than trusted from a caller.
+    allowed, why = safe_url(url)
+    if not allowed:
+        raise ValueError(why)
     req = urllib.request.Request(url, method=method, headers={"User-Agent": UA})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:

@@ -128,6 +128,7 @@ def test_confirm():
 
 # --- the URL re-check itself ---------------------------------------------
 def test_check_url():
+    LIVE = "https://u.test/x"      # a real scheme: safe_url now refuses bare placeholders
     def opener(codes):
         seq = list(codes)
         def _o(url, method, timeout):
@@ -137,35 +138,70 @@ def test_check_url():
             return v
         return _o
 
-    ok, d = ls.check_url("u", opener=opener([200]), sleep=lambda s: None)
+    ok, d = ls.check_url(LIVE, opener=opener([200]), sleep=lambda s: None)
     check("200 is alive", ok, d)
     for code in ls.ACCEPT_CODES:
-        ok, _ = ls.check_url("u", opener=opener([code]), sleep=lambda s: None)
+        ok, _ = ls.check_url(LIVE, opener=opener([code]), sleep=lambda s: None)
         check("accepted code %s counts as alive (matches the crawl)" % code, ok)
-    ok, d = ls.check_url("u", opener=opener([301]), sleep=lambda s: None)
+    ok, d = ls.check_url(LIVE, opener=opener([301]), sleep=lambda s: None)
     check("a redirect is alive", ok, d)
-    ok, d = ls.check_url("u", opener=opener([404, 404, 404, 404, 404, 404]), sleep=lambda s: None)
+    ok, d = ls.check_url(LIVE, opener=opener([404, 404, 404, 404, 404, 404]), sleep=lambda s: None)
     check("404 is dead", not ok and "404" in d, d)
-    ok, d = ls.check_url("u", opener=opener([TimeoutError("slow")] * 8), sleep=lambda s: None)
+    ok, d = ls.check_url(LIVE, opener=opener([TimeoutError("slow")] * 8), sleep=lambda s: None)
     check("a timeout is dead, and is named", not ok and "Timeout" in d, d)
 
     # HEAD-hostile sites are common; refusing HEAD must not read as rot.
-    ok, d = ls.check_url("u", opener=opener([405, 200]), sleep=lambda s: None)
+    ok, d = ls.check_url(LIVE, opener=opener([405, 200]), sleep=lambda s: None)
     check("a HEAD-refusing site falls back to GET", ok, d)
 
     # The blip: fails twice, answers on the third attempt. The crawl retries 3x and so must
     # this -- one request per attempt, since a 500 is not a method refusal worth a GET retry.
-    ok, d = ls.check_url("u", opener=opener([500, 500, 200]), tries=3, sleep=lambda s: None)
+    ok, d = ls.check_url(LIVE, opener=opener([500, 500, 200]), tries=3, sleep=lambda s: None)
     check("a transient failure is retried, not called dead", ok, d)
-    ok, d = ls.check_url("u", opener=opener([500, 500, 500, 200]), tries=3, sleep=lambda s: None)
+    ok, d = ls.check_url(LIVE, opener=opener([500, 500, 500, 200]), tries=3, sleep=lambda s: None)
     check("but the retries stop at the budget rather than trying forever", not ok, d)
 
     waits = []
-    ls.check_url("u", opener=opener([404] * 12), tries=3, wait=5, sleep=waits.append)
+    ls.check_url(LIVE, opener=opener([404] * 12), tries=3, wait=5, sleep=waits.append)
     check("retries are bounded by the try count", len(waits) == 2, str(waits))
 
 
 # --- the issue body -------------------------------------------------------
+def test_safe_url():
+    """urlopen honours whatever scheme it is handed. The URLs here come from a crawl report
+    and a state file, so file:// would turn a link re-check into a local file read."""
+    for good in ("https://a.test/x", "http://a.test", "https://a.test:8443/p?q=1#f"):
+        check("http(s) URL is fetchable: %s" % good, ls.safe_url(good)[0])
+    for bad in ("file:///etc/passwd", "file://localhost/etc/passwd", "mailto:a@b.test",
+                "tel:+15551234", "ftp://a.test/x", "javascript:alert(1)", "data:text/html,x",
+                "", "not a url", "https://", "//a.test/x"):
+        ok, why = ls.safe_url(bad)
+        check("refused: %r" % bad, not ok and why.startswith(("refused", "unparseable")), why)
+    ok, why = ls.safe_url("https://user:pw@a.test/x")
+    check("a URL with embedded credentials is refused (the status lands in a public issue)",
+          not ok and "credential" in why, why)
+
+    # The sink must refuse on its own, not merely because a caller checked first.
+    hit = []
+    ok, why = ls.check_url("file:///etc/passwd",
+                           opener=lambda u, m, t: hit.append(u) or 200, sleep=lambda s: None)
+    check("check_url refuses a file: URL without opening it", not ok and hit == [], str(hit))
+    try:
+        ls._urlopen("file:///etc/passwd", "HEAD", 1)
+        raised = False
+    except ValueError:
+        raised = True
+    except Exception:
+        raised = False
+    check("_urlopen refuses a file: URL even when called directly", raised)
+
+    # And such a URL must never become a suspect in the first place.
+    got = ls.parse_lychee({"fail_map": {"p.html": [
+        {"url": "file:///etc/passwd"}, {"url": "mailto:a@b.test"}, {"url": "https://real.test"}]}})
+    check("only http(s) failures become suspects",
+          [f["url"] for f in got] == ["https://real.test"], str(got))
+
+
 def test_issue_body():
     t0 = 1000.0
     state = ls.record({"suspects": {}}, [fail("https://dead.test", "404", "public/o/1.html")], t0)[0]
@@ -231,6 +267,7 @@ def main():
     test_due_window()
     test_confirm()
     test_check_url()
+    test_safe_url()
     test_issue_body()
     test_accept_codes_match_the_workflow()
     test_state_roundtrip()
