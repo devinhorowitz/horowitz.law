@@ -47,6 +47,14 @@ import golden_check    # the regression guard; reused so it tests what the funne
 # Knobs, all repo-variable overridable; the defaults are conservative.
 RESERVE   = int(os.environ.get("OPINIONS_MAINT_RESERVE", "50"))     # trailing-24h funnel cl_calls at or above which the CL re-validation is skipped
 SLICE     = int(os.environ.get("OPINIONS_MAINT_SLICE", "3"))        # published cards to re-validate per run
+# Printed on the way out when this run found something SUBSTANTIVE -- a golden regression, a
+# flagged card, a completeness gap -- as opposed to having crashed. Both exit nonzero, and the
+# workflow cannot otherwise tell them apart: a crash is transient and should stop mattering once
+# a later run is clean, while a finding is about a specific card and does NOT stop mattering,
+# because the next run re-validates a DIFFERENT rotating slice and would auto-close the issue
+# without anyone having looked. maintain.yml greps for this exact string; test_maintain.py
+# asserts the two agree.
+FINDING_MARKER = "MAINTENANCE_FINDING=1"
 FETCH_SEC = int(os.environ.get("OPINIONS_MAINT_FETCH_SEC", "180"))  # per-run wall-clock budget for the slice's fetches; a full window or 429 defers the rest
 # Route the slice's guard calls through the 50%-priced Batch API. ON by default: the guards are a
 # latency-tolerant daily trickle (SLICE=3 cards -> <=6 small Sonnet calls), so half price is a clear
@@ -331,7 +339,15 @@ def main():
     # Exit nonzero only when a person should look: a golden regression or a published-card
     # flag. A deferral or a budget skip is normal operation and exits clean. The workflow's
     # failure step opens or updates the maintenance issue.
-    sys.exit(1 if (gc_rc or flags or comp_issues) else 0)
+    #
+    # The marker distinguishes "found something" from "fell over". An uncaught exception exits
+    # nonzero WITHOUT printing it, so its absence on a failed run means the run really did
+    # break -- and that is the only case the workflow may auto-close later, since a crash is
+    # transient while a card flag survives until the card is dealt with.
+    substantive = bool(gc_rc or flags or comp_issues)
+    if substantive:
+        print(FINDING_MARKER)
+    sys.exit(1 if substantive else 0)
 
 
 if __name__ == "__main__":

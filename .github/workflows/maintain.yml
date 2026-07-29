@@ -252,9 +252,21 @@ jobs:
             tail -n 100 ./maintain-out.txt 2>/dev/null || echo "(no output captured -- the step died before producing any)"
             echo '```'
           } > ./maintain-body.md
+          # A run that FOUND something prints the marker; a run that CRASHED does not. Only the
+          # former gets the sticky label, and only the unlabelled kind is ever auto-closed --
+          # see "Close the findings issue on a healthy run" for why that distinction matters.
+          label=""
+          if grep -qx "MAINTENANCE_FINDING=1" ./maintain-out.txt 2>/dev/null; then
+            gh label create maintenance-finding --repo "$GITHUB_REPOSITORY" \
+              --color B60205 --description "A specific card or check, not a transient error; close by hand once addressed" --force || true
+            label="maintenance-finding"
+          fi
           num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Opinions maintenance findings' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
           if [ -n "$num" ]; then
             gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body-file ./maintain-body.md
+            [ -n "$label" ] && gh issue edit "$num" --repo "$GITHUB_REPOSITORY" --add-label "$label" || true
+          elif [ -n "$label" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body-file ./maintain-body.md --label "$label"
           else
             gh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body-file ./maintain-body.md
           fi
@@ -276,9 +288,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Auto-close ONLY issues without the maintenance-finding label. A clean run proves the
+          # transient thing (a credit lapse, a network blip) is over -- but it does NOT clear a
+          # card flag, because re-validation walks a rotating slice of 3 cards a day: today's run
+          # checked three DIFFERENT cards and says nothing about the one flagged yesterday. At 96
+          # cards that card is not revisited for roughly a month, so auto-closing on the next run
+          # would erase a real finding within a day of filing it. Those stay open for a person.
           title="Opinions maintenance findings"
-          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number,title \
-            --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
-            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: a later maintenance run completed cleanly. Closing automatically." || true
+          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number,title,labels \
+            --jq ".[] | select(.title==\"$title\") | select([.labels[].name] | index(\"maintenance-finding\") | not) | .number" 2>/dev/null || true); do
+            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: a later maintenance run completed cleanly, and this issue was a transient error rather than a finding about a specific card. Closing automatically." || true
             gh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
           done

@@ -138,6 +138,28 @@ def run_batch(label, results, *, raise_timeout=False, raise_error=False, text_st
           % (label, len(flags), checked, deferred, bstub.n_requests))
 
 
+def test_finding_marker_matches_the_workflow():
+    """maintain.py prints FINDING_MARKER when it FOUND something; an uncaught exception exits
+    nonzero WITHOUT it. maintain.yml greps for that exact string to decide whether the issue
+    gets the sticky maintenance-finding label -- and that label is the only thing stopping the
+    self-heal from auto-closing a card flag the next day, when re-validation walks a different
+    rotating slice and says nothing about the card that was flagged. If the two strings drift,
+    every finding silently becomes auto-closeable again, which is the bug this pair prevents."""
+    wf = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                      ".github", "workflows", "maintain.yml")
+    text = open(wf, encoding="utf-8").read()
+    marker = maintain.FINDING_MARKER
+    assert ('grep -qx "%s"' % marker) in text, \
+        "maintain.yml does not grep for maintain.FINDING_MARKER (%r)" % marker
+    assert "\n" not in marker and " " not in marker, \
+        "FINDING_MARKER must be one bare token for grep -qx to match a whole line: %r" % marker
+    assert 'index(\\"maintenance-finding\\") | not' in text, \
+        "the self-heal no longer filters out maintenance-finding-labelled issues"
+    assert "--label \"$label\"" in text, "the report step no longer applies the label"
+    print("  ok   finding marker and label wiring agree between maintain.py and maintain.yml")
+
+
+
 def main():
     print("maintain.revalidate wiring:")
     # Both guards clean: no flags, both cards checked, one fetch per card.
@@ -189,7 +211,9 @@ def main():
     run_batch("batch_timeout_defers", {}, raise_timeout=True,
               exp_flags=[], exp_checked=0, exp_deferred=2, exp_fetches=2, exp_requests=4)
 
-    print("\nALL TESTS PASSED (11 cases)")
+    test_finding_marker_matches_the_workflow()
+
+    print("\nALL TESTS PASSED (11 cases + marker wiring)")
     return 0
 
 
