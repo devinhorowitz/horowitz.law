@@ -1,8 +1,25 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 60,
+  "count": 61,
   "opinions": [
+    {
+      "cluster_id": 10936160,
+      "name": "The Town of Pine Hill, Alabama v. 3M Company",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2026-07-29",
+      "disposition": "vacated and remanded",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10936160/the-town-of-pine-hill-alabama-v-3m-company/",
+      "synopsis": "A municipal water provider sued a chemical manufacturer in Alabama state court on state-law negligence, wantonness, nuisance, and trespass theories for PFAS contamination of its raw water source, and the manufacturer removed under the federal officer removal statute, 28 U.S.C. section 1442(a)(1). The district court remanded, reasoning that the gravamen of the claims was the sale of PFAS products to private paper mills, conduct not undertaken under color of federal office. The Eleventh Circuit held that the first prong of the removal test was satisfied, reading its prior decision that section 1442(a)(1) reaches only current officers as addressed to removal of a state criminal prosecution and not as barring a contractor sued civilly for past conduct performed while assisting a federal superior. The court found the manufacturer's notice of removal sufficiently alleged that it acted under a federal officer in producing firefighting foam to detailed military specifications, and vacated the remand order.",
+      "why": "The decision clarifies that a company sued civilly for conduct performed years earlier while assisting a federal officer may still invoke federal officer removal, limiting the reach of the court's prior holding that the statute covers only current officers.",
+      "dockets": [
+        "25-10746"
+      ]
+    },
     {
       "cluster_id": 10935915,
       "name": "Michael Davis v. Lockheed Martin Corporation",

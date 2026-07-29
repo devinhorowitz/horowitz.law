@@ -2461,5 +2461,43 @@
       }
     ],
     "official_url": "https://media.ca11.uscourts.gov/opinions/pub/files/202410080.pdf"
+  },
+  {
+    "cluster_id": 10936160,
+    "name": "The Town of Pine Hill, Alabama v. 3M Company",
+    "court": "ca11",
+    "division": null,
+    "date": "2026-07-29",
+    "dockets": [
+      "25-10746"
+    ],
+    "disposition": "vacated and remanded",
+    "areas": [
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10936160/the-town-of-pine-hill-alabama-v-3m-company/",
+    "synopsis": "A municipal water provider sued a chemical manufacturer in Alabama state court on state-law negligence, wantonness, nuisance, and trespass theories for PFAS contamination of its raw water source, and the manufacturer removed under the federal officer removal statute, 28 U.S.C. section 1442(a)(1). The district court remanded, reasoning that the gravamen of the claims was the sale of PFAS products to private paper mills, conduct not undertaken under color of federal office. The Eleventh Circuit held that the first prong of the removal test was satisfied, reading its prior decision that section 1442(a)(1) reaches only current officers as addressed to removal of a state criminal prosecution and not as barring a contractor sued civilly for past conduct performed while assisting a federal superior. The court found the manufacturer's notice of removal sufficiently alleged that it acted under a federal officer in producing firefighting foam to detailed military specifications, and vacated the remand order.",
+    "why": "The decision clarifies that a company sued civilly for conduct performed years earlier while assisting a federal officer may still invoke federal officer removal, limiting the reach of the court's prior holding that the statute covers only current officers.",
+    "precedential": "published",
+    "first_seen": "2026-07-29",
+    "first_impression": true,
+    "law_applied": "federal",
+    "additional_holdings": [
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "On the second prong, the court held that the district court should have credited the removing defendant's theory of the case and identified the gravamen of the complaint as overall PFAS contamination of the river rather than only sales to paper mills. Addressing an issue it said it had not previously decided, the court adopted the First Circuit's framework distinguishing express disclaimers that fully eliminate any ground for federal officer removal from artful pleading, and held that a disclaimer requiring a state court to determine the nexus between the charged conduct and federal authority does not defeat removal. It concluded the plaintiff's disclaimer of relief for aqueous film forming foam contamination amounted to artful pleading because commingled contamination from a nearby air base was plausibly alleged.",
+        "why": "It establishes in the Eleventh Circuit that a plaintiff's express disclaimer of federally connected claims can sever the causal nexus for federal officer removal only if it wholly removes the federal question from the case, and that a disclaimer leaving a state court to sort out the federal nexus does not."
+      },
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "On the third prong, the court held that the notice of removal plausibly alleged a colorable government contractor defense under the Boyle elements, pointing to allegations of reasonably precise military specifications, inclusion on a Department of Defense qualified products list, and government knowledge of the relevant hazards. Because the challenge to removal was facial, the court limited its review to the complaint and the notice of removal and declined to consider a multidistrict litigation court's summary judgment ruling on the same defense. It emphasized that the defense need only be plausible and that its ultimate validity is not decided at the removal stage.",
+        "why": "It confirms that a facial challenge to a notice of removal is assessed on the complaint and notice alone and that a government contractor defense need only be plausible, not proven, to support federal officer removal."
+      }
+    ],
+    "official_url": "https://media.ca11.uscourts.gov/opinions/pub/files/202510746.pdf"
   }
 ]
