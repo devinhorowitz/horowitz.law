@@ -110,9 +110,10 @@ def test_confirm():
     s, conf, rec = ls.confirm(state, t0 + DAY, ["https://dead.test"])
     check("a URL still failing after 24h is confirmed", conf == ["https://dead.test"])
     check("a URL that recovered is dropped, not reported", rec == ["https://blip.test"])
-    check("the recovered one leaves the state", "https://blip.test" not in s["suspects"])
-    check("the confirmed one stays, so recovery can close the issue later",
-          "https://dead.test" in s["suspects"])
+    # Exact key set, not two membership probes: this also pins that nothing ELSE was left
+    # behind, and it reads as what it is -- a dict key lookup, not a URL substring test.
+    check("the state holds exactly the confirmed suspect; the recovered one is gone",
+          sorted(s["suspects"]) == ["https://dead.test"], str(sorted(s["suspects"])))
     check("and is stamped confirmed", s["suspects"]["https://dead.test"].get("confirmed_at") == t0 + DAY)
 
     # A confirmed link that later comes back must clear itself.
@@ -148,7 +149,8 @@ def test_issue_body():
     state = ls.record({"suspects": {}}, [fail("https://dead.test", "404", "public/o/1.html")], t0)[0]
     state, conf, _ = ls.confirm(state, t0 + 2 * DAY, ["https://dead.test"])
     body = ls.issue_body(state, conf, t0 + 2 * DAY)
-    check("the body names the URL", "https://dead.test" in body)
+    check("the body renders the URL as its own table cell",
+          any(ln.startswith("| https://dead.test |") for ln in body.splitlines()), body)
     check("it says how long it has been failing", "48h ago" in body or "2d ago" in body, body)
     check("it says where the link lives", "public/o/1.html" in body)
     check("it states the two-strike rule so the reader knows what it is not",
@@ -184,7 +186,8 @@ def test_cli_due_and_confirm():
         r = run("confirm", "--state", st, "--report", os.path.join(tmp, "nope.json"))
         check("an unreadable re-check report confirms nothing", "confirmed=0" in r.stdout, r.stdout)
         check("and does not silently drop the suspect",
-              "https://dead.test" in ls.load_state(st)["suspects"])
+              sorted(ls.load_state(st)["suspects"]) == ["https://dead.test"],
+              str(sorted(ls.load_state(st)["suspects"])))
 
         rep = os.path.join(tmp, "re.json")
         json.dump({"fail_map": {"due.txt": [{"url": "https://dead.test", "status": "404"}]}},
@@ -192,7 +195,10 @@ def test_cli_due_and_confirm():
         body = os.path.join(tmp, "b.md")
         r = run("confirm", "--state", st, "--report", rep, "--body", body)
         check("a failing re-check confirms the suspect", "confirmed=1" in r.stdout, r.stdout)
-        check("and writes the issue body", os.path.exists(body) and "https://dead.test" in open(body).read())
+        written = open(body).read() if os.path.exists(body) else ""
+        check("and writes an issue body naming the suspect in its own cell",
+              any(ln.startswith("| https://dead.test |") for ln in written.splitlines()),
+              written[:200] or "(no body written)")
 
         json.dump({"total": 1, "successful": 1}, open(rep, "w"))
         r = run("confirm", "--state", st, "--report", rep)
