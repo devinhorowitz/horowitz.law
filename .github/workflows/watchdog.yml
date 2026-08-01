@@ -1,0 +1,119 @@
+name: Run watchdog
+
+# Reports the failures that cannot report themselves.
+#
+# Every unattended workflow here ends with a `Report a failed run` step guarded by
+# `if: failure()`. That covers a script crashing. It does NOT cover the runner dying: an
+# `if: failure()` step runs ON the runner, so when the hosted VM is reclaimed mid-job the
+# reporting step is marked `skipped` and nothing is filed. That happened to the weekly
+# treatment sweep on 2026-08-01 -- exit 143, SIGTERM, sixteen minutes of work lost, PR
+# never opened, zero open issues. The repo said nothing.
+#
+# So this watches from outside, on its own runner, and files only the failures that were
+# silent. When the watched workflow's own handler ran, this stays quiet -- that handler
+# has the log tail and writes the better report. See scripts/run_watchdog.py for the rule.
+on:
+  workflow_run:
+    # Every unattended workflow: anything on a cron, plus the long dispatch-driven jobs
+    # nobody sits and watches. CI, Ruff lint, opinions-diagnose and opinions-review-veto
+    # are deliberately absent -- they run against a PR, where a failure is already visible
+    # in the checks list and a tracking issue would be noise.
+    workflows:
+      - Auto-merge self-healing PRs
+      - Drop-reason audit
+      - Georgia Appellate Watch backfill
+      - Georgia Appellate Watch digest
+      - Georgia Appellate Watch instant alert
+      - Georgia Appellate Watch queue
+      - Georgia Appellate Watch render sync
+      - Georgia Appellate Watch treatment sweep
+      - Georgia Appellate Watch update
+      - Georgia Legislative & Regulatory Watch
+      - Lighthouse
+      - Link check
+      - Model watch (Claude model pins)
+      - dependency-bump review
+      - golden-check
+      - opinions-heartbeat
+      - opinions-maintenance
+      - opinions-review-apply
+    types: [completed]
+
+permissions:
+  actions: read          # reads the failed run's job steps back out of the API
+  issues: write          # opens or comments on the one tracking issue
+  contents: read
+
+# Keyed on the watched run, not on this workflow: two different failures should both get
+# reported, and neither should cancel the other.
+concurrency:
+  group: run-watchdog-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    # Only failures. A cancelled run is somebody pressing cancel -- including the manual
+    # cancel used to correct a mis-dispatched workflow -- and is not a fault to report.
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+
+      - name: Fetch the failed run's job steps
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Via env, never interpolated into the script body: a ${{ }} expression inside a
+          # run: block is textual substitution before bash sees it, so the value would be
+          # shell source. As $RUN_ID it is only ever data.
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" > ./wd-jobs.json
+
+      - name: Decide whether the failure went unreported
+        id: decide
+        env:
+          WF_NAME: ${{ github.event.workflow_run.name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -o pipefail
+          out=$(python scripts/run_watchdog.py decide \
+                  --jobs ./wd-jobs.json \
+                  --body ./wd-body.md \
+                  --workflow "$WF_NAME" \
+                  --run-url "$RUN_URL")
+          echo "$out"
+          echo "$out" | grep '^silent=' >> "$GITHUB_OUTPUT"
+
+      # One issue, reused. An unattended repo would otherwise stack a fresh issue per
+      # reclaimed runner, which is the pile-up the two-strike link rule exists to avoid.
+      - name: Find an existing watchdog issue
+        id: existing
+        if: steps.decide.outputs.silent == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Workflow run failed without reporting itself"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          echo "number=$num" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the watchdog issue
+        if: steps.decide.outputs.silent == 'true'
+        uses: peter-evans/create-issue-from-file@fca9117c27cdc29c6c4db3b86c48e4115a786710 # v6.0.0
+        with:
+          title: Workflow run failed without reporting itself
+          content-filepath: ./wd-body.md
+          labels: automated, infrastructure
+          issue-number: ${{ steps.existing.outputs.number }}
