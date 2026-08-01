@@ -54,6 +54,9 @@ Env:
   TREATMENT_PER_CARD       max new citers classified per card per run (default 6)
   TREATMENT_PER_RUN        max new citers classified per run, all cards (default 25)
   TREATMENT_PAGES          citer search pages per card, 20 per page (default 2)
+  TREATMENT_FIRST_PER_RUN  never-swept cards given an unbounded full-history crawl per run
+                           (default 3); the rest keep their never-swept state for a later run
+  TREATMENT_PAGE_LOG_EVERY print a progress line every Nth citation page (default 10)
   TREATMENT_BUDGET_SEC     wall-clock cap; also how long one run will wait across rate
                            windows to drain a backlog (default 900; the workflow raises it for the weekly sweep)
   TREATMENT_MAXCHARS       citing-opinion characters sent to the classifier (default 9000)
@@ -85,6 +88,24 @@ LOOKBACK_DAYS = int(os.environ.get("TREATMENT_LOOKBACK_DAYS", "200"))
 PER_CARD      = int(os.environ.get("TREATMENT_PER_CARD", "6"))
 PER_RUN       = int(os.environ.get("TREATMENT_PER_RUN", "25"))
 PAGES         = int(os.environ.get("TREATMENT_PAGES", "2"))
+# How many never-swept cards may take their unbounded full-history crawl in ONE run.
+#
+# A card with no completed full pass pages its ENTIRE citation history (max_pages=None).
+# That is correct -- a partial first pass would mark the card swept while an older
+# overruling went unexamined -- but it is also the only unbounded work here, and the
+# never-swept cards are ordered first. They accumulate: a run that exhausts PER_RUN or the
+# REST budget before reaching them leaves them for next week, so the pile grows while the
+# per-run cost of clearing it grows with it. By 2026-08-01 nine cards were waiting, some
+# from 06-24, and successful-run durations had climbed 1:00 -> 2:02 across five weeks.
+#
+# Capping them per run drains the backlog over several weeks at a bounded cost each time,
+# instead of one run attempting every full crawl at once. Cards past the cap are simply not
+# visited; they keep their never-swept state and come first again next run, so nothing is
+# marked done that was not actually swept.
+FIRST_PER_RUN = int(os.environ.get("TREATMENT_FIRST_PER_RUN", "3"))
+# Page-progress cadence for the full-history crawl. Every page for the first few, then
+# every Nth, so a long crawl leaves a trail without burying the classifications.
+PAGE_LOG_EVERY = int(os.environ.get("TREATMENT_PAGE_LOG_EVERY", "10"))
 BUDGET_SEC    = int(os.environ.get("TREATMENT_BUDGET_SEC", "900"))
 MAXCHARS      = int(os.environ.get("TREATMENT_MAXCHARS", "9000"))
 # When passage() cannot locate the cited case in the citing opinion by a distinctive party name, it
@@ -158,6 +179,23 @@ def lead_opinion_id(cluster_id, deadline):
     return None
 
 
+def first_time_allowed(first_done, cap=None):
+    """Whether another never-swept card may take its unbounded full-history crawl this run.
+
+    Split out of the loop so the budget is testable on its own. A cap of 0 means no card
+    gets a full crawl this run -- valid, and the way to force a sweep to stay incremental
+    while a backlog problem is being worked on.
+    """
+    return first_done < (FIRST_PER_RUN if cap is None else cap)
+
+
+def log_this_page(pages, every=None):
+    """Whether page `pages` of a citation crawl should print. First page always -- the point
+    is to mark that the crawl STARTED, which is what three dead runs could not tell us."""
+    n = PAGE_LOG_EVERY if every is None else every
+    return pages == 1 or (n > 0 and pages % n == 0)
+
+
 def citing_results(opinion_id, since, deadline, max_pages=None):
     """In-scope opinions citing opinion_id, filed on/after `since`, newest first.
 
@@ -178,7 +216,18 @@ def citing_results(opinion_id, since, deadline, max_pages=None):
         out += data.get("results", [])
         url = data.get("next")
         pages += 1
+        # Progress, not decoration. An unbounded full-history sweep prints nothing until it
+        # finishes -- the loop below only speaks once a citer is classified -- so three runs
+        # died mid-crawl (exit 143, runner shutdown) leaving a log whose last line was the
+        # Anthropic status check. There was no way to tell which card, or how deep, from the
+        # outside. Every page now leaves a mark, so the next failure names its own position.
+        if log_this_page(pages):
+            print("    ~ citation page %d (%d citer(s) so far)%s"
+                  % (pages, len(out), "" if url else "; last page"), flush=True)
         time.sleep(0.5)
+    if max_pages is not None and url:
+        print("    ~ stopped at the %d-page cap; older citers roll to a later run" % pages,
+              flush=True)
     return out, (url is None)   # exhausted iff no further page remains
 
 
@@ -386,6 +435,8 @@ def main():
     changed = False    # any tracked-file change (state grew, or a flag changed)
     stopped = ""       # why the run ended early, if it did
     defer = ""         # operator-facing detail when stopped on the rate budget
+    first_done = 0     # never-swept cards given their full-history crawl this run
+    deferred_first = 0 # never-swept cards left for a later run by FIRST_PER_RUN
     api_fail = 0       # consecutive model-call failures (circuit breaker)
 
     # Never-swept cards first (full history), oldest first within each group so the
@@ -416,6 +467,24 @@ def main():
         # overruling decision filed before that window. Entries predating this flag have no
         # "full" key, so they each get one corrective full-history pass.
         first_time = not full_done
+
+        # Bounded backlog drain: only FIRST_PER_RUN never-swept cards take their unbounded
+        # full-history crawl per run. Skipped ones are left untouched -- not marked, not
+        # partially swept -- so they sort first again next run and lose nothing.
+        if first_time:
+            if not first_time_allowed(first_done):
+                deferred_first += 1
+                continue
+            first_done += 1
+
+        # One line per card, before any network call. Three runs died inside the work below
+        # with a log that ended at the Anthropic status check; from the outside there was no
+        # way to say which card was being swept. This is the line that answers that.
+        print("  > %s %s (%s)%s"
+              % ("full-history" if first_time else "incremental",
+                 (card.get("name") or "?")[:56], card.get("date") or "?",
+                 "" if first_time else " since %s" % sweep_since(card, full_done)),
+              flush=True)
 
         try:
             oid = st.get("oid")
@@ -628,13 +697,21 @@ def main():
             lines.append("- %s <- %s -- https://www.courtlistener.com/opinion/%d/x/ "
                          "(%d failed classify attempts; marked reviewed to stop retrying)"
                          % (cardnm, cname, ccid, tries))
+    if deferred_first:
+        lines += ["", "_%d never-swept card(s) deferred: only %d full-history crawl(s) run per "
+                  "sweep (TREATMENT_FIRST_PER_RUN). They are untouched and come first next run._"
+                  % (deferred_first, FIRST_PER_RUN)]
     if stopped:
         lines += ["", "_Run stopped early (%s%s); remaining cards roll to the next run._"
                   % (stopped, "; " + defer if defer else "")]
     pr_body = "\n".join(lines) + "\n"
 
-    print("\nclassified %d citing opinion(s); new flags: %d; CourtListener REST calls: %d%s%s"
+    # Never a silent cap: a deferred card looks exactly like a card with nothing to report
+    # unless the count is stated, and "swept everything" is the wrong thing to infer.
+    print("\nclassified %d citing opinion(s); new flags: %d; CourtListener REST calls: %d%s%s%s"
           % (classified, len(new_flags), cl_rate.PACER.calls,
+             ("; %d full-history crawl(s), %d card(s) deferred to a later run"
+              % (first_done, deferred_first)) if deferred_first else "",
              (" (stopped: %s%s)" % (stopped, "; " + defer if defer else "")) if stopped else "",
              ("; %d citer(s) given up for manual review" % len(stuck)) if stuck else ""))
 

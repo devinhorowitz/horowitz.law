@@ -17,9 +17,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import treatment      # noqa: E402  (sys.path shim must run first)
 
 FAILS = []
+CHECKS = 0
 
 
 def check(name, cond, detail=""):
+    global CHECKS
+    CHECKS += 1
     print(("  ok   " if cond else "  FAIL ") + name + (("  -- " + detail) if (detail and not cond) else ""))
     if not cond:
         FAILS.append(name)
@@ -160,18 +163,56 @@ def test_pending_rec():
                                                                treatment._pending_rec({"cluster_id": 2}, 3)]))
 
 
+def test_first_time_budget():
+    """The backlog cap. Three sweeps died mid-crawl on 2026-08-01 with nine never-swept
+    cards queued ahead of everything else, each entitled to an unbounded full-history
+    crawl. The cap bounds how many of those one run attempts."""
+    check("under the cap, another full crawl is allowed",
+          treatment.first_time_allowed(0, cap=3) is True)
+    check("the last slot is still allowed",
+          treatment.first_time_allowed(2, cap=3) is True)
+    check("at the cap, the next never-swept card defers",
+          treatment.first_time_allowed(3, cap=3) is False)
+    check("past the cap it stays closed",
+          treatment.first_time_allowed(9, cap=3) is False)
+    check("a cap of 0 defers every full crawl (forces an incremental-only run)",
+          treatment.first_time_allowed(0, cap=0) is False)
+    check("the default cap is a positive number, not an accidental 0",
+          treatment.FIRST_PER_RUN > 0, str(treatment.FIRST_PER_RUN))
+    check("with no cap argument it reads the module default",
+          treatment.first_time_allowed(treatment.FIRST_PER_RUN - 1) is True
+          and treatment.first_time_allowed(treatment.FIRST_PER_RUN) is False)
+
+
+def test_page_logging():
+    """A crawl that prints nothing is a crawl you cannot debug -- the whole reason three
+    dead runs could not name the card they were on."""
+    check("the first page always prints, so a started crawl is visible",
+          treatment.log_this_page(1, every=10) is True)
+    check("quiet between milestones", treatment.log_this_page(4, every=10) is False)
+    check("every Nth page prints", treatment.log_this_page(20, every=10) is True)
+    check("a zero cadence does not divide by zero, and still prints page 1",
+          treatment.log_this_page(1, every=0) is True
+          and treatment.log_this_page(7, every=0) is False)
+    check("the default cadence is positive",
+          treatment.PAGE_LOG_EVERY > 0, str(treatment.PAGE_LOG_EVERY))
+
+
 def main():
     print("treatment pure logic:")
     test_passage()
     test_sweep_since()
     test_swept_full()
     test_pending_rec()
+    print("treatment backlog + progress:")
+    test_first_time_budget()
+    test_page_logging()
     print("treatment classify batch:")
     test_classify_batch()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (%d checks)" % 25)
+    print("\nALL TESTS PASSED (%d checks)" % CHECKS)
     return 0
 
 
