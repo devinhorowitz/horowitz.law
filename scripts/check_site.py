@@ -387,11 +387,20 @@ def check_wrangler_vars(errors):
 
 def check_python_version(errors):
     """.python-version is the one place the interpreter version is stated, and ruff.toml's
-    target-version must agree with it. The workflows no longer carry a literal (they read the
-    file via setup-python's python-version-file), so these two are the only statements left --
-    and a stale ruff target silently lints against the wrong language version, accepting or
-    rejecting syntax the runtime does not. Same discipline as check_render_outputs: two places
-    that must agree, asserted rather than remembered."""
+    target-version must agree with it. The workflows read the file via setup-python's
+    python-version-file rather than carrying a literal, so these two are the only statements
+    left -- and a stale ruff target silently lints against the wrong language version,
+    accepting or rejecting syntax the runtime does not. Same discipline as
+    check_render_outputs: two places that must agree, asserted rather than remembered.
+
+    One deliberate exception: .github/workflows/treatment.yml pins python-version: '3.12'
+    inline. The weekly sweep is the only multi-hour job here and it failed twice on 3.14
+    (exit 143, runner shutdown) after 12 clean runs on 3.12. The pin is a holding position
+    while that is understood, documented at the pin itself. Note the gap it opens: ruff
+    targets py314, so 3.13-or-newer syntax lints clean but would fail at runtime under the
+    sweep's 3.12. Nothing in scripts/ uses such syntax today (the whole tree still imports
+    and tests clean on 3.12), but the lint will not catch it if someone adds it -- another
+    reason the pin should not outlive the investigation."""
     vpath = os.path.join(REPO, ".python-version")
     try:
         version = open(vpath, encoding="utf-8").read().strip()
