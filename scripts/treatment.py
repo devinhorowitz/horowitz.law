@@ -54,8 +54,10 @@ Env:
   TREATMENT_PER_CARD       max new citers classified per card per run (default 6)
   TREATMENT_PER_RUN        max new citers classified per run, all cards (default 25)
   TREATMENT_PAGES          citer search pages per card, 20 per page (default 2)
-  TREATMENT_FIRST_PER_RUN  never-swept cards given an unbounded full-history crawl per run
-                           (default 3); the rest keep their never-swept state for a later run
+  TREATMENT_FIRST_PER_RUN  never-swept cards given a full-history crawl per run (default 3);
+                           the rest keep their never-swept state for a later run
+  TREATMENT_FIRST_PAGES    hard page ceiling for a full-history crawl (default 200 = 4,000
+                           citers); a capped card is not marked full and resumes next run
   TREATMENT_PAGE_LOG_EVERY print a progress line every Nth citation page (default 10)
   TREATMENT_BUDGET_SEC     wall-clock cap; also how long one run will wait across rate
                            windows to drain a backlog (default 900; the workflow raises it for the weekly sweep)
@@ -88,12 +90,12 @@ LOOKBACK_DAYS = int(os.environ.get("TREATMENT_LOOKBACK_DAYS", "200"))
 PER_CARD      = int(os.environ.get("TREATMENT_PER_CARD", "6"))
 PER_RUN       = int(os.environ.get("TREATMENT_PER_RUN", "25"))
 PAGES         = int(os.environ.get("TREATMENT_PAGES", "2"))
-# How many never-swept cards may take their unbounded full-history crawl in ONE run.
+# How many never-swept cards may take their full-history crawl in ONE run.
 #
-# A card with no completed full pass pages its ENTIRE citation history (max_pages=None).
-# That is correct -- a partial first pass would mark the card swept while an older
-# overruling went unexamined -- but it is also the only unbounded work here, and the
-# never-swept cards are ordered first. They accumulate: a run that exhausts PER_RUN or the
+# A card with no completed full pass walks its whole citation history (max_pages=None,
+# itself bounded by FIRST_PAGES). That is correct -- a partial first pass would mark the
+# card swept while an older overruling went unexamined -- but it is by far the most
+# expensive work here, and the never-swept cards are ordered first. They accumulate: a run that exhausts PER_RUN or the
 # REST budget before reaching them leaves them for next week, so the pile grows while the
 # per-run cost of clearing it grows with it. By 2026-08-01 nine cards were waiting, some
 # from 06-24, and successful-run durations had climbed 1:00 -> 2:02 across five weeks.
@@ -103,6 +105,11 @@ PAGES         = int(os.environ.get("TREATMENT_PAGES", "2"))
 # visited; they keep their never-swept state and come first again next run, so nothing is
 # marked done that was not actually swept.
 FIRST_PER_RUN = int(os.environ.get("TREATMENT_FIRST_PER_RUN", "3"))
+# Hard ceiling on how DEEP a full-history crawl may page. FIRST_PER_RUN bounds how many
+# cards get one; this bounds each one. 200 pages x 20 per page = 4,000 citers, far past any
+# real card in scope, so in practice it only ever stops a walk that was not going to stop.
+# A capped card is simply not marked full, so nothing is lost -- it resumes next run.
+FIRST_PAGES = int(os.environ.get("TREATMENT_FIRST_PAGES", "200"))
 # Page-progress cadence for the full-history crawl. Every page for the first few, then
 # every Nth, so a long crawl leaves a trail without burying the classifications.
 PAGE_LOG_EVERY = int(os.environ.get("TREATMENT_PAGE_LOG_EVERY", "10"))
@@ -179,8 +186,37 @@ def lead_opinion_id(cluster_id, deadline):
     return None
 
 
+def rss_mb():
+    """Resident set size in MiB, or None where it cannot be read.
+
+    The runner is a 16 GB box and exit 143 is SIGTERM -- the shape a supervisor produces when
+    it reclaims a process under memory pressure. Three sweeps died that way without leaving a
+    single number behind, so the question "was it memory?" had no evidence either way. Reading
+    /proc keeps that from being a guess a fourth time. Returns None rather than raising: a
+    diagnostic must never be the thing that breaks the run it is diagnosing.
+    """
+    try:
+        with open("/proc/self/status", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) // 1024      # kB -> MiB
+    except (OSError, ValueError, IndexError):
+        pass
+    try:
+        import resource
+        return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) // 1024
+    except Exception:
+        return None
+
+
+def rss_note():
+    """RSS as a log fragment, empty when unreadable so callers need no branch."""
+    mb = rss_mb()
+    return "" if mb is None else "; rss %d MiB" % mb
+
+
 def first_time_allowed(first_done, cap=None):
-    """Whether another never-swept card may take its unbounded full-history crawl this run.
+    """Whether another never-swept card may take its full-history crawl this run.
 
     Split out of the loop so the budget is testable on its own. A cap of 0 means no card
     gets a full crawl this run -- valid, and the way to force a sweep to stay incremental
@@ -201,33 +237,45 @@ def citing_results(opinion_id, since, deadline, max_pages=None):
 
     Uses the search `cites:(id)` query with repeated court params (the REST API accepts repeated court=
     filters). Returns (results, exhausted): `exhausted` is True only when the search reached the end
-    (no further page) within `max_pages`. `max_pages=None` pages the ENTIRE history -- a first,
-    full-history sweep must see every citer, not just the newest page, or a card with more citers than
-    one page is marked fully-swept while its older citers (possibly an overruling) are never examined.
-    Incremental runs pass max_pages=PAGES to stay cheap in the recent window.
+    (no further page) within the effective cap. `max_pages=None` means "full history" -- a first
+    sweep must see every citer, not just the newest page, or a card with more citers than one page is
+    marked fully-swept while its older citers (possibly an overruling) are never examined -- but it
+    resolves to FIRST_PAGES, not to no limit. Incremental runs pass max_pages=PAGES to stay cheap in
+    the recent window. Either way, a walk stopped by a cap reports exhausted=False.
     """
     params = [("type", "o"), ("q", "cites:(%d)" % int(opinion_id)),
               ("filed_after", since), ("order_by", "dateFiled desc"), ("page_size", "20")]
     params += [("court", c) for c in SCOPE_COURTS]
     url = "https://www.courtlistener.com/api/rest/v4/search/?" + urllib.parse.urlencode(params)
+    # No caller may ask for genuinely unbounded paging. `max_pages=None` still means "full
+    # history", but it resolves to FIRST_PAGES rather than to no limit at all: `out` grows by
+    # a page of results every iteration and the only other stops were CourtListener choosing
+    # to stop sending `next` and the 5h deadline. On a 16 GB runner that is a process the
+    # supervisor can kill -- which is what exit 143 / SIGTERM means -- and it dies without
+    # printing anything, exactly as on 2026-08-01.
+    #
+    # Capping is safe by construction: `exhausted` is False whenever a cap stopped the walk,
+    # and the caller only sets `full` when exhausted, so a capped card stays never-swept and
+    # is retried rather than being wrongly marked done.
+    cap = FIRST_PAGES if max_pages is None else max_pages
     out, pages = [], 0
-    while url and (max_pages is None or pages < max_pages):
+    while url and pages < cap:
         data = update.cl_get(url, deadline)
         out += data.get("results", [])
         url = data.get("next")
         pages += 1
-        # Progress, not decoration. An unbounded full-history sweep prints nothing until it
+        # Progress, not decoration. A full-history sweep prints nothing of its own until it
         # finishes -- the loop below only speaks once a citer is classified -- so three runs
         # died mid-crawl (exit 143, runner shutdown) leaving a log whose last line was the
         # Anthropic status check. There was no way to tell which card, or how deep, from the
         # outside. Every page now leaves a mark, so the next failure names its own position.
         if log_this_page(pages):
-            print("    ~ citation page %d (%d citer(s) so far)%s"
-                  % (pages, len(out), "" if url else "; last page"), flush=True)
+            print("    ~ citation page %d (%d citer(s) so far)%s%s"
+                  % (pages, len(out), rss_note(), "" if url else "; last page"), flush=True)
         time.sleep(0.5)
-    if max_pages is not None and url:
-        print("    ~ stopped at the %d-page cap; older citers roll to a later run" % pages,
-              flush=True)
+    if url:
+        print("    ~ stopped at the %d-page cap%s; card stays unswept and is retried next run"
+              % (cap, " (full-history ceiling)" if max_pages is None else ""), flush=True)
     return out, (url is None)   # exhausted iff no further page remains
 
 
@@ -468,8 +516,8 @@ def main():
         # "full" key, so they each get one corrective full-history pass.
         first_time = not full_done
 
-        # Bounded backlog drain: only FIRST_PER_RUN never-swept cards take their unbounded
-        # full-history crawl per run. Skipped ones are left untouched -- not marked, not
+        # Bounded backlog drain: only FIRST_PER_RUN never-swept cards take a full-history
+        # crawl per run (and each is capped at FIRST_PAGES deep). Skipped ones are left untouched -- not marked, not
         # partially swept -- so they sort first again next run and lose nothing.
         if first_time:
             if not first_time_allowed(first_done):
@@ -480,10 +528,11 @@ def main():
         # One line per card, before any network call. Three runs died inside the work below
         # with a log that ended at the Anthropic status check; from the outside there was no
         # way to say which card was being swept. This is the line that answers that.
-        print("  > %s %s (%s)%s"
+        print("  > %s %s (%s)%s%s"
               % ("full-history" if first_time else "incremental",
                  (card.get("name") or "?")[:56], card.get("date") or "?",
-                 "" if first_time else " since %s" % sweep_since(card, full_done)),
+                 "" if first_time else " since %s" % sweep_since(card, full_done),
+                 rss_note()),
               flush=True)
 
         try:
@@ -713,7 +762,8 @@ def main():
              ("; %d full-history crawl(s), %d card(s) deferred to a later run"
               % (first_done, deferred_first)) if deferred_first else "",
              (" (stopped: %s%s)" % (stopped, "; " + defer if defer else "")) if stopped else "",
-             ("; %d citer(s) given up for manual review" % len(stuck)) if stuck else ""))
+             ("; %d citer(s) given up for manual review" % len(stuck)) if stuck else "")
+          + rss_note())
 
     safeio.step_summary(
         "## Georgia Appellate Watch \u00b7 treatment sweep\n\n"
