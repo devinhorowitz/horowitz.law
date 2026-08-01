@@ -184,6 +184,90 @@ def test_first_time_budget():
           and treatment.first_time_allowed(treatment.FIRST_PER_RUN) is False)
 
 
+def test_full_history_ceiling():
+    """The depth cap. `max_pages=None` used to mean genuinely unbounded paging -- `out` grew
+    by a page of results per iteration with no stop but CourtListener's own `next` and the
+    5h deadline. On a 16 GB runner that is a process the supervisor can SIGTERM, which is
+    what exit 143 is. The cap must be finite, and must never mark a capped card as swept."""
+    check("the full-history ceiling is finite and positive",
+          isinstance(treatment.FIRST_PAGES, int) and treatment.FIRST_PAGES > 0,
+          str(treatment.FIRST_PAGES))
+    check("it is deep enough to be a backstop, not a routine truncation",
+          treatment.FIRST_PAGES >= 50, str(treatment.FIRST_PAGES))
+    check("it is far deeper than the incremental window",
+          treatment.FIRST_PAGES > treatment.PAGES)
+    # The exhausted contract is what makes capping safe. citing_results returns
+    # exhausted=False whenever a cap stopped the walk; the caller computes
+    # `truncated = cap_truncated or not exhausted` and swept_full must then refuse to mark
+    # the card done, or its unexamined older history is lost for good.
+    check("a capped walk (exhausted=False -> truncated) does NOT mark the card fully swept",
+          treatment.swept_full(False, "", True) is False)
+    check("a walk that reached the end does",
+          treatment.swept_full(False, "", False) is True)
+    check("and a card already full is not un-marked by a capped walk",
+          treatment.swept_full(True, "", True) is True)
+
+
+def test_crawl_is_actually_bounded():
+    """Exercise citing_results against the pathological case that motivated the ceiling: a
+    CourtListener that never stops handing back a `next` cursor. Before the cap this walked
+    forever, growing `out` by a page each time -- the shape that gets a process SIGTERMed on
+    a 16 GB runner. Asserting on the constant alone did not catch a cap set to a billion."""
+    calls = {"n": 0}
+    # Fail fast, do not hang. If the ceiling is ever removed, an endless `next` would spin
+    # this test until CI killed the job -- a timeout reads as infrastructure trouble, not as
+    # "the cap is gone". The runaway guard turns that into an immediate, legible failure.
+    RUNAWAY = treatment.FIRST_PAGES + 50
+
+    def endless_cl_get(url, deadline=None):
+        calls["n"] += 1
+        if calls["n"] > RUNAWAY:
+            raise AssertionError("citation walk ran past %d pages -- the ceiling is not "
+                                 "bounding it" % RUNAWAY)
+        return {"results": [{"cluster_id": calls["n"]}], "next": "https://next.example/page"}
+
+    real_get, real_sleep = treatment.update.cl_get, treatment.time.sleep
+    treatment.update.cl_get = endless_cl_get
+    treatment.time.sleep = lambda _s: None
+    try:
+        out, exhausted = treatment.citing_results(1, "2020-01-01", None, max_pages=3)
+        check("an explicit page cap stops the walk", calls["n"] == 3, str(calls["n"]))
+        check("and reports NOT exhausted, so the card is retried",
+              exhausted is False)
+        check("results are still returned up to the cap", len(out) == 3, str(len(out)))
+
+        calls["n"] = 0
+        out, exhausted = treatment.citing_results(1, "2020-01-01", None, max_pages=None)
+        check("a full-history walk is bounded by FIRST_PAGES, not unbounded",
+              calls["n"] == treatment.FIRST_PAGES, str(calls["n"]))
+        check("and it too reports NOT exhausted", exhausted is False)
+
+        calls["n"] = 0
+        treatment.update.cl_get = lambda url, deadline=None: {"results": [{"cluster_id": 1}],
+                                                              "next": None}
+        out, exhausted = treatment.citing_results(1, "2020-01-01", None, max_pages=None)
+        check("a walk that genuinely runs out reports exhausted", exhausted is True)
+    finally:
+        treatment.update.cl_get, treatment.time.sleep = real_get, real_sleep
+
+
+def test_rss():
+    """A diagnostic must never break the run it is diagnosing."""
+    mb = treatment.rss_mb()
+    check("rss reads as a positive number on this platform",
+          mb is None or (isinstance(mb, int) and mb > 0), str(mb))
+    note = treatment.rss_note()
+    check("the note is empty or a formatted fragment",
+          note == "" or note.startswith("; rss "), repr(note))
+    real = treatment.rss_mb
+    treatment.rss_mb = lambda: None
+    try:
+        check("an unreadable rss degrades to an empty fragment, it does not raise",
+              treatment.rss_note() == "")
+    finally:
+        treatment.rss_mb = real
+
+
 def test_page_logging():
     """A crawl that prints nothing is a crawl you cannot debug -- the whole reason three
     dead runs could not name the card they were on."""
@@ -206,7 +290,10 @@ def main():
     test_pending_rec()
     print("treatment backlog + progress:")
     test_first_time_budget()
+    test_full_history_ceiling()
+    test_crawl_is_actually_bounded()
     test_page_logging()
+    test_rss()
     print("treatment classify batch:")
     test_classify_batch()
     if FAILS:
