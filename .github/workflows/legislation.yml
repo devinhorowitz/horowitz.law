@@ -117,9 +117,21 @@ jobs:
             { [ "${leg:-0}" = "1" ] || [ "${reg:-0}" = "1" ] || [ "${crc:-0}" = "1" ]; } && changed=1
             echo "changed=${changed}" >> "$GITHUB_OUTPUT"
             # One combined review-PR body from whichever watches produced cards.
+            # `if`, not `[ -f ] && { }`. A for loop's exit status is its last iteration's,
+            # and this loop was the last command in the step -- so the STEP inherited it.
+            # The last name checked is pr_body_courtrules, and courtrules.py only writes
+            # that file when something changed. A quiet week in the federal rules therefore
+            # ended the step with status 1 and failed the whole run, with every watch having
+            # done its work correctly. (Not a `set -e` effect: a failing `&&` list is exempt
+            # from that. It was purely "the script exits with its last command's status.")
+            # An `if` whose condition is false returns 0, so a missing body is now what it
+            # always was in intent: nothing to append.
             : > scripts/pr_body_legreg.md
             for b in pr_body_legislation pr_body_regulations pr_body_courtrules; do
-              [ -f "scripts/$b.md" ] && { cat "scripts/$b.md" >> scripts/pr_body_legreg.md; echo >> scripts/pr_body_legreg.md; }
+              if [ -f "scripts/$b.md" ]; then
+                cat "scripts/$b.md" >> scripts/pr_body_legreg.md
+                echo >> scripts/pr_body_legreg.md
+              fi
             done
           fi
 
