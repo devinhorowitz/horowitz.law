@@ -945,6 +945,41 @@ def parse_json(s):
         return json.loads(obj)
 
 
+def rss_mb():
+    """Resident set size in MiB, or None where it cannot be read.
+
+    The runner is a 16 GB box and exit 143 is SIGTERM -- the shape a supervisor produces when
+    it reclaims a process under memory pressure. Four runs have died that way (three treatment
+    sweeps on 2026-08-01, then the daily pipeline on 2026-08-03) without leaving a single
+    number behind, so "was it memory?" has had no evidence either way.
+
+    It lives here rather than in treatment.py because the daily pipeline is now the better
+    witness: it runs four times a day instead of weekly, and its last failure named the phase
+    it died in. Whatever answers this will come from the funnel, not the sweep.
+
+    Returns None rather than raising: a diagnostic must never be the thing that breaks the run
+    it is diagnosing.
+    """
+    try:
+        with open("/proc/self/status", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) // 1024      # kB -> MiB
+    except (OSError, ValueError, IndexError):
+        pass
+    try:
+        import resource
+        return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) // 1024
+    except Exception:
+        return None
+
+
+def rss_note():
+    """RSS as a log fragment, empty when unreadable so callers need no branch."""
+    mb = rss_mb()
+    return "" if mb is None else "; rss %d MiB" % mb
+
+
 def _dbg(msg):
     if DEBUG:
         print("  . " + msg)
@@ -2345,8 +2380,9 @@ def main():
         cand.append(r)
     cand.sort(key=lambda r: (r.get("dateFiled") or "", cluster_id_of(r)), reverse=True)
     cand = cand[:MAX_RUN]
-    print("since %s | candidates: %d | tiers: screen=%s pretriage=%s triage=%s summarize=%s"
-          % (since, len(cand), SCREEN_MODEL or "off", PRETRIAGE_MODEL or "off", TRIAGE_MODEL or "off", MODEL))
+    print("since %s | candidates: %d | tiers: screen=%s pretriage=%s triage=%s summarize=%s%s"
+          % (since, len(cand), SCREEN_MODEL or "off", PRETRIAGE_MODEL or "off", TRIAGE_MODEL or "off", MODEL,
+             rss_note()), flush=True)
 
     added, flagged, skipped = [], [], []
     rejections = []                            # screen/triage drops this run, logged to REJECT_PATH for recall review
@@ -2761,7 +2797,8 @@ def main():
     if SMELL_MODEL and smell_pending and not cfg_error:
         verdicts = {}
         if any((d["rej"].get("reason") or "").strip() for d in smell_pending):
-            print("  . smelling %d triage-drop reason(s)" % len(smell_pending), flush=True)
+            print("  . smelling %d triage-drop reason(s)%s"
+                  % (len(smell_pending), rss_note()), flush=True)
             try:
                 items = [{"name": d["rej"]["name"], "court": d["rej"]["court"],
                           "date": d["rej"]["date"], "reason": d["rej"]["reason"]}
@@ -2854,7 +2891,11 @@ def main():
     # (OPINIONS_GUARD_BATCH). On a batch timeout/failure, fall back to the synchronous consensus
     # guards so no card ships un-guarded. Populates the same crosschecks/completeness the PR body reads.
     if GUARD_BATCH and guard_pending:
-        print("  . guarding %d drafted card(s) as one batch (fidelity + completeness)" % len(guard_pending), flush=True)
+        # The 2026-08-03 daily run died about 1m45s into this line's batch (exit 143,
+        # runner shutdown) with no memory number anywhere in the log. Now there is one on
+        # the way in, and batch.poll adds one per wait, so the next death is measurable.
+        print("  . guarding %d drafted card(s) as one batch (fidelity + completeness)%s"
+              % (len(guard_pending), rss_note()), flush=True)
         if not guard_cards_batch(guard_pending, crosschecks, completeness, deadline=time.time() + GUARD_BATCH_SEC):
             for it in guard_pending:
                 cc = crosscheck(it["name"], it["text"], it["entry"])

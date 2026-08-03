@@ -10,6 +10,7 @@ the real urllib path with a fake urlopen).
 
 Run directly: `python scripts/test_batch.py`.
 """
+import contextlib
 import io
 import json
 import os
@@ -21,9 +22,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import batch          # noqa: E402  (sys.path shim must run first)
 
 FAILS = []
+CASES = [0]
 
 
 def check(name, cond, detail=""):
+    CASES[0] += 1
     print(("  ok   " if cond else "  FAIL ") + name + (("  -- " + detail) if (detail and not cond) else ""))
     if not cond:
         FAILS.append(name)
@@ -65,10 +68,58 @@ def with_send(fake, fn):
         batch._send = orig
 
 
+def test_poll_progress():
+    """A poll loop is where four dead runs were last seen (three treatment sweeps 2026-08-01,
+    the daily funnel 2026-08-03 -- all exit 143, runner shutdown). It is also the quietest
+    stretch of a run: minutes with nothing printed, so a death there looked identical to a
+    death anywhere else. Every wait must leave a line, and it must carry RSS."""
+    check("the first wait always logs, so a started batch is visible",
+          batch._poll_log(1, every=5) is True)
+    check("quiet between milestones", batch._poll_log(3, every=5) is False)
+    check("every Nth wait logs", batch._poll_log(10, every=5) is True)
+    check("a zero cadence neither divides by zero nor goes silent on wait 1",
+          batch._poll_log(1, every=0) is True and batch._poll_log(4, every=0) is False)
+    check("the default cadence is positive", batch.POLL_LOG_EVERY > 0, str(batch.POLL_LOG_EVERY))
+
+    note = batch._rss_note()
+    check("the rss fragment is empty or formatted",
+          note == "" or note.startswith("; rss "), repr(note))
+
+    import update as _u
+    real = _u.rss_note
+    _u.rss_note = lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+    try:
+        check("a broken rss helper cannot break a batch poll", batch._rss_note() == "")
+    finally:
+        _u.rss_note = real
+
+
+def test_poll_actually_prints(capture):
+    """Drive poll() itself: the predicate being right is not the same as it being wired in."""
+    fake = Scripted([
+        json.dumps({"id": "b1", "processing_status": "in_progress"}),
+        json.dumps({"id": "b1", "processing_status": "ended", "results_url": "u"}),
+    ])
+    out = with_send(fake, lambda: batch.poll("b1", interval=0.01, label="lbl"))
+    text = capture()
+    check("poll returns the ended object", out.get("processing_status") == "ended")
+    check("and printed a wait line naming the label and batch",
+          "lbl: waiting on batch b1" in text, text.strip()[:120] or "(no output)")
+
+
 def main():
     # No real sleeping during polls.
     _orig_sleep = batch.time.sleep
     batch.time.sleep = lambda *_a, **_k: None
+
+    print("poll progress:")
+    test_poll_progress()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        test_poll_actually_prints(lambda: buf.getvalue())
+    for ln in buf.getvalue().splitlines():
+        if ln.startswith("  ok") or ln.startswith("  FAIL"):
+            print(ln)
 
     # 1. run(): submit -> one in_progress -> ended -> collect two lines (one ok, one errored).
     results_url = "https://api.anthropic.com/v1/messages/batches/batch_1/results"
@@ -191,7 +242,7 @@ def main():
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (23 cases)")
+    print("\nALL TESTS PASSED (%d cases)" % CASES[0])
     return 0
 
 
