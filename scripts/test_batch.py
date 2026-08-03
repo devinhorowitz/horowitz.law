@@ -10,6 +10,7 @@ the real urllib path with a fake urlopen).
 
 Run directly: `python scripts/test_batch.py`.
 """
+import contextlib
 import io
 import json
 import os
@@ -113,7 +114,6 @@ def main():
 
     print("poll progress:")
     test_poll_progress()
-    import io, contextlib
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         test_poll_actually_prints(lambda: buf.getvalue())
