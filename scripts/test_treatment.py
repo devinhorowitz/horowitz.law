@@ -259,13 +259,19 @@ def test_rss():
     note = treatment.rss_note()
     check("the note is empty or a formatted fragment",
           note == "" or note.startswith("; rss "), repr(note))
-    real = treatment.rss_mb
-    treatment.rss_mb = lambda: None
+    # Patch where the lookup happens: rss_note lives in update and resolves rss_mb in
+    # update's namespace, so patching treatment.rss_mb would be a no-op that silently
+    # tested nothing.
+    real = treatment.update.rss_mb
+    treatment.update.rss_mb = lambda: None
     try:
         check("an unreadable rss degrades to an empty fragment, it does not raise",
               treatment.rss_note() == "")
     finally:
-        treatment.rss_mb = real
+        treatment.update.rss_mb = real
+    check("treatment re-exports the shared implementation, it does not keep a copy",
+          treatment.rss_mb is treatment.update.rss_mb
+          and treatment.rss_note is treatment.update.rss_note)
 
 
 def test_page_logging():

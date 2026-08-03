@@ -186,33 +186,10 @@ def lead_opinion_id(cluster_id, deadline):
     return None
 
 
-def rss_mb():
-    """Resident set size in MiB, or None where it cannot be read.
-
-    The runner is a 16 GB box and exit 143 is SIGTERM -- the shape a supervisor produces when
-    it reclaims a process under memory pressure. Three sweeps died that way without leaving a
-    single number behind, so the question "was it memory?" had no evidence either way. Reading
-    /proc keeps that from being a guess a fourth time. Returns None rather than raising: a
-    diagnostic must never be the thing that breaks the run it is diagnosing.
-    """
-    try:
-        with open("/proc/self/status", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("VmRSS:"):
-                    return int(line.split()[1]) // 1024      # kB -> MiB
-    except (OSError, ValueError, IndexError):
-        pass
-    try:
-        import resource
-        return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) // 1024
-    except Exception:
-        return None
-
-
-def rss_note():
-    """RSS as a log fragment, empty when unreadable so callers need no branch."""
-    mb = rss_mb()
-    return "" if mb is None else "; rss %d MiB" % mb
+# RSS reading lives in update.py now: the daily funnel needs it too, and one implementation
+# beats two that can drift. Re-exported so this module's call sites and tests read naturally.
+rss_mb = update.rss_mb
+rss_note = update.rss_note
 
 
 def first_time_allowed(first_done, cap=None):

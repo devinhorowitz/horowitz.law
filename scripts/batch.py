@@ -32,6 +32,26 @@ import urllib.error
 import urllib.request
 
 API = "https://api.anthropic.com/v1/messages/batches"
+# Poll-progress cadence. First wait always, then every Nth, so a long batch leaves a trail
+# without burying the run's real output.
+POLL_LOG_EVERY = int(os.environ.get("BATCH_POLL_LOG_EVERY", "5"))
+
+
+def _poll_log(waits, every=None):
+    """Whether wait number `waits` should print. First always -- the point is to mark that
+    the batch started waiting, which is what four dead runs could not tell us."""
+    n = POLL_LOG_EVERY if every is None else every
+    return waits == 1 or (n > 0 and waits % n == 0)
+
+
+def _rss_note():
+    """RSS fragment, via update. Imported lazily and defensively: batch.py is transport and
+    must not acquire a hard dependency on the funnel, nor break a run if the helper moves."""
+    try:
+        import update
+        return update.rss_note()
+    except Exception:
+        return ""
 KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 VERSION = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
 RETRY_STATUS = {429, 500, 502, 503, 529}   # same set update.anthropic_json retries
@@ -175,10 +195,21 @@ def poll(batch_id, deadline=None, interval=20.0, label="batch"):
     `interval`, and at most ~1s past `deadline` (a 1s floor avoids a busy-spin as the
     deadline nears); once the deadline has passed it raises BatchTimeout(batch_id) so the
     caller can defer collection to a later run."""
+    waits = 0
     while True:
         obj = status(batch_id, label)
         if obj.get("processing_status") == "ended":
             return obj
+        # A poll loop is the last thing four dead runs were doing (three treatment sweeps on
+        # 2026-08-01, the daily funnel on 2026-08-03 -- all exit 143, runner shutdown). It is
+        # also the quietest part of a run: minutes pass with nothing printed, so a death here
+        # is indistinguishable from a death anywhere else. One line per wait fixes that, and
+        # carries the RSS that decides whether memory is the story.
+        waits += 1
+        if _poll_log(waits):
+            print("  . %s: waiting on batch %s (%s), %d poll(s)%s"
+                  % (label, batch_id, obj.get("processing_status") or "?", waits,
+                     _rss_note()), flush=True)
         if deadline is not None and time.time() >= deadline:
             raise BatchTimeout(batch_id, "batch %s still %s at deadline"
                                % (batch_id, obj.get("processing_status")))
