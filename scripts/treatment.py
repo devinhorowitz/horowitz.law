@@ -16,7 +16,7 @@ Shepard's (Gate 2) and, by editing opinions.json, promotes "caution" to
 downgrades a human setting and never re-raises a citing case already recorded, so
 a cleared flag stays cleared.
 
-This is the thorough weekend backstop to the daily forward escalation in
+This is the thorough backstop to the daily forward escalation in
 update.py: it walks the full citation graph, including criminal and out-of-scope
 citers the daily screen drops before triage ever sees them.
 
@@ -26,12 +26,16 @@ The sweep spends REST only on DISCOVERY: one call to resolve each card's lead
 opinion id (cached in state the moment it is resolved), and one or two to find its
 citers. Each citing opinion's TEXT comes from its free PDF (the same trick the
 daily pipeline uses), not a REST call, falling back to REST only when a PDF will
-not extract. Because the weekly run gets a long wall-clock budget
-(TREATMENT_BUDGET_SEC), when an hourly window fills the run WAITS for it to refill
-and keeps going, draining a backlog in one run with no second trigger; it is
-bounded by that budget, by the per-day limit, and by the job timeout. Only a
-backlog larger than a day's limit defers its tail to the next run. Built to run on
-a weekend, when the daily updater is idle and the budget is free.
+not extract. When an hourly window fills, the run WAITS for it to refill within its
+wall-clock budget (TREATMENT_BUDGET_SEC); it is bounded by that budget, by the
+per-day limit, and by the job timeout, and whatever it does not reach defers to
+the next run.
+
+Cadence: SHORT runs every few hours, not one long weekly sweep. The weekly form
+spent most of its wall clock asleep waiting on rate windows, and an idle runner is
+what gets reclaimed -- three consecutive sweeps were killed that way on 2026-08-01
+(exit 143), each losing its entire run. Same throughput ceiling, far less exposure,
+and gentler per-day REST pressure than the old single-day burst.
 
 Scope. Only citers from the feed's own courts (Supreme Court of Georgia, Court of
 Appeals of Georgia, Eleventh Circuit, U.S. Supreme Court, plus the supplementary
@@ -69,7 +73,7 @@ Env:
   DRY_RUN=1                evaluate and print; write nothing, open no PR
   OPINIONS_DEBUG=1         verbose (inherited from update.py)
 
-Run via .github/workflows/treatment.yml (weekend cron + manual dispatch).
+Run via .github/workflows/treatment.yml (6-hourly cron + manual dispatch).
 """
 import os, re, sys, json, time, html, datetime
 import urllib.parse

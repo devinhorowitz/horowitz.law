@@ -219,9 +219,38 @@ def poll(batch_id, deadline=None, interval=20.0, label="batch"):
         time.sleep(nap)
 
 
-def run(requests, deadline=None, interval=20.0, label="batch"):
+def run(requests, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
     """Submit, poll to completion, and collect -- the blocking convenience path.
     Returns {custom_id: result}. Raises BatchTimeout (carrying the batch id) if the
-    deadline passes first, and BatchError on a transport failure."""
-    return collect(poll(submit(requests, label), deadline=deadline,
-                        interval=interval, label=label), label)
+    deadline passes first, and BatchError on a transport failure.
+
+    `on_submit` is called with the new batch id the instant submit() returns, BEFORE any
+    polling. That ordering is the whole point: a batch is billed from the moment it is
+    accepted, so the id has to be recorded before the long wait that might not survive.
+
+    `resume_id` collects a batch a previous run already paid for instead of submitting new
+    work. BatchTimeout carries the id and always has, and this module's docstring has always
+    said callers should persist it -- but until now nothing did, so every deferral abandoned
+    a batch that Anthropic had already run and billed.
+
+    A resumed batch is used INSTEAD of `requests`, not merged with it: its results are keyed
+    by custom_id and every caller already ignores ids it no longer wants and re-queues ids it
+    did not get, so a drifted pending set degrades to "some work rolls to the next run"
+    rather than to wrong output. A stale or expired id raises BatchError on the status call,
+    which falls through to a fresh submit.
+    """
+    if resume_id:
+        try:
+            obj = poll(resume_id, deadline=deadline, interval=interval, label=label)
+            print("  . %s: collected batch %s carried over from a previous run"
+                  % (label, resume_id), flush=True)
+            return collect(obj, label)
+        except BatchTimeout:
+            raise          # still running; the id rides the exception so the caller re-records it
+        except BatchError as e:
+            print("  . %s: could not resume batch %s (%s); submitting fresh work"
+                  % (label, resume_id, e), flush=True)
+    bid = submit(requests, label)
+    if on_submit:
+        on_submit(bid)
+    return collect(poll(bid, deadline=deadline, interval=interval, label=label), label)

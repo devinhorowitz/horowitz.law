@@ -22,6 +22,10 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    # Deliberately still 45, not tightened to convert reclamations into cancellations. That
+    # idea does not survive the numbers: opinions reclamations landed at 668s and 783s while a
+    # legitimate run took 616s, so any guard low enough to pre-empt a reclamation also cancels
+    # real work. The exposure is cut by the batch budgets below instead.
     timeout-minutes: 45     # watchdog: a hung run fails fast instead of running to the 6h cap
     steps:
       # Supply-chain hardening (block mode): only the endpoints below are reachable.
@@ -120,6 +124,24 @@ jobs:
           # (no opinion text) and escalates keep-shaped drops to the summarizer in the same run.
           # Set the repo Variable to 'off' to disable the pass.
           OPINIONS_SMELL_MODEL: ${{ vars.OPINIONS_SMELL_MODEL || 'claude-opus-5' }}
+          # Batch wait budgets. The defaults in update.py total 90 minutes of in-job sleeping
+          # (1500 triage + 900 smell + 1500 summarize + 1500 guard), and sleeping is exactly
+          # the exposure that gets a run reclaimed: seven reclamations since 2026-07-17, all
+          # while idle, none explained by memory (RSS was flat at 55 MiB through the 08-04
+          # kill). We cannot fix the cause, so shrink the window.
+          #
+          # Safe to shorten because every phase already degrades on BatchTimeout: triage and
+          # smell fall back to synchronous calls, guards fall back to the synchronous guards,
+          # and summarize rolls its drafts to the next run. Those branches are unit-tested.
+          # And since batch ids now carry over in opinions_state.json, a deferral no longer
+          # throws away the batch Anthropic already billed us for -- the next run collects it.
+          #
+          # The cost is that a deferred phase pays synchronous (non-batch) token pricing that
+          # run. Tune against measured wall clock; these are starting points, not findings.
+          OPINIONS_TRIAGE_BATCH_SEC: ${{ vars.OPINIONS_TRIAGE_BATCH_SEC || '150' }}
+          OPINIONS_SMELL_BATCH_SEC: ${{ vars.OPINIONS_SMELL_BATCH_SEC || '90' }}
+          OPINIONS_SUMMARIZE_BATCH_SEC: ${{ vars.OPINIONS_SUMMARIZE_BATCH_SEC || '210' }}
+          OPINIONS_GUARD_BATCH_SEC: ${{ vars.OPINIONS_GUARD_BATCH_SEC || '120' }}
           OPINIONS_MAX: ${{ vars.OPINIONS_MAX || '80' }}
           # Senior Fable review of held cases: 'clear' auto-publishes a held card Fable is highly
           # confident is a false positive (fail-closed); set the repo Variable to 'advisory' to

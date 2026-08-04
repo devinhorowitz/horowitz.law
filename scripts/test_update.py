@@ -241,7 +241,7 @@ def test_draft_pending():
     def finish_fn(v, p):
         finished.append((p["cid"], v))
 
-    def mixed_run(reqs, deadline=None, interval=20.0, label="batch"):
+    def mixed_run(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
         assert sorted(rq["custom_id"] for rq in reqs) == ["111", "222", "333"], [rq["custom_id"] for rq in reqs]
         return {"111": {"ok": True, "text": '{"relevant": true, "significance": "high"}', "stop_reason": "end_turn"},
                 "222": {"ok": False, "type": "errored", "error": "x"},
@@ -259,7 +259,7 @@ def test_draft_pending():
                       ("transport error", update.batch.BatchError("submit failed"))):
         finished.clear()
 
-        def raiser(reqs, deadline=None, interval=20.0, label="batch", _e=exc):
+        def raiser(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None, _e=exc):
             raise _e
         update.batch.run = raiser
         try:
@@ -281,7 +281,7 @@ def test_guard_cards_batch():
              {"cid": 222, "name": CARD["name"], "text": OPINION, "entry": CARD}]
     real_run = update.batch.run
 
-    def guard_run(reqs, deadline=None, interval=20.0, label="batch"):
+    def guard_run(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
         ids = sorted(rq["custom_id"] for rq in reqs)
         assert ids == ["111-completeness", "111-fidelity", "222-completeness", "222-fidelity"], ids
         return {
@@ -306,7 +306,7 @@ def test_guard_cards_batch():
 
     cc2, cp2 = {}, {}
 
-    def raiser(reqs, deadline=None, interval=20.0, label="batch"):
+    def raiser(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
         raise update.batch.BatchTimeout("bid", "still running")
     update.batch.run = raiser
     try:
@@ -336,7 +336,7 @@ def test_triage_batch():
         return {"relevant": True, "significance": "high", "note": "sync:%s" % name}
 
     # 111 ok from the batch; 222 errored line -> sync fallback; 333 unparseable body -> sync fallback.
-    def mixed_run(reqs, deadline=None, interval=20.0, label="batch"):
+    def mixed_run(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
         assert sorted(rq["custom_id"] for rq in reqs) == ["111", "222", "333"], [rq["custom_id"] for rq in reqs]
         return {"111": {"ok": True, "text": '{"relevant": true, "significance": "high", "note": "batch"}'},
                 "222": {"ok": False, "type": "errored", "error": "x"},
@@ -357,7 +357,7 @@ def test_triage_batch():
                        ("transport error", update.batch.BatchError("submit failed"))):
         sync_calls.clear()
 
-        def raiser(reqs, deadline=None, interval=20.0, label="batch", _e=exc):
+        def raiser(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None, _e=exc):
             raise _e
         update.batch.run, update.triage = raiser, fake_triage
         try:
@@ -492,6 +492,116 @@ def test_funnel_pr_body():
     print("  ok  empty run says 'no new relevant opinions'")
 
 
+def test_batch_carry_over():
+    """A Message Batch is billed when Anthropic accepts it, not when we read it. Before this,
+    every deferral abandoned a batch that had already run -- at opus-5 rates for summarize.
+    The id must be recorded at SUBMIT time (not after the wait) and collected next run.
+
+    Honest scope, asserted in the comments so it is not forgotten: this recovers DEFERRALS.
+    A reclaimed run never reaches the commit step, so nothing reaches the state file.
+    """
+    real_run = update.batch.run
+    seen = {}
+
+    def submitting(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+        seen["resume_id"] = resume_id
+        if on_submit:
+            on_submit("bid_new")
+        return {"a": {"ok": True, "text": "{}"}}
+
+    def timing_out(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+        if on_submit:
+            on_submit("bid_deferred")
+        raise update.batch.BatchTimeout("bid_deferred", "still running")
+
+    try:
+        # A completed batch leaves nothing behind.
+        update._PENDING_BATCHES.clear(); update._RESUME_BATCHES.clear()
+        update.batch.run = submitting
+        out = update.batch_run(["r"], 0, "funnel-summarize", now=1000.0)
+        assert out == {"a": {"ok": True, "text": "{}"}}, out
+        assert update._PENDING_BATCHES == {}, update._PENDING_BATCHES
+        assert seen["resume_id"] is None, seen
+        print("  ok  a collected batch returns results and leaves nothing to carry")
+
+        # A deferral still raises (callers degrade unchanged) but keeps the paid id.
+        update.batch.run = timing_out
+        update._PENDING_BATCHES.clear()
+        raised = False
+        try:
+            update.batch_run(["r"], 0, "funnel-summarize", now=2000.0)
+        except update.batch.BatchTimeout:
+            raised = True
+        assert raised, "BatchTimeout must still propagate to the caller"
+        rec = update._PENDING_BATCHES.get("funnel-summarize") or {}
+        assert rec.get("id") == "bid_deferred", rec
+        assert rec.get("at") == 2000.0, rec
+        print("  ok  a deferral still raises, and retains the billed batch id")
+
+        # A deferral whose id arrives ONLY on the exception (on_submit never fired -- e.g. the
+        # carried batch was still running, so nothing new was submitted) must still be held.
+        # Mutation testing caught this path being unreachable from the happy-path test.
+        def timing_out_silently(reqs, deadline=None, interval=20.0, label="batch",
+                                resume_id=None, on_submit=None):
+            raise update.batch.BatchTimeout("bid_from_exception", "still running")
+        update.batch.run = timing_out_silently
+        update._PENDING_BATCHES.clear()
+        try:
+            update.batch_run(["r"], 0, "funnel-triage", now=2500.0)
+        except update.batch.BatchTimeout:
+            pass
+        assert (update._PENDING_BATCHES.get("funnel-triage") or {}).get("id") == "bid_from_exception", \
+            update._PENDING_BATCHES
+        print("  ok  an id carried only on the exception is still retained")
+
+        # Restore the state the round-trip assertions below expect.
+        update.batch.run = timing_out
+        update._PENDING_BATCHES.clear()
+        try:
+            update.batch_run(["r"], 0, "funnel-summarize", now=2000.0)
+        except update.batch.BatchTimeout:
+            pass
+
+        # The id round-trips through the committed state file.
+        st = update.stamp_pending_batches({"seen_clusters": []})
+        assert st["pending_batches"]["funnel-summarize"]["id"] == "bid_deferred", st
+        back = update.load_pending_batches(st, now=2060.0)
+        assert back == {"funnel-summarize": "bid_deferred"}, back
+        print("  ok  the id round-trips through opinions_state.json")
+
+        # Next run offers it as resume_id instead of paying for the same work twice.
+        update._RESUME_BATCHES.clear(); update._RESUME_BATCHES.update(back)
+        update._PENDING_BATCHES.clear()
+        update.batch.run = submitting
+        update.batch_run(["r"], 0, "funnel-summarize", now=3000.0)
+        assert seen["resume_id"] == "bid_deferred", seen
+        assert update._RESUME_BATCHES == {}, update._RESUME_BATCHES
+        print("  ok  the carried id is offered as resume_id, and consumed once")
+
+        # A healthy run leaves no trace, so the committed diff stays quiet.
+        st2 = update.stamp_pending_batches({"pending_batches": {"stale": {"id": "x"}}})
+        assert "pending_batches" not in st2, st2
+        print("  ok  a clean run removes the key rather than committing an empty dict")
+
+        # Too old to still be collectable -> dropped, not polled with the phase's whole budget.
+        old = {"pending_batches": {"funnel-triage": {"id": "bid_old", "at": 1000.0}}}
+        assert update.load_pending_batches(old, now=1000.0 + update.BATCH_CARRY_MAX_AGE_SEC + 1) == {}
+        assert update.load_pending_batches(old, now=1060.0) == {"funnel-triage": "bid_old"}
+        print("  ok  a stale id is dropped; one inside the window is carried")
+
+        # Junk in a committed file must never crash the run that reads it.
+        for junk in ({"pending_batches": {"a": "not-a-dict"}},
+                     {"pending_batches": {"a": {"id": "x", "at": "nonsense"}}},
+                     {"pending_batches": {"a": {"at": 1.0}}},
+                     {"pending_batches": None},
+                     {}):
+            assert update.load_pending_batches(junk, now=1000.0) == {}, junk
+        print("  ok  malformed carry-over state reads as empty instead of crashing")
+    finally:
+        update.batch.run = real_run
+        update._PENDING_BATCHES.clear(); update._RESUME_BATCHES.clear()
+
+
 def main():
     print("crosscheck guardrails:")
     for c in CASES:
@@ -514,7 +624,8 @@ def main():
     test_guard_cards_batch()
     test_triage_batch()
     test_funnel_pr_body()
-    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 4))
+    test_batch_carry_over()
+    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 12))
     return 0
 
 

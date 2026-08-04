@@ -107,11 +107,81 @@ def test_poll_actually_prints(capture):
           "lbl: waiting on batch b1" in text, text.strip()[:120] or "(no output)")
 
 
+def test_resume_and_on_submit():
+    """Drive the REAL batch.run through the _send seam. The update-side test stubs batch.run
+    entirely, so nothing there can catch a mutation inside this function -- and mutation
+    testing proved it: dropping on_submit, or disabling the resume path, survived that suite
+    untouched. These are the assertions that actually pin the money-saving behaviour."""
+    submitted = []
+
+    # 1. on_submit fires with the new id BEFORE any polling. Ordering is the point: a batch is
+    #    billed the instant Anthropic accepts it, so the id must be recorded before the wait.
+    order = []
+    fake = Scripted([
+        json.dumps({"id": "batch_new", "processing_status": "in_progress"}),                 # submit
+        json.dumps({"id": "batch_new", "processing_status": "ended", "results_url": "u"}),   # poll
+        json.dumps(_succeeded("a", "{}")),                                                    # collect
+    ])
+
+    def note(bid):
+        submitted.append(bid)
+        order.append(("on_submit", len(fake.calls)))
+    with_send(fake, lambda: batch.run([batch.request("a", "m", "s", [{"role": "user", "content": "x"}], 8)],
+                                      interval=0.01, label="t", on_submit=note))
+    check("on_submit receives the new batch id", submitted == ["batch_new"], str(submitted))
+    check("and is called right after submit, before polling",
+          order and order[0][1] == 1, str(order))
+
+    # 2. resume_id collects the carried batch and NEVER submits -- that is the whole saving.
+    fake2 = Scripted([
+        json.dumps({"id": "batch_old", "processing_status": "ended", "results_url": "u"}),   # status
+        json.dumps(_succeeded("a", '{"carried": 1}')),                                        # collect
+    ])
+    out = with_send(fake2, lambda: batch.run(["ignored"], interval=0.01, label="t",
+                                             resume_id="batch_old"))
+    check("a resumed batch returns the carried results",
+          out.get("a", {}).get("text") == '{"carried": 1}', repr(out))
+    check("and no POST was made -- the work is not paid for twice",
+          all(c[0] != "POST" for c in fake2.calls), str([c[0] for c in fake2.calls]))
+
+    # 3. A carried batch that is STILL running re-raises BatchTimeout carrying the same id, so
+    #    the caller keeps holding it rather than losing it a second time.
+    fake3 = Scripted([json.dumps({"id": "batch_old", "processing_status": "in_progress"})])
+    err = {}
+    try:
+        with_send(fake3, lambda: batch.run(["ignored"], deadline=0, interval=0.01, label="t",
+                                           resume_id="batch_old"))
+    except batch.BatchTimeout as e:
+        err["id"] = e.batch_id
+    check("a still-running carried batch re-raises BatchTimeout", "id" in err)
+    check("carrying the same id, so it is held for the next run",
+          err.get("id") == "batch_old", str(err))
+
+    # 4. A stale/expired id must not strand the phase: fall through to a fresh submit.
+    calls4 = {"n": 0}
+
+    def flaky(method, url, body=None, label="batch"):
+        calls4["n"] += 1
+        if calls4["n"] == 1:
+            raise batch.BatchError("404 not_found_error: no such batch")
+        if method == "POST":
+            return json.dumps({"id": "batch_fresh", "processing_status": "in_progress"})
+        if url == "u":
+            return json.dumps(_succeeded("a", '{"fresh": 1}'))
+        return json.dumps({"id": "batch_fresh", "processing_status": "ended", "results_url": "u"})
+    out4 = with_send(flaky, lambda: batch.run(["r"], interval=0.01, label="t",
+                                              resume_id="batch_gone"))
+    check("an unknown carried id falls through to a fresh submit",
+          out4.get("a", {}).get("text") == '{"fresh": 1}', repr(out4))
+
+
 def main():
     # No real sleeping during polls.
     _orig_sleep = batch.time.sleep
     batch.time.sleep = lambda *_a, **_k: None
 
+    print("resume + on_submit (real batch.run):")
+    test_resume_and_on_submit()
     print("poll progress:")
     test_poll_progress()
     buf = io.StringIO()

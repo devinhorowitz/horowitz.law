@@ -945,6 +945,85 @@ def parse_json(s):
         return json.loads(obj)
 
 
+# --- carried-over batches ---------------------------------------------------
+# A Message Batch is billed when Anthropic accepts it, not when we read the results. Every
+# phase here runs one under a wall-clock budget, and when that budget expires the phase
+# catches BatchTimeout and degrades gracefully -- but the batch itself keeps running to
+# completion on Anthropic's side and nobody ever collects it. That is paid work thrown away
+# on every deferral, at opus-5 rates for the summarize phase.
+#
+# So the id is recorded when the batch is submitted and carried in opinions_state.json; the
+# next run collects it before submitting anything new.
+#
+# HONEST LIMIT: this recovers DEFERRALS, not reclamations. When the runner is reclaimed
+# (exit 143) the commit step never runs, so nothing reaches the state file. Shrinking the
+# batch budgets makes deferrals the common case and reclamations rarer, which is exactly the
+# trade this is meant to support -- but a reclaimed run still loses its batch.
+_PENDING_BATCHES = {}    # label -> {"id", "at", "n"}  : submitted this run, not yet collected
+_RESUME_BATCHES = {}     # label -> id                 : carried in from the last run
+# A carried id older than this is dropped rather than polled: Anthropic expires batch results,
+# and a stale id would spend the phase's whole budget discovering that.
+BATCH_CARRY_MAX_AGE_SEC = int(os.environ.get("OPINIONS_BATCH_CARRY_MAX_AGE_SEC", str(3 * 24 * 3600)))
+
+
+def load_pending_batches(state, now=None):
+    """Read carried batch ids out of state, dropping anything too old to still be collectable."""
+    now = time.time() if now is None else now
+    out = {}
+    for label, rec in (state.get("pending_batches") or {}).items():
+        if not isinstance(rec, dict) or not rec.get("id"):
+            continue
+        try:
+            age = now - float(rec.get("at") or 0)
+        except (TypeError, ValueError):
+            continue
+        if age <= BATCH_CARRY_MAX_AGE_SEC:
+            out[label] = rec["id"]
+    return out
+
+
+def stamp_pending_batches(state):
+    """Fold this run's uncollected batch ids into state, just before it is written.
+
+    Removes the key entirely when nothing is outstanding, so a healthy run leaves no trace
+    in the committed file and the diff stays quiet.
+    """
+    if _PENDING_BATCHES:
+        state["pending_batches"] = dict(_PENDING_BATCHES)
+    else:
+        state.pop("pending_batches", None)
+    return state
+
+
+def batch_run(reqs, deadline, label, now=None):
+    """batch.run with carry-over: collect a batch left behind by the last run if there is one,
+    and record this run's id the moment it is submitted.
+
+    Callers keep their existing `except (BatchTimeout, BatchError)` handling -- the exception
+    still propagates and still means "degrade this phase". The only change is that the paid
+    work survives to the next run.
+    """
+    now = time.time() if now is None else now
+    resume_id = _RESUME_BATCHES.pop(label, None)
+
+    def _record(bid):
+        _PENDING_BATCHES[label] = {"id": bid, "at": now, "n": len(reqs)}
+
+    if resume_id:
+        _record(resume_id)          # keep it recorded until it is actually collected
+    try:
+        out = batch.run(reqs, deadline=deadline, label=label,
+                        resume_id=resume_id, on_submit=_record)
+    except batch.BatchTimeout as e:
+        # Prefer the id the exception carries: on a fresh submit it is the new batch, and on a
+        # resume it is the same one we were already holding.
+        if getattr(e, "batch_id", None):
+            _record(e.batch_id)
+        raise
+    _PENDING_BATCHES.pop(label, None)   # collected; nothing left to carry
+    return out
+
+
 def rss_mb():
     """Resident set size in MiB, or None where it cannot be read.
 
@@ -1184,7 +1263,7 @@ def _triage_batch(items, feed_index, deadline=None):
     reqs = [batch.from_body(str(p["cid"]), triage_request(p["name"], p["docket"], p["text"], feed_index))
             for p in items]
     try:
-        results = batch.run(reqs, deadline=deadline, label="funnel-triage")
+        results = batch_run(reqs, deadline, "funnel-triage")
     except (batch.BatchTimeout, batch.BatchError) as e:
         print("  ! triage batch deferred (%s); triaging %d candidate(s) synchronously this run"
               % (e, len(items)), flush=True)
@@ -1257,7 +1336,7 @@ def smell_reasons(items, deadline=None):
     if SMELL_BATCH:
         try:
             reqs = [batch.from_body("smell-%d" % k, smell_request(c)) for k, c in enumerate(chunks)]
-            res = batch.run(reqs, deadline=deadline, label="funnel-smell")
+            res = batch_run(reqs, deadline, "funnel-smell")
             for k in range(len(chunks)):
                 line = res.get("smell-%d" % k)
                 if line and line.get("ok"):
@@ -1669,7 +1748,7 @@ def guard_cards_batch(items, crosschecks, completeness, deadline=None):
     if not reqs:
         return True
     try:
-        results = batch.run(reqs, deadline=deadline, label="funnel-guards")
+        results = batch_run(reqs, deadline, "funnel-guards")
     except (batch.BatchTimeout, batch.BatchError) as e:
         print("  ! finish-guard batch deferred (%s); falling back to the synchronous guards" % e)
         return False
@@ -2151,7 +2230,7 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
         if seen_all != seen:
             state["seen_clusters"] = sorted(seen_all)[-SEEN_CAP:]
             state["updated"] = now_iso
-            safeio.atomic_write_json(STATE_PATH, state)
+            safeio.atomic_write_json(STATE_PATH, stamp_pending_batches(state))
         return {"auto": 0, "held": 0, "treatments": 0, "wrote_auto": False, "noop": True}
 
     # AUTO lane: write + render only when there is additive content. Held treatment changes are
@@ -2218,7 +2297,7 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
     seen_all = (seen | evaluated | have | {int(e["cluster_id"]) for e, _ in auto_cards}) - held_card_cids
     state["seen_clusters"] = sorted(seen_all)[-SEEN_CAP:]
     state["updated"] = now_iso
-    safeio.atomic_write_json(STATE_PATH, state)
+    safeio.atomic_write_json(STATE_PATH, stamp_pending_batches(state))
     return {"auto": len(auto_cards), "held": len(held_items), "treatments": len(treat_events),
             "wrote_auto": bool(auto_cards), "noop": False}
 
@@ -2245,7 +2324,7 @@ def _draft_pending(pending, deadline, finish_fn):
                                               cl_status=p["cl_status"]))
             for p in pending]
     try:
-        results = batch.run(reqs, deadline=deadline, label="funnel-summarize")
+        results = batch_run(reqs, deadline, "funnel-summarize")
     except (batch.BatchTimeout, batch.BatchError) as e:
         print("  ! tier-3 summarize batch deferred (%s); %d draft(s) roll to the next run"
               % (e, len(pending)))
@@ -2329,6 +2408,13 @@ def main():
     if os.path.exists(STATE_PATH):
         state = json.load(open(STATE_PATH, encoding="utf-8"))
     seen = set(int(x) for x in state.get("seen_clusters", []))
+    # Batches the last run paid for but never collected. Loaded before any phase runs so each
+    # one collects its carry-over instead of submitting duplicate work.
+    _RESUME_BATCHES.clear()
+    _RESUME_BATCHES.update(load_pending_batches(state))
+    if _RESUME_BATCHES:
+        print("  . carrying over %d uncollected batch(es) from the last run: %s"
+              % (len(_RESUME_BATCHES), ", ".join(sorted(_RESUME_BATCHES))), flush=True)
     # Cases already staged in an open review PR: skip them so the funnel does not re-summarize
     # (and re-stage) a case every four hours while it is awaiting a human decision. A veto
     # clears the case from this ledger, so it is rediscovered and redrafted on a later run.
