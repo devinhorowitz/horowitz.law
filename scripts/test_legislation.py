@@ -490,7 +490,7 @@ def main():
     _real_run = _B.run
     screen_keep = make_ai({"leg-screen": screen_router})   # drops the appropriations bill (444), keeps 111/222
 
-    def _fake_batch(reqs, deadline=None, interval=20.0, label="batch"):
+    def _fake_batch(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         # custom_id is the bill_id: 111 kept, 222 declined, anything else an errored line.
         out = {}
         for r in reqs:
@@ -520,7 +520,7 @@ def main():
     check("batch run announces the batch", any("batching" in n for n in bnotes))
 
     # A whole-batch timeout defers EVERY write (all un-seen, retry next run); only the screen drop stays seen.
-    def _timeout_batch(reqs, deadline=None, interval=20.0, label="batch"):
+    def _timeout_batch(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         raise _B.BatchTimeout("bid", "still running")
 
     _B.run = _timeout_batch

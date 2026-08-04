@@ -68,7 +68,7 @@ def main():
 
     # 4. _draft_cards batch success: one job, results keyed by "<cid>".
     backfill.BATCH = True
-    def _run_ok(reqs, deadline=None, interval=20.0, label="batch"):
+    def _run_ok(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         _run_ok.n = len(reqs)
         return {"1": {"ok": True, "text": json.dumps(summary_card())},
                 "2": {"ok": True, "text": json.dumps(dict(summary_card(), areas=[]))}}  # card, then no-card
@@ -79,7 +79,7 @@ def main():
     check("batch draft: one card built, none deferred", len(cards) == 1 and deferred == 0)
 
     # 5. _draft_cards batch with a per-request failure (ok=False): error row, rest unaffected.
-    def _run_partial(reqs, deadline=None, interval=20.0, label="batch"):
+    def _run_partial(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         return {"1": {"ok": False, "type": "errored"},
                 "2": {"ok": True, "text": json.dumps(summary_card())}}
     batch.run = _run_partial
@@ -88,7 +88,7 @@ def main():
     check("batch draft: the good line still cards", len(cards) == 1)
 
     # 6. _draft_cards batch timeout: the whole (already-fetched) set defers, nothing drafted.
-    def _run_timeout(reqs, deadline=None, interval=20.0, label="batch"):
+    def _run_timeout(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         raise batch.BatchTimeout("bid_x", "not finished")
     batch.run = _run_timeout
     rows, cards, deferred = backfill._draft_cards([pending(1), pending(2, "Beta v. Y")])

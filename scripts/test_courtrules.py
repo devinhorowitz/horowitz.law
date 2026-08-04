@@ -161,7 +161,7 @@ def main():
     import batch as _B
     _real_run = _B.run
 
-    def _fake_batch(reqs, deadline=None, interval=20.0, label="batch"):
+    def _fake_batch(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         assert [r["custom_id"] for r in reqs] == ["cr-0"], [r["custom_id"] for r in reqs]
         return {"cr-0": {"ok": True, "text": __import__("json").dumps({"amendments": [AMEND_26]})}}
 
@@ -178,7 +178,7 @@ def main():
     check("batch extract hashes the page seen", bupd["pages"].get("u"))
     check("batch run announces the batch", any("batching" in n for n in bnotes))
 
-    def _timeout_batch(reqs, deadline=None, interval=20.0, label="batch"):
+    def _timeout_batch(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         raise _B.BatchTimeout("bid", "still running")
 
     _B.run = _timeout_batch

@@ -101,7 +101,7 @@ def test_classify_batch():
                for i, c in enumerate([501, 502, 503], 1)]
     real_run = treatment.batch.run
 
-    def mixed_run(reqs, deadline=None, interval=20.0, label="batch"):
+    def mixed_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         check("classify batch custom_ids are str(ccid)",
               sorted(rq["custom_id"] for rq in reqs) == ["501", "502", "503"])
         return {"501": {"ok": True, "stop_reason": "end_turn",
@@ -121,7 +121,7 @@ def test_classify_batch():
 
     for label, exc in (("timeout", treatment.batch.BatchTimeout("bid", "still running")),
                        ("transport error", treatment.batch.BatchError("submit failed"))):
-        def raiser(reqs, deadline=None, interval=20.0, label="batch", _e=exc):
+        def raiser(reqs, deadline=None, interval=20.0, label="batch", _e=exc, **_kw):
             raise _e
         treatment.batch.run = raiser
         try:

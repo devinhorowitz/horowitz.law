@@ -192,7 +192,7 @@ def main():
     import batch as _B
     _real_run = _B.run
 
-    def _fake_batch(reqs, deadline=None, interval=20.0, label="batch"):
+    def _fake_batch(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         # custom_id is the document_number: HOS kept, INS declined, anything else errored.
         out = {}
         for r in reqs:
@@ -220,7 +220,7 @@ def main():
     check("batch write records the screen-dropped fee rule seen", "2025-22222" in bseen)
     check("batch run announces the batch", any("batching" in n for n in bnotes))
 
-    def _timeout_batch(reqs, deadline=None, interval=20.0, label="batch"):
+    def _timeout_batch(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         raise _B.BatchTimeout("bid", "still running")
 
     _B.run = _timeout_batch

@@ -1,12 +1,22 @@
 name: Georgia Appellate Watch treatment sweep
 
-# Reverse citation sweep. Runs on a weekend, when the daily updater finds no new
-# opinions and the CourtListener REST budget is free. Leave dry_run checked the
+# Reverse citation sweep. Short runs every few hours rather than one long weekly
+# sweep -- see the cron note below. Leave dry_run checked the
 # first time to preview the citing opinions and any flags in the run log without
 # writing anything or opening a PR; uncheck it (or let the cron run) to write.
 on:
   schedule:
-    - cron: '17 13 * * 6'    # Saturdays at 13:17 UTC, about an hour after the 12:17 daily slot (the daily runs at :17 past every fourth hour)
+    # Was a single weekly run (Saturdays 13:17) with a 5-hour budget. That run spent most of
+    # its time ASLEEP: treatment.py waits for the CourtListener hourly window to refill rather
+    # than stopping, so a two-hour sweep was largely a runner sitting idle. Idle time is the
+    # exposure that gets a job reclaimed (seven reclamations since 2026-07-17, every one while
+    # waiting), and the sweep lost its entire run three times on 2026-08-01.
+    #
+    # Same CourtListener throughput ceiling, spread over short runs instead of one long one.
+    # Safe because the sweep is already resumable: treatment_state.json carries per-card
+    # progress, a card cut short is simply not marked full and resumes next run, and
+    # FIRST_PER_RUN/FIRST_PAGES already bound each run's work.
+    - cron: '41 */6 * * *'   # every 6 hours, off-peak minute; was weekly
   workflow_dispatch:
     inputs:
       dry_run:
@@ -30,7 +40,7 @@ concurrency:
 jobs:
   treatment:
     runs-on: ubuntu-latest
-    timeout-minutes: 350      # backstop under GitHub's 6h hard cap; a run finishes well before this
+    timeout-minutes: 25       # a short run now; the old 350 backstopped a 5-hour budget
     steps:
       # Supply-chain hardening (block mode).
       # Funnel egress, same eight as opinions:
@@ -73,13 +83,22 @@ jobs:
           CL_PER_DAY: ${{ vars.CL_PER_DAY }}
           CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
-          # Long budget so a real run drains across rate windows in one pass; a dry-run preview stays short.
-          # The run is bounded by this, by CL_PER_DAY, and by the job timeout. Override via the TREATMENT_BUDGET_SEC repo Variable.
-          TREATMENT_BUDGET_SEC: ${{ inputs.dry_run && '900' || (vars.TREATMENT_BUDGET_SEC || '18000') }}
-          # Throughput ceilings raised for a real run so the backlog clears in one pass. They are ceilings, not targets:
-          # steady-state weeks have little to do. A dry-run preview keeps the small defaults. Override via repo Variables.
-          TREATMENT_PER_RUN: ${{ inputs.dry_run && '25' || (vars.TREATMENT_PER_RUN || '300') }}
+          # The run is bounded by this, by CL_PER_DAY, and by the job timeout. Override via the
+          # TREATMENT_BUDGET_SEC repo Variable.
+          #
+          # 8 minutes, not 5 hours: the budget is also how long the run will WAIT on a filled
+          # rate window, so it was the direct cause of the idle exposure. Six runs a day at 8
+          # minutes buys more working time per week than one run at five hours, without ever
+          # leaving a runner asleep.
+          TREATMENT_BUDGET_SEC: ${{ inputs.dry_run && '300' || (vars.TREATMENT_BUDGET_SEC || '480') }}
+          # Per-run throughput ceilings, sized for a short run repeated through the day rather
+          # than one long weekly pass. Ceilings, not targets: a steady-state run has little to
+          # do. A dry-run preview keeps the small defaults. Override via repo Variables.
+          TREATMENT_PER_RUN: ${{ inputs.dry_run && '25' || (vars.TREATMENT_PER_RUN || '40') }}
           TREATMENT_PER_CARD: ${{ inputs.dry_run && '6' || (vars.TREATMENT_PER_CARD || '50') }}
+          # Bounded like the funnel's, and for the same reason: a long batch wait is idle
+          # exposure. _classify_batch already defers the card on BatchTimeout and retries it.
+          TREATMENT_BATCH_SEC: ${{ vars.TREATMENT_BATCH_SEC || '180' }}
           TREATMENT_MODEL: ${{ vars.TREATMENT_MODEL || 'claude-sonnet-5' }}     # full-read classifier; set the repo Variable to update without editing this file
         run: |
           set -o pipefail

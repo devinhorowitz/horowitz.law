@@ -93,7 +93,7 @@ def test_batch_path_and_fallback():
         payload = json.dumps({"verdicts": [{"i": 2, "verdict": "suspect", "note": "topic label"}]})
         calls = {"batch": 0, "sync": 0}
 
-        def fake_run(reqs, deadline=None, interval=20.0, label="batch"):
+        def fake_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):
             calls["batch"] += 1
             check("batch gets exactly one request", len(reqs) == 1)
             check("batch request is keyed 'smell-0'", reqs[0]["custom_id"] == "smell-0")
@@ -104,14 +104,14 @@ def test_batch_path_and_fallback():
         check("batch path parses the verdict", out.get(1, {}).get("verdict") == "suspect")
         check("batch path never calls the sync API", calls["sync"] == 0)
 
-        def broken_run(reqs, deadline=None, interval=20.0, label="batch"):
+        def broken_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):
             raise batch.BatchError("boom")
         batch.run = broken_run
         update.anthropic_json = lambda body, label=None: {"verdicts": [{"i": 1, "verdict": "suspect", "note": "n"}]}
         out = update.smell_reasons(ITEMS)
         check("batch error falls back to the synchronous call", out.get(0, {}).get("verdict") == "suspect")
 
-        def failed_line_run(reqs, deadline=None, interval=20.0, label="batch"):
+        def failed_line_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):
             return {"smell-0": {"ok": False, "type": "errored", "error": "x"}}
         batch.run = failed_line_run
         out = update.smell_reasons(ITEMS)
@@ -149,7 +149,7 @@ def test_chunking():
                 for i in range(update.SMELL_CHUNK * 2 + 5)]
         update.SMELL_BATCH = True
 
-        def fake_run(reqs, deadline=None, interval=20.0, label="batch"):
+        def fake_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):
             check("chunked batch: one request per SMELL_CHUNK slice", len(reqs) == 3)
             check("chunk custom_ids are smell-<k>",
                   [r["custom_id"] for r in reqs] == ["smell-0", "smell-1", "smell-2"])
@@ -173,7 +173,7 @@ def test_chunking():
 
         def broken_sync(body, label=None):
             raise RuntimeError("api down")
-        def dead_run(reqs, deadline=None, interval=20.0, label="batch"):
+        def dead_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):
             raise batch.BatchError("dead")
         batch.run, update.anthropic_json = dead_run, broken_sync
         check("total failure returns an EMPTY map (nothing judged, nothing invented)",
