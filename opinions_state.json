@@ -1337,15 +1337,13 @@
     10939453,
     10939454,
     10939459,
-    10939460
+    10939460,
+    10939548,
+    10939549,
+    10939550,
+    10939560,
+    10939574
   ],
-  "updated": "2026-08-04T18:09:53Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-smell": {
-      "id": "msgbatch_01CXMcTmhRzL5ZDQZSfm1Ud5",
-      "at": 1785866898.8969188,
-      "n": 1
-    }
-  }
+  "updated": "2026-08-04T21:40:13Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
