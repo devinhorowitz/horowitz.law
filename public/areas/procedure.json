@@ -1,8 +1,25 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 61,
+  "count": 62,
   "opinions": [
+    {
+      "cluster_id": 10938729,
+      "name": "City of Brunswick v. Honeywell International, Inc.",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2026-08-03",
+      "disposition": "motion to dismiss appeal denied; remand order reversed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10938729/city-of-brunswick-v-honeywell-international-inc/",
+      "synopsis": "A city sued two companies in Georgia state court for continuing nuisance and continuing trespass based on pollution around a Superfund site; the defendants removed under the federal officer removal statute, 28 U.S.C. section 1442(a)(1), and the district court remanded. While the appeal of the remand order was pending, the parties litigated in state court and the city amended its complaint twice, and the city argued the appeal was moot. Applying the Griggs principle as explained in Coinbase, the court held that a timely notice of appeal from a remand order reviewable under 28 U.S.C. section 1447(d) automatically stays all district court proceedings, including the remand order itself, so that later state court proceedings are void for purposes of the appeal, and that the earlier mailing of the remand order to the state court does not defeat the stay because the district court retains jurisdiction to reconsider a reviewable remand order. The court denied the city's motion to dismiss and rejected the mootness argument based on the amended state court complaints.",
+      "why": "It establishes in the Eleventh Circuit that an appeal from a remand order in a federal officer removal case operates as a self-executing stay of district court proceedings, so post-remand state court activity and amended pleadings do not affect appellate review, a position that diverges from the Ninth Circuit's discretionary-stay approach and aligns with the Fourth Circuit.",
+      "dockets": [
+        "23-13200"
+      ]
+    },
     {
       "cluster_id": 10936160,
       "name": "The Town of Pine Hill, Alabama v. 3M Company",

@@ -2499,5 +2499,43 @@
       }
     ],
     "official_url": "https://media.ca11.uscourts.gov/opinions/pub/files/202510746.pdf"
+  },
+  {
+    "cluster_id": 10938729,
+    "name": "City of Brunswick v. Honeywell International, Inc.",
+    "court": "ca11",
+    "division": null,
+    "date": "2026-08-03",
+    "dockets": [
+      "23-13200"
+    ],
+    "disposition": "motion to dismiss appeal denied; remand order reversed",
+    "areas": [
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10938729/city-of-brunswick-v-honeywell-international-inc/",
+    "synopsis": "A city sued two companies in Georgia state court for continuing nuisance and continuing trespass based on pollution around a Superfund site; the defendants removed under the federal officer removal statute, 28 U.S.C. section 1442(a)(1), and the district court remanded. While the appeal of the remand order was pending, the parties litigated in state court and the city amended its complaint twice, and the city argued the appeal was moot. Applying the Griggs principle as explained in Coinbase, the court held that a timely notice of appeal from a remand order reviewable under 28 U.S.C. section 1447(d) automatically stays all district court proceedings, including the remand order itself, so that later state court proceedings are void for purposes of the appeal, and that the earlier mailing of the remand order to the state court does not defeat the stay because the district court retains jurisdiction to reconsider a reviewable remand order. The court denied the city's motion to dismiss and rejected the mootness argument based on the amended state court complaints.",
+    "why": "It establishes in the Eleventh Circuit that an appeal from a remand order in a federal officer removal case operates as a self-executing stay of district court proceedings, so post-remand state court activity and amended pleadings do not affect appellate review, a position that diverges from the Ninth Circuit's discretionary-stay approach and aligns with the Fourth Circuit.",
+    "precedential": "published",
+    "first_seen": "2026-08-04",
+    "first_impression": true,
+    "law_applied": "federal",
+    "additional_holdings": [
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "As an alternative ground for denying the motion to dismiss, the court held that the defendants did not waive their right to remove or to appeal the remand order by answering, moving to dismiss, and appearing at a hearing in state court after remand. Waiver principles reach substantial offensive or defensive action taken in state court before removal, and here the only conduct identified occurred after remand and after the plaintiff itself successfully asked the state court to lift its stay pending appeal. Under those circumstances the defendants had no practical choice but to participate.",
+        "why": "It clarifies that post-remand participation in state court litigation, particularly where the plaintiff obtained dissolution of a stay pending appeal, does not forfeit the right to appeal a remand order."
+      },
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "On the merits, the court held that removal under 28 U.S.C. section 1442(a)(1) was proper. The defendants were \"acting under\" the EPA because, unlike an ordinary regulated party merely complying with detailed regulation, they were carrying out remediation selected in an EPA Record of Decision and consent decree at a listed Superfund site, work the agency would otherwise have had to perform; the city's continuing nuisance and trespass claims premised on inadequate remediation were \"for or relating to\" those acts; and the defendants raised a colorable federal defense that CERCLA and the consent decree conflict-preempt the state tort remedies. The court also stated that, following the Supreme Court's Plaquemines Parish decision, the \"causal connection\" and \"causal nexus\" phrasing previously used for the second prong should be retired in favor of asking whether the challenged acts are closely connected to the performance of federal duties.",
+        "why": "It clarifies when parties performing EPA-directed CERCLA cleanup may remove state tort suits to federal court and updates the Eleventh Circuit's articulation of the \"for or relating to\" prong of the federal officer removal test."
+      }
+    ],
+    "official_url": "https://media.ca11.uscourts.gov/opinions/pub/files/202313200.pdf"
   }
 ]
