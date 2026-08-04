@@ -111,6 +111,57 @@ def test_no_step_ends_on_a_bare_conditional():
           not offenders, " | ".join(offenders))
 
 
+def test_relaxed_egress_is_justified_and_marked_temporary():
+    """Every workflow that is not on `egress-policy: block` must say why, next to the policy.
+
+    Two are permanently relaxed by design -- links.yml and lighthouse.yml crawl arbitrary
+    third-party URLs, so no allowlist can be written in advance. opinions.yml is relaxed
+    only as a running experiment into the exit-143 runner kills, and an experiment with no
+    end date is just a weakened posture nobody remembers choosing. Requiring the word
+    TEMPORARY there means the day someone restores `block`, this check keeps passing with
+    nothing else to remember; the day someone leaves it relaxed and silent, it fails.
+    """
+    print("egress policy")
+    PERMANENT = ("links.yml", "lighthouse.yml")   # crawl arbitrary third-party URLs by design
+    hardened, relaxed, unjustified, untemporary = [], [], [], []
+    for path in sorted(glob.glob(os.path.join(WORKFLOWS, "*.yml"))):
+        raw = open(path, encoding="utf-8").read()
+        lines = raw.splitlines()
+        doc = yaml.safe_load(raw)
+        for job in (doc.get("jobs") or {}).values():
+            for st in (job.get("steps") or []):
+                if "harden-runner" not in str(st.get("uses", "")):
+                    continue
+                name = os.path.basename(path)
+                hardened.append(name)
+                if (st.get("with") or {}).get("egress-policy") == "block":
+                    continue
+                relaxed.append(name)
+                # The justification must sit next to the policy, not in a commit message
+                # nobody reads while editing. Require a comment in the lines just above it.
+                # Deliberately not keyword-matched: links.yml says "audit, not block" and
+                # never uses the word "egress", and a check that dictates vocabulary would
+                # fail good prose while a missing explanation slipped past on a lucky word.
+                # Counting '#' across the whole file would pass anything -- these workflows
+                # are heavily commented -- so the window is what makes it mean something.
+                idx = next((i for i, ln in enumerate(lines)
+                            if ln.strip().startswith("egress-policy:")), None)
+                window = lines[max(0, (idx or 0) - 30):(idx or 0)]
+                if not any(ln.strip().startswith("#") for ln in window):
+                    unjustified.append(name)
+                if name not in PERMANENT and "TEMPORARY" not in raw:
+                    untemporary.append(name)
+
+    check("harden-runner steps were actually found and parsed",
+          len(hardened) >= 10, "%d found" % len(hardened))
+    check("every relaxed workflow explains itself in a comment beside the policy",
+          not unjustified, str(unjustified))
+    check("a relaxed workflow that is not one of the two permanent crawlers is marked TEMPORARY",
+          not untemporary, str(untemporary))
+    check("the permanently-relaxed set is still just the two crawlers plus any marked experiment",
+          set(relaxed) <= {"links.yml", "lighthouse.yml", "opinions.yml"}, str(sorted(relaxed)))
+
+
 def test_the_legislation_step_specifically():
     """The step that broke. Pinned by name because it is the one with three optional body
     files, so it is the one most likely to regrow the shape."""
@@ -130,6 +181,7 @@ def test_the_legislation_step_specifically():
 def main():
     for t in (test_the_shape_is_actually_dangerous,
               test_no_step_ends_on_a_bare_conditional,
+              test_relaxed_egress_is_justified_and_marked_temporary,
               test_the_legislation_step_specifically):
         t()
     if FAILS:

@@ -14,6 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # audit, not block, and permanently so: Lighthouse drives a real Chrome against the
+      # deployed site, so the run fetches whatever horowitz.law's HTML happens to reference
+      # -- fonts, feeds, any third-party asset a future page adds -- plus the action's own
+      # Chrome download and the temporary-public-storage upload of each report. That set is
+      # not knowable in advance, which is the same reason links.yml audits rather than
+      # blocks. Nothing here handles a repo secret: permissions are contents: read plus
+      # issues: write for the regression tracker.
       - name: Harden the runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:

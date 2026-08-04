@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
 """Hermetic tests for run_watchdog.
 
-The two headline fixtures are not invented. They are the real step sequences from the two
-runs that motivated this module, trimmed to the fields the rule reads:
+The headline fixtures are not invented. They are real step sequences, trimmed to the
+fields the rule reads:
 
-  RUNNER_DEATH   treatment sweep 30704271089, 2026-08-01 -- runner reclaimed at 16 minutes,
-                 exit 143. `Report a failed run` was SKIPPED. Nothing was filed.
-  NORMAL_FAILURE opinions-maintenance 30375455076, 2026-07-28 -- a genuine finding, exit 1.
-                 `Report maintenance findings` ran and filed. Note that
-                 `Post Run actions/setup-python` is `skipped` here on a perfectly healthy
-                 runner, which is why the rule must not read post-steps as liveness.
+  RUNNER_DEATH        treatment sweep 30704271089, 2026-08-01 -- runner reclaimed at 16
+                      minutes, exit 143. `Report a failed run` was SKIPPED. Nothing filed.
+  CANCELLED_MID_REPORT daily funnel 30875514401, 2026-08-04 -- runner reclaimed WHILE the
+                      reporting step was running, so it is `cancelled`, not `skipped`. The
+                      first version of the rule called this self-reported and stayed quiet,
+                      so the failure went entirely unrecorded. Production found the bug.
+  NORMAL_FAILURE      opinions-maintenance 30375455076, 2026-07-28 -- a genuine finding,
+                      exit 1. `Report maintenance findings` ran and filed. Note that
+                      `Post Run actions/setup-python` is `skipped` here on a perfectly
+                      healthy runner, which is why the rule must not read post-steps as
+                      liveness.
 
-If a future change makes the second one report as silent, the watchdog has started
-duplicating every ordinary failure onto its own issue, which is exactly the pile-up the
-two-strike link rule was built to avoid.
+The two failure fixtures pull in opposite directions from NORMAL_FAILURE, which is the
+point. If a future change makes NORMAL_FAILURE report as silent, the watchdog has started
+duplicating every ordinary failure onto its own issue -- the pile-up the two-strike link
+rule was built to avoid. If it makes either of the others report as NOT silent, a dead
+runner goes unrecorded again.
 """
 import json
 import os
@@ -62,6 +69,30 @@ RUNNER_DEATH = {
     ]),
 }
 
+# Run 30875514401, the daily funnel on 2026-08-04. The runner was reclaimed WHILE the
+# reporting step was executing, so that step is `cancelled` rather than `skipped`. Nothing
+# was filed for this failure -- not by the workflow (its handler was cut off) and not by
+# this watchdog (the all-skipped test came back false). It is the exact case the module
+# exists for, and the first rule missed it.
+CANCELLED_MID_REPORT = {
+    "name": "update",
+    "conclusion": "failure",
+    "steps": _steps([
+        ("Set up job", "success"),
+        ("Harden the runner", "success"),
+        ("Install dependencies", "success"),
+        ("Fetch, screen, triage, summarize, render", "failure"),
+        ("Publish auto cards and bookkeeping to main", "skipped"),
+        ("Stage held cases in the review PR", "skipped"),
+        ("Publish scan status", "skipped"),
+        ("Report a failed run", "cancelled"),          # started, then the runner went away
+        ("Post Run actions/setup-python@5fda3b95", "skipped"),
+        ("Post Run actions/checkout@3d3c42e5", "skipped"),
+        ("Post Harden the runner", "skipped"),
+        ("Complete job", "success"),
+    ]),
+}
+
 NORMAL_FAILURE = {
     "name": "maintain",
     "conclusion": "failure",
@@ -96,6 +127,9 @@ def test_the_two_real_runs():
           rw.job_is_silent(RUNNER_DEATH) is True)
     check("an ordinary failure whose handler ran does NOT read as silent",
           rw.job_is_silent(NORMAL_FAILURE) is False)
+    check("a handler CANCELLED mid-run reads as silent, same as one never started",
+          rw.job_is_silent(CANCELLED_MID_REPORT) is True,
+          "run 30875514401 filed nothing and must be caught")
     check("...and that is decided by the handler, not by post-steps",
           any(s["name"].startswith("Post ") and s["conclusion"] == "skipped"
               for s in NORMAL_FAILURE["steps"]),
@@ -110,6 +144,18 @@ def test_the_rule():
           rw.job_is_silent({"conclusion": "cancelled",
                             "steps": _steps([("a", "failure")])}) is False)
 
+    check("a cancelled later step counts as not having run",
+          rw.job_is_silent({"conclusion": "failure", "steps": _steps([
+              ("work", "failure"), ("report", "cancelled")])}) is True)
+    check("a later step with no conclusion at all counts as not having run",
+          rw.job_is_silent({"conclusion": "failure", "steps": [
+              {"name": "work", "conclusion": "failure"}, {"name": "report"}]}) is True)
+    check("a mix of skipped and cancelled is still silent",
+          rw.job_is_silent({"conclusion": "failure", "steps": _steps([
+              ("work", "failure"), ("a", "skipped"), ("report", "cancelled")])}) is True)
+    check("but one step that SUCCEEDED among them is not silent",
+          rw.job_is_silent({"conclusion": "failure", "steps": _steps([
+              ("work", "failure"), ("a", "cancelled"), ("report", "success")])}) is False)
     check("a failure with one later step that RAN is not silent",
           rw.job_is_silent({"conclusion": "failure", "steps": _steps([
               ("work", "failure"), ("report", "success")])}) is False)
@@ -139,11 +185,12 @@ def test_the_rule():
 
 def test_selection():
     print("picking failed jobs out of a payload")
-    payload = {"jobs": [RUNNER_DEATH, NORMAL_FAILURE,
+    payload = {"jobs": [RUNNER_DEATH, NORMAL_FAILURE, CANCELLED_MID_REPORT,
                         {"conclusion": "success", "steps": []}]}
     got = rw.silent_jobs(payload)
-    check("exactly the reclaimed job is selected",
-          [j["name"] for j in got] == ["treatment"], str([j.get("name") for j in got]))
+    check("both silent jobs are selected, the self-reported one is not",
+          [j["name"] for j in got] == ["treatment", "update"],
+          str([j.get("name") for j in got]))
     check("a bare list payload works too",
           [j["name"] for j in rw.silent_jobs([RUNNER_DEATH])] == ["treatment"])
     check("a junk payload yields nothing rather than crashing",

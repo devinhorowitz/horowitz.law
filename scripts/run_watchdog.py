@@ -51,6 +51,18 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # not work, and counting it as work would defeat the whole check.
 IGNORED_TRAILING_STEPS = ("Complete job",)
 
+# Conclusions that mean "this step did not complete its work", so it cannot have reported
+# anything. `skipped` was the obvious one. `cancelled` was not, and production found it:
+# the daily funnel's 2026-08-04 death (run 30875514401) killed the runner WHILE its
+# `Report a failed run` step was executing, so that step's conclusion was `cancelled`, the
+# all-skipped test came back false, this watchdog concluded the workflow had spoken for
+# itself -- and nothing was filed for the failure at all. A step that was cut off mid-run
+# is exactly as silent as one that never started.
+#
+# `None` covers a step the API recorded without a conclusion, which is the same situation
+# seen from a slightly different angle.
+DID_NOT_RUN = frozenset(("skipped", "cancelled", None))
+
 
 def _steps(job):
     """A job's steps, tolerating a shape the API did not give us."""
@@ -59,7 +71,7 @@ def _steps(job):
 
 
 def job_is_silent(job):
-    """True when a failed job's later steps all skipped, so no handler reported it.
+    """True when no step after the failure completed its work, so no handler reported it.
 
     A job that did not fail is never silent: there is nothing to report. A job that failed
     with NO steps at all is treated as silent -- that is the runner dying before it could
@@ -81,7 +93,7 @@ def job_is_silent(job):
         return True
 
     after = steps[first_failure + 1:]
-    return all(s.get("conclusion") == "skipped" for s in after)
+    return all(s.get("conclusion") in DID_NOT_RUN for s in after)
 
 
 def silent_jobs(payload):
