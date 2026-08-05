@@ -1,7 +1,7 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 62,
+  "count": 63,
   "opinions": [
     {
       "cluster_id": 10938729,
@@ -278,6 +278,25 @@
       "why": "The decision marks the limits of the transient-substance and notice framework by requiring, where a hazard could have arisen from plumbing maintained by either the unit owner or the association, evidence making it more likely than not that the component under the defendant's control caused the condition.",
       "dockets": [
         "3D2024-2149"
+      ]
+    },
+    {
+      "cluster_id": 10879452,
+      "name": "Universal Property & Casualty Insurance Company v. Orlando Cisneros Dameras",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-06-24",
+      "disposition": "affirmed in part, reversed in part, and remanded with instructions",
+      "areas": [
+        "damages",
+        "coverage",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10879452/universal-property-casualty-insurance-company-v-orlando-cisneros-dameras/",
+      "synopsis": "After a settlement in a first-party property insurance case, the trial court awarded the insured a lodestar fee of $389,362.50 enhanced by a 2.5 contingency risk multiplier, for a total of $973,406.25, plus costs. The Third District affirmed the lodestar computation as supported by sufficient findings under Rowe and Quanstrom, but reversed the multiplier because the record contained no competent substantial evidence on the first Quanstrom factor. The court explained that counsel's own skill, experience, and willingness to try the case does not address whether other competent attorneys in the relevant market would have taken the case without the availability of a multiplier, and the fee expert's assertion that the case was risky and that \"nobody\" would take it did not supply that proof, particularly where the trial court acknowledged that numerous other south Florida property insurance firms could have obtained some recovery. The court remanded for entry of the lodestar without any multiplier.",
+      "why": "The decision reiterates and applies the evidentiary showing required before a contingency fee multiplier may be added to a lodestar award in insurance fee litigation, specifically proof about the availability of other competent counsel in the relevant market absent a multiplier.",
+      "dockets": [
+        "3D2024-2233"
       ]
     },
     {

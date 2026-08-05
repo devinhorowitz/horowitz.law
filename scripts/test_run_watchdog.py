@@ -300,9 +300,12 @@ def test_matches_the_workflow():
     unknown = [w for w in watched if w not in real]
     check("every watched name matches a real workflow", not unknown, str(unknown))
 
-    # The exclusions are a decision, not an oversight: these run against a PR, where a
-    # failure is already visible in the checks list.
-    expected_unwatched = {"CI", "Ruff lint", "opinions-diagnose", "opinions-review-veto"}
+    # The exclusions are a decision, not an oversight. The first four run against a PR, where
+    # a failure is already visible in the checks list. The probe is different: it is an
+    # experiment whose whole purpose is to be killed sometimes, so its failures are the data
+    # and filing an issue for each one would bury the real signal.
+    expected_unwatched = {"CI", "Ruff lint", "opinions-diagnose", "opinions-review-veto",
+                          "Runner reclamation probe"}
     actual_unwatched = set(real) - set(watched) - {name}
     check("only the PR-time workflows are left unwatched",
           actual_unwatched == expected_unwatched,

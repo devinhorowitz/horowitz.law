@@ -492,6 +492,31 @@ def test_funnel_pr_body():
     print("  ok  empty run says 'no new relevant opinions'")
 
 
+def test_guard_token_budget():
+    """The guard output budget was a hardcoded 400 -- the smallest in the funnel, given to the
+    two tiers that must quote source text VERBATIM. It fails SOFT: a truncated response becomes
+    verdict "unavailable", not an error, so the guard silently stops guarding. On 2026-08-05
+    the fidelity cross-check for Universal Property & Casualty burned all three attempts on
+    "hit max_tokens (400); response truncated" and that card went un-cross-checked.
+
+    Pin it here because nothing else would notice it shrinking back: no test asserts on a
+    verdict that only appears when the budget is too small.
+    """
+    assert update.GUARD_TOKENS >= 1024, update.GUARD_TOKENS
+    assert update.GUARD_TOKENS > 400, "400 is the value that truncated in production"
+    # Both guard kinds build through one function, so both must get the budget.
+    entry = {"areas": ["procedure"], "synopsis": "s", "why": "w", "disposition": "affirmed"}
+    for kind in ("fidelity", "completeness"):
+        body, ground = update.guard_request(kind, "Case v. Case", "opinion text", entry)
+        assert body["max_tokens"] == update.GUARD_TOKENS, (kind, body["max_tokens"])
+        assert "max_tokens" in body and body["max_tokens"] != 400, kind
+    # It must be env-overridable like every other tier's budget, not a literal.
+    src = open(os.path.join(HERE, "update.py"), encoding="utf-8").read()
+    assert 'OPINIONS_GUARD_MAX_TOKENS' in src, "the budget should be settable without an edit"
+    assert '"max_tokens": 400' not in src, "a hardcoded 400 is back somewhere"
+    print("  ok  guard output budget is raised, shared by both kinds, and env-overridable")
+
+
 def test_batch_carry_over():
     """A Message Batch is billed when Anthropic accepts it, not when we read it. Before this,
     every deferral abandoned a batch that had already run -- at opus-5 rates for summarize.
@@ -624,8 +649,9 @@ def main():
     test_guard_cards_batch()
     test_triage_batch()
     test_funnel_pr_body()
+    test_guard_token_budget()
     test_batch_carry_over()
-    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 12))
+    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 13))
     return 0
 
 

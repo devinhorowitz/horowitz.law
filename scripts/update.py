@@ -206,6 +206,21 @@ SMELL_MAX_ESCALATIONS = int(os.environ.get("OPINIONS_SMELL_MAX_ESCALATIONS", "5"
 # chunks correctly stayed un-audited (fail-open held; nothing was mis-stamped). ~200 tokens per
 # item of headroom; a raised cap costs nothing unless the model actually writes more.
 SMELL_TOKENS = int(os.environ.get("OPINIONS_SMELL_MAX_TOKENS", "8000"))
+# Output budget for one guard request (fidelity cross-check or completeness). Was a hardcoded
+# 400 -- the smallest budget in the funnel, given to the two tiers that must quote source text
+# VERBATIM to be grounded, which is the most token-hungry thing here.
+#
+# It fails soft, which is why it hid: a truncated response becomes verdict "unavailable", not
+# an error, so the guard just quietly stops guarding. On 2026-08-05 the fidelity cross-check
+# for Universal Property & Casualty burned all three attempts on
+#     crosscheck claude-sonnet-5 hit max_tokens (400); response truncated
+# and that card went un-cross-checked. The completeness guard on the same card did fit, and
+# caught a real omission -- so the two halves of the guard disagreed only because one ran out
+# of room to answer.
+#
+# Same defect the smell tier had (cb243e5, 2026-07-25); this tier was missed then. A raised
+# cap costs nothing unless the model actually writes more.
+GUARD_TOKENS = int(os.environ.get("OPINIONS_GUARD_MAX_TOKENS", "2048"))
 STATUS_URL   = os.environ.get("ANTHROPIC_STATUS_URL", "https://status.claude.com/api/v2/summary.json")
 STATUS_MODE  = (os.environ.get("ANTHROPIC_STATUS", "on") or "on").strip().lower()  # on | warn | off
 
@@ -1703,7 +1718,7 @@ def guard_request(kind, name, text, entry):
     opinion = clip(text)
     user = ("Case name: %s\nDisposition as drafted: %s\n\nDRAFTED SUMMARY:\n%s\n\nFULL OPINION:\n%s"
             % (name, entry.get("disposition") or "(none stated)", drafted, opinion))
-    body = {"model": model, "max_tokens": 400, "system": system,
+    body = {"model": model, "max_tokens": GUARD_TOKENS, "system": system,
             "messages": [{"role": "user", "content": user}]}
     return body, (drafted if kind == "fidelity" else opinion)
 

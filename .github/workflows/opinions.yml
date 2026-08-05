@@ -46,40 +46,17 @@ jobs:
       #                             still served from the legacy host).
       # Actions cache/infra endpoints are auto-allowed.
       #
-      # TEMPORARILY `audit`, NOT `block` -- this is a running experiment, not a new policy.
-      # Restore `block` once it has answered (see below); the allowed-endpoints list is left
-      # in place and unchanged so restoring is a one-word edit.
-      #
-      # Five runs have been killed with exit 143 / "The runner has received a shutdown
-      # signal": three treatment sweeps on 2026-08-01 and this workflow on 08-03 and 08-04.
-      # The 08-04 run (30875514401) carried the RSS instrumentation and settled the first
-      # hypothesis outright -- memory was FLAT at 55 MiB across eleven minutes, right up to
-      # the kill, on a 16 GB runner. Not exhaustion, and the process was idle in a batch
-      # poll when it died. That also retires the generic answer for this error, which is
-      # "you ran out of memory, add swap".
-      #
-      # What is left is a threshold that did not exist before 2026-07-26: since then every
-      # run past ~11 minutes dies and every run under ~4 minutes lives, where the sweep
-      # previously ran 2h02m clean. harden-runner is in the frame because its agent is the
-      # one thing here operating below the process -- eBPF hooks, a kill-block enforcement
-      # mode, and detection rules fetched from stepsecurity.io at runtime, which can change
-      # with no commit in this repo. It also blocks two GitHub hosted-compute control-plane
-      # endpoints (hosted-compute-watchdog-*, hosted-compute-request-orchestrator-*), seen
-      # in the harden-runner logs of runs that survived.
-      #
-      # `audit` keeps the agent, the logging and the insights, and stops only the blocking.
-      # So: a long run that now SURVIVES implicates the blocking. A long run that still
-      # dies exonerates harden-runner entirely and points at GitHub's own infrastructure.
-      # Either answer is worth more than another guess, and this is the cheapest way to buy
-      # one -- no API spend, one word.
-      #
-      # The cost while it runs: this workflow's egress is recorded rather than enforced. It
-      # is the daily funnel, which touches only the endpoints listed above, and the window
-      # is meant to be days, not weeks.
+      # Back on `block`. This workflow briefly ran on `audit` to test whether harden-runner's
+      # egress enforcement is a precondition for the exit-143 runner reclamations. That was
+      # the wrong place for the experiment on two counts: this job had its batch budgets cut
+      # in the same window, so a quiet stretch could not say which change was responsible;
+      # and it made the repo's most secret-bearing scheduled job the one carrying a weakened
+      # posture. The experiment now lives in reclaim-probe.yml, which holds no secrets, checks
+      # out nothing, and varies exactly one thing.
       - name: Harden the runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:
-          egress-policy: audit      # TEMPORARY -- see the note above; restore to `block` when the experiment ends
+          egress-policy: block
           allowed-endpoints: >
             api.anthropic.com:443
             status.claude.com:443
