@@ -1342,8 +1342,46 @@
     10939549,
     10939550,
     10939560,
-    10939574
+    10939574,
+    10939957,
+    10939965,
+    10939966,
+    10939974,
+    10939975,
+    10939981,
+    10939982,
+    10939983,
+    10939984,
+    10939985,
+    10939986,
+    10939987,
+    10939988,
+    10939989,
+    10939990,
+    10939991,
+    10939992,
+    10939993,
+    10939994,
+    10939995,
+    10939996
   ],
-  "updated": "2026-08-04T21:40:13Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-08-05T14:47:41Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-triage": {
+      "id": "msgbatch_01HGSyfKTNcoUtuq8FCCrVYj",
+      "at": 1785940722.0604815,
+      "n": 4
+    },
+    "funnel-smell": {
+      "id": "msgbatch_0135ZHz8qy8ukfrHv9we98rx",
+      "at": 1785940952.8707137,
+      "n": 1
+    },
+    "funnel-summarize": {
+      "id": "msgbatch_01XyjTVYfWfW92tE8yXqA918",
+      "at": 1785941051.081371,
+      "n": 3
+    }
+  }
 }
