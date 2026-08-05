@@ -158,8 +158,13 @@ def test_relaxed_egress_is_justified_and_marked_temporary():
           not unjustified, str(unjustified))
     check("a relaxed workflow that is not one of the two permanent crawlers is marked TEMPORARY",
           not untemporary, str(untemporary))
-    check("the permanently-relaxed set is still just the two crawlers plus any marked experiment",
-          set(relaxed) <= {"links.yml", "lighthouse.yml", "opinions.yml"}, str(sorted(relaxed)))
+    # reclaim-probe.yml is parameterised (`${{ matrix.egress }}`), not relaxed: one arm is
+    # block, the other audit, and that contrast IS the experiment. It still has to explain
+    # itself and carry TEMPORARY, which the checks above enforce -- a probe that outlives its
+    # question is the same problem as a forgotten policy change.
+    check("the relaxed/parameterised set is still just the two crawlers plus marked experiments",
+          set(relaxed) <= {"links.yml", "lighthouse.yml", "opinions.yml", "reclaim-probe.yml"},
+          str(sorted(relaxed)))
 
 
 def test_the_legislation_step_specifically():

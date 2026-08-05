@@ -1,0 +1,120 @@
+name: Runner reclamation probe
+
+# A controlled experiment, deliberately NOT run inside a production workflow.
+#
+# Seven jobs since 2026-07-17 have been killed with exit 143 / "The runner has received a
+# shutdown signal". The cause is unknown. What is known, from instrumentation and from
+# reading run history:
+#   * not memory  -- RSS was flat at 55 MiB across the 08-04 kill, on a 16 GB runner
+#   * not Python  -- reproduced on 3.12 after pinning down from 3.14
+#   * not a duration cliff -- a 616s run survived while 668s and 783s died, and a 1514s
+#     maintain run survived; it behaves like a hazard that scales with exposure, not a limit
+#   * the runner is not destroyed -- every kill finalizes with `Complete job: success` after
+#     walking its remaining steps, which is an orderly unwind, not a VM torn away
+#
+# The open question is whether harden-runner's egress ENFORCEMENT is a precondition. Until
+# now that was being tested by running the daily funnel on `audit`, which had two problems:
+# the funnel also had its batch budgets cut in the same window, so a quiet stretch could not
+# say which change was responsible; and it meant the repo's most secret-bearing scheduled job
+# was the one carrying a weakened posture.
+#
+# So the experiment moves here. Two arms differing in EXACTLY one variable, on a job that
+# holds no secrets, checks out nothing, and needs no permissions. Production goes back to
+# being production.
+#
+# Reading the result: compare `block` vs `audit` conclusions over time. A reclamation is
+# identifiable without reading logs -- `Post Harden the runner` comes back `skipped`, because
+# no step runs after the runner goes away. Deliberately NOT in watchdog.yml's watch list: the
+# probe is expected to fail sometimes, and that is data, not an incident.
+#
+# TEMPORARY by construction: delete this file once the question is answered. It has no other
+# purpose, and an experiment with no end date is just a weakened posture nobody chose.
+on:
+  schedule:
+    - cron: '23 * * * *'   # hourly, off-minute; 2 arms/hour is ~48 free jobs a day on a public repo
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'Idle minutes per arm (default 16 -- above the observed 11-13 min kill band)'
+        type: string
+        default: '16'
+
+permissions: {}          # no checkout, no secrets, no issues: nothing to grant
+
+concurrency:
+  group: reclaim-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false    # one arm dying must not cancel the other -- that would destroy the comparison
+      matrix:
+        egress: [block, audit]
+    name: probe-${{ matrix.egress }}
+    steps:
+      # THE ONLY VARIABLE. Both arms run the same agent, the same version, the same allowed
+      # list; only enforcement differs. `audit` still attaches the eBPF module and still
+      # logs, so this isolates blocking specifically rather than the agent's presence.
+      #
+      # The allowed list is what an idle job actually needs: nothing. The endpoints below are
+      # only those the runner and the agent themselves use, so the `block` arm is a realistic
+      # enforcement setup rather than a trivially-permissive one.
+      - name: Harden the runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: ${{ matrix.egress }}
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            raw.githubusercontent.com:443
+
+      # Sit idle for the configured span, exactly as a batch-poll loop does, and stream the
+      # runner's own diagnostic log while doing it.
+      #
+      # The diag tail is the highest-value part. A reclamation kills every later step, so
+      # anything printed AFTER the fact is lost -- but a line streamed as it happens survives
+      # in the job log. If GitHub asks the runner to stop over a live connection, the runner
+      # writes a message saying so, and catching that line distinguishes "GitHub told it to
+      # stop" from "the VM was taken away". That is the single fact that most narrows the
+      # cause, and it costs nothing to collect.
+      - name: Idle, and stream the runner's own diagnostics
+        env:
+          # Via env, never interpolated into the script body. A ${{ }} expression inside a
+          # run: block is textual substitution before bash ever sees it, so the value becomes
+          # shell source. These two are workflow-literal today, but the rule is the rule --
+          # it is the same discipline every other workflow here follows.
+          MINUTES: ${{ inputs.minutes || '16' }}
+          ARM: ${{ matrix.egress }}
+        run: |
+          set -o pipefail
+          echo "arm=$ARM minutes=$MINUTES runner=$RUNNER_NAME"
+
+          # The diag directory is not exported; find it rather than hardcoding a path that
+          # changes with the runner layout. Failure to find it must not fail the probe.
+          diag="$(find /home/runner -maxdepth 4 -type d -name _diag 2>/dev/null | head -1 || true)"
+          if [ -n "$diag" ]; then
+            echo "tailing $diag"
+            # Filter hard: the whole log would flood the run. These are the lines that would
+            # name a shutdown, a cancellation, or a lost connection to the service.
+            ( stdbuf -oL tail -n 0 -F "$diag"/*.log 2>/dev/null \
+              | stdbuf -oL grep -Ei 'shutdown|cancel|terminat|sigterm|unload|disconnect|reconnect|lost connection|JobCompleted' \
+              | sed -u 's/^/  [diag] /' ) &
+          else
+            echo "no _diag directory found; continuing without the runner log"
+          fi
+
+          end=$(( $(date +%s) + MINUTES * 60 ))
+          n=0
+          while [ "$(date +%s)" -lt "$end" ]; do
+            sleep 30
+            n=$((n + 1))
+            # A heartbeat every 30s, so the job log itself records exactly how far it got
+            # before dying. Mirrors the batch-poll cadence the real failures happen in.
+            echo "  . idle ${n}x30s  ($(( $(date +%s) - end + MINUTES * 60 ))s elapsed); rss $(awk '/VmRSS/{print $2/1024}' /proc/self/status 2>/dev/null || echo '?') MiB"
+          done
+          echo "arm=$ARM SURVIVED ${MINUTES}m"
