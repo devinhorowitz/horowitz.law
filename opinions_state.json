@@ -1380,15 +1380,17 @@
     10940096,
     10940097,
     10940150,
-    10940151
+    10940151,
+    10940182,
+    10940190,
+    10940191,
+    10940206,
+    10940207,
+    10940208,
+    10940209,
+    10940229,
+    10940230
   ],
-  "updated": "2026-08-05T18:00:05Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-guards": {
-      "id": "msgbatch_01RAG7Xn2VcKfAJsiG3MHA2X",
-      "at": 1785952657.072481,
-      "n": 2
-    }
-  }
+  "updated": "2026-08-05T21:36:54Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
