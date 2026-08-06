@@ -1389,8 +1389,39 @@
     10940208,
     10940209,
     10940229,
-    10940230
+    10940230,
+    10940539,
+    10940660,
+    10940670,
+    10940673,
+    10940676,
+    10940677,
+    10940678,
+    10940679,
+    10940681,
+    10940684,
+    10940739,
+    10940741,
+    10940743,
+    10940744,
+    10940745,
+    10940746,
+    10940750,
+    10940752,
+    10940753,
+    10940756,
+    10940760,
+    10940761,
+    10940762,
+    10940763
   ],
-  "updated": "2026-08-05T21:36:54Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-08-06T14:43:27Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-triage": {
+      "id": "msgbatch_01Lvn9ZreehTpArTQKuMvx5A",
+      "at": 1786027168.3770523,
+      "n": 2
+    }
+  }
 }
