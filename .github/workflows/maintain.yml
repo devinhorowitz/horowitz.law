@@ -87,12 +87,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           title="Court registry drift detected"
-          existing=$(gh issue list --state open --search "$title in:title" --json number,title \
+          existing=$(bash scripts/gh_retry.sh issue list --state open --search "$title in:title" --json number,title \
             --jq "[.[] | select(.title==\"$title\")] | .[0].number" 2>/dev/null || true)
           if [ -n "$existing" ] && [ "$existing" != "null" ]; then
-            gh issue comment "$existing" --body-file scripts/court_drift.md
+            bash scripts/gh_retry.sh issue comment "$existing" --body-file scripts/court_drift.md
           else
-            gh issue create --title "$title" --body-file scripts/court_drift.md
+            bash scripts/gh_retry.sh issue create --title "$title" --body-file scripts/court_drift.md
           fi
 
       - name: Court registry clean
@@ -101,10 +101,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           title="Court registry drift detected"
-          for n in $(gh issue list --state open --search "$title in:title" --json number,title \
+          for n in $(bash scripts/gh_retry.sh issue list --state open --search "$title in:title" --json number,title \
             --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
-            gh issue comment "$n" --body "Resolved: the court-registry validation now passes."
-            gh issue close "$n"
+            bash scripts/gh_retry.sh issue comment "$n" --body "Resolved: the court-registry validation now passes."
+            bash scripts/gh_retry.sh issue close "$n"
           done
 
       # A CourtListener throttle or a transient network blip deferred the check (exit 4):
@@ -121,11 +121,11 @@ jobs:
         run: |
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           body="Court-registry validation hit a non-transient error (exit ${{ steps.courts.outputs.code }}), likely an auth or config problem, not drift. ${run_url}"
-          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Opinions maintenance findings' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          num=$(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Opinions maintenance findings' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
           if [ -n "$num" ]; then
-            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+            bash scripts/gh_retry.sh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body "$body"
+            bash scripts/gh_retry.sh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body "$body"
           fi
 
       # Feed-shape canary: the funnel discovers new opinions by parsing each court's Atom feed, and
@@ -148,12 +148,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           title="Feed-shape drift detected"
-          existing=$(gh issue list --state open --search "$title in:title" --json number,title \
+          existing=$(bash scripts/gh_retry.sh issue list --state open --search "$title in:title" --json number,title \
             --jq "[.[] | select(.title==\"$title\")] | .[0].number" 2>/dev/null || true)
           if [ -n "$existing" ] && [ "$existing" != "null" ]; then
-            gh issue comment "$existing" --body-file scripts/feed_check_alert.md
+            bash scripts/gh_retry.sh issue comment "$existing" --body-file scripts/feed_check_alert.md
           else
-            gh issue create --title "$title" --body-file scripts/feed_check_alert.md
+            bash scripts/gh_retry.sh issue create --title "$title" --body-file scripts/feed_check_alert.md
           fi
 
       - name: Feed-shape check clean
@@ -162,10 +162,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           title="Feed-shape drift detected"
-          for n in $(gh issue list --state open --search "$title in:title" --json number,title \
+          for n in $(bash scripts/gh_retry.sh issue list --state open --search "$title in:title" --json number,title \
             --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
-            gh issue comment "$n" --body "Resolved: the funnel's feed parser is extracting candidates again."
-            gh issue close "$n"
+            bash scripts/gh_retry.sh issue comment "$n" --body "Resolved: the funnel's feed parser is extracting candidates again."
+            bash scripts/gh_retry.sh issue close "$n"
           done
 
       # Exit 4: every feed empty or unreachable (a quiet stretch or a transient CL outage), not proof
@@ -261,14 +261,14 @@ jobs:
               --color B60205 --description "A specific card or check, not a transient error; close by hand once addressed" --force || true
             label="maintenance-finding"
           fi
-          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Opinions maintenance findings' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          num=$(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Opinions maintenance findings' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
           if [ -n "$num" ]; then
-            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body-file ./maintain-body.md
-            [ -n "$label" ] && gh issue edit "$num" --repo "$GITHUB_REPOSITORY" --add-label "$label" || true
+            bash scripts/gh_retry.sh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body-file ./maintain-body.md
+            [ -n "$label" ] && bash scripts/gh_retry.sh issue edit "$num" --repo "$GITHUB_REPOSITORY" --add-label "$label" || true
           elif [ -n "$label" ]; then
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body-file ./maintain-body.md --label "$label"
+            bash scripts/gh_retry.sh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body-file ./maintain-body.md --label "$label"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body-file ./maintain-body.md
+            bash scripts/gh_retry.sh issue create --repo "$GITHUB_REPOSITORY" --title "Opinions maintenance findings" --body-file ./maintain-body.md
           fi
 
       # Symmetric with the step above, and with the two drift issues this workflow already
@@ -295,8 +295,8 @@ jobs:
           # cards that card is not revisited for roughly a month, so auto-closing on the next run
           # would erase a real finding within a day of filing it. Those stay open for a person.
           title="Opinions maintenance findings"
-          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number,title,labels \
+          for n in $(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number,title,labels \
             --jq ".[] | select(.title==\"$title\") | select([.labels[].name] | index(\"maintenance-finding\") | not) | .number" 2>/dev/null || true); do
-            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: a later maintenance run completed cleanly, and this issue was a transient error rather than a finding about a specific card. Closing automatically." || true
-            gh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
+            bash scripts/gh_retry.sh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: a later maintenance run completed cleanly, and this issue was a transient error rather than a finding about a specific card. Closing automatically." || true
+            bash scripts/gh_retry.sh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
           done

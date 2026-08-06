@@ -118,11 +118,11 @@ jobs:
           run_url="$SERVER_URL/$REPO_NAME/actions/runs/$RUN_ID"
           body="The link crawl reported failures, but scripts/link_suspects.py could not parse lychee's JSON report, so the 24-hour confirmation could not run. This is a TOOLING problem, not link rot: treat it as the two-strike rule being offline until the parser is fixed. ${run_url}"
           title="Link checker found broken links"
-          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          num=$(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
           if [ -n "$num" ]; then
-            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+            bash scripts/gh_retry.sh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" --label automated --label link-rot
+            bash scripts/gh_retry.sh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" --label automated --label link-rot
           fi
 
       # Strike two, run by lychee itself over the suspect list -- same binary, same flags,
@@ -186,7 +186,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           title="Link checker found broken links"
-          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          num=$(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
           echo "number=$num" >> "$GITHUB_OUTPUT"
       - name: Open or update the broken-links issue
         if: steps.confirm.outputs.confirmed != '0'
@@ -207,7 +207,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           title="Link checker found broken links"
-          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number,title --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
-            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: no link is still failing 24 hours after it was first seen failing. Closing automatically." || true
-            gh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
+          for n in $(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number,title --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
+            bash scripts/gh_retry.sh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: no link is still failing 24 hours after it was first seen failing. Closing automatically." || true
+            bash scripts/gh_retry.sh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
           done

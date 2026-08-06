@@ -87,9 +87,9 @@ jobs:
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           pr_url="${{ github.event.pull_request.html_url }}"
           body=$(printf 'Applying a resolved review batch failed -- accepted cases may not have reached main.\n\nReview PR: %s\nRun: %s\n' "$pr_url" "$run_url")
-          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Review-apply failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          num=$(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Review-apply failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
           if [ -n "$num" ]; then
-            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+            bash scripts/gh_retry.sh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "Review-apply failures" --body "$body"
+            bash scripts/gh_retry.sh issue create --repo "$GITHUB_REPOSITORY" --title "Review-apply failures" --body "$body"
           fi

@@ -162,9 +162,26 @@ def test_the_rule():
     check("a failure with one later step that skipped IS silent",
           rw.job_is_silent({"conclusion": "failure", "steps": _steps([
               ("work", "failure"), ("report", "skipped")])}) is True)
-    check("a later FAILED step also counts as having run",
+    # A later step that FAILED proves the runner was alive, so the reporting step got its
+    # turn -- unless the step that failed IS the reporting step, in which case the alert is
+    # exactly as undelivered as if it had never run. That is the checkout-failed case:
+    # `if: failure()` fires, the step cannot execute scripts/gh_retry.sh because there is no
+    # checkout, and it concludes `failure` having alerted nobody.
+    check("a later failed step that is NOT a reporter means the handler still had its turn",
           rw.job_is_silent({"conclusion": "failure", "steps": _steps([
-              ("work", "failure"), ("report", "failure")])}) is False)
+              ("Checkout", "failure"), ("Upload artifacts", "failure"),
+              ("Report a failed run", "success")])}) is False)
+    check("but a reporting step that itself FAILED is silence",
+          rw.job_is_silent({"conclusion": "failure", "steps": _steps([
+              ("Checkout", "failure"), ("Report a failed run", "failure")])}) is True)
+    check("and so is the real shape: checkout dies, the alert step dies on the missing script",
+          rw.job_is_silent({"conclusion": "failure", "steps": _steps([
+              ("Harden the runner", "success"), ("Checkout", "failure"),
+              ("Set up Python", "skipped"), ("Report a failed run", "failure"),
+              ("Complete job", "success")])}) is True)
+    check("a non-reporting step failing after the failure is still not silence",
+          rw.job_is_silent({"conclusion": "failure", "steps": _steps([
+              ("work", "failure"), ("Upload coverage", "failure")])}) is False)
 
     check("Complete job alone after the failure does not count as running",
           rw.job_is_silent({"conclusion": "failure", "steps": _steps([
@@ -312,9 +329,56 @@ def test_matches_the_workflow():
           "unwatched=%s" % sorted(actual_unwatched))
 
 
+def test_reporting_hints_cover_every_real_alert_step():
+    """Keep REPORTING_STEP_HINTS honest against the workflows it describes.
+
+    The jobs API gives this module a step's name and conclusion, nothing more -- the
+    `if: failure()` guard that actually makes a step a reporter is only in the workflow
+    file. So the hint list is a name-based approximation of a condition it cannot see, and
+    an approximation drifts: rename `Report a failed run` to `Announce a broken run` and the
+    watchdog stops recognising it, with no error anywhere. This reads the guard from the
+    source of truth and asserts the approximation still covers it.
+    """
+    print("reporting-step hints vs the real workflows")
+    try:
+        import yaml
+    except ImportError:                                # pragma: no cover
+        print("  .. pyyaml not available; skipping")
+        return
+    wdir = os.path.join(HERE, "..", ".github", "workflows")
+    reporters, missed = [], []
+    for fn in sorted(os.listdir(wdir)):
+        if not fn.endswith(".yml"):
+            continue
+        doc = yaml.safe_load(open(os.path.join(wdir, fn), encoding="utf-8"))
+        for jn, job in (doc.get("jobs") or {}).items():
+            for st in (job.get("steps") or []):
+                run, cond = st.get("run") or "", str(st.get("if") or "")
+                if "issue create" not in run and "issue comment" not in run:
+                    continue
+                if "failure()" not in cond:
+                    continue
+                name = st.get("name") or jn
+                reporters.append("%s: %s" % (fn, name))
+                if not rw.is_reporting_step({"name": name}):
+                    missed.append("%s: %s" % (fn, name))
+
+    check("the scan found the repo's failure reporters", len(reporters) >= 10,
+          "%d found" % len(reporters))
+    check("every `if: failure()` step that files an issue is recognised as a reporter",
+          not missed, str(missed))
+    # The other direction: the hints must not be so broad that ordinary work counts.
+    for ordinary in ("Checkout", "Set up Python", "Run the funnel", "Install dependencies",
+                     "Harden the runner", "Commit and push", "Build the site"):
+        check("not treated as a reporter: %s" % ordinary,
+              not rw.is_reporting_step({"name": ordinary}))
+    check("a step with no name at all is not a reporter", not rw.is_reporting_step({}))
+
+
 def main():
     for t in (test_the_two_real_runs, test_the_rule, test_selection, test_body,
-              test_cli, test_path_confinement, test_matches_the_workflow):
+              test_cli, test_path_confinement, test_matches_the_workflow,
+              test_reporting_hints_cover_every_real_alert_step):
         t()
     n = len(FAILURES)
     print()

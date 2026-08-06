@@ -280,3 +280,27 @@ Run by hand, from the Actions tab:
   entries but the parser extracts none. If it fires, compare a live feed
   (`courtlistener.com/feed/court/<id>/`) against `_parse_feed` in `scripts/update.py` and fix the
   parser — the `/opinion/<id>/` link pattern is the usual culprit.
+- **When GitHub itself is having a bad day.** The live site is unaffected: Cloudflare Pages
+  serves `public/` from its own edge and no workflow deploys it, so an Actions or
+  `api.github.com` outage is invisible to readers. What an outage threatens is the automation,
+  in two specific places, and both are now bounded rather than instant:
+  - *Losing a run's work at the last step.* Every workflow that writes main does it through
+    `scripts/push_main.sh`. That script now tells a collision (another run landed first —
+    rebase and retry within seconds) apart from a sick remote (retry on 15/30/60/120/240s,
+    about ten minutes). A failed `git fetch` counts as the sick-remote case, not as a rebase
+    conflict, because during an outage the fetch is usually what fails first. If it still
+    gives up, the run log says so explicitly and the work needs re-dispatching — nothing is
+    force-pushed and nothing is silently dropped.
+  - *Losing the alert about the failure.* Tracking issues are this repo's only notification
+    channel, and a degraded `api.github.com` used to make the alert about a broken run the
+    thing that broke. Every `gh issue` call now goes through `scripts/gh_retry.sh`, which
+    retries the transient failures (5xx, rate limits, resets, DNS) and refuses to retry the
+    deterministic ones (404, bad flag, no permission — waiting does not fix those). When the
+    budget runs out it emits a `::warning::gh_retry:` annotation naming the undelivered
+    alert, so the run log still carries a trace.
+  - The remaining hole is a job whose *checkout* failed, which cannot run either script. That
+    is caught one layer up: `run_watchdog.py` treats a reporting step that itself failed as a
+    job that could not report itself, and files the issue from a separate runner.
+  - There is no status-page preflight, deliberately. Every one of these paths already fails
+    safe, and a preflight would add a dependency on a second GitHub surface being healthy in
+    order to decide whether GitHub is healthy.

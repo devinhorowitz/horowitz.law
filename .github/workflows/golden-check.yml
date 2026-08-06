@@ -93,11 +93,11 @@ jobs:
         run: |
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           body="A manually-triggered golden-check run failed. ${run_url}"
-          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Golden-check run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          num=$(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Golden-check run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
           if [ -n "$num" ]; then
-            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+            bash scripts/gh_retry.sh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "Golden-check run failures" --body "$body"
+            bash scripts/gh_retry.sh issue create --repo "$GITHUB_REPOSITORY" --title "Golden-check run failures" --body "$body"
           fi
 
       # Symmetric with the step above: once a later run completes cleanly, close the tracking issue so
@@ -110,7 +110,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           title="Golden-check run failures"
-          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number,title --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
-            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: a later golden-check run completed cleanly. Closing automatically." || true
-            gh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
+          for n in $(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number,title --jq ".[] | select(.title==\"$title\") | .number" 2>/dev/null || true); do
+            bash scripts/gh_retry.sh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: a later golden-check run completed cleanly. Closing automatically." || true
+            bash scripts/gh_retry.sh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
           done

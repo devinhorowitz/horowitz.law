@@ -67,4 +67,4 @@ jobs:
         if: ${{ hashFiles('scripts/diagnosis.md') != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment "${{ github.event.issue.number }}" --repo "$GITHUB_REPOSITORY" --body-file scripts/diagnosis.md
+        run: bash scripts/gh_retry.sh issue comment "${{ github.event.issue.number }}" --repo "$GITHUB_REPOSITORY" --body-file scripts/diagnosis.md
