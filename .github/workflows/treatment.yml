@@ -150,9 +150,9 @@ jobs:
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           logtail=$(tail -c 3500 "$RUNNER_TEMP/run.log" 2>/dev/null || true)
           body=$(printf 'A scheduled treatment sweep run failed.\n\n%s\n\n**Last output**\n\n```\n%s\n```\n' "$run_url" "${logtail:-(no run output captured)}")
-          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Treatment sweep run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          num=$(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title Treatment sweep run failures' --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
           if [ -n "$num" ]; then
-            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+            bash scripts/gh_retry.sh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "Treatment sweep run failures" --body "$body"
+            bash scripts/gh_retry.sh issue create --repo "$GITHUB_REPOSITORY" --title "Treatment sweep run failures" --body "$body"
           fi

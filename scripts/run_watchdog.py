@@ -63,6 +63,44 @@ IGNORED_TRAILING_STEPS = ("Complete job",)
 # seen from a slightly different angle.
 DID_NOT_RUN = frozenset(("skipped", "cancelled", None))
 
+# A step that exists to file the alert. If one of these FAILED, the job is just as
+# unreported as if it had never run -- and unlike the two conclusions above, this is a case
+# the reporting step reaches under its own power and still loses.
+#
+# It is the residual hole in scripts/gh_retry.sh. That wrapper retries a degraded
+# api.github.com, but it is a file in the repo, so a step whose job died AT CHECKOUT cannot
+# execute it: the `if: failure()` alert step still runs, dies on the missing file, and
+# concludes `failure`. Every later step then also concludes `failure`, the all-skipped test
+# comes back false, and the watchdog would decide the workflow had spoken for itself. It had
+# not. The one moment a checkout fails is a GitHub outage, which is the one moment the alert
+# matters -- so the rule has to look at what the step was FOR, not only whether it ran.
+#
+# Matched on names, because the jobs API returns a step's name and conclusion and nothing
+# else -- the `if: failure()` guard that actually defines a reporting step is not in the
+# payload. test_run_watchdog.py closes that gap from the other side: it reads the workflow
+# files and asserts every `if: failure()` step that files an issue matches one of these, so
+# the list cannot drift away from the steps it is supposed to describe.
+#
+# `issue` is deliberately broad. It sweeps in the `Close the ... issue` recovery steps, but
+# those are `if: success()` and so are already `skipped` after a failure; and it would sweep
+# in an unrelated step with "issue" in its name, whose only cost is this watchdog filing a
+# report that some other handler had covered. A duplicate report is a nuisance. A missed one
+# is the entire failure mode this file exists for.
+REPORTING_STEP_HINTS = ("report", "alert", "notify", "issue")
+
+
+def is_reporting_step(step):
+    name = (step.get("name") or "").lower()
+    return any(h in name for h in REPORTING_STEP_HINTS)
+
+
+def step_was_silent(step):
+    """True when this step cannot have delivered an alert -- it did not run, or it was a
+    reporting step that ran and failed."""
+    if step.get("conclusion") in DID_NOT_RUN:
+        return True
+    return is_reporting_step(step) and step.get("conclusion") == "failure"
+
 
 def _steps(job):
     """A job's steps, tolerating a shape the API did not give us."""
@@ -93,7 +131,7 @@ def job_is_silent(job):
         return True
 
     after = steps[first_failure + 1:]
-    return all(s.get("conclusion") in DID_NOT_RUN for s in after)
+    return all(step_was_silent(s) for s in after)
 
 
 def silent_jobs(payload):
@@ -117,13 +155,19 @@ def issue_body(workflow, run_url, jobs):
     """The tracking-issue body. Deliberately short on diagnosis and long on pointers: the
     run log is the only place the real story survives, and this watchdog cannot see it."""
     lines = [
-        "A scheduled run failed **and its own failure-reporting step never ran**, so it "
-        "would otherwise have failed silently.",
+        "A scheduled run failed **and its own failure-reporting step never delivered an "
+        "alert**, so it would otherwise have failed silently.",
         "",
-        "This usually means the hosted runner was reclaimed mid-job (exit 143 / SIGTERM / "
-        "\"The runner has received a shutdown signal\"). An `if: failure()` step runs on "
-        "the runner, so it cannot report the runner's own death -- that is why this "
-        "watchdog runs separately.",
+        "Usually that means the hosted runner was reclaimed mid-job (exit 143 / SIGTERM / "
+        "\"The runner has received a shutdown signal\") and the reporting step never ran: "
+        "an `if: failure()` step runs on the runner, so it cannot report the runner's own "
+        "death -- which is why this watchdog runs separately.",
+        "",
+        "The other shape is a reporting step that ran and failed. That points at GitHub "
+        "itself rather than the runner: a checkout that failed leaves the alert step with "
+        "no `scripts/gh_retry.sh` to call, and an `api.github.com` degraded for longer "
+        "than that wrapper's retry budget leaves it with nowhere to file. Check the run "
+        "log for a `gh_retry` warning before assuming the workflow is at fault.",
         "",
         "| workflow | %s |" % (workflow or "(unknown)"),
         "| --- | --- |",

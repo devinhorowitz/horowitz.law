@@ -67,11 +67,11 @@ jobs:
         run: |
           body=$(cat scripts/heartbeat_alert.md 2>/dev/null || echo "The funnel heartbeat check failed; see the run log.")
           title="Funnel heartbeat: possible stall"
-          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          num=$(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
           if [ -n "$num" ]; then
-            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+            bash scripts/gh_retry.sh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+            bash scripts/gh_retry.sh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
           fi
 
       # Healthy: close any open heartbeat issue (self-heal) and ping the optional external monitor.
@@ -82,9 +82,9 @@ jobs:
           HEARTBEAT_PING_URL: ${{ secrets.HEARTBEAT_PING_URL }}
         run: |
           title="Funnel heartbeat: possible stall"
-          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[].number' 2>/dev/null || true); do
-            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: the funnel heartbeat is healthy again." || true
-            gh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
+          for n in $(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[].number' 2>/dev/null || true); do
+            bash scripts/gh_retry.sh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: the funnel heartbeat is healthy again." || true
+            bash scripts/gh_retry.sh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
           done
           if [ -n "$HEARTBEAT_PING_URL" ]; then
             curl -fsS -m 15 "$HEARTBEAT_PING_URL" >/dev/null 2>&1 && echo "external monitor pinged" || echo "external ping skipped (host not reachable/allow-listed)"

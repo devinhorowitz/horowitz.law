@@ -89,10 +89,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           title="Drop-reason audit: suspect drops"
-          existing=$(gh issue list --state open --search "$title in:title" --json number,title \
+          existing=$(bash scripts/gh_retry.sh issue list --state open --search "$title in:title" --json number,title \
             --jq "[.[] | select(.title==\"$title\")] | .[0].number" 2>/dev/null || true)
           if [ -n "$existing" ] && [ "$existing" != "null" ]; then
-            gh issue comment "$existing" --body-file scripts/smell_suspects.md
+            bash scripts/gh_retry.sh issue comment "$existing" --body-file scripts/smell_suspects.md
           else
-            gh issue create --title "$title" --body-file scripts/smell_suspects.md
+            bash scripts/gh_retry.sh issue create --title "$title" --body-file scripts/smell_suspects.md
           fi

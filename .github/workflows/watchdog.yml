@@ -106,7 +106,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           title="Workflow run failed without reporting itself"
-          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          num=$(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
           echo "number=$num" >> "$GITHUB_OUTPUT"
 
       - name: Open or update the watchdog issue
