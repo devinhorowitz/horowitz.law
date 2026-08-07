@@ -1453,8 +1453,22 @@
     10942234,
     10942235,
     10942263,
-    10942264
+    10942264,
+    10942304,
+    10942320,
+    10942321,
+    10942349,
+    10942365,
+    10942366,
+    10942367
   ],
-  "updated": "2026-08-07T17:16:01Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-08-07T21:08:39Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-smell": {
+      "id": "msgbatch_01KHDuXkeGtkC8qn2mSGghSQ",
+      "at": 1786136739.7557054,
+      "n": 1
+    }
+  }
 }
