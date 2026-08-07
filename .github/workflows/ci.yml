@@ -52,6 +52,11 @@ jobs:
             pypi.org:443
             files.pythonhosted.org:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history, for one reason: the render-idempotency check below needs the date the
+          # committed pages were RENDERED, and the only record of that is the commit that wrote
+          # them. A shallow clone has no such commit. ~1400 commits, so this costs a second.
+          fetch-depth: 0
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -110,15 +115,31 @@ jobs:
       # of waiting for the daily render-sync net.
       - name: Render idempotency
         run: |
-          # Render AS OF the last funnel render (status.json scanned_at), not the live clock. The
-          # committed pages are whatever the funnel/render-sync last produced; between their runs the
-          # clock can drift past a card's rolling-2-year edge (or the Jan-1 footer year), which would
-          # make a naive re-render differ until the next reconciliation and fail this byte-for-byte
-          # check on an unrelated PR. Pinning the render date to scanned_at reproduces exactly what
-          # was committed, so only REAL drift (stale wording, a card the committed page is missing)
-          # fails -- those still diverge because they don't depend on the clock. Falls back to real
-          # today if status.json is unreadable (strict, as before).
-          export OPINIONS_RENDER_ASOF="$(python -c "import json; print(json.load(open('public/status.json'))['scanned_at'][:10])" 2>/dev/null || true)"
+          # Render AS OF the date the committed pages were rendered, not the live clock. Those
+          # pages are whatever the funnel or render-sync last produced; between their runs the
+          # clock can drift past a card's rolling-2-year edge (or the Jan-1 footer year), which
+          # would make a naive re-render differ until the next reconciliation and fail this
+          # byte-for-byte check on an unrelated PR. Pinning reproduces exactly what was committed,
+          # so only REAL drift (stale wording, a card the committed page is missing) fails --
+          # those still diverge because they don't depend on the clock.
+          #
+          # The date comes from the pages' own commit, which is the only honest record of when
+          # they were rendered. Both nearby timestamps in status.json are the wrong quantity and
+          # both have been observed to be wrong:
+          #
+          #   scanned_at          advances every funnel run whether or not anything is rendered.
+          #                       This is what the check used until 2026-08-07, when it went red
+          #                       on an unrelated PR: the pages were rendered 08-05, scanned_at
+          #                       had moved to 08-07, and a card decided 2024-08-06 aged out of
+          #                       the 2-year window in between. Exactly the drift the pin exists
+          #                       to absorb, reintroduced by pinning to the wrong clock.
+          #   content_updated_at  is the last commit to opinions.json, so it LAGS a render-sync
+          #                       run that re-rendered pages without a data change -- 5 of the
+          #                       last 20 page renders were that shape.
+          #
+          # Empty (no history, or the file never committed) falls back to real today, as before.
+          export OPINIONS_RENDER_ASOF="$(TZ=UTC git log -1 --date=short-local --format=%cd -- public/opinions.html 2>/dev/null || true)"
+          echo "rendering as of ${OPINIONS_RENDER_ASOF:-(real today)}"
           python scripts/render.py
           # -N (intent-to-add) makes never-committed generated files visible to
           # the diff, so a forgotten o/ upload fails here instead of 404ing live.
