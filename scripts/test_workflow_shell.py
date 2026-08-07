@@ -167,6 +167,45 @@ def test_relaxed_egress_is_justified_and_marked_temporary():
           str(sorted(relaxed)))
 
 
+def test_no_step_backgrounds_a_process():
+    """A `run:` step must not leave a process running after its script exits.
+
+    Found the hard way. reclaim-probe.yml streamed the runner's diagnostics with
+    `tail -F | grep | sed &`, and the orphaned pipeline hung the job twice: the script
+    finished its loop, but the step never concluded, the post-step stayed `pending`, the
+    job was killed at timeout + the 5-minute grace, and no log was ever uploaded. The
+    surviving arm's log shows the runner having to reap them by hand --
+    "Terminate orphan process: (bash) (tail) (grep)".
+
+    Two reasons that is worth a standing check rather than a one-time fix. A backgrounded
+    process inherits the step's stdout, so the step cannot finish until it closes; and in
+    that probe it silently broke the experiment, because only one of the two arms managed
+    to reap the orphan, which made the arms differ in something other than the variable
+    under test. A failure caused by the instrumentation reads exactly like a finding.
+    """
+    print("no backgrounded processes")
+    offenders = []
+    seen = 0
+    for wf, name, run in steps():
+        for raw in run.splitlines():
+            ln = raw.strip()
+            if not ln or ln.startswith("#"):
+                continue
+            seen += 1
+            # A trailing `&` backgrounds. `&&` is a conjunction, and an escaped or quoted
+            # ampersand is not job control -- neither ends a line as a lone `&`.
+            if re.search(r"(?<![&\\])&$", ln):
+                offenders.append("%s / %s: %s" % (wf, name, ln[:70]))
+    check("shell lines were actually scanned", seen > 200, str(seen))
+    check("no workflow step backgrounds a process", not offenders, " | ".join(offenders))
+    # The pattern must not be so loose that `&&` trips it: a check that failed on half the
+    # repo would be deleted rather than fixed.
+    for safe in ("a && b", "grep x y && echo z", "printf 'a&b'"):
+        check("not flagged: %s" % safe, not re.search(r"(?<![&\\])&$", safe))
+    for bad in ("sleep 5 &", "( tail -F x | grep y ) &"):
+        check("flagged: %s" % bad, bool(re.search(r"(?<![&\\])&$", bad)))
+
+
 def test_the_legislation_step_specifically():
     """The step that broke. Pinned by name because it is the one with three optional body
     files, so it is the one most likely to regrow the shape."""
@@ -187,6 +226,7 @@ def main():
     for t in (test_the_shape_is_actually_dangerous,
               test_no_step_ends_on_a_bare_conditional,
               test_relaxed_egress_is_justified_and_marked_temporary,
+              test_no_step_backgrounds_a_process,
               test_the_legislation_step_specifically):
         t()
     if FAILS:

@@ -22,10 +22,25 @@ name: Runner reclamation probe
 # holds no secrets, checks out nothing, and needs no permissions. Production goes back to
 # being production.
 #
-# Reading the result: compare `block` vs `audit` conclusions over time. A reclamation is
-# identifiable without reading logs -- `Post Harden the runner` comes back `skipped`, because
-# no step runs after the runner goes away. Deliberately NOT in watchdog.yml's watch list: the
-# probe is expected to fail sometimes, and that is data, not an incident.
+# Reading the result: compare `block` vs `audit` conclusions over time -- but only after
+# checking that a failure is the RIGHT KIND of failure. Three shapes look alike in the runs
+# list and are not alike at all, and telling them apart needs no log:
+#
+#   reclamation (the thing under study)  the idle step CONCLUDES `failure`; every later step
+#       is stamped within the same second; `Post Harden the runner` is `skipped`; the job
+#       ends `Complete job: success` a second or two later; the log uploads and contains
+#       "##[error]The runner has received a shutdown signal" right after an exit-143 line.
+#
+#   hang (instrumentation, not data)  the idle step stays `in_progress` and never concludes;
+#       `Post Harden the runner` is `pending`, not `skipped`; the job is killed at
+#       timeout-minutes plus the 5-minute grace; NO LOG IS EVER UPLOADED (the API 404s).
+#       This is what the old backgrounded `tail -F` caused -- see the idle step's comment.
+#
+#   starvation (no data either way)  runner_id is 0 and the job records no steps at all; it
+#       waited for a runner it never got and was cancelled. Says nothing about either arm.
+#
+# Deliberately NOT in watchdog.yml's watch list: the probe is expected to fail sometimes, and
+# that is data, not an incident.
 #
 # TEMPORARY by construction: delete this file once the question is answered. It has no other
 # purpose, and an experiment with no end date is just a weakened posture nobody chose.
@@ -82,6 +97,25 @@ jobs:
       # writes a message saying so, and catching that line distinguishes "GitHub told it to
       # stop" from "the VM was taken away". That is the single fact that most narrows the
       # cause, and it costs nothing to collect.
+      #
+      # NO BACKGROUND PROCESS -- and that restriction is the whole reason this step was
+      # rewritten on 2026-08-07. The first version streamed with `tail -F | grep | sed &`,
+      # and the orphan that left behind hung the `block` arm twice: the step's script
+      # finished its loop but the step never concluded, `Post Harden the runner` stayed
+      # `pending`, the job was killed at timeout+5m, and no log was ever uploaded. The
+      # `audit` arm survived the same shape -- its log ends with the runner reaping the
+      # orphans ("Terminate orphan process: (bash) (tail) (grep)") -- so the two arms were
+      # differing in something other than egress policy, which is exactly what an experiment
+      # may not do. Worse, the failure it produced was NOT the failure under study: a real
+      # reclamation concludes its step, records `Complete job: success` within a second, and
+      # uploads its logs. Those two hangs did none of that. They were instrumentation, and
+      # the 2-vs-0 split they produced was not evidence.
+      #
+      # So the diag is polled from inside the loop instead, at the same 30s cadence as the
+      # heartbeat. Granularity costs up to 30s of lines if the kill lands between ticks;
+      # that is a fair price for an experiment whose arms are actually comparable.
+      #
+      # SAMPLE COUNT RESTARTS HERE. Everything before 2026-08-07 is void.
       - name: Idle, and stream the runner's own diagnostics
         env:
           # Via env, never interpolated into the script body. A ${{ }} expression inside a
@@ -91,22 +125,29 @@ jobs:
           MINUTES: ${{ inputs.minutes || '16' }}
           ARM: ${{ matrix.egress }}
         run: |
-          set -o pipefail
           echo "arm=$ARM minutes=$MINUTES runner=$RUNNER_NAME"
 
           # The diag directory is not exported; find it rather than hardcoding a path that
           # changes with the runner layout. Failure to find it must not fail the probe.
           diag="$(find /home/runner -maxdepth 4 -type d -name _diag 2>/dev/null | head -1 || true)"
-          if [ -n "$diag" ]; then
-            echo "tailing $diag"
-            # Filter hard: the whole log would flood the run. These are the lines that would
-            # name a shutdown, a cancellation, or a lost connection to the service.
-            ( stdbuf -oL tail -n 0 -F "$diag"/*.log 2>/dev/null \
-              | stdbuf -oL grep -Ei 'shutdown|cancel|terminat|sigterm|unload|disconnect|reconnect|lost connection|JobCompleted' \
-              | sed -u 's/^/  [diag] /' ) &
-          else
-            echo "no _diag directory found; continuing without the runner log"
-          fi
+          # Filter hard: the whole log would flood the run. These are the lines that would
+          # name a shutdown, a cancellation, or a lost connection to the service.
+          PAT='shutdown|cancel|terminat|sigterm|unload|disconnect|reconnect|lost connection|JobCompleted'
+          [ -n "$diag" ] && echo "polling $diag" || echo "no _diag directory found; continuing without the runner log"
+
+          # Print whatever matched since the last call. Counting matches and skipping the
+          # ones already shown keeps this stateless across log rotation: if the count ever
+          # drops, nothing is printed rather than the whole file being repeated.
+          seen=0
+          emit_diag() {
+            [ -n "$diag" ] || return 0
+            n_now="$(grep -hEi "$PAT" "$diag"/*.log 2>/dev/null | wc -l)"
+            if [ "${n_now:-0}" -gt "$seen" ]; then
+              grep -hEi "$PAT" "$diag"/*.log 2>/dev/null \
+                | tail -n +$((seen + 1)) | sed 's/^/  [diag] /'
+              seen="$n_now"
+            fi
+          }
 
           end=$(( $(date +%s) + MINUTES * 60 ))
           n=0
@@ -116,5 +157,7 @@ jobs:
             # A heartbeat every 30s, so the job log itself records exactly how far it got
             # before dying. Mirrors the batch-poll cadence the real failures happen in.
             echo "  . idle ${n}x30s  ($(( $(date +%s) - end + MINUTES * 60 ))s elapsed); rss $(awk '/VmRSS/{print $2/1024}' /proc/self/status 2>/dev/null || echo '?') MiB"
+            emit_diag
           done
+          emit_diag
           echo "arm=$ARM SURVIVED ${MINUTES}m"
