@@ -1427,15 +1427,16 @@
     10940987,
     10941326,
     10941328,
-    10941397
+    10941397,
+    10942060,
+    10942065,
+    10942066,
+    10942067,
+    10942068,
+    10942069,
+    10942070,
+    10942074
   ],
-  "updated": "2026-08-07T00:58:05Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-smell": {
-      "id": "msgbatch_0128c9yfb1staQajvcc6Suoz",
-      "at": 1786064188.58045,
-      "n": 1
-    }
-  }
+  "updated": "2026-08-07T13:45:36Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
