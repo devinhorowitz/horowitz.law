@@ -2576,5 +2576,27 @@
         "why": "It clarifies that a defective cancellation does not extend a claims-made policy beyond its expiration date, and that the reporting window turns on the policy period plus any purchased extended discovery period."
       }
     ]
+  },
+  {
+    "cluster_id": 10942104,
+    "name": "RLI Insurance Company v. Lehman",
+    "court": "ca11",
+    "division": null,
+    "date": "2026-08-07",
+    "dockets": [
+      "24-10600"
+    ],
+    "disposition": "vacated and remanded with instructions to enter summary judgment for the insurer",
+    "areas": [
+      "coverage",
+      "auto"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10942104/rli-insurance-company-v-john-lehman/",
+    "synopsis": "An umbrella insurer sought a declaratory judgment that it owed no coverage for injuries an insured suffered in a car accident, relying on policy language conditioning coverage on the underlying insurance limits being \"exhausted by payment of judgments or settlements.\" One underlying uninsured/underinsured motorist carrier paid its full $200,000 limit, while a second underlying carrier with a $500,000 UM limit initially denied the claim and later settled for $50,001. Applying Florida law and dictionary definitions of \"exhaust,\" the Eleventh Circuit held that a settlement well below the underlying policy limits does not fully consume those limits and therefore does not satisfy the exhaustion clause. The court distinguished a Florida Third District Court of Appeal decision that had found exhaustion through a below-limits settlement, noting that the clause there referred to exhausting \"all primary insurance\" without reference to policy limits and that the decision did not analyze the plain meaning of \"exhaust,\" and concluded there was persuasive indication the Florida Supreme Court would depart from it. The panel vacated the sua sponte summary judgment entered for the insureds and remanded with instructions to enter judgment for the insurer, without reaching whether the insureds maintained the required amount of underlying UM coverage.",
+    "why": "The decision construes an umbrella policy exhaustion clause tied to \"policy limits\" as requiring full consumption of the underlying limits rather than any settlement of the underlying claim, and illustrates when a federal court sitting in diversity will decline to follow a state intermediate appellate decision on insurance interpretation.",
+    "precedential": "unpublished",
+    "first_seen": "2026-08-07",
+    "law_applied": "fl",
+    "official_url": "https://media.ca11.uscourts.gov/opinions/unpub/files/202410600.pdf"
   }
 ]
