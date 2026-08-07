@@ -1413,15 +1413,29 @@
     10940760,
     10940761,
     10940762,
-    10940763
+    10940763,
+    10940804,
+    10940805,
+    10940815,
+    10940928,
+    10940954,
+    10940955,
+    10940958,
+    10940959,
+    10940970,
+    10940971,
+    10940987,
+    10941326,
+    10941328,
+    10941397
   ],
-  "updated": "2026-08-06T14:43:27Z",
+  "updated": "2026-08-07T00:58:05Z",
   "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
   "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_01Lvn9ZreehTpArTQKuMvx5A",
-      "at": 1786027168.3770523,
-      "n": 2
+    "funnel-smell": {
+      "id": "msgbatch_0128c9yfb1staQajvcc6Suoz",
+      "at": 1786064188.58045,
+      "n": 1
     }
   }
 }
