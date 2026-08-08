@@ -117,8 +117,19 @@ jobs:
           body-path: scripts/treatment_pr_body.md
           labels: opinions, automated, treatment
           delete-branch: true
+          # `add-paths` is a literal block scalar: every line is a path pattern, so the
+          # explanation goes here rather than inside it.
+          #
+          # treatment_state.json is the sweep's progress, and it must stay on this list. It was
+          # dropped by 1807fba (2026-07-25), which regenerated every add-paths list from render's
+          # OUTPUT_PATHS -- a list of RENDER outputs, which this file is not. The sweep then ran
+          # 17 times reporting success while committing no progress: the same 3 never-swept cards
+          # took a full-history crawl every 6 hours and their results were discarded, and the 12
+          # cards added since were never swept at all. scripts/test_workflow_state_paths.py now
+          # fails if a workflow drops the state file its own script writes.
           add-paths: |
             opinions.json
+            treatment_state.json
             public/.well-known/security.txt
             public/404.html
             public/archive.html
