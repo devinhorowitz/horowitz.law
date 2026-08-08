@@ -11,4 +11,4 @@
 # CVE-2026-54651 (infinite loop on threads/articles, fixed 6.13.1). 6.14.2 covers all of them, and
 # the funnel uses only pypdf's stable PdfReader/.pages/.extract_text API (update.py), verified to
 # work unchanged on 6.x. Dependabot tracks further 6.x bumps (no major cap now).
-pypdf==6.14.2
+pypdf==6.15.0
