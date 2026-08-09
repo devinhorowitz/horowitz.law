@@ -27,7 +27,7 @@ Environment:
   RESEND_SEGMENT_ID  The Segment confirmed subscribers are added to. Default in siteconfig.py.
   RESEND_TOPIC_ID    The Topic to scope the send and the unsubscribe link. Default in siteconfig.py.
   DIGEST_FROM        From header. Default in siteconfig.py.
-  DIGEST_DAYS        Lookback window in days. Default 7.
+  DIGEST_DAYS        Lookback window in days. Default in siteconfig.py.
   DIGEST_DRY_RUN     'true' to render a preview without creating anything. Default false.
   DIGEST_DRAFT       'true' to create the broadcast but NOT send it, so you can review and
                      send it from the Resend dashboard. Default false (create and send).
@@ -37,10 +37,14 @@ Environment:
   DIGEST_PREHEADER   Inbox preview line.
   DIGEST_PREVIEW     Where to write the rendered HTML in a dry run. Default digest_preview.html.
 
-  --- Legislative & Regulatory Watch (a SEPARATE broadcast; all OFF until configured) ---
-  RESEND_LEGISLATION_SEGMENT_ID  Segment of legislation opt-ins. Empty -> the legislation digest
-                     previews but never sends (inert), so this feature ships dormant.
-  RESEND_LEGISLATION_TOPIC_ID    Topic scoping the legislation send + its unsubscribe. Recommended.
+  --- Legislative & Regulatory Watch (a SEPARATE broadcast) ---
+  Configured in siteconfig.py, not here: siteconfig.LEGISLATION_DIGEST says whether this email is
+  MEANT to send, and the two ids below default from siteconfig. That distinction matters -- when
+  the email is meant to send and the audience is empty, this warns loudly on every run instead of
+  skipping in silence. It shipped the other way and went dormant for three weeks unnoticed when
+  the repo Variables holding the ids were purged.
+  RESEND_LEGISLATION_SEGMENT_ID  Override for the Segment of legislation opt-ins.
+  RESEND_LEGISLATION_TOPIC_ID    Override for the Topic scoping the send + its unsubscribe.
   LEGISLATION_SITE_URL           Base page URL for the legislation email. Default
                      'https://horowitz.law/legislation'.
   DIGEST_LEG_PREVIEW             Where to write the legislation preview in a dry run.
@@ -56,7 +60,7 @@ import safeio  # GitHub Actions run-summary helper
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_PATH = os.path.join(REPO, "opinions.json")
 
-DAYS       = int((os.environ.get("DIGEST_DAYS") or "7"))
+DAYS       = int(os.environ.get("DIGEST_DAYS") or siteconfig.DIGEST_DAYS)
 DRY_RUN    = (os.environ.get("DIGEST_DRY_RUN") or "").lower() in ("1", "true", "yes")
 DRAFT      = (os.environ.get("DIGEST_DRAFT") or "").lower() in ("1", "true", "yes")  # create but do not send
 SITE       = (os.environ.get("SITE_URL") or "https://horowitz.law/opinions").rstrip("/")
@@ -77,9 +81,10 @@ PREVIEW    = os.environ.get("DIGEST_PREVIEW") or os.path.join(REPO, "digest_prev
 # unchanged until the Resend audience/topic are wired. Reads the same card files the watch writes.
 LEG_JSON_PATH  = os.path.join(REPO, "legislation.json")
 REG_JSON_PATH  = os.path.join(REPO, "regulations.json")
-LEG_SEGMENT_ID = os.environ.get("RESEND_LEGISLATION_SEGMENT_ID") or ""   # legislation opt-in recipients
-LEG_TOPIC_ID   = os.environ.get("RESEND_LEGISLATION_TOPIC_ID") or ""     # scopes the send + unsubscribe
-LEG_SITE       = (os.environ.get("LEGISLATION_SITE_URL") or "https://horowitz.law/legislation").rstrip("/")
+LEG_SEGMENT_ID = os.environ.get("RESEND_LEGISLATION_SEGMENT_ID") or siteconfig.RESEND_LEGISLATION_SEGMENT_ID
+LEG_TOPIC_ID   = os.environ.get("RESEND_LEGISLATION_TOPIC_ID") or siteconfig.RESEND_LEGISLATION_TOPIC_ID
+LEG_SITE       = (os.environ.get("LEGISLATION_SITE_URL")
+                  or siteconfig.SITE_URL + "/legislation").rstrip("/")   # derived, not a second copy of the domain
 LEG_PREVIEW    = os.environ.get("DIGEST_LEG_PREVIEW") or os.path.join(REPO, "digest_legislation_preview.html")
 
 # Per-area sends. RESEND_AREA_TOPICS maps area code -> Resend Topic id, e.g.
@@ -91,7 +96,8 @@ LEG_PREVIEW    = os.environ.get("DIGEST_LEG_PREVIEW") or os.path.join(REPO, "dig
 # so its unsubscribe link leaves only that area.
 def _area_topics():
     try:
-        m = json.loads(os.environ.get("RESEND_AREA_TOPICS") or "{}")
+        raw = os.environ.get("RESEND_AREA_TOPICS")
+        m = json.loads(raw) if raw else siteconfig.RESEND_AREA_TOPICS
         return m if isinstance(m, dict) else {}
     except Exception:
         return {}
@@ -617,8 +623,9 @@ def send_legislation_digest():
     """The Legislative & Regulatory Watch broadcast: a SEPARATE email to its own opt-in audience
     (RESEND_LEGISLATION_SEGMENT_ID) and Topic, sent only in weeks with new legislation/regulation
     cards. Fully independent of the opinions digest -- an opinions subscriber is not mailed this, and
-    a quiet opinions week does not suppress it. Fail-safe: with no key/segment it previews and sends
-    nothing, exactly like the opinions path, so it is inert until the Resend audience is wired."""
+    a quiet opinions week does not suppress it. With no key, or in a dry run, it previews only. With
+    no SEGMENT it cannot send -- and whether that is a setting or a fault is decided by
+    siteconfig.LEGISLATION_DIGEST, which is what makes an unconfigured-but-expected send loud."""
     leg, _ = select_leg(_load_leg_cards(LEG_JSON_PATH), DAYS)
     reg, _ = select_leg(_load_leg_cards(REG_JSON_PATH), DAYS)
     if not leg and not reg:
@@ -635,8 +642,25 @@ def send_legislation_digest():
         print("  target segment: %s | topic: %s" % (LEG_SEGMENT_ID or "(unset)", LEG_TOPIC_ID or "(unset)"))
         return
     if not LEG_SEGMENT_ID:
-        print("legislation digest: RESEND_LEGISLATION_SEGMENT_ID is empty; nothing to send "
-              "(configure the Resend audience to enable it).")
+        # An unset audience used to print one line and return, and the run stayed green. That is
+        # how this email went dormant for three weeks without anyone noticing: the values lived
+        # only as GitHub repo Variables, were purged, and nothing said so. A misconfiguration
+        # that presents as a successful run is the failure mode this repo keeps paying for.
+        #
+        # So the two cases are now told apart, and only one of them is quiet. siteconfig
+        # declares whether the email is MEANT to send; if it is, an unset audience is a fault
+        # and says so as a workflow annotation and on the run summary, every week, until it is
+        # fixed. It still does not abort: the opinions digest has already sent by this point,
+        # and legislation must never fail a run that otherwise succeeded.
+        if getattr(siteconfig, "LEGISLATION_DIGEST", False):
+            msg = ("legislation digest: NOT SENT -- the audience is unset. Set "
+                   "RESEND_LEGISLATION_SEGMENT_ID (and _TOPIC_ID) in scripts/siteconfig.py from "
+                   "the Resend dashboard. %d law(s) and %d rule(s) went unsent this week."
+                   % (len(leg), len(reg)))
+            print("::warning::" + msg)
+            safeio.step_summary("## Legislative & Regulatory Watch · NOT SENT\n\n" + msg)
+        else:
+            print("legislation digest: disabled (siteconfig.LEGISLATION_DIGEST is off); nothing to send.")
         return
     # Same CAN-SPAM postal gate as the opinions digest, but a skip (not a crash): the opinions send
     # already enforces it hard, and legislation must never abort a run that otherwise succeeded.

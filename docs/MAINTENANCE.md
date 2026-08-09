@@ -334,3 +334,23 @@ Run by hand, from the Actions tab:
     prevents harm, and vetoing on confidence too would discard drafts whose basis is verified.
   - Still verify before applying. It shortens the work — it does not replace reading the
     opinion. The 2026-08-09 flag on cluster 10357471 (#241 → #242) is the worked example.
+- **The Legislative & Regulatory Watch email, and why it went quiet.** Its Resend audience
+  (`RESEND_LEGISLATION_SEGMENT_ID`, `RESEND_LEGISLATION_TOPIC_ID`, `RESEND_AREA_TOPICS`) lived
+  only as GitHub repo Variables: the email landed 2026-07-18, a week before `eed31af` moved
+  the rest of the email config into `siteconfig.py`, and that migration missed these three.
+  When the repo Variables were purged there was no copy left, the audience read empty, and the
+  send returned early — with the run still green. Three weeks of digests went unsent and
+  nothing said so.
+  - They now live in `scripts/siteconfig.py` like every other non-secret setting, and
+    `siteconfig.LEGISLATION_DIGEST` declares whether the email is *meant* to send. Empty ids
+    with that flag on is a **fault, not a setting**: `digest.py` emits a `::warning::`
+    annotation and a run-summary line every week until it is fixed. Deliberately off stays
+    quiet. It still never aborts the run — the opinions digest has already sent by then.
+  - **To restore it**: fill the two ids in `siteconfig.py` from the Resend dashboard
+    (Audiences → Segments, and Topics). They are not secrets — inert without `RESEND_API_KEY`,
+    and they already ride in every sent email's unsubscribe plumbing, which is why the
+    opinions equivalents sit in that file in plaintext.
+  - `scripts/test_digest.py` now fails if any `RESEND_*` / `DIGEST_*` / `LEGISLATION_*` setting
+    is read from the environment without a `siteconfig` fallback. `RESEND_API_KEY` is the one
+    exemption, because it is a real secret. That check is what would have caught the original
+    miss, and it is scoped so a setting can only be vouched for by its own fallback.

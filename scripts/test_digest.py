@@ -17,6 +17,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import digest    # noqa: E402  (sys.path shim must run first)
 import render    # noqa: E402
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+
 FAILS = []
 
 
@@ -153,6 +155,107 @@ def test_legislation_digest():
           and "Georgia legislation" in only_leg)
 
 
+def test_every_email_setting_has_a_home_in_the_repo():
+    """No email setting may exist only as a GitHub repo Variable.
+
+    This is the check that would have caught the actual bug. The Legislative & Regulatory Watch
+    email landed 2026-07-18 reading its Resend audience from repo Variables; the migration that
+    made the repo master of its own configuration landed a week later and moved the opinions
+    values only. Nothing noticed the three it missed. When the Variables were later purged, the
+    audience became empty, the send returned early, and the run stayed green -- three weeks of
+    digests lost silently.
+
+    The rule: a module-level RESEND_*/DIGEST_*/LEGISLATION_* read from os.environ must fall back
+    to siteconfig, not to a literal. A literal default is fine for a preview path or a debug
+    flag; it is not fine for a value that decides who gets email.
+    """
+    print("every email setting falls back to siteconfig")
+    import re
+    import siteconfig
+    src = open(os.path.join(HERE, "digest.py"), encoding="utf-8").read()
+    # The WHOLE file, not just the module header. RESEND_AREA_TOPICS is read inside a helper
+    # function and is every bit as much configuration as the ids above it -- scanning only the
+    # header let a mutation revert it to a UI-only literal without failing anything.
+    pat = re.compile(r'os\.environ\.get\("((?:RESEND|DIGEST|LEGISLATION)_[A-Z_]+)"\)')
+    checked, offenders = 0, []
+    EXEMPT = {"DIGEST_LEG_PREVIEW", "DIGEST_PREVIEW",     # local file paths, not audience config
+              "DIGEST_DRY_RUN", "DIGEST_DRAFT",           # per-run switches
+              "DIGEST_ALLOW_NO_POSTAL",                   # deliberate one-off escape hatch
+              "RESEND_API_KEY"}                           # a REAL secret: the one thing that
+                                                          # must live outside the repo
+
+    def fallback_window(pos):
+        """Source between this env read and the NEXT one, capped.
+
+        The boundary is what makes the check mean something. A fixed line window ran into the
+        following setting's line and borrowed its `siteconfig.`, so a reverted line passed on
+        its neighbour's compliance -- two mutations survived that way. Stopping at the next
+        env read means each setting can only be vouched for by its own fallback. The cap keeps
+        the last setting in a file from swallowing everything after it."""
+        nxt = src.find('os.environ.get("', pos)
+        stop = len(src) if nxt < 0 else nxt
+        return src[pos:min(stop, pos + 240)]
+
+    for m in pat.finditer(src):
+        name = m.group(1)
+        if name in EXEMPT:
+            continue
+        checked += 1
+        stmt = fallback_window(m.end())
+        if "siteconfig." not in stmt:
+            offenders.append("%s -> %s" % (name, stmt.strip()[:60]))
+    assert checked >= 8, "the scan found only %d settings; the pattern has drifted" % checked
+    assert not offenders, "email settings with no siteconfig fallback: %s" % offenders
+    print("  ok  %d settings, all falling back to siteconfig" % checked)
+
+    # And the names it falls back to must actually exist, or the fallback is an AttributeError
+    # waiting for the one run where the env is unset.
+    for attr in ("RESEND_SEGMENT_ID", "RESEND_TOPIC_ID", "RESEND_LEGISLATION_SEGMENT_ID",
+                 "RESEND_LEGISLATION_TOPIC_ID", "RESEND_AREA_TOPICS", "DIGEST_FROM",
+                 "DIGEST_POSTAL", "DIGEST_DISCLAIMER", "LEGISLATION_DIGEST"):
+        assert hasattr(siteconfig, attr), "siteconfig has no %s" % attr
+    print("  ok  every fallback name exists in siteconfig")
+
+
+def test_an_unset_audience_is_loud_when_the_email_is_meant_to_send():
+    """Dormant-but-expected must never look like a clean run again.
+
+    The old behaviour printed one line and returned 0, which is how three weeks of sends were
+    lost without anyone noticing. siteconfig.LEGISLATION_DIGEST now separates "deliberately
+    off" from "meant to send but unconfigured", and only the first is quiet."""
+    print("unset audience is loud")
+    import io
+    import contextlib
+    import siteconfig
+    saved = (digest.LEG_SEGMENT_ID, digest.API_KEY, digest.DRY_RUN,
+             siteconfig.LEGISLATION_DIGEST, digest._load_leg_cards)
+    try:
+        # Cards in the window, a key present, not a dry run: everything ready except the audience.
+        digest._load_leg_cards = lambda path: [law_card("HB 1", "enacted", days_ago(1))]
+        digest.API_KEY, digest.DRY_RUN, digest.LEG_SEGMENT_ID = "k", False, ""
+
+        siteconfig.LEGISLATION_DIGEST = True
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            digest.send_legislation_digest()
+        out = buf.getvalue()
+        check("an expected-but-unconfigured send warns", "::warning::" in out, out[:160])
+        check("and says it did not send", "NOT SENT" in out, out[:160])
+        check("and says where to fix it", "siteconfig.py" in out, out[:160])
+        check("and says how much went unsent", "law(s)" in out, out[:160])
+
+        siteconfig.LEGISLATION_DIGEST = False
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            digest.send_legislation_digest()
+        out = buf.getvalue()
+        check("a deliberately disabled email stays quiet", "::warning::" not in out, out[:160])
+        check("and says it is disabled", "disabled" in out, out[:160])
+    finally:
+        (digest.LEG_SEGMENT_ID, digest.API_KEY, digest.DRY_RUN,
+         siteconfig.LEGISLATION_DIGEST, digest._load_leg_cards) = saved
+
+
 def main():
     print("digest selection + rendering:")
     test_labels_and_esc()
@@ -162,6 +265,8 @@ def main():
     test_subject_line()
     test_build_smoke()
     test_legislation_digest()
+    test_every_email_setting_has_a_home_in_the_repo()
+    test_an_unset_audience_is_loud_when_the_email_is_meant_to_send()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
