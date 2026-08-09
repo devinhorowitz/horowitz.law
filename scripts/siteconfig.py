@@ -118,6 +118,20 @@ DIGEST_DISCLAIMER = "NOT Legal Advice - You are advised to retain your own couns
 RESEND_SEGMENT_ID = "1ae517f5-5981-4f7b-bed1-606cfa5649ab"   # confirmed subscribers Segment
 RESEND_TOPIC_ID   = "52b81509-0230-4d3d-b5ff-393409df3b2c"   # send scope + per-topic unsubscribe
 
+# ---- Pipeline behaviour --------------------------------------------------
+# Operational switches whose value must be visible, diffable and reviewable. The repo is the
+# master of its own configuration: a setting that lives only as a repo Variable in the GitHub
+# UI is invisible in review, absent from history, and lost if the repo is cloned or moved. So
+# the value lives here and the matching env var is an OVERRIDE for a one-off run, never the
+# place the real value is kept. Secrets are the only exception, and none of these are secret.
+
+# Escalate a flagged published card to the Fable senior reviewer during maintenance
+# re-validation, so the tracking issue carries a verdict, the passage from the opinion, and a
+# drafted correction instead of one line of guard reason. Costs one Fable call per flag; the
+# opinion text is already fetched. Off by default: a new model call on a production path is a
+# choice someone makes deliberately. Override for one run with OPINIONS_MAINT_REVIEW=on.
+MAINT_REVIEW = False
+
 # ---- Top-level page registry --------------------------------------------
 # The site's top-level pages, as (path, label, changefreq, priority, lastmod).
 # render.py drives both the /404 "ls /" listing and the sitemap's static URLs

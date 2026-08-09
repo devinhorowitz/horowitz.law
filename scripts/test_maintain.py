@@ -160,6 +160,158 @@ def test_finding_marker_matches_the_workflow():
 
 
 
+def test_the_senior_review_can_never_suppress_a_flag():
+    """The property the whole feature rests on: whatever the reviewer does -- disabled, errors,
+    calls it a false positive, or quotes something the opinion never said -- the flag that was
+    already recorded stays recorded, and `checked` is not disturbed.
+
+    Worth an integration test rather than trusting fable_review's unit tests, because the risk
+    here is in the WIRING: the sync caller runs guards inside a try/except that decrements
+    `checked` and skips the card, so a review that raised in the wrong place would silently cost
+    a card's re-validation while looking like a clean run.
+    """
+    print("senior review never suppresses a flag")
+    import fable_review
+    flagged = {"verdict": "flag", "reason": "misstates the holding"}
+    baseline_prev = maintain.MAINT_REVIEW
+    real = fable_review.review_published
+    seen = []            # (card_name, reason, opinion_text) per invocation
+
+    def recording(result):
+        """Wrap a canned result so the test also proves the reviewer was REACHED, and with the
+        flag's own reason and the opinion text already in hand. Without this the whole feature
+        could be deleted and every flag assertion below would still pass."""
+        def _r(card, reasons, text, call_json, grounded=None, model=None, out_tokens=8000):
+            seen.append((card.get("name"), list(reasons), text))
+            if callable(result):
+                return result()
+            return result
+        return _r
+
+    try:
+        # Baseline: review off (the default) -- one flag.
+        maintain.MAINT_REVIEW = False
+        run("review off", {"Alpha v. X": flagged}, {}, exp_flags=[("Alpha v. X", "fidelity: misstates the holding")], exp_checked=2)
+
+        maintain.MAINT_REVIEW = True
+        for label, stub in (
+            ("review raises", lambda: (_ for _ in ()).throw(RuntimeError("fable down"))),
+            ("review unavailable", {"available": False, "verdict": "uncertain",
+                                    "confidence": "low", "quote": "", "grounded": False,
+                                    "assessment": "no", "suggested_synopsis": "", "suggested_why": ""}),
+            ("review says false positive", {"available": True, "verdict": "false_positive",
+                                    "confidence": "high", "quote": "q", "grounded": True,
+                                    "assessment": "mistaken", "suggested_synopsis": "", "suggested_why": ""}),
+            ("review drafts a fix", {"available": True, "verdict": "genuine",
+                                    "confidence": "high", "quote": "q", "grounded": True,
+                                    "assessment": "real", "suggested_synopsis": "fixed",
+                                    "suggested_why": "fixed"}),
+        ):
+            fable_review.review_published = recording(stub)
+            del seen[:]
+            run(label, {"Alpha v. X": flagged}, {},
+                exp_flags=[("Alpha v. X", "fidelity: misstates the holding")], exp_checked=2)
+            assert len(seen) == 1, "%s: reviewer reached %d time(s), expected 1" % (label, len(seen))
+            nm, reasons, text = seen[0]
+            assert nm == "Alpha v. X", "%s: reviewed the wrong card (%r)" % (label, nm)
+            assert reasons == ["fidelity: misstates the holding"], "%s: reason not passed (%r)" % (label, reasons)
+            assert text == "OPINION TEXT", "%s: opinion text not passed (%r)" % (label, text)
+
+        # The BATCH path is a second, independent call site -- it raises its flags in a later
+        # loop where neither the card nor its text is otherwise in scope, so it is exactly the
+        # one that would be missed.
+        fable_review.review_published = recording({"available": True, "verdict": "genuine",
+                                    "confidence": "high", "quote": "q", "grounded": True,
+                                    "assessment": "real", "suggested_synopsis": "fixed",
+                                    "suggested_why": "fixed"})
+        del seen[:]
+        # A GROUNDED flag, since the batch path runs verdicts through update.guard_verdict and
+        # an unquoted one is dismissed as an invented premise before any review could happen.
+        run_batch("batch path reviews too",
+                  {"1-fidelity": {"verdict": "flag", "reason": "misread", "quote": "Why it matters"},
+                   "1-completeness": {"verdict": "complete"},
+                   "2-fidelity": {"verdict": "match"}, "2-completeness": {"verdict": "complete"}},
+                  exp_flags=[("Alpha v. X",
+                              'fidelity: misread (drafted text at issue: "Why it matters")')],
+                  exp_checked=2)
+        assert len(seen) == 1, "batch: reviewer reached %d time(s), expected 1" % len(seen)
+        assert seen[0][0] == "Alpha v. X" and seen[0][2] == "OPINION TEXT", \
+            "batch: card/text not carried to the reviewer (%r)" % (seen[0],)
+        assert seen[0][1] == ['fidelity: misread (drafted text at issue: "Why it matters")'], \
+            "batch: the flag's own reason was not passed to the reviewer (%r)" % (seen[0][1],)
+
+        # And with the feature off, it is never reached at all.
+        maintain.MAINT_REVIEW = False
+        del seen[:]
+        run("review off, not reached", {"Alpha v. X": flagged}, {},
+            exp_flags=[("Alpha v. X", "fidelity: misstates the holding")], exp_checked=2)
+        assert not seen, "reviewer was called while disabled"
+    finally:
+        fable_review.review_published = real
+        maintain.MAINT_REVIEW = baseline_prev
+
+
+def test_the_switch_lives_in_the_config_file():
+    """The repo is the master of its own configuration.
+
+    A setting whose real value is a repo Variable typed into the GitHub Actions UI is invisible
+    in review, absent from git history, and gone the moment the repo is cloned -- so the value
+    belongs in siteconfig.py and the env var is an OVERRIDE for a one-off run, never the place
+    the value is kept. Secrets are the only exception, and a boolean switch is not one.
+
+    Pinned rather than trusted: without this, someone "simplifying" maintain.py back to
+    os.environ.get(..., "off") would restore the UI-only shape and nothing would notice.
+    """
+    print("senior review config")
+    import importlib
+    import siteconfig
+    prev = os.environ.pop("OPINIONS_MAINT_REVIEW", None)
+    prev_cfg = siteconfig.MAINT_REVIEW
+    try:
+        importlib.reload(maintain)
+        assert maintain.MAINT_REVIEW is False, "the shipped default is not off"
+        print("  ok  ships off")
+
+        # The config file -- not an inline default -- decides when the env is unset.
+        siteconfig.MAINT_REVIEW = True
+        importlib.reload(maintain)
+        assert maintain.MAINT_REVIEW is True, "siteconfig.MAINT_REVIEW is not the source of truth"
+        print("  ok  siteconfig.py is the source of truth")
+
+        # ...and the env overrides it in BOTH directions, so an override is never a one-way door.
+        os.environ["OPINIONS_MAINT_REVIEW"] = "off"
+        importlib.reload(maintain)
+        assert maintain.MAINT_REVIEW is False, "the env cannot turn a config-on switch off"
+        print("  ok  the env can override it off")
+
+        siteconfig.MAINT_REVIEW = False
+        for on in ("1", "on", "true", "YES"):
+            os.environ["OPINIONS_MAINT_REVIEW"] = on
+            importlib.reload(maintain)
+            assert maintain.MAINT_REVIEW is True, "%r did not enable it" % on
+        print("  ok  the env can override it on (1/on/true/yes, case-insensitive)")
+    finally:
+        os.environ.pop("OPINIONS_MAINT_REVIEW", None)
+        if prev is not None:
+            os.environ["OPINIONS_MAINT_REVIEW"] = prev
+        siteconfig.MAINT_REVIEW = prev_cfg
+        importlib.reload(maintain)
+
+
+def test_no_workflow_makes_the_switch_ui_only():
+    """The other half of the rule: nothing may reintroduce it as a bare `vars.` lookup."""
+    print("senior review is not a UI-only variable")
+    import glob
+    offenders = []
+    for path in glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                       "..", ".github", "workflows", "*.yml")):
+        raw = open(path, encoding="utf-8").read()
+        if "vars.OPINIONS_MAINT_REVIEW" in raw:
+            offenders.append(os.path.basename(path))
+    assert not offenders, "the switch is read from the Actions UI in %s" % offenders
+    print("  ok  no workflow reads it from vars.*")
+
+
 def main():
     print("maintain.revalidate wiring:")
     # Both guards clean: no flags, both cards checked, one fetch per card.
@@ -212,6 +364,9 @@ def main():
               exp_flags=[], exp_checked=0, exp_deferred=2, exp_fetches=2, exp_requests=4)
 
     test_finding_marker_matches_the_workflow()
+    test_the_senior_review_can_never_suppress_a_flag()
+    test_the_switch_lives_in_the_config_file()
+    test_no_workflow_makes_the_switch_ui_only()
 
     print("\nALL TESTS PASSED (11 cases + marker wiring)")
     return 0

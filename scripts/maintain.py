@@ -43,6 +43,8 @@ import update          # production cross-check, text fetch, paths, model config
 import cl_rate         # shared CourtListener REST budget (same singleton update uses)
 import batch           # Message Batches transport (used only when MAINTAIN_BATCH is set)
 import golden_check    # the regression guard; reused so it tests what the funnel runs
+import siteconfig      # repo-owned config: the senior-review switch lives there, not in the Actions UI
+import fable_review    # senior review of a flagged PUBLISHED card (advisory; never suppresses a flag)
 
 # Knobs, all repo-variable overridable; the defaults are conservative.
 RESERVE   = int(os.environ.get("OPINIONS_MAINT_RESERVE", "50"))     # trailing-24h funnel cl_calls at or above which the CL re-validation is skipped
@@ -55,6 +57,26 @@ SLICE     = int(os.environ.get("OPINIONS_MAINT_SLICE", "3"))        # published 
 # without anyone having looked. maintain.yml greps for this exact string; test_maintain.py
 # asserts the two agree.
 FINDING_MARKER = "MAINTENANCE_FINDING=1"
+# Senior review of a flagged published card.
+#
+# What it buys: the maintenance issue carries only the guard's one-line reason, so acting on a flag
+# means pulling the opinion from CourtListener by hand to find the passage that settles it. The
+# 2026-08-09 fidelity flag on cluster 10357471 cost exactly that, and the correction it led to was a
+# single clause. The opinion text is already fetched and in hand when the flag is raised, so the
+# expensive half is already paid for; this spends one Fable call on top.
+#
+# It cannot make the run quieter. The flag is appended before this is consulted, and the review is
+# printed underneath it -- see _senior_review.
+#
+# THE VALUE LIVES IN siteconfig.py, not as a repo Variable set by hand in the GitHub UI. The repo
+# is the master of its own configuration -- the same rule digest.py states for the Resend and
+# digest settings -- because a value kept only in the Actions UI is invisible in review, absent
+# from git history, and gone the moment the repo is cloned or moved. Secrets are the only thing
+# that may live outside the repo, and a boolean switch is not a secret.
+# OPINIONS_MAINT_REVIEW still overrides for a one-off run, and it can turn the review OFF as well
+# as on, so an override is never a one-way door.
+_MR = os.environ.get("OPINIONS_MAINT_REVIEW", "").strip().lower()
+MAINT_REVIEW = (_MR in ("1", "on", "true", "yes")) if _MR else bool(siteconfig.MAINT_REVIEW)
 FETCH_SEC = int(os.environ.get("OPINIONS_MAINT_FETCH_SEC", "180"))  # per-run wall-clock budget for the slice's fetches; a full window or 429 defers the rest
 # Route the slice's guard calls through the 50%-priced Batch API. ON by default: the guards are a
 # latency-tolerant daily trickle (SLICE=3 cards -> <=6 small Sonnet calls), so half price is a clear
@@ -138,6 +160,46 @@ def rotating_slice(cards):
     return [pool[(start + i) % n] for i in range(k)]
 
 
+def _senior_review(card, reason, text):
+    """Print a senior review under a flag that has ALREADY been recorded.
+
+    Ordering is the point: every caller appends to `flags` and prints the FLAG line before
+    calling this, so no outcome here -- disabled, errored, false-positive, ungrounded quote --
+    can reduce what the run reports. The review only ever adds lines beneath a flag that is
+    already standing.
+
+    Output goes to stdout because that is what becomes the issue body (maintain.yml tails the
+    last 100 lines), which is where a person actually reads the flag. Kept compact for the same
+    reason: the tail is a budget shared with the golden-check listing above it.
+    """
+    if not MAINT_REVIEW:
+        return None
+    try:
+        v = fable_review.review_published(
+            card, [reason], text, update.anthropic_json,
+            grounded=update._quote_substantiated,  # the house grounding check, injected: fable_review
+            model=update.FABLE_MODEL)              # must not import update (update imports it)
+    except Exception as e:
+        # review_published does not raise, so this is about everything around it -- a renamed
+        # update attribute, a missing model constant. The sync caller runs this inside a
+        # try/except that decrements `checked` and skips the card, so an escape here would
+        # quietly cost a card's re-validation. Belt and braces, in the direction of the flag.
+        print("    ~ senior review: unavailable (%s)" % e)
+        return None
+    if not v.get("available"):
+        print("    ~ senior review: %s" % v.get("assessment"))
+        return v
+    print("    ~ senior review: %s (%s confidence)" % (v["verdict"], v["confidence"]))
+    print("      %s" % v["assessment"])
+    if v["quote"]:
+        print("      opinion says: \"%s\"%s" % (v["quote"], "" if v["grounded"] else
+                                                "   [NOT FOUND in the opinion text -- suggestion withheld]"))
+    for label, val in (("synopsis", v["suggested_synopsis"]), ("why it matters", v["suggested_why"])):
+        if val:
+            print("      suggested %s: %s" % (label, val))
+    return v
+
+
 def revalidate(cards):
     """Re-run the per-card guards on the rotating slice. Returns (flags, checked, deferred),
     where flags is a list of (name, reason) and each reason is prefixed with the guard that
@@ -172,6 +234,7 @@ def revalidate(cards):
                 if cc and cc.get("verdict") == "flag":
                     flags.append((name, "fidelity: " + (cc.get("reason") or "")))
                     print("  FLAG (fidelity) %s: %s" % (name[:50], cc.get("reason") or "")); raised = True
+                    _senior_review(card, "fidelity: " + (cc.get("reason") or ""), text)
                 elif cc and cc.get("verdict") == "unavailable":
                     print("  . cross-check unavailable for %s" % name[:50])
             if update.COMPLETENESS_MODEL:
@@ -179,6 +242,7 @@ def revalidate(cards):
                 if cp and cp.get("verdict") == "flag":
                     flags.append((name, "completeness: " + (cp.get("reason") or "")))
                     print("  FLAG (completeness) %s: %s" % (name[:50], cp.get("reason") or "")); raised = True
+                    _senior_review(card, "completeness: " + (cp.get("reason") or ""), text)
                 elif cp and cp.get("verdict") == "unavailable":
                     print("  . completeness check unavailable for %s" % name[:50])
         except update.ConfigError:
@@ -206,7 +270,10 @@ def _revalidate_batch(cards):
     but a single attempt per guard (no consensus) -- see update.guard_verdict."""
     flags, checked, deferred = [], 0, 0
     deadline = time.time() + FETCH_SEC
-    reqs, meta, picked = [], {}, []      # meta: custom_id -> (kind, name, ground_text)
+    # meta: custom_id -> (kind, name, ground_text, card, opinion_text). The card and text
+    # ride along only so a flag raised in the results loop below can be senior-reviewed
+    # there; the slice is SLICE cards, so this holds a handful of opinions, not a corpus.
+    reqs, meta, picked = [], {}, []
     for card in rotating_slice(cards):
         name = card.get("name", "(unnamed)")
         try:
@@ -228,7 +295,7 @@ def _revalidate_batch(cards):
             # so join the cluster id and guard kind with a hyphen.
             cid = "%s-%s" % (card["cluster_id"], kind)
             reqs.append(batch.from_body(cid, body))
-            meta[cid] = (kind, name, ground)
+            meta[cid] = (kind, name, ground, card, text)
     if not reqs:
         return flags, checked, deferred
 
@@ -251,7 +318,7 @@ def _revalidate_batch(cards):
             # maintenance defers, it never fails the run.
             print("  . batch returned an unknown custom_id %r; skipping" % cid)
             continue
-        kind, name, ground = meta[cid]
+        kind, name, ground, card, text = meta[cid]
         if not res.get("ok"):
             print("  . %s guard unavailable for %s (batch: %s)" % (kind, name[:50], res.get("type")))
             continue
@@ -262,8 +329,10 @@ def _revalidate_batch(cards):
             continue
         v = update.guard_verdict(kind, r, ground)
         if v.get("verdict") == "flag":
-            flags.append((name, "%s: %s" % (kind, v.get("reason") or "")))
+            reason = "%s: %s" % (kind, v.get("reason") or "")
+            flags.append((name, reason))
             print("  FLAG (%s) %s: %s" % (kind, name[:50], v.get("reason") or ""))
+            _senior_review(card, reason, text)
     return flags, checked, deferred
 
 

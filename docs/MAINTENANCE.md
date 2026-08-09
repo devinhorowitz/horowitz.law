@@ -304,3 +304,33 @@ Run by hand, from the Actions tab:
   - There is no status-page preflight, deliberately. Every one of these paths already fails
     safe, and a preflight would add a dependency on a second GitHub surface being healthy in
     order to decide whether GitHub is healthy.
+- **A flagged published card can arrive with a drafted fix.** The maintenance re-validation
+  flags a live card and files an issue carrying the guard's one-line reason — which means
+  acting on it starts with pulling the opinion from CourtListener by hand to find the passage
+  that settles the question. Set `MAINT_REVIEW = True` in `scripts/siteconfig.py` and each
+  flag is escalated to Fable, the same senior-appellate-attorney reviewer the funnel uses on
+  held cards, and the issue additionally carries: genuine / false-positive / uncertain with a
+  confidence, the passage from the opinion, and a drafted correction to the synopsis and the
+  why-it-matters. The opinion text is already fetched and in hand when the flag is raised, so
+  this costs one Fable call per flag and no extra CourtListener budget.
+  - **Turn it on by editing `MAINT_REVIEW` in `scripts/siteconfig.py`**, not by typing a
+    Variable into the Actions UI. The repo is the master of its own configuration: a value
+    that lives only in the GitHub UI is invisible in review, absent from git history, and gone
+    the moment the repo is cloned or moved. Secrets are the only thing that belongs outside the
+    repo, and a boolean switch is not a secret. `OPINIONS_MAINT_REVIEW` still overrides for a
+    one-off run, in both directions, so an override is never a one-way door.
+  - **Off by default**: a new model call on a production path is a choice someone makes, not
+    one that arrives with a merge.
+  - **It can only add.** The flag is recorded and printed before the reviewer is consulted,
+    and the reviewer is wrapped so nothing it does — disabled, errored, "false positive" —
+    changes what the run reports or whether it exits nonzero. It never edits a card; the
+    suggestion is text in an issue for a person to apply.
+  - **A suggestion is shown only when the quote is real.** The reviewer must quote the passage
+    it relied on, and that quote is checked against the opinion with the same grounding rule
+    the funnel's guards use. An invented or trivially short quote means the verdict is still
+    reported but the drafted correction is withheld — an edit to published legal text resting
+    on words the opinion does not contain is worse than no suggestion at all. Confidence is
+    reported for you to weigh, deliberately *not* used as a second gate: the quote is what
+    prevents harm, and vetoing on confidence too would discard drafts whose basis is verified.
+  - Still verify before applying. It shortens the work — it does not replace reading the
+    opinion. The 2026-08-09 flag on cluster 10357471 (#241 → #242) is the worked example.
