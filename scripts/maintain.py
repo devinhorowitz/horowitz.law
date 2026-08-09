@@ -43,6 +43,7 @@ import update          # production cross-check, text fetch, paths, model config
 import cl_rate         # shared CourtListener REST budget (same singleton update uses)
 import batch           # Message Batches transport (used only when MAINTAIN_BATCH is set)
 import golden_check    # the regression guard; reused so it tests what the funnel runs
+import siteconfig      # repo-owned config: the senior-review switch lives there, not in the Actions UI
 import fable_review    # senior review of a flagged PUBLISHED card (advisory; never suppresses a flag)
 
 # Knobs, all repo-variable overridable; the defaults are conservative.
@@ -56,8 +57,7 @@ SLICE     = int(os.environ.get("OPINIONS_MAINT_SLICE", "3"))        # published 
 # without anyone having looked. maintain.yml greps for this exact string; test_maintain.py
 # asserts the two agree.
 FINDING_MARKER = "MAINTENANCE_FINDING=1"
-# Senior review of a flagged published card. OFF by default, matching OPINIONS_FABLE_REVIEW: a new
-# model call on a production path is a choice someone makes, not one that arrives with a merge.
+# Senior review of a flagged published card.
 #
 # What it buys: the maintenance issue carries only the guard's one-line reason, so acting on a flag
 # means pulling the opinion from CourtListener by hand to find the passage that settles it. The
@@ -67,7 +67,16 @@ FINDING_MARKER = "MAINTENANCE_FINDING=1"
 #
 # It cannot make the run quieter. The flag is appended before this is consulted, and the review is
 # printed underneath it -- see _senior_review.
-MAINT_REVIEW = os.environ.get("OPINIONS_MAINT_REVIEW", "off").strip().lower() in ("1", "on", "true", "yes")
+#
+# THE VALUE LIVES IN siteconfig.py, not as a repo Variable set by hand in the GitHub UI. The repo
+# is the master of its own configuration -- the same rule digest.py states for the Resend and
+# digest settings -- because a value kept only in the Actions UI is invisible in review, absent
+# from git history, and gone the moment the repo is cloned or moved. Secrets are the only thing
+# that may live outside the repo, and a boolean switch is not a secret.
+# OPINIONS_MAINT_REVIEW still overrides for a one-off run, and it can turn the review OFF as well
+# as on, so an override is never a one-way door.
+_MR = os.environ.get("OPINIONS_MAINT_REVIEW", "").strip().lower()
+MAINT_REVIEW = (_MR in ("1", "on", "true", "yes")) if _MR else bool(siteconfig.MAINT_REVIEW)
 FETCH_SEC = int(os.environ.get("OPINIONS_MAINT_FETCH_SEC", "180"))  # per-run wall-clock budget for the slice's fetches; a full window or 429 defers the rest
 # Route the slice's guard calls through the 50%-priced Batch API. ON by default: the guards are a
 # latency-tolerant daily trickle (SLICE=3 cards -> <=6 small Sonnet calls), so half price is a clear

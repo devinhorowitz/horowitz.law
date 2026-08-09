@@ -251,29 +251,65 @@ def test_the_senior_review_can_never_suppress_a_flag():
         maintain.MAINT_REVIEW = baseline_prev
 
 
-def test_the_review_is_off_by_default():
-    """A new model call on a production path must not arrive with a merge."""
-    print("senior review default")
+def test_the_switch_lives_in_the_config_file():
+    """The repo is the master of its own configuration.
+
+    A setting whose real value is a repo Variable typed into the GitHub Actions UI is invisible
+    in review, absent from git history, and gone the moment the repo is cloned -- so the value
+    belongs in siteconfig.py and the env var is an OVERRIDE for a one-off run, never the place
+    the value is kept. Secrets are the only exception, and a boolean switch is not one.
+
+    Pinned rather than trusted: without this, someone "simplifying" maintain.py back to
+    os.environ.get(..., "off") would restore the UI-only shape and nothing would notice.
+    """
+    print("senior review config")
     import importlib
+    import siteconfig
     prev = os.environ.pop("OPINIONS_MAINT_REVIEW", None)
+    prev_cfg = siteconfig.MAINT_REVIEW
     try:
         importlib.reload(maintain)
-        assert maintain.MAINT_REVIEW is False, "OPINIONS_MAINT_REVIEW defaults on"
-        print("  ok  defaults to off")
+        assert maintain.MAINT_REVIEW is False, "the shipped default is not off"
+        print("  ok  ships off")
+
+        # The config file -- not an inline default -- decides when the env is unset.
+        siteconfig.MAINT_REVIEW = True
+        importlib.reload(maintain)
+        assert maintain.MAINT_REVIEW is True, "siteconfig.MAINT_REVIEW is not the source of truth"
+        print("  ok  siteconfig.py is the source of truth")
+
+        # ...and the env overrides it in BOTH directions, so an override is never a one-way door.
+        os.environ["OPINIONS_MAINT_REVIEW"] = "off"
+        importlib.reload(maintain)
+        assert maintain.MAINT_REVIEW is False, "the env cannot turn a config-on switch off"
+        print("  ok  the env can override it off")
+
+        siteconfig.MAINT_REVIEW = False
         for on in ("1", "on", "true", "YES"):
             os.environ["OPINIONS_MAINT_REVIEW"] = on
             importlib.reload(maintain)
             assert maintain.MAINT_REVIEW is True, "%r did not enable it" % on
-        print("  ok  1/on/true/yes enable it (case-insensitive)")
-        os.environ["OPINIONS_MAINT_REVIEW"] = "off"
-        importlib.reload(maintain)
-        assert maintain.MAINT_REVIEW is False
-        print("  ok  off disables it")
+        print("  ok  the env can override it on (1/on/true/yes, case-insensitive)")
     finally:
         os.environ.pop("OPINIONS_MAINT_REVIEW", None)
         if prev is not None:
             os.environ["OPINIONS_MAINT_REVIEW"] = prev
+        siteconfig.MAINT_REVIEW = prev_cfg
         importlib.reload(maintain)
+
+
+def test_no_workflow_makes_the_switch_ui_only():
+    """The other half of the rule: nothing may reintroduce it as a bare `vars.` lookup."""
+    print("senior review is not a UI-only variable")
+    import glob
+    offenders = []
+    for path in glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                       "..", ".github", "workflows", "*.yml")):
+        raw = open(path, encoding="utf-8").read()
+        if "vars.OPINIONS_MAINT_REVIEW" in raw:
+            offenders.append(os.path.basename(path))
+    assert not offenders, "the switch is read from the Actions UI in %s" % offenders
+    print("  ok  no workflow reads it from vars.*")
 
 
 def main():
@@ -329,7 +365,8 @@ def main():
 
     test_finding_marker_matches_the_workflow()
     test_the_senior_review_can_never_suppress_a_flag()
-    test_the_review_is_off_by_default()
+    test_the_switch_lives_in_the_config_file()
+    test_no_workflow_makes_the_switch_ui_only()
 
     print("\nALL TESTS PASSED (11 cases + marker wiring)")
     return 0
