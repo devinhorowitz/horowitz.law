@@ -110,6 +110,7 @@ PUBLISHER_NAME   = NAME
 # repo Variable remains available as a break-glass override -- but the committed value here is
 # the source of truth. The Resend ids are not secrets: they are inert without RESEND_API_KEY
 # and already ride in every sent email's unsubscribe plumbing.
+DIGEST_DAYS   = 7     # lookback window, in days; matches the weekly cron
 DIGEST_FROM   = "Georgia Appellate Watch <digest@horowitz.law>"
 # CAN-SPAM postal line for the email footer; the same address the home page's JSON-LD publishes.
 DIGEST_POSTAL = f"{NAME}, 365 Northridge Road, Suite 230, Atlanta, GA 30350"
@@ -117,6 +118,25 @@ DIGEST_POSTAL = f"{NAME}, 365 Northridge Road, Suite 230, Atlanta, GA 30350"
 DIGEST_DISCLAIMER = "NOT Legal Advice - You are advised to retain your own counsel."
 RESEND_SEGMENT_ID = "1ae517f5-5981-4f7b-bed1-606cfa5649ab"   # confirmed subscribers Segment
 RESEND_TOPIC_ID   = "52b81509-0230-4d3d-b5ff-393409df3b2c"   # send scope + per-topic unsubscribe
+
+# ---- Legislative & Regulatory Watch opt-in email -------------------------
+# These three belong here for the same reason as the four above, and were missed. The watch
+# email landed 2026-07-18 (f268fef) reading them from GitHub repo Variables; the migration
+# that made the repo master of its own configuration landed a week later (eed31af,
+# 2026-07-25) and moved the opinions values only. When the repo Variables were later purged
+# these had no remaining home, and the send went quietly dormant -- the run stayed green
+# because an unset audience returns early.
+#
+# So empty here does NOT mean "off". LEGISLATION_DIGEST is what says whether the email is
+# meant to send; when it is on and the audience is unset, digest.py says so loudly on every
+# run instead of skipping in silence. Fill the two ids from the Resend dashboard
+# (Audiences > Segments, and Topics) to switch it back on.
+LEGISLATION_DIGEST = True    # this email is supposed to send; empty ids below are a fault, not a setting
+RESEND_LEGISLATION_SEGMENT_ID = ""   # Resend Segment: legislation opt-in recipients
+RESEND_LEGISLATION_TOPIC_ID   = ""   # Resend Topic: send scope + per-topic unsubscribe
+# Practice-area code -> Resend Topic id, for the per-area opinion broadcasts. Empty means no
+# per-area sends, which is the pre-feature behaviour and a legitimate setting.
+RESEND_AREA_TOPICS = {}
 
 # ---- Pipeline behaviour --------------------------------------------------
 # Operational switches whose value must be visible, diffable and reviewable. The repo is the
