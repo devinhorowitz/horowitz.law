@@ -1,5 +1,63 @@
 [
   {
+    "bill_id": 1958455,
+    "state": "GA",
+    "number": "HB295",
+    "title": "Local government; procedures for real property owners to make claims for compensation for loss of property value or expenses incurred; provisions",
+    "status": "enacted",
+    "status_date": "2026-05-12",
+    "effective_date": "",
+    "areas": [
+      "procedure",
+      "premises",
+      "damages"
+    ],
+    "synopsis": "HB295 amends Chapter 60 of Title 36 (general provisions for counties and municipalities) to create a statutory procedure by which real property owners may present claims to a local government for lost property value or expenses caused by that government's failure to comply with or enforce specified laws, ordinances, and resolutions, or by the local government's maintenance of a public nuisance. Previously, such claims against counties and cities proceeded under general tort, nuisance, and inverse condemnation theories subject to sovereign and official immunity defenses and generally applicable ante litem notice rules, with no dedicated compensation-claim mechanism in Chapter 60. The provided title and description do not specify the claim filing deadlines, notice content, response obligations, damages measures or caps, or whether and when suit may follow an unpaid claim, so those details must be confirmed from the enrolled text.",
+    "impact": "Creates a new administrative claim path against Georgia local governments for property-value losses from nonenforcement or public nuisance, adding a pre-suit step to counsel.",
+    "url": "https://legiscan.com/GA/bill/HB295/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/69969",
+    "change_hash": "ea932adceb69f5771c181543daecaf24",
+    "first_seen": "2026-08-09"
+  },
+  {
+    "bill_id": 1947610,
+    "state": "GA",
+    "number": "HB185",
+    "title": "Professions and businesses; repeal and reenact Chapter 11A, the Dietetics Practice Act",
+    "status": "enacted",
+    "status_date": "2026-05-11",
+    "effective_date": "",
+    "areas": [
+      "expert",
+      "procedure"
+    ],
+    "synopsis": "HB185 repeals and reenacts OCGA Title 43, Chapter 11A, the Dietetics Practice Act, and makes conforming cross-reference amendments in Titles 9 (civil practice), 31, 33 (insurance), 43, and 51 (torts). The description identifies the Title 9, 33, and 51 changes only as conforming cross-references, so the substantive civil-practice rules appear unchanged; the provided text does not identify which specific code sections (for example, the professional malpractice affidavit or expert competency provisions that enumerate licensed dietitians) are being renumbered or relabeled. Practitioners relying on statutory references to dietitians or the prior chapter should verify current section numbers and any changed licensure terminology in the reenacted chapter.",
+    "impact": "Renumbered dietetics licensure references may alter citations in malpractice affidavit, expert competency, and insurance statutes without changing substantive civil rules.",
+    "url": "https://legiscan.com/GA/bill/HB185/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/69666",
+    "change_hash": "6438ee094892db25bad2fb5f0aa43d13",
+    "first_seen": "2026-08-09"
+  },
+  {
+    "bill_id": 1961012,
+    "state": "GA",
+    "number": "HB339",
+    "title": "Motor vehicles; exempt ride share drivers or ride share network services from definition of motor carrier",
+    "status": "enacted",
+    "status_date": "2025-05-14",
+    "effective_date": "",
+    "areas": [
+      "auto",
+      "coverage"
+    ],
+    "synopsis": "HB339 amends Georgia's motor carrier article (Title 40, Chapter 1, Article 3) to expressly exclude ride share drivers and ride share network services from the definition of \"motor carrier,\" adds definitions, and revises the article's legislative findings. It also provides that ride share network services are not liable for the actions of ride share drivers in certain circumstances, and makes conforming changes elsewhere in the article. Because the motor carrier designation is the gateway to the regulatory and insurance-related obligations imposed by that article, drivers and network services operating under this exemption are no longer treated as motor carriers for those purposes. The bill text as described does not spell out which circumstances trigger the liability exemption or how it interacts with any other basis for holding a network service liable, so those limits must be read from the enacted language itself.",
+    "impact": "Ride share drivers and networks fall outside motor carrier status, narrowing claims and insurer-joinder theories that depend on that designation.",
+    "url": "https://legiscan.com/GA/bill/HB339/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/70069",
+    "change_hash": "170540667c28c9f8f472ca280e98bbdd",
+    "first_seen": "2026-08-09"
+  },
+  {
     "bill_id": 1929066,
     "state": "GA",
     "number": "HB114",
@@ -35,5 +93,42 @@
     "state_link": "https://www.legis.ga.gov/legislation/69447",
     "change_hash": "52e1ba9a4213345e387aeb5be252d8cb",
     "first_seen": "2026-07-19"
+  },
+  {
+    "bill_id": 1947499,
+    "state": "GA",
+    "number": "HB179",
+    "title": "Appellate practice; digital recording of certain trial proceedings; provide",
+    "status": "enacted",
+    "status_date": "2025-04-30",
+    "effective_date": "",
+    "areas": [
+      "procedure"
+    ],
+    "synopsis": "HB 179 amends the appellate practice provisions of O.C.G.A. Title 5, Chapter 6, Article 2, along with Title 9, Article 2 of Chapter 14 (post-conviction procedure) and Title 15 (courts, including the Georgia State-wide Business Court), to authorize digital recording of specified trial proceedings and to set rules governing the use and regulation of digital recording systems, with accompanying definitions. Previously, the statutory framework for making the record in these proceedings did not expressly provide for digital recording as an authorized method; the Act now supplies that authorization and its parameters. The description does not identify which specific proceedings may be digitally recorded, what certification or transcription requirements apply, or how a digital recording is to be reduced to a transcript for the record on appeal, so those details must be read in the enacted text.",
+    "impact": "Civil litigators may face digitally recorded proceedings, including in the Business Court, changing how the record and appellate transcript are created and verified.",
+    "url": "https://legiscan.com/GA/bill/HB179/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/69658",
+    "change_hash": "39d631e55f9848838cf5e3b57aaf03f7",
+    "first_seen": "2026-08-09"
+  },
+  {
+    "bill_id": 1955594,
+    "state": "GA",
+    "number": "HB268",
+    "title": "Education; safety, health, and well-being of students and school communities; provide",
+    "status": "enacted",
+    "status_date": "2025-04-28",
+    "effective_date": "",
+    "areas": [
+      "negsec",
+      "procedure"
+    ],
+    "synopsis": "HB 268 amends Chapter 2 of Title 20 to create an Office of Safe Schools within GEMA/HS, to require technical assistance for local school systems in developing threat management team policies and procedures, and to establish a state-wide behavioral threat management operational process with accompanying definitions. It also amends O.C.G.A. 16-11-37 to criminalize threatening death or serious injury to persons who are or are likely to be at school, and amends Article 4 of Chapter 18 of Title 50 to exempt certain records from public inspection. The text supplied does not identify which specific records fall within the Open Records exemption, nor does it state any immunity provisions for schools or threat management team members.",
+    "impact": "Creates statutory school threat-assessment duties relevant to negligent security claims while shielding some related records from Open Records requests.",
+    "url": "https://legiscan.com/GA/bill/HB268/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/69929",
+    "change_hash": "9974df9fa53631b78fa6c44327a3c7f7",
+    "first_seen": "2026-08-09"
   }
 ]
