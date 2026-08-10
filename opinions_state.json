@@ -1460,15 +1460,31 @@
     10942349,
     10942365,
     10942366,
-    10942367
+    10942367,
+    10943740,
+    10943741,
+    10943745,
+    10943767,
+    10943768,
+    10943769,
+    10943777,
+    10943778,
+    10943779,
+    10943780,
+    10943781,
+    10943782,
+    10943783,
+    10943784,
+    10943785,
+    10943786,
+    10943787,
+    10943788,
+    10943843,
+    10943864,
+    10943865,
+    10943866,
+    10943867
   ],
-  "updated": "2026-08-07T21:08:39Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-smell": {
-      "id": "msgbatch_01KHDuXkeGtkC8qn2mSGghSQ",
-      "at": 1786136739.7557054,
-      "n": 1
-    }
-  }
+  "updated": "2026-08-10T17:14:20Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
