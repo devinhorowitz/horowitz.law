@@ -1,8 +1,26 @@
 {
   "area": "coverage",
   "label": "coverage",
-  "count": 22,
+  "count": 23,
   "opinions": [
+    {
+      "cluster_id": 10944729,
+      "name": "Mt. Hawley Insurance Company v. H&M Builders, LLC",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2026-08-11",
+      "disposition": "appeal dismissed for lack of jurisdiction",
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10944729/mt-hawley-insurance-company-v-hm-builders-llc/",
+      "synopsis": "An insurer sought a declaratory judgment that it owed no duty to defend or indemnify its insured in an underlying state-court wrongful death action, and the district court granted summary judgment to the insured on the duty to defend while reserving the indemnity question. While the insurer's interlocutory appeal was pending, the underlying state-court action settled and was dismissed. The Eleventh Circuit held the appeal no longer presented an actual controversy under the Declaratory Judgment Act and Article III, because a duty-to-defend dispute depends on an actual dispute over a present defense obligation, and it rejected the parties' arguments that potential recovery of defense costs on reversal or of attorney fees under Florida law on affirmance preserved a live dispute, noting also that parties cannot stipulate to federal jurisdiction.",
+      "why": "It establishes that a duty-to-defend declaratory action becomes moot once the underlying action is settled and dismissed, and that the prospect of recouping defense costs or obtaining a fee award does not by itself supply a live controversy.",
+      "dockets": [
+        "24-10460"
+      ]
+    },
     {
       "cluster_id": 10942104,
       "name": "RLI Insurance Company v. Lehman",
