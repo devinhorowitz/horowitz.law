@@ -1572,20 +1572,14 @@
     10945810,
     10945811,
     10945812,
-    10945874
+    10945874,
+    10946025,
+    10946078,
+    10946088,
+    10946089,
+    10946090,
+    10946104
   ],
-  "updated": "2026-08-12T17:26:44Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_01XG7YKP89uc483BY3RzU65k",
-      "at": 1786555040.7128692,
-      "n": 4
-    },
-    "funnel-guards": {
-      "id": "msgbatch_012XdcLXbQHo73A3ZBaJCCZ3",
-      "at": 1786555410.050629,
-      "n": 4
-    }
-  }
+  "updated": "2026-08-12T21:06:32Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
