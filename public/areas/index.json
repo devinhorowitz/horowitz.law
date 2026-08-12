@@ -3,7 +3,7 @@
     {
       "area": "coverage",
       "label": "coverage",
-      "count": 23,
+      "count": 24,
       "url": "https://horowitz.law/areas/coverage.json"
     },
     {
@@ -45,7 +45,7 @@
     {
       "area": "damages",
       "label": "damages",
-      "count": 35,
+      "count": 36,
       "url": "https://horowitz.law/areas/damages.json"
     }
   ]

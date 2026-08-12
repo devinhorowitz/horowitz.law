@@ -2637,5 +2637,36 @@
       }
     ],
     "official_url": "https://media.ca11.uscourts.gov/opinions/pub/files/202410460.pdf"
+  },
+  {
+    "cluster_id": 10945798,
+    "name": "Vainberg v. Florida Insurance Guaranty Association",
+    "court": "dcafl",
+    "division": null,
+    "date": "2026-08-12",
+    "dockets": [
+      "4D2025-1219"
+    ],
+    "disposition": "reversed and remanded",
+    "areas": [
+      "coverage",
+      "damages"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10945798/samuel-vainberg-and-lynn-vainberg-v-florida-insurance-guaranty-association/",
+    "synopsis": "Insureds whose water-damage claim the insurer elected to repair sued for breach of the resulting Drew repair contract, and after the insurer's insolvency the Florida Insurance Guaranty Association was substituted as defendant and a consent judgment for policy limits was entered. The Fourth District held that a suit for breach of a Drew repair contract falls within the fee-shifting scope of section 627.428, Florida Statutes (2015), because such a contract exists solely by virtue of the insurer's exercise of a repair right granted by the policy and the dispute therefore arises under the policy. The court also relied on the statute's disjunctive reference to a 'policy or contract executed by the insurer,' reasoning that an election-to-repair letter is itself a contract executed by the insurer and that reading 'contract' as adding nothing would render it superfluous. The order denying fees was reversed and the case remanded to determine the amount.",
+    "why": "The decision establishes that an insurer's election to repair does not remove a subsequent breach claim from the reach of section 627.428's one-way fee-shifting provision.",
+    "precedential": "published",
+    "first_seen": "2026-08-12",
+    "jurisdiction": "fl",
+    "additional_holdings": [
+      {
+        "areas": [
+          "coverage",
+          "damages"
+        ],
+        "synopsis": "The court separately held that section 631.70, Florida Statutes (2022), did not bar fees because the guaranty association denied a portion of the claim 'by affirmative action, other than delay.' Distinguishing prior decisions in which the association was sued before it could investigate and was compelled to answer, the court noted that here the association was substituted into pending litigation, had the benefit of an automatic stay and two agreed extensions, and then voluntarily pleaded coverage-based affirmative defenses. The court identified a sustained course of conduct constituting affirmative denial: the pre-answer partial payment excluding ordinance-and-law line items, the coverage affirmative defenses, corporate-representative testimony that the claim was not covered, the pretrial stipulation, and a summary judgment motion asserting non-coverage. It also held that where the association is substituted mid-litigation, the relevant inquiry is whether it denied coverage by affirmative action at any point before retrial, not before suit was filed, and that post-answer litigation conduct may be considered.",
+        "why": "It clarifies how the 'denial by affirmative action' requirement applies when a guaranty association is substituted into pending litigation, including that post-answer litigation positions and partial claim payments can supply the affirmative denial."
+      }
+    ]
   }
 ]

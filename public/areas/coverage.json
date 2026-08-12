@@ -1,8 +1,26 @@
 {
   "area": "coverage",
   "label": "coverage",
-  "count": 23,
+  "count": 24,
   "opinions": [
+    {
+      "cluster_id": 10945798,
+      "name": "Vainberg v. Florida Insurance Guaranty Association",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-08-12",
+      "disposition": "reversed and remanded",
+      "areas": [
+        "coverage",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10945798/samuel-vainberg-and-lynn-vainberg-v-florida-insurance-guaranty-association/",
+      "synopsis": "Insureds whose water-damage claim the insurer elected to repair sued for breach of the resulting Drew repair contract, and after the insurer's insolvency the Florida Insurance Guaranty Association was substituted as defendant and a consent judgment for policy limits was entered. The Fourth District held that a suit for breach of a Drew repair contract falls within the fee-shifting scope of section 627.428, Florida Statutes (2015), because such a contract exists solely by virtue of the insurer's exercise of a repair right granted by the policy and the dispute therefore arises under the policy. The court also relied on the statute's disjunctive reference to a 'policy or contract executed by the insurer,' reasoning that an election-to-repair letter is itself a contract executed by the insurer and that reading 'contract' as adding nothing would render it superfluous. The order denying fees was reversed and the case remanded to determine the amount.",
+      "why": "The decision establishes that an insurer's election to repair does not remove a subsequent breach claim from the reach of section 627.428's one-way fee-shifting provision.",
+      "dockets": [
+        "4D2025-1219"
+      ]
+    },
     {
       "cluster_id": 10944729,
       "name": "Mt. Hawley Insurance Company v. H&M Builders, LLC",
