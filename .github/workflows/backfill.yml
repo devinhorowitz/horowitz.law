@@ -17,6 +17,24 @@ on:
         description: 'Dry run (preview recall report + cards in the log; write nothing, open no PR)'
         type: boolean
         default: true
+      debug:
+        # Same switch opinions.yml carries, for the same reason -- but this is the workflow that
+        # can actually answer the question on demand. anthropic_json logs cache_write/cache_read
+        # from the API's `usage`, and the documented check is exactly "if both are 0, the prompt
+        # was not cached". Seeing a cache READ needs several calls sharing one system prompt
+        # inside the TTL, and the funnel only does that on a day the courts happened to publish
+        # several opinions -- dispatching into a quiet morning measures nothing.
+        #
+        # The built-in seed is four clusters, each drafted by one synchronous Opus call against
+        # the same SYSTEM. So dry_run + debug is a repeatable four-call experiment that writes
+        # nothing and opens no PR: the first call should write the cache and the other three
+        # should read it, if the prefix clears the model's minimum at all.
+        #
+        # Keep `batch` OFF for this: the Batch API path goes through batch.py, not
+        # anthropic_json, so it produces no _dbg line to read.
+        description: 'Verbose per-call logging (prints cache_write/cache_read from usage); pair with dry_run'
+        type: boolean
+        default: false
       batch:
         description: 'Draft the seed summaries through the 50%-priced Batch API (skill-seed mode only). Off = one synchronous Opus call per cluster.'
         type: boolean
@@ -102,6 +120,7 @@ jobs:
           CL_PER_DAY: ${{ vars.CL_PER_DAY }}
           CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          OPINIONS_DEBUG: ${{ inputs.debug && '1' || '' }}
           OPINIONS_SEED: ${{ inputs.seed }}
           # Batch API for the seed's Tier-3 summaries (skill-seed mode only). Default off; the
           # 60-min job timeout comfortably covers the 3300s wait budget. Combine batch=true with
