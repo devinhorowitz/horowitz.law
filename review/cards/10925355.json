@@ -1,0 +1,47 @@
+{
+  "kind": "card",
+  "cluster_id": 10925355,
+  "name": "Angel v. White",
+  "hold_reasons": [
+    "fidelity guard unavailable; not auto-published without verification"
+  ],
+  "entry": {
+    "cluster_id": 10925355,
+    "name": "Angel v. White",
+    "court": "dcafl",
+    "division": null,
+    "date": "2026-07-10",
+    "dockets": [
+      "2D2025-0703"
+    ],
+    "disposition": "reversed and remanded",
+    "areas": [
+      "auto",
+      "expert",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10925355/angel-v-white-white/",
+    "synopsis": "In a multivehicle rear-end negligence action, the trial court granted a directed verdict finding one hundred percent liability against the rear-most driver and no negligence by the middle driver, reasoning that the rear-most driver's account was physically impossible and that his testimony did not rebut Florida's rear-end presumption of negligence. The appellate court held this improperly weighed conflicting expert reconstruction testimony, because the two experts gave opposing accounts of the sequence of impacts and the plaintiff's expert testified that the middle driver struck the stopped lead vehicle first. Where conflicting evidence and reasonable inferences exist, the issue is factual for the jury, and directed verdicts in negligence actions should rarely be granted. Reversed and remanded for a new trial.",
+    "why": "It confirms that a court may not resolve conflicting expert accident-reconstruction testimony on a directed verdict by crediting one expert's physics-based opinion over another's, leaving credibility and weight to the jury.",
+    "precedential": "published",
+    "first_seen": "2026-07-10",
+    "jurisdiction": "fl",
+    "additional_holdings": [
+      {
+        "areas": [
+          "auto"
+        ],
+        "synopsis": "The court held that Florida's rebuttable rear-end presumption of negligence cannot support a directed verdict imposing zero liability on the presumed lead driver where an expert testified that she was actually the rear-end striker in the first collision. When a defendant produces evidence fairly tending to show the rear driver was not negligent as presumed, the matter must go to the trier of fact.",
+        "why": "It clarifies that the rear-end presumption does not permit a zero-liability directed verdict for the lead driver when evidence indicates she was the striker in a prior impact."
+      },
+      {
+        "areas": [
+          "expert",
+          "procedure"
+        ],
+        "synopsis": "Addressing the 'inference on inference' rule, the court held that an expert's testimony to the existence of a fact, even when contradicted by other testimony, is direct evidence rather than an inference drawn from circumstantial evidence. Accepting the plaintiff's expert account therefore did not require impermissible stacking of inferences.",
+        "why": "It clarifies that expert testimony to a fact counts as direct evidence for purposes of the inference-on-inference rule, so relying on it does not constitute impermissible inference stacking."
+      }
+    ]
+  }
+}
