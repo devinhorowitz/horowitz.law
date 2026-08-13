@@ -1625,20 +1625,14 @@
     10947292,
     10947293,
     10947294,
-    10947295
+    10947295,
+    10947339,
+    10947387,
+    10947404,
+    10947449,
+    10947450,
+    10947535
   ],
-  "updated": "2026-08-13T17:25:29Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_014nZtc9ryZrHxVVAyksDVeF",
-      "at": 1786641432.2476487,
-      "n": 2
-    },
-    "funnel-guards": {
-      "id": "msgbatch_013zyHZ9GLuvFNJXVvpJu47r",
-      "at": 1786641794.0500302,
-      "n": 2
-    }
-  }
+  "updated": "2026-08-13T21:06:46Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
