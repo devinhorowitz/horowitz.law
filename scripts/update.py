@@ -1096,13 +1096,42 @@ def anthropic_json(body, label="call"):
     # Cache the static system prompt so repeated same-model calls in one 5-minute
     # window can bill it at the cache-read rate. Behavior-neutral: the model sees
     # identical content, and a system below the model's minimum cacheable prefix is
-    # a silent no-op (no cache write, no cost). Kept because it is free and self-
-    # activates if a prompt ever grows past the floor -- but note that today every
-    # tier's system sits UNDER its floor (Haiku 4.5 and Opus 4.8 = 4096 tokens,
-    # Sonnet 5 ~ 2048; the summarize SYSTEM is only ~2.6k), so nothing actually
-    # caches right now. Caching is a weak lever here regardless: the large per-
-    # opinion text is unique to each call and lives after the breakpoint, so it is
-    # never cacheable, and the tiers run on different models (separate caches).
+    # a silent no-op (no cache write, no cost).
+    #
+    # WHAT IS AND IS NOT KNOWN HERE. This comment used to assert that "nothing
+    # actually caches right now" because every tier's system sat under its floor,
+    # citing 4096 tokens for Opus. That was written against Opus 4.8; the pins moved
+    # to the 5-family and it was never revisited. The documented minimums for the
+    # models actually pinned below are:
+    #
+    #     claude-opus-5    512      claude-sonnet-5   1024
+    #     claude-fable-5   512      claude-haiku-4-5  4096
+    #
+    # Against those, and measuring the prompts by character count (so treat these as
+    # approximate -- ~3.6 chars/token, never token-counted):
+    #
+    #     SYSTEM (summarize)   opus-5      ~3100   well ABOVE its 512 floor
+    #     AUDIT_SYSTEM         opus-5       ~560   marginally above
+    #     TRIAGE_SYSTEM        sonnet-5     ~950   just under 1024
+    #     CROSSCHECK/COMPLETE  sonnet-5  ~500/625  under
+    #     SCREEN/PRETRIAGE     haiku-4-5 ~600/560  well under 4096
+    #
+    # So the old blanket claim is very likely wrong for the summarize tier, which is
+    # also the most expensive one. THIS HAS STILL NOT BEEN OBSERVED. Three runs were
+    # dispatched with OPINIONS_DEBUG on to read it off `usage` and none of them made a
+    # summarize call: two quiet funnel runs and a backfill whose seed clusters were
+    # already carded. Do not upgrade "very likely" to "does" without a log line.
+    #
+    # To settle it: dispatch backfill with debug + dry_run and a `seed` of clusters
+    # NOT already in the archive (or sweep mode over an old date window). That drafts
+    # several summaries against one system prompt, so the first call should show a
+    # nonzero cache_write and the rest a nonzero cache_read. The documented check is
+    # exactly that -- both zero means the prompt was not cached.
+    #
+    # Worth keeping in proportion either way: the per-opinion text is unique to each
+    # call and sits after the breakpoint, so it is never cacheable, and the tiers run
+    # on different models with separate caches. Even a fully working cache here saves
+    # cents per run, which is why this is documented rather than optimized.
     if isinstance(body.get("system"), str):
         body["system"] = [{"type": "text", "text": body["system"],
                            "cache_control": {"type": "ephemeral"}}]
