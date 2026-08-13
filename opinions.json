@@ -2668,5 +2668,24 @@
         "why": "It clarifies how the 'denial by affirmative action' requirement applies when a guaranty association is substituted into pending litigation, including that post-answer litigation positions and partial claim payments can supply the affirmative denial."
       }
     ]
+  },
+  {
+    "cluster_id": 10947292,
+    "name": "Lineberger v. Newberry",
+    "court": "ctapp",
+    "division": "Third Division",
+    "date": "2026-08-13",
+    "dockets": [
+      "A26A1002"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10947292/james-earl-lineberger-v-caryl-ellen-newberry/",
+    "synopsis": "After prevailing in a quiet-title boundary dispute and having the judgment affirmed on appeal, the prevailing parties left a motion for attorney fees under OCGA section 9-15-14 pending for five years, taking no action until they filed a notice of hearing shortly before the five-year anniversary of the last written order. The trial court held the case stood automatically dismissed by operation of law under the five-year rule and that it therefore lacked jurisdiction over the fee motion. The Court of Appeals affirmed, holding that a pending OCGA section 9-15-14 motion is part of the original action rather than a separate case, so the case was not fully adjudicated and the exception excusing already-resolved cases from the five-year rule did not apply. Because no written order signed by the judge and filed with the clerk, including an order of continuance, was obtained within five years, the automatic dismissal took effect one day before the scheduled hearing.",
+    "why": "The decision clarifies that an unresolved attorney fee motion keeps a case pending for purposes of the five-year automatic dismissal rule under OCGA section 9-11-41(e), so parties with fee motions outstanding after judgment must obtain a written order or continuance within five years or lose the trial court's jurisdiction to decide the motion.",
+    "precedential": "published",
+    "first_seen": "2026-08-13"
   }
 ]
