@@ -5,7 +5,22 @@ on:
     - cron: '17 */4 * * *'   # every 4 hours. A slot lost to an outage retries at the next slot
                              # instead of waiting a full day. Held cases are tracked in the
                              # pending-review ledger so a slot never re-summarizes an open case.
-  workflow_dispatch: {}      # lets you run it by hand from the Actions tab
+  workflow_dispatch:         # lets you run it by hand from the Actions tab
+    inputs:
+      debug:
+        # Turns on update.py's _dbg lines for ONE run. The per-call line it unlocks reports
+        # `cache_write=` / `cache_read=` straight from the API's `usage`, which is the only
+        # way to answer whether a tier's system prompt is actually being cached -- the
+        # documented check is exactly "if both are 0, the prompt was not cached".
+        #
+        # That logging has existed since the caching breakpoint was added and has never once
+        # run: OPINIONS_DEBUG was read by update.py and set by no workflow, so the comment in
+        # anthropic_json reasoned from published minimums instead of from measurement. This
+        # input is how the instrument gets switched on without making every scheduled run
+        # verbose.
+        description: 'Verbose per-call logging for one run (prints cache_write/cache_read from usage)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -86,6 +101,9 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+          # Empty on a scheduled run, so the cadence is unchanged; '1' only when the
+          # dispatch input above is ticked.
+          OPINIONS_DEBUG: ${{ inputs.debug && '1' || '' }}
           CL_PER_MINUTE: ${{ vars.CL_PER_MINUTE }}
           CL_PER_HOUR: ${{ vars.CL_PER_HOUR }}
           CL_PER_DAY: ${{ vars.CL_PER_DAY }}
