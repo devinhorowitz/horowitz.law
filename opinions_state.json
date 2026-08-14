@@ -1631,8 +1631,36 @@
     10947404,
     10947449,
     10947450,
-    10947535
+    10947535,
+    10948380,
+    10948405,
+    10948406,
+    10948407,
+    10948408,
+    10948409,
+    10948410,
+    10948411,
+    10948412,
+    10948413,
+    10948414,
+    10948415,
+    10948416,
+    10948417,
+    10948418,
+    10948419,
+    10948420,
+    10948421,
+    10948422,
+    10948423,
+    10948427
   ],
-  "updated": "2026-08-13T21:06:46Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-08-14T13:53:40Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-smell": {
+      "id": "msgbatch_01SHqgQZoWM4osZ6dNeLB7q9",
+      "at": 1786715436.8170254,
+      "n": 1
+    }
+  }
 }
