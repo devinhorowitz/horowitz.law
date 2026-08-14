@@ -1,8 +1,26 @@
 {
   "area": "coverage",
   "label": "coverage",
-  "count": 24,
+  "count": 25,
   "opinions": [
+    {
+      "cluster_id": 10948474,
+      "name": "Citizens Property Insurance Corporation v. Nekouee",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-08-14",
+      "disposition": "petition granted; order quashed",
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10948474/citizens-property-insurance-corporation-v-nekouee/",
+      "synopsis": "An insured demanded appraisal under his residential property policy, the appraisers agreed on the amount of loss, and the insured then refused to sign the insurer's appraisal award form and filed a declaratory judgment action seeking only a declaration about the form's enforceability and his rights under the policy, without seeking damages. The trial court denied the insurer's motion to dismiss for failure to give the presuit notice required by section 627.70152(3)(a), Florida Statutes. The Second District held that section 627.70152(1)'s application to \"all suits arising under\" a residential or commercial property insurance policy means all suits, including declaratory judgment actions that seek no monetary relief, and that the statutorily specified notice contents remain workable in that setting. The court found a departure from the essential requirements of law, granted certiorari, and quashed the order, noting that section 627.70152(5) directs dismissal without prejudice when the required notice was not given.",
+      "why": "The decision establishes that Florida's presuit notice condition precedent for property insurance suits reaches declaratory judgment actions seeking no damages, so claimants must serve the statutory notice before filing any such action and courts must dismiss without prejudice when it is absent.",
+      "dockets": [
+        "2D2025-2866"
+      ]
+    },
     {
       "cluster_id": 10945798,
       "name": "Vainberg v. Florida Insurance Guaranty Association",

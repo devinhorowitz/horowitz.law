@@ -2687,5 +2687,59 @@
     "why": "The decision clarifies that an unresolved attorney fee motion keeps a case pending for purposes of the five-year automatic dismissal rule under OCGA section 9-11-41(e), so parties with fee motions outstanding after judgment must obtain a written order or continuance within five years or lose the trial court's jurisdiction to decide the motion.",
     "precedential": "published",
     "first_seen": "2026-08-13"
+  },
+  {
+    "cluster_id": 10948520,
+    "name": "Estancia US Limited Partnership v. Aji-Dawkins",
+    "court": "dcafl",
+    "division": null,
+    "date": "2026-08-14",
+    "dockets": [
+      "6D2025-0673"
+    ],
+    "disposition": "reversed and remanded with instructions",
+    "areas": [
+      "damages",
+      "procedure",
+      "premises"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10948520/estancia-us-limited-partnership-dba-latitude-26-waterfront-resorts-v/",
+    "synopsis": "In a premises case arising from a fall when a PVC railing gave way at a hotel's second-story walkway, the trial court granted plaintiff leave to amend to add a punitive damages claim based on gross negligence. Applying the Florida Supreme Court's recent clarification of the section 768.72(1) evidentiary-sufficiency test, the Sixth DCA reviewed de novo, viewed the proffered record in the light most favorable to the claimant, and asked whether a reasonable person could conclude the defendant engaged in gross negligence as defined in section 768.72(2), together with the employer criteria of section 768.72(3). The court held the deposition testimony did not support the two pleaded bases, because the maintenance employee who described the railing as a breakaway product testified he did not tell the owner it was unsuitable until after the fall and never said he reported an earlier child-related railing failure to the owner, while the other employee testified no safety concerns were raised. The order permitting the amendment was reversed with instructions to vacate it, and the court separately directed that a copy of the opinion be sent to The Florida Bar based on trial counsel's misrepresentations of the deposition record at the hearing and in the proposed written order.",
+    "why": "The decision applies the clarified section 768.72(1) standard for pleading punitive damages, confirming that the reviewing court does not weigh evidence but tests whether the proffered record itself, read favorably to the claimant, could support a finding of gross negligence under the statutory definitions and the employer-liability criteria.",
+    "precedential": "published",
+    "first_seen": "2026-08-14",
+    "jurisdiction": "fl"
+  },
+  {
+    "cluster_id": 10948474,
+    "name": "Citizens Property Insurance Corporation v. Nekouee",
+    "court": "dcafl",
+    "division": null,
+    "date": "2026-08-14",
+    "dockets": [
+      "2D2025-2866"
+    ],
+    "disposition": "petition granted; order quashed",
+    "areas": [
+      "coverage",
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10948474/citizens-property-insurance-corporation-v-nekouee/",
+    "synopsis": "An insured demanded appraisal under his residential property policy, the appraisers agreed on the amount of loss, and the insured then refused to sign the insurer's appraisal award form and filed a declaratory judgment action seeking only a declaration about the form's enforceability and his rights under the policy, without seeking damages. The trial court denied the insurer's motion to dismiss for failure to give the presuit notice required by section 627.70152(3)(a), Florida Statutes. The Second District held that section 627.70152(1)'s application to \"all suits arising under\" a residential or commercial property insurance policy means all suits, including declaratory judgment actions that seek no monetary relief, and that the statutorily specified notice contents remain workable in that setting. The court found a departure from the essential requirements of law, granted certiorari, and quashed the order, noting that section 627.70152(5) directs dismissal without prejudice when the required notice was not given.",
+    "why": "The decision establishes that Florida's presuit notice condition precedent for property insurance suits reaches declaratory judgment actions seeking no damages, so claimants must serve the statutory notice before filing any such action and courts must dismiss without prejudice when it is absent.",
+    "precedential": "published",
+    "first_seen": "2026-08-14",
+    "first_impression": true,
+    "jurisdiction": "fl",
+    "additional_holdings": [
+      {
+        "areas": [
+          "coverage",
+          "procedure"
+        ],
+        "synopsis": "The insured separately argued that his suit did not \"arise under\" the policy within the meaning of section 627.70152(1), relying on arbitration cases that read \"arising out of\" or \"arising under\" narrowly to reach only disputes relating to interpretation and performance of the contract. The court concluded that even under that narrower construction the suit arises under the policy, because the insured alleged a bona fide controversy over policy terms and resolving whether the appraisal award form imposed extracontractual conditions requires interpreting the policy. The court also rejected reliance on personal injury protection precedent construing a differently worded notice statute limited to actions \"for benefits.\"",
+        "why": "The holding clarifies that a dispute over the form or terms used to conclude an appraisal is a suit \"arising under\" the property policy for presuit notice purposes because its resolution turns on policy interpretation."
+      }
+    ]
   }
 ]

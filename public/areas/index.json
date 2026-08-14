@@ -3,7 +3,7 @@
     {
       "area": "coverage",
       "label": "coverage",
-      "count": 24,
+      "count": 25,
       "url": "https://horowitz.law/areas/coverage.json"
     },
     {
@@ -21,7 +21,7 @@
     {
       "area": "premises",
       "label": "premises",
-      "count": 16,
+      "count": 17,
       "url": "https://horowitz.law/areas/premises.json"
     },
     {
@@ -39,13 +39,13 @@
     {
       "area": "procedure",
       "label": "procedure",
-      "count": 65,
+      "count": 67,
       "url": "https://horowitz.law/areas/procedure.json"
     },
     {
       "area": "damages",
       "label": "damages",
-      "count": 36,
+      "count": 37,
       "url": "https://horowitz.law/areas/damages.json"
     }
   ]

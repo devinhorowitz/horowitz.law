@@ -1,8 +1,27 @@
 {
   "area": "damages",
   "label": "damages",
-  "count": 36,
+  "count": 37,
   "opinions": [
+    {
+      "cluster_id": 10948520,
+      "name": "Estancia US Limited Partnership v. Aji-Dawkins",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-08-14",
+      "disposition": "reversed and remanded with instructions",
+      "areas": [
+        "damages",
+        "procedure",
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10948520/estancia-us-limited-partnership-dba-latitude-26-waterfront-resorts-v/",
+      "synopsis": "In a premises case arising from a fall when a PVC railing gave way at a hotel's second-story walkway, the trial court granted plaintiff leave to amend to add a punitive damages claim based on gross negligence. Applying the Florida Supreme Court's recent clarification of the section 768.72(1) evidentiary-sufficiency test, the Sixth DCA reviewed de novo, viewed the proffered record in the light most favorable to the claimant, and asked whether a reasonable person could conclude the defendant engaged in gross negligence as defined in section 768.72(2), together with the employer criteria of section 768.72(3). The court held the deposition testimony did not support the two pleaded bases, because the maintenance employee who described the railing as a breakaway product testified he did not tell the owner it was unsuitable until after the fall and never said he reported an earlier child-related railing failure to the owner, while the other employee testified no safety concerns were raised. The order permitting the amendment was reversed with instructions to vacate it, and the court separately directed that a copy of the opinion be sent to The Florida Bar based on trial counsel's misrepresentations of the deposition record at the hearing and in the proposed written order.",
+      "why": "The decision applies the clarified section 768.72(1) standard for pleading punitive damages, confirming that the reviewing court does not weigh evidence but tests whether the proffered record itself, read favorably to the claimant, could support a finding of gross negligence under the statutory definitions and the employer-liability criteria.",
+      "dockets": [
+        "6D2025-0673"
+      ]
+    },
     {
       "cluster_id": 10945798,
       "name": "Vainberg v. Florida Insurance Guaranty Association",
