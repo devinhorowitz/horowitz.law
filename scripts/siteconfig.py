@@ -129,11 +129,18 @@ RESEND_TOPIC_ID   = "52b81509-0230-4d3d-b5ff-393409df3b2c"   # send scope + per-
 #
 # So empty here does NOT mean "off". LEGISLATION_DIGEST is what says whether the email is
 # meant to send; when it is on and the audience is unset, digest.py says so loudly on every
-# run instead of skipping in silence. Fill the two ids from the Resend dashboard
-# (Audiences > Segments, and Topics) to switch it back on.
+# run instead of skipping in silence. The audience was rebuilt in Resend on 2026-08-14 and
+# the two ids are wired below, so the send is live again -- if either is ever emptied, that
+# is a fault to fix, not a way to turn the email off.
+#
+# The Topic mirrors the opinions Topic above (default subscription opt_out). Note what gates
+# the send: the broadcast is addressed to the SEGMENT, so only contacts in that Segment get
+# the email; the Topic scopes the per-topic unsubscribe link. The Segment starts empty and
+# fills from the /subscribe flow, which still needs the opt-in mapping (see RESEND_AREA_TOPICS
+# below) before the "legislation & regulations" checkbox puts anyone in it.
 LEGISLATION_DIGEST = True    # this email is supposed to send; empty ids below are a fault, not a setting
-RESEND_LEGISLATION_SEGMENT_ID = ""   # Resend Segment: legislation opt-in recipients
-RESEND_LEGISLATION_TOPIC_ID   = ""   # Resend Topic: send scope + per-topic unsubscribe
+RESEND_LEGISLATION_SEGMENT_ID = "96550305-4a0b-4b3b-8a3d-0ed29b0dbabf"   # Segment "Legislative & Regulatory Watch"
+RESEND_LEGISLATION_TOPIC_ID   = "1144774b-0574-4e25-9160-4fe148e18c5c"   # Topic, same name: send scope + unsubscribe
 # Practice-area code -> Resend Topic id, for the per-area opinion broadcasts. Empty means no
 # per-area sends, which is the pre-feature behaviour and a legitimate setting.
 RESEND_AREA_TOPICS = {}
