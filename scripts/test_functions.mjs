@@ -464,6 +464,95 @@ test("area choices map to their own topics, falling back to the main topic", asy
                    "a malformed map must never strand a confirmed subscriber");
 });
 
+// The Legislative & Regulatory Watch is a separate broadcast addressed to its OWN Segment.
+// These four tests pin the two things that make the checkbox actually deliver, both of which a
+// map-it-as-an-area-topic implementation gets wrong: the subscriber must land in the legislation
+// SEGMENT (a Topic opt-in alone reaches nobody, because the broadcast targets the Segment), and
+// the choice must be ADDITIVE (narrowing off the opinions Topic strands them).
+const LEG_ENV = {
+  RESEND_LEGISLATION_SEGMENT_ID: "seg_leg",
+  RESEND_LEGISLATION_TOPIC_ID: "top_leg",
+};
+
+test("ticking legislation adds the legislation segment, keeping the main one", async () => {
+  const link = await validLink("a@b.co", ["legislation"]);
+  const calls = stubFetch(() => jsonResponse({ id: "c" }, 201));
+  await call(confirm, "onRequestPost", formPost(link), baseEnv(LEG_ENV));
+  const body = JSON.parse(calls[0].body);
+  assert.deepEqual(body.segments.map((s) => s.id).sort(), ["seg_123", "seg_leg"],
+                   "the broadcast is addressed to the segment, so the subscriber must be in it");
+  assert.deepEqual(body.topics.map((t) => t.id).sort(), ["top_leg", "top_main"],
+                   "legislation is additive: it must not narrow them off the opinions topic");
+});
+
+test("legislation does not consume the area-narrowing branch", async () => {
+  // With a practice area ALSO chosen, the area still narrows the opinions topic, and legislation
+  // rides alongside rather than replacing it.
+  const link = await validLink("a@b.co", ["coverage", "legislation"]);
+  const env = baseEnv({ ...LEG_ENV, RESEND_AREA_TOPICS: JSON.stringify({ coverage: "top_cov" }) });
+  const calls = stubFetch(() => jsonResponse({ id: "c" }, 201));
+  await call(confirm, "onRequestPost", formPost(link), env);
+  assert.deepEqual(JSON.parse(calls[0].body).topics.map((t) => t.id).sort(),
+                   ["top_cov", "top_leg"]);
+});
+
+test("a legislation entry in the area map cannot narrow off the opinions topic", async () => {
+  // The trap this guards: digest.py's docstring once said to wire the checkbox by mapping the
+  // token in RESEND_AREA_TOPICS. If someone does that anyway, the token must still be filtered
+  // out of the practice-area narrowing -- otherwise ticking only this box replaces the opinions
+  // topic instead of adding to it, and strands the subscriber.
+  const link = await validLink("a@b.co", ["legislation"]);
+  const env = baseEnv({ ...LEG_ENV, RESEND_AREA_TOPICS: JSON.stringify({ legislation: "top_leg" }) });
+  const calls = stubFetch(() => jsonResponse({ id: "c" }, 201));
+  await call(confirm, "onRequestPost", formPost(link), env);
+  assert.deepEqual(JSON.parse(calls[0].body).topics.map((t) => t.id).sort(),
+                   ["top_leg", "top_main"], "must stay additive even when mapped as an area");
+});
+
+test("a half-configured legislation audience opts nobody into an unreachable topic", async () => {
+  // Topic set, Segment not. The email is addressed to the Segment, so opting someone into the
+  // Topic here would hand them an unsubscribe preference for mail that can never arrive.
+  const link = await validLink("a@b.co", ["legislation"]);
+  const calls = stubFetch(() => jsonResponse({ id: "c" }, 201));
+  await call(confirm, "onRequestPost", formPost(link),
+             baseEnv({ RESEND_LEGISLATION_TOPIC_ID: "top_leg" }));
+  const body = JSON.parse(calls[0].body);
+  assert.deepEqual(body.segments, [{ id: "seg_123" }]);
+  assert.deepEqual(body.topics, [{ id: "top_main", subscription: "opt_in" }]);
+});
+
+test("not ticking legislation leaves the legislation segment alone", async () => {
+  const link = await validLink("a@b.co", ["coverage"]);
+  const calls = stubFetch(() => jsonResponse({ id: "c" }, 201));
+  await call(confirm, "onRequestPost", formPost(link), baseEnv(LEG_ENV));
+  const body = JSON.parse(calls[0].body);
+  assert.deepEqual(body.segments, [{ id: "seg_123" }]);
+  assert.ok(!body.topics.some((t) => t.id === "top_leg"));
+});
+
+test("an unconfigured legislation audience changes nothing", async () => {
+  // Ticking the box before the ids are wired must behave exactly as it did before the feature,
+  // rather than half-subscribing anyone.
+  const link = await validLink("a@b.co", ["legislation"]);
+  const calls = stubFetch(() => jsonResponse({ id: "c" }, 201));
+  await call(confirm, "onRequestPost", formPost(link), baseEnv());
+  const body = JSON.parse(calls[0].body);
+  assert.deepEqual(body.segments, [{ id: "seg_123" }]);
+  assert.deepEqual(body.topics, [{ id: "top_main", subscription: "opt_in" }]);
+});
+
+test("the repair path re-adds BOTH segments for an existing contact", async () => {
+  const link = await validLink("a@b.co", ["legislation"]);
+  const calls = stubFetch((u, init) => {
+    if (u.endsWith("/contacts") && init.method === "POST") return jsonResponse({}, 409);
+    return jsonResponse({ ok: true });
+  });
+  const r = await call(confirm, "onRequestPost", formPost(link), baseEnv(LEG_ENV));
+  assert.equal(r.status, 200);
+  assert.ok(calls.some((c) => c.url.includes("/segments/seg_123")), "re-adds the opinions segment");
+  assert.ok(calls.some((c) => c.url.includes("/segments/seg_leg")), "re-adds the legislation one");
+});
+
 test("a tampered POST makes no Resend call", async () => {
   const link = await validLink();
   const calls = stubFetch(() => undefined);

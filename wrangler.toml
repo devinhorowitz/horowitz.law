@@ -21,6 +21,8 @@ compatibility_date = "2025-05-01"
 # or wrangler-only. Edit a value in BOTH files, in the same commit.
 [vars]
 DIGEST_FROM = "Georgia Appellate Watch <digest@horowitz.law>"
+RESEND_LEGISLATION_SEGMENT_ID = "96550305-4a0b-4b3b-8a3d-0ed29b0dbabf"
+RESEND_LEGISLATION_TOPIC_ID = "1144774b-0574-4e25-9160-4fe148e18c5c"
 RESEND_SEGMENT_ID = "1ae517f5-5981-4f7b-bed1-606cfa5649ab"
 RESEND_TOPIC_ID = "52b81509-0230-4d3d-b5ff-393409df3b2c"
 SITE_URL = "https://horowitz.law"

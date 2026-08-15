@@ -23,6 +23,8 @@
 //   RESEND_SEGMENT_ID  the Segment ID confirmed subscribers are added to
 //   RESEND_TOPIC_ID    the Topic ID confirmed subscribers are opted into
 // Optional:
+//   RESEND_LEGISLATION_SEGMENT_ID  Segment for the Legislative & Regulatory Watch
+//   RESEND_LEGISLATION_TOPIC_ID    Topic scoping that email's unsubscribe
 //   SITE_URL           site origin, only used for links on the result page
 
 const RESEND = "https://api.resend.com";
@@ -100,22 +102,47 @@ function areaTopicMap(env) {
   }
 }
 
+// The "legislation & regulations" checkbox rides the same `area` field as the practice
+// areas (public/subscribe.html), but it is NOT one of them: the Legislative & Regulatory
+// Watch is a separate weekly broadcast with its own Segment and Topic, so it is handled
+// apart from areaTopicMap. Two things follow, and both were wrong in the version that
+// only mapped it as another area topic:
+//
+//   1. A broadcast is addressed to a SEGMENT. digest.py sends the legislation email to
+//      RESEND_LEGISLATION_SEGMENT_ID, so opting a subscriber into the legislation Topic
+//      while leaving them out of that Segment delivers nothing -- while looking wired.
+//      Ticking the box has to put them in the Segment.
+//   2. Legislation is ADDITIVE, never narrowing. Treated as an area topic it would
+//      consume the narrowing branch below, so someone who ticked only this box would be
+//      opted into the legislation Topic and OUT of the opinions one -- breaking the
+//      "a choice can narrow what arrives but never strand a confirmed subscriber" rule.
+const LEGISLATION_AREA = "legislation";
+
 // Create the global contact subscribed, opted into the Topic, and in the Segment.
-// New contact: a single POST applies segment + topic inline. Existing contact: the
+// New contact: a single POST applies segments + topics inline. Existing contact: the
 // POST returns non-2xx (or upserts), so we follow with idempotent updates.
 async function subscribeConfirmed(env, email, areas) {
   const seg = env.RESEND_SEGMENT_ID;
   const top = env.RESEND_TOPIC_ID;
+  const legSeg = env.RESEND_LEGISLATION_SEGMENT_ID;
+  const legTop = env.RESEND_LEGISLATION_TOPIC_ID;
+
+  const chose = (areas || []).includes(LEGISLATION_AREA);
+  const wantsLegislation = chose && Boolean(legSeg);   // unconfigured: behave as before
 
   // The topic set this confirmation opts into: the chosen areas' topics where
   // mapped, the main topic when nothing was chosen or nothing mapped. A choice
   // can narrow what arrives but never strand a confirmed subscriber.
   const map = areaTopicMap(env);
-  const areaTopics = (areas || []).map((a) => map[a]).filter(Boolean);
+  const practice = (areas || []).filter((a) => a !== LEGISLATION_AREA);
+  const areaTopics = practice.map((a) => map[a]).filter(Boolean);
   const topicIds = areaTopics.length ? [...new Set(areaTopics)] : (top ? [top] : []);
+  if (wantsLegislation && legTop && !topicIds.includes(legTop)) topicIds.push(legTop);
+
+  const segmentIds = [...new Set([seg, wantsLegislation ? legSeg : null].filter(Boolean))];
 
   const createBody = { email, unsubscribed: false };
-  if (seg) createBody.segments = [{ id: seg }];
+  if (segmentIds.length) createBody.segments = segmentIds.map((id) => ({ id }));
   if (topicIds.length) createBody.topics = topicIds.map((id) => ({ id, subscription: "opt_in" }));
 
   const created = await rfetch(env, "POST", "/contacts", createBody);
@@ -136,8 +163,8 @@ async function subscribeConfirmed(env, email, areas) {
     if (!t.ok) throw new Error(`confirm: topics ${t.status}`);
   }
 
-  if (seg) {
-    const s = await rfetch(env, "POST", `${path}/segments/${seg}`, null);
+  for (const id of segmentIds) {
+    const s = await rfetch(env, "POST", `${path}/segments/${id}`, null);
     // Adding a contact already in the segment may return a 4xx; only treat 5xx as fatal.
     if (!s.ok && s.status >= 500) throw new Error(`confirm: segment ${s.status}`);
   }

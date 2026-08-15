@@ -48,8 +48,13 @@ Environment:
   LEGISLATION_SITE_URL           Base page URL for the legislation email. Default
                      'https://horowitz.law/legislation'.
   DIGEST_LEG_PREVIEW             Where to write the legislation preview in a dry run.
-  (The /subscribe "legislation & regulations" checkbox rides the existing `area` field, so mapping
-  the "legislation" token in RESEND_AREA_TOPICS to the Topic above wires opt-in with no code change.)
+  (The /subscribe "legislation & regulations" checkbox rides the existing `area` field. It is NOT
+  wired through RESEND_AREA_TOPICS -- an earlier version of this note said it was, which is wrong
+  and cost a round trip: that map only sets Topic opt-ins, while THIS broadcast is addressed to the
+  SEGMENT, so a subscriber mapped that way would be opted into the Topic, left out of the Segment,
+  and receive nothing. confirm.js handles the checkbox directly instead, adding the contact to
+  RESEND_LEGISLATION_SEGMENT_ID and opting them into the Topic on top of -- never instead of --
+  their opinions subscription.)
 """
 import os, json, time, html, datetime, textwrap
 import urllib.request, urllib.error
