@@ -190,6 +190,45 @@ def main():
     check("batch extract timeout: no cards, page left un-hashed (retry next run)",
           tcards == [] and tupd["pages"] == {})
 
+    # ---- A relabelled amendment is the SAME amendment ----------------------------------------
+    # The regression this pins: the extractor wrote "Rule 707", then "Rule 707 (new)", then
+    # "New Rule 707" on three successive runs. Each phrasing hashed to a different id, missed
+    # seen_cards, and carded again -- FRE 707 and FRBP 7043 each reached three cards on the
+    # public page before anyone noticed.
+    print("\nrelabelled rules are one card:")
+    for variant in ("Rule 707 (new)", "New Rule 707", "  Rule   707  ", "new Rule 707"):
+        check("%r canonicalizes to 'Rule 707'" % variant, C.canonical_rule(variant) == "Rule 707",
+              "got %r" % C.canonical_rule(variant))
+    base = C._card_id("FRE", "Rule 707")
+    for variant in ("Rule 707 (new)", "New Rule 707", "NEW RULE 707", "Rule 707 ( New )"):
+        check("%r shares the id of 'Rule 707'" % variant, C._card_id("FRE", variant) == base)
+    check("the stored designation is canonical, so the page shows one name",
+          C.build_card({"rule_set": "FRE", "rule": "New Rule 707", "summary": "s", "impact": "i",
+                        "status": "pending", "effective_date": "2027-12-01"}, "u",
+                       today=__import__("datetime").date(2026, 8, 16))["rule"] == "Rule 707")
+
+    # The other half of the guarantee: canonicalizing must not FUSE distinct amendments.
+    check("Rule 5 and Rule 5.2 stay separate", C._card_id("FRCP", "Rule 5") != C._card_id("FRCP", "Rule 5.2"))
+    check("a Form is not the Rule of the same number",
+          C._card_id("FRAP", "Form 4") != C._card_id("FRAP", "Rule 4"))
+    check("the same number in two rule sets stays separate",
+          C._card_id("FRE", "Rule 707") != C._card_id("FRBP", "Rule 707"))
+    check("a designation with no 'new' marker is untouched",
+          C.canonical_rule("Official Forms 101 and 106C") == "Official Forms 101 and 106C")
+    check("'new' inside a longer word is not stripped",
+          C.canonical_rule("Rule 9 (renewed)") == "Rule 9 (renewed)")
+
+    # End to end: a run whose extraction relabels an already-seen rule must card nothing.
+    seen_id = C._card_id("FRE", "Rule 707")
+    with _m.patch.object(C, "_load_seen", lambda: {"pages": {}, "cards": {seen_id: "2026-07-19"}}):
+        cards, _notes, _upd = C.run(
+            fetch=lambda url: PAGE_V1, sources=[("Pending", "u")],
+            ai=lambda body, label=None: {"amendments": [
+                {"rule_set": "FRE", "rule": "New Rule 707", "summary": "relabelled", "impact": "i",
+                 "status": "pending", "effective_date": "2027-12-01"}]},
+            today=__import__("datetime").date(2026, 8, 16))
+    check("a relabelled, already-seen rule cards nothing", cards == [], "got %d card(s)" % len(cards))
+
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
