@@ -1,5 +1,137 @@
 [
   {
+    "id": "d3d384baa892",
+    "rule_set": "FRE",
+    "rule": "Rule 902",
+    "status": "pending",
+    "effective_date": "2028-12-01",
+    "summary": "Evidence Rule 902 is among the amendments projected to take effect December 1, 2028; the page does not state the substance of the change.",
+    "impact": "Self-authentication procedures, often used for electronic records, may change and alter trial exhibit preparation.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
+  },
+  {
+    "id": "64e3e08b2fb6",
+    "rule_set": "FRE",
+    "rule": "Rule 104",
+    "status": "pending",
+    "effective_date": "2028-12-01",
+    "summary": "Evidence Rule 104 is among the amendments projected to take effect December 1, 2028; the page does not state the substance of the change.",
+    "impact": "Preliminary questions on admissibility are decided under this rule, so trial practice could be affected.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
+  },
+  {
+    "id": "e4b8b57915ee",
+    "rule_set": "FRCP",
+    "rule": "Rule 6",
+    "status": "pending",
+    "effective_date": "2028-12-01",
+    "summary": "Civil Rule 6 is among the amendments projected to take effect December 1, 2028; the page does not state the substance of the change.",
+    "impact": "Any change to computing and extending time affects every deadline in a civil case.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
+  },
+  {
+    "id": "634395c6bfe4",
+    "rule_set": "FRCP",
+    "rule": "Rule 55",
+    "status": "pending",
+    "effective_date": "2028-12-01",
+    "summary": "Civil Rule 55 is among the amendments projected to take effect December 1, 2028; the page does not state the substance of the change.",
+    "impact": "Default and default-judgment procedure may change, which matters in unopposed and collection matters.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
+  },
+  {
+    "id": "ae1e7dcc8863",
+    "rule_set": "FRCP",
+    "rule": "Rule 5.2",
+    "status": "pending",
+    "effective_date": "2028-12-01",
+    "summary": "Civil Rule 5.2 is among the amendments projected to take effect December 1, 2028; the page does not state the substance of the change.",
+    "impact": "Privacy and redaction rules for court filings may change, affecting sealing and confidentiality practice.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
+  },
+  {
+    "id": "e337ba687d81",
+    "rule_set": "FRCP",
+    "rule": "Rule 5",
+    "status": "pending",
+    "effective_date": "2028-12-01",
+    "summary": "Civil Rule 5 is among the amendments projected to take effect December 1, 2028; the page does not state the substance of the change.",
+    "impact": "Service and filing requirements are central to daily practice, so litigators should review the preliminary draft.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
+  },
+  {
+    "id": "db193f5d1b87",
+    "rule_set": "FRBP",
+    "rule": "Rule 9037",
+    "status": "pending",
+    "effective_date": "2028-12-01",
+    "summary": "Bankruptcy Rule 9037 is among the amendments projected to take effect December 1, 2028; the page does not state the substance of the change.",
+    "impact": "Privacy protection and redaction obligations in filings may be revised, raising compliance risk.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
+  },
+  {
+    "id": "eb9d078f5a7d",
+    "rule_set": "FRBP",
+    "rule": "Rule 9036",
+    "status": "pending",
+    "effective_date": "2028-12-01",
+    "summary": "Bankruptcy Rule 9036 is among the amendments projected to take effect December 1, 2028; the page does not state the substance of the change.",
+    "impact": "Electronic noticing and service practices may change for all bankruptcy participants.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
+  },
+  {
+    "id": "ffc068adb648",
+    "rule_set": "FRBP",
+    "rule": "Rule 8011",
+    "status": "pending",
+    "effective_date": "2028-12-01",
+    "summary": "Bankruptcy Rule 8011 is among the amendments projected to take effect December 1, 2028; the page does not state the substance of the change.",
+    "impact": "Bankruptcy appellate filing and service rules may change, affecting appeal logistics.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
+  },
+  {
+    "id": "8b9bb9e9fdff",
+    "rule_set": "FRBP",
+    "rule": "Rule 5005",
+    "status": "pending",
+    "effective_date": "2028-12-01",
+    "summary": "Bankruptcy Rule 5005 is among the amendments projected to take effect December 1, 2028; the page does not state the substance of the change.",
+    "impact": "Filing and transmittal of papers in bankruptcy court may be affected, so early review is worthwhile.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
+  },
+  {
+    "id": "cec09a5ed1f0",
+    "rule_set": "FRBP",
+    "rule": "Rule 2003",
+    "status": "pending",
+    "effective_date": "2028-12-01",
+    "summary": "Bankruptcy Rule 2003 is among the amendments projected to take effect December 1, 2028; the page does not state the substance of the change.",
+    "impact": "Creditors' meeting procedures may change; the preliminary draft is open for review and comment.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
+  },
+  {
+    "id": "46a66c00ed19",
+    "rule_set": "FRAP",
+    "rule": "Rule 25",
+    "status": "pending",
+    "effective_date": "2028-12-01",
+    "summary": "Appellate Rule 25 is among the amendments projected to take effect December 1, 2028; the page does not state the substance of the change.",
+    "impact": "Appellate filing and service mechanics may change, so counsel should review the August 2026 preliminary draft and consider commenting.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
+  },
+  {
     "id": "08ca1e0d3ad9",
     "rule_set": "FRE",
     "rule": "Rule 707 (new)",
@@ -31,6 +163,17 @@
     "impact": "Changes to impeachment by evidence of a criminal conviction may affect witness examination.",
     "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
     "first_seen": "2026-07-19"
+  },
+  {
+    "id": "4c081f320466",
+    "rule_set": "FRE",
+    "rule": "New Rule 707",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "A new Evidence Rule 707 is projected to take effect December 1, 2027; the page does not describe its content.",
+    "impact": "A new evidence rule in the expert-testimony series will add a fresh admissibility issue to litigate.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
   },
   {
     "id": "f0435a2fd390",
@@ -218,6 +361,17 @@
     "impact": "Debtor's counsel must use the updated petition and exemption forms starting on the earlier effective date.",
     "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
     "first_seen": "2026-07-26"
+  },
+  {
+    "id": "dee031c31d58",
+    "rule_set": "FRBP",
+    "rule": "New Rule 7043",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "A new Bankruptcy Rule 7043 is projected to take effect December 1, 2026; the page does not describe its content.",
+    "impact": "A brand-new adversary-proceeding rule will apply after December 1, 2026, so litigators should review it in the rules packages.",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-16"
   },
   {
     "id": "932aa68901f8",
