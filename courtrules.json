@@ -132,17 +132,6 @@
     "first_seen": "2026-08-16"
   },
   {
-    "id": "08ca1e0d3ad9",
-    "rule_set": "FRE",
-    "rule": "Rule 707 (new)",
-    "status": "pending",
-    "effective_date": "2027-12-01",
-    "summary": "A new Evidence Rule 707 is pending, with no substantive description given on the page.",
-    "impact": "A new rule in the expert-testimony article of the Evidence Rules could change how expert-related proof is admitted.",
-    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
-    "first_seen": "2026-07-26"
-  },
-  {
     "id": "893b86d51179",
     "rule_set": "FRE",
     "rule": "Rule 707",
@@ -163,17 +152,6 @@
     "impact": "Changes to impeachment by evidence of a criminal conviction may affect witness examination.",
     "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
     "first_seen": "2026-07-19"
-  },
-  {
-    "id": "4c081f320466",
-    "rule_set": "FRE",
-    "rule": "New Rule 707",
-    "status": "pending",
-    "effective_date": "2027-12-01",
-    "summary": "A new Evidence Rule 707 is projected to take effect December 1, 2027; the page does not describe its content.",
-    "impact": "A new evidence rule in the expert-testimony series will add a fresh admissibility issue to litigate.",
-    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
-    "first_seen": "2026-08-16"
   },
   {
     "id": "f0435a2fd390",
@@ -297,17 +275,6 @@
     "first_seen": "2026-07-19"
   },
   {
-    "id": "c51df65e9fa2",
-    "rule_set": "FRBP",
-    "rule": "Rule 7043 (new)",
-    "status": "pending",
-    "effective_date": "2026-12-01",
-    "summary": "A new Bankruptcy Rule 7043 is pending, with no substantive description given on the page.",
-    "impact": "A new rule in the Part VII adversary-proceeding series may change how testimony is taken in adversary litigation.",
-    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
-    "first_seen": "2026-07-26"
-  },
-  {
     "id": "5baab94a20b4",
     "rule_set": "FRBP",
     "rule": "Rule 7043",
@@ -361,17 +328,6 @@
     "impact": "Debtor's counsel must use the updated petition and exemption forms starting on the earlier effective date.",
     "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
     "first_seen": "2026-07-26"
-  },
-  {
-    "id": "dee031c31d58",
-    "rule_set": "FRBP",
-    "rule": "New Rule 7043",
-    "status": "pending",
-    "effective_date": "2026-12-01",
-    "summary": "A new Bankruptcy Rule 7043 is projected to take effect December 1, 2026; the page does not describe its content.",
-    "impact": "A brand-new adversary-proceeding rule will apply after December 1, 2026, so litigators should review it in the rules packages.",
-    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
-    "first_seen": "2026-08-16"
   },
   {
     "id": "932aa68901f8",

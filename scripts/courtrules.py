@@ -252,12 +252,42 @@ def _draft_extractions(pending, deadline=None):
     return out
 
 
+# The extractor writes the same amendment's designation differently from run to run -- "Rule 707",
+# "Rule 707 (new)", "New Rule 707" are all the one pending FRE 707. Because the id is a hash of that
+# string, each phrasing minted a NEW card that no longer matched seen_cards, so the same rule was
+# re-carded on every relabel: FRE 707 and FRBP 7043 each reached THREE cards on the public page
+# (2026-07-19, 07-26 and 08-16) before this was caught.
+#
+# Deliberately narrow. It strips only the "new"-marker drift actually observed, and leaves every
+# other designation byte-identical, so the canonical form of each existing card hashes to the id it
+# already has: only the variants move, and only onto their original. A broader normalizer (parsing
+# out the number, folding punctuation) would also collapse rules that are genuinely distinct --
+# "Rule 5" and "Rule 5.2" are separate amendments, and FRAP "Form 4" is not FRAP "Rule 4".
+_NEW_SUFFIX = re.compile(r"\s*\(\s*new\s*\)\s*$", re.I)
+_NEW_PREFIX = re.compile(r"^\s*new\s+(?=(?:official\s+)?(?:rule|form)s?\b)", re.I)
+_KEYWORD = re.compile(r"^(official\s+)?(rules?|forms?)\b", re.I)
+
+
+def canonical_rule(rule):
+    """The designation with the 'new' marker stripped, whichever side it was written on, and the
+    leading Rule/Form keyword in its house casing. 'Rule 707 (new)', 'New Rule 707' and
+    'NEW RULE 707' all canonicalize to 'Rule 707'. Everything after the keyword -- the number, a
+    subsection, a form's letter suffix -- is left exactly as extracted, so nothing that is
+    genuinely two amendments can be fused into one."""
+    s = " ".join(str(rule or "").split())
+    s = _NEW_SUFFIX.sub("", s)
+    s = _NEW_PREFIX.sub("", s)
+    s = _KEYWORD.sub(lambda m: (m.group(1).title() if m.group(1) else "") + m.group(2).title(), s)
+    return s.strip()
+
+
 def _card_id(rule_set, rule):
     # Identity is (rule set, rule number) -- NOT the effective date. A rule's amendment progresses
     # pending -> effective (and its date may be firmed up along the way); keying on the date too
     # would mint a second card for the same amendment instead of updating the first. One card per
-    # rule, updated in place as its status/date settle.
-    key = "%s|%s" % ((rule_set or "").upper(), (rule or "").strip())
+    # rule, updated in place as its status/date settle. The designation is canonicalized first, so
+    # a relabel is not a new rule (see canonical_rule above).
+    key = "%s|%s" % ((rule_set or "").upper(), canonical_rule(rule))
     return hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
 
 
@@ -274,7 +304,8 @@ def build_card(amendment, url, today=None):
         eff = ""
     status = (amendment.get("status") or "").strip().lower()
     status = status if status in ("pending", "effective") else "pending"
-    rule = str(amendment.get("rule") or "").strip()
+    # Store the canonical designation too, so the page never shows the same rule under two names.
+    rule = canonical_rule(amendment.get("rule"))
     return {
         "id": _card_id(rule_set, rule),
         "rule_set": rule_set,
