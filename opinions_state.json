@@ -1688,8 +1688,36 @@
     10951884,
     10951906,
     10951907,
-    10951912
+    10951912,
+    10951934,
+    10951951,
+    10951952,
+    10951953,
+    10951954,
+    10952000,
+    10952003,
+    10952004,
+    10952005,
+    10952009,
+    10952010,
+    10952020,
+    10952021,
+    10952022,
+    10952023,
+    10952024,
+    10952025,
+    10952026,
+    10952027,
+    10952028,
+    10952029
   ],
-  "updated": "2026-08-17T16:49:05Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-08-17T20:51:50Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-smell": {
+      "id": "msgbatch_01WFTQqVnQYSiYwdgPsENhVx",
+      "at": 1786999814.9126303,
+      "n": 1
+    }
+  }
 }
