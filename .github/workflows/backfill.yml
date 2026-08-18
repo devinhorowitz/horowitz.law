@@ -132,10 +132,7 @@ jobs:
           BACKFILL_FROM: ${{ inputs.date_from }}
           BACKFILL_TO: ${{ inputs.date_to }}
           BACKFILL_COURTS: ${{ inputs.courts }}
-          # Same three-tier funnel as the daily pipeline; same repo Variables.
-          OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5' }}
-          OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-5' }}
-          OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-5' }}
+          # Same three-tier funnel as the daily pipeline; the pins live in scripts/update.py.
         run: python scripts/backfill.py
 
       # In a dry run the script writes nothing, so this finds no changes and opens

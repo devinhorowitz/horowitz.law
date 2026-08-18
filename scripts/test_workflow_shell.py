@@ -222,12 +222,44 @@ def test_the_legislation_step_specifically():
                                  "pr_body_courtrules")))
 
 
+def test_no_model_pin_comes_from_a_repo_variable():
+    """A model pin written as `X_MODEL: ${{ vars.X_MODEL || 'claude-...' }}` puts the value that
+    actually runs in the GitHub UI, and duplicates the script's own default as a YAML literal
+    that can drift from it. Worse, it always sets the env var, so any inheritance the script
+    built is severed: update.py resolves SMELL_MODEL from AUDIT_MODEL from MODEL precisely so a
+    summarizer repin carries, and smell.yml and opinions.yml were overriding that with a literal.
+    Repinning the summarizer in the repo would have left the audit on the old model with the repo
+    showing the new one.
+
+    25 of these were removed across 9 workflows; every one duplicated a default the script
+    already had, with the identical value. The pins belong in scripts/*.py (and siteconfig.py
+    for the smell model), with the env var left as a one-run override for a manual dispatch."""
+    print("model pins")
+    bad = []
+    pat = re.compile(r"^\s*([A-Z0-9_]*MODEL[A-Z0-9_]*):\s*\$\{\{\s*vars\.")
+    for path in sorted(glob.glob(os.path.join(WORKFLOWS, "*.yml"))):
+        for i, line in enumerate(open(path, encoding="utf-8"), 1):
+            if pat.match(line):
+                bad.append("%s:%d %s" % (os.path.basename(path), i, line.strip()[:60]))
+    check("no workflow pins a model from a repo Variable", not bad,
+          "%d found: %s" % (len(bad), "; ".join(bad[:3])))
+    # And nothing should describe a model pin as living in the UI any more.
+    stale = []
+    for path in sorted(glob.glob(os.path.join(WORKFLOWS, "*.yml"))):
+        for i, line in enumerate(open(path, encoding="utf-8"), 1):
+            t = line.strip()
+            if t.startswith("#") and "repo variable" in t.lower() and "model" in t.lower():
+                stale.append("%s:%d" % (os.path.basename(path), i))
+    check("no comment still points at a repo Variable for a model", not stale, "; ".join(stale))
+
+
 def main():
     for t in (test_the_shape_is_actually_dangerous,
               test_no_step_ends_on_a_bare_conditional,
               test_relaxed_egress_is_justified_and_marked_temporary,
               test_no_step_backgrounds_a_process,
-              test_the_legislation_step_specifically):
+              test_the_legislation_step_specifically,
+              test_no_model_pin_comes_from_a_repo_variable):
         t()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))

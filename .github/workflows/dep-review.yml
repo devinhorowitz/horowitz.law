@@ -54,7 +54,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          DEP_REVIEW_MODEL: ${{ vars.DEP_REVIEW_MODEL || 'claude-fable-5' }}
           R: ${{ github.repository }}
         run: |
           set -e

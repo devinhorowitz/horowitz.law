@@ -108,16 +108,13 @@ jobs:
           CL_PER_HOUR: ${{ vars.CL_PER_HOUR }}
           CL_PER_DAY: ${{ vars.CL_PER_DAY }}
           CL_RATE_MARGIN: ${{ vars.CL_RATE_MARGIN }}
-          OPINIONS_SCREEN_MODEL: ${{ vars.OPINIONS_SCREEN_MODEL || 'claude-haiku-4-5' }}
-          # Pretriage is ON by default (the golden recall gate passed and the tier went live
-          # 2026-07); the repo Variable remains a break-glass override, e.g. set it to a dated
-          # snapshot to reproduce a screen decision, or leave it unset for this default.
-          OPINIONS_PRETRIAGE_MODEL: ${{ vars.OPINIONS_PRETRIAGE_MODEL || 'claude-haiku-4-5' }}
-          OPINIONS_TRIAGE_MODEL: ${{ vars.OPINIONS_TRIAGE_MODEL || 'claude-sonnet-5' }}
-          OPINIONS_MODEL: ${{ vars.OPINIONS_MODEL || 'claude-opus-5' }}
-          # Tier-2.5 drop-reason audit: the smell model reads each triage drop's stated REASON
-          # (no opinion text) and escalates keep-shaped drops to the summarizer in the same run.
-          # Set the repo Variable to 'off' to disable the pass.
+          # No model pins here. They live in scripts/update.py, and the smell model in
+          # scripts/siteconfig.py, so the value that runs is the value in review; the
+          # OPINIONS_*_MODEL env vars stay one-run overrides for a manual dispatch. Pretriage
+          # is ON by default (the golden recall gate passed and the tier went live 2026-07).
+          # The tier-2.5 drop-reason audit reads each drop's stated REASON with no opinion text
+          # and escalates keep-shaped drops to the summarizer in the same run; disable it with
+          # siteconfig.SMELL_MODEL = "off".
           # Batch wait budgets. The defaults in update.py total 90 minutes of in-job sleeping
           # (1500 triage + 900 smell + 1500 summarize + 1500 guard), and sleeping is exactly
           # the exposure that gets a run reclaimed: seven reclamations since 2026-07-17, all
@@ -139,9 +136,8 @@ jobs:
           OPINIONS_MAX: ${{ vars.OPINIONS_MAX || '80' }}
           # Senior Fable review of held cases: 'clear' auto-publishes a held card Fable is highly
           # confident is a false positive (fail-closed); set the repo Variable to 'advisory' to
-          # only attach its verdict to the review PR, or 'off' to disable. Model is overridable too.
+          # only attach its verdict to the review PR, or 'off' to disable.
           OPINIONS_FABLE_REVIEW: ${{ vars.OPINIONS_FABLE_REVIEW || 'clear' }}
-          OPINIONS_FABLE_MODEL: ${{ vars.OPINIONS_FABLE_MODEL || 'claude-fable-5' }}
         run: |
           set -o pipefail
           python scripts/update.py 2>&1 | tee "$RUNNER_TEMP/run.log"
