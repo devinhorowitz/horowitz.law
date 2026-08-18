@@ -3,13 +3,13 @@
     {
       "area": "coverage",
       "label": "coverage",
-      "count": 26,
+      "count": 27,
       "url": "https://horowitz.law/areas/coverage.json"
     },
     {
       "area": "badfaith",
       "label": "bad faith",
-      "count": 3,
+      "count": 4,
       "url": "https://horowitz.law/areas/badfaith.json"
     },
     {
