@@ -65,7 +65,6 @@ jobs:
       - name: Audit logged drop reasons
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OPINIONS_SMELL_MODEL: ${{ vars.OPINIONS_SMELL_MODEL || 'claude-opus-5' }}
           SMELL_ALL: ${{ inputs.all && '1' || '' }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
         run: python scripts/smell_check.py
