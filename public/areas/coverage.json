@@ -1,7 +1,7 @@
 {
   "area": "coverage",
   "label": "coverage",
-  "count": 26,
+  "count": 27,
   "opinions": [
     {
       "cluster_id": 10948474,
@@ -19,6 +19,25 @@
       "why": "The decision establishes that Florida's presuit notice condition precedent for property insurance suits reaches declaratory judgment actions seeking no damages, so claimants must serve the statutory notice before filing any such action and courts must dismiss without prejudice when it is absent.",
       "dockets": [
         "2D2025-2866"
+      ]
+    },
+    {
+      "cluster_id": 10948454,
+      "name": "Ex parte State Farm Fire and Casualty Company (In re Foor v. State Farm Fire and Casualty Company)",
+      "court": "Supreme Court of Alabama",
+      "date": "2026-08-14",
+      "disposition": "petition granted in part, denied in part, writ issued",
+      "areas": [
+        "coverage",
+        "badfaith",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10948454/in-re-james-m-foor-and-krystina-foor-v-state-farm-fire-and-casualty/",
+      "synopsis": "Homeowners suing their insurer for breach of contract and bad faith over a hail and wind roof claim obtained a protective order permitting their counsel to share materials designated confidential or trade secret with other bad-faith roof cases against the same insurer in which the same counsel appear, and to disclose such materials to governmental agencies with oversight authority. On the insurer's mandamus petition, the court held that Rule 26, Ala. R. Civ. P., does not categorically bar sharing provisions, reasoning that Rule 26(b)(1) governs what information may be obtained in discovery rather than what a party may do with it once obtained, and that absent a protective order parties may generally disseminate discovery materials. The court nevertheless concluded the trial court exceeded its discretion in the breadth of the sharing language and granted the petition in part, directing that the provision be narrowed with additional safeguards; it also clarified that whether particular materials are in fact confidential or trade secret was not before it, because the umbrella order postpones that question and places the burden on the insurer to justify a designation if challenged. Two justices dissented, arguing that sharing of trade-secret and confidential information is antithetical to Rule 26 absent a case-specific justification.",
+      "why": "The decision establishes that Alabama's discovery rules do not per se prohibit protective orders allowing discovery materials to be shared with counsel in parallel litigation, while confirming that trial courts must tailor such provisions, which shapes how confidentiality disputes over claims-handling materials are litigated.",
+      "dockets": [
+        "SC-2025-0918"
       ]
     },
     {
