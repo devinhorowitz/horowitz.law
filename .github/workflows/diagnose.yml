@@ -54,7 +54,6 @@ jobs:
       - name: Diagnose the issue
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          DIAGNOSE_MODEL: ${{ vars.DIAGNOSE_MODEL || 'claude-fable-5' }}
           # Passed as env, NOT interpolated into the run script: issue content stays data, not shell.
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}

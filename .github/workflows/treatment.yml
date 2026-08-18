@@ -99,7 +99,6 @@ jobs:
           # Bounded like the funnel's, and for the same reason: a long batch wait is idle
           # exposure. _classify_batch already defers the card on BatchTimeout and retries it.
           TREATMENT_BATCH_SEC: ${{ vars.TREATMENT_BATCH_SEC || '180' }}
-          TREATMENT_MODEL: ${{ vars.TREATMENT_MODEL || 'claude-sonnet-5' }}     # full-read classifier; set the repo Variable to update without editing this file
         run: |
           set -o pipefail
           python scripts/treatment.py 2>&1 | tee "$RUNNER_TEMP/run.log"
