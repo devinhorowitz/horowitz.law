@@ -245,6 +245,15 @@ SCREEN_SYSTEM = (
     "compensation, attorney discipline or bar admission, or election; or it is a one-line order "
     "that merely grants or denies an application or dismisses for failure to file, with no "
     "merits.\n\n"
+    "A CAPTION IS NOT A CATEGORY. 'In re', 'Ex parte' and 'In the Matter of' are procedural "
+    "wrappers: in the Supreme Court of Alabama they head a mandamus or certiorari petition, and "
+    "the case underneath is whatever the parties were litigating below. Read the PARTIES and the "
+    "excerpt, never the prefix. A named company, insurer, self-insurance fund, government body or "
+    "LLC as a party is not a juvenile, dependency or probate matter. What marks those is the "
+    "SUBJECT: 'In the Interest of', 'In re Estate of', 'In re Amendments to ... Rules', or parties "
+    "given only as initials.\n\n"
+    "If your reason needs a hedge -- 'likely', 'appears to be', 'suggests', 'indicates' -- you are "
+    "guessing from the caption, which is exactly the case you must PASS.\n\n"
     "That list is CLOSED, and each entry means the DISPUTE is of that kind, not that the case "
     "touches it. Your reason must name one of the categories above; if you cannot, PASS. Note what "
     "is NOT on it: a landlord-tenant or dispossessory posture (a slip-and-fall at an apartment "
@@ -1110,11 +1119,19 @@ def anthropic_json(body, label="call"):
     # Against those, and measuring the prompts by character count (so treat these as
     # approximate -- ~3.6 chars/token, never token-counted):
     #
-    #     SYSTEM (summarize)   opus-5      ~3100   well ABOVE its 512 floor
-    #     AUDIT_SYSTEM         opus-5       ~560   marginally above
-    #     TRIAGE_SYSTEM        sonnet-5     ~950   just under 1024
-    #     CROSSCHECK/COMPLETE  sonnet-5  ~500/625  under
-    #     SCREEN/PRETRIAGE     haiku-4-5 ~600/560  well under 4096
+    #     SYSTEM (summarize)   opus-5     ~3360   well ABOVE its 512 floor
+    #     AUDIT_SYSTEM         opus-5      ~515   above
+    #     TRIAGE_SYSTEM        sonnet-5   ~2180   ABOVE 1024 -- see the correction below
+    #     CROSSCHECK/COMPLETE  sonnet-5 ~450/570  under
+    #     SCREEN/PRETRIAGE     haiku-4-5 ~758/514 well under 4096
+    #
+    # The TRIAGE_SYSTEM figure is a CORRECTION. This table previously read "~950, just
+    # under 1024", which is what it would measure if the constant were only its own
+    # literal. It is not: TRIAGE_SYSTEM concatenates TRIAGE_CRITERIA and the glossed
+    # taxonomy block at module level, and the whole 7856 characters is what goes over
+    # the wire (see the request built below). So the triage tier is over its floor too,
+    # and the set of prompts that CANNOT be caching is smaller than this comment claimed
+    # -- only the two sonnet guards and the two haiku screeners.
     #
     # So the old blanket claim is very likely wrong for the summarize tier, which is
     # also the most expensive one. THIS HAS STILL NOT BEEN OBSERVED. Three runs were

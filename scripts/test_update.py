@@ -627,6 +627,38 @@ def test_batch_carry_over():
         update._PENDING_BATCHES.clear(); update._RESUME_BATCHES.clear()
 
 
+def test_screen_caption_rule():
+    """The screen judges from a caption and an opening excerpt, so a caption CONVENTION it
+    misreads costs the feed whole cases silently. Nothing catches it either: update.py's tier 2.5
+    smells TRIAGE-drop reasons only, and of 1,502 logged rejections the 1,163 screen drops are
+    100% unaudited.
+
+    Twelve adversarial 'In re: A v. B' captions were discarded this way, including two Supreme
+    Court of Alabama insurance decisions: SC-2025-0918 (Ex parte State Farm Fire & Cas. Co.,
+    'sharing' provisions in a protective order in a first-party bad-faith case), dropped as
+    "dependency or juvenile proceeding ('In re' with minor names)" though no minor is named and
+    State Farm is a party; and SC-2025-1015 (Ex parte Assn. of County Commissions of Ala.
+    Liability Self-Insurance Fund, duty to defend), dropped as "dependency or receivership
+    proceeding". In Alabama that prefix heads a mandamus petition and says nothing about subject.
+
+    This pins the INSTRUCTION, not the model's behavior -- a prompt fix can only be guarded by
+    asserting the prompt still carries it. It fails if the rule is edited back out.
+    """
+    sys_prompt = update.SCREEN_SYSTEM
+    for phrase in ("A CAPTION IS NOT A CATEGORY", "Ex parte", "In the Matter of", "mandamus",
+                   "PARTIES", "self-insurance fund"):
+        assert phrase in sys_prompt, "screen prompt lost the caption-wrapper rule: %r" % phrase
+    for hedge in ("likely", "appears to be", "suggests"):
+        assert hedge in sys_prompt, "screen prompt no longer forbids the hedge %r" % hedge
+    # It must stay DISCRIMINATING. A blanket "always pass In re" would readmit the probate and
+    # rules-amendment captions the screen currently discards correctly.
+    for marker in ("In the Interest of", "In re Estate of", "Rules", "initials"):
+        assert marker in sys_prompt, "screen prompt lost the true subject marker %r" % marker
+    # The exclusion list must still be closed; that is what makes "if you cannot, PASS" bite.
+    assert "That list is CLOSED" in sys_prompt
+    print("  ok  screen prompt separates caption wrappers from subject markers, and bans hedged reasons")
+
+
 def main():
     print("crosscheck guardrails:")
     for c in CASES:
@@ -650,8 +682,9 @@ def main():
     test_triage_batch()
     test_funnel_pr_body()
     test_guard_token_budget()
+    test_screen_caption_rule()
     test_batch_carry_over()
-    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 13))
+    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 14))
     return 0
 
 
