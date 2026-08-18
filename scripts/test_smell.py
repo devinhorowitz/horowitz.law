@@ -259,6 +259,49 @@ def test_retro_persistence():
          smell_check.OUT, smell_check.DRY_RUN, update.smell_reasons) = real
 
 
+def test_stage_config():
+    """Screen drops were the blindest and the only unwatched gate: of 1,502 logged rejections the
+    1,163 screen drops had never had a reason checked, because this audit read "triage" alone on
+    the premise that screen reasons are category labels and so safe by construction. Twelve
+    "In re: A v. B" captions dropped on the prefix alone disproved it.
+
+    Two things are pinned. The stage list must come from the CONFIG FILE, not a hardcoded default
+    or a GitHub Variable, with the env var demoted to a one-run override; and the audit must treat
+    a reason the case NAME contradicts as suspect, which is what actually catches these -- the
+    reasons name a recognized disqualifier ("dependency or juvenile proceeding") and are only
+    detectable as wrong against a caption naming State Farm as a party."""
+    import importlib, siteconfig
+    check("screen is audited by default", "screen" in siteconfig.SMELL_STAGES)
+    check("triage is still audited", "triage" in siteconfig.SMELL_STAGES)
+    check("the default comes from the config file, not a literal in the script",
+          'os.environ.get("SMELL_STAGES", "triage")' not in open(
+              os.path.join(os.path.dirname(os.path.abspath(__file__)), "smell_check.py"), encoding="utf-8").read())
+
+    saved = os.environ.get("SMELL_STAGES")
+    try:
+        os.environ["SMELL_STAGES"] = "pretriage"
+        mod = importlib.reload(importlib.import_module("smell_check"))
+        check("the env var still overrides for one run", mod.STAGES == ["pretriage"],
+              "got %r" % (mod.STAGES,))
+        os.environ.pop("SMELL_STAGES")
+        mod = importlib.reload(importlib.import_module("smell_check"))
+        check("and falls back to the config file when unset",
+              mod.STAGES == list(siteconfig.SMELL_STAGES), "got %r" % (mod.STAGES,))
+    finally:
+        if saved is None:
+            os.environ.pop("SMELL_STAGES", None)
+        else:
+            os.environ["SMELL_STAGES"] = saved
+        importlib.reload(importlib.import_module("smell_check"))
+
+    sysp = update.SMELL_SYSTEM
+    check("a reason contradicted by the caption is suspect", "contradicted by the case" in sysp)
+    check("the wrapper prefixes are named as carrying no subject",
+          "'In re'" in sysp and "Ex parte" in sysp)
+    check("the request header no longer claims every drop came from triage",
+          "CASES DROPPED AT TRIAGE" not in update.smell_request(ITEMS)["messages"][0]["content"])
+
+
 def main():
     print("smell prompt + parsing:")
     test_prompt_shape()
@@ -272,6 +315,7 @@ def main():
     test_retro_selection()
     print("retro persistence:")
     test_retro_persistence()
+    test_stage_config()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
