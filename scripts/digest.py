@@ -38,6 +38,9 @@ Environment:
   DIGEST_PREVIEW     Where to write the rendered HTML in a dry run. Default digest_preview.html.
 
   --- Legislative & Regulatory Watch (a SEPARATE broadcast) ---
+  Carries all FOUR watch sections the /legislation page shows: Georgia legislation, federal
+  regulations, Federal Rules amendments, and State Bar Formal Advisory Opinions. The last two were
+  page-only until 2026-08-18, so 31 court-rule cards published without ever reaching an inbox.
   Configured in siteconfig.py, not here: siteconfig.LEGISLATION_DIGEST says whether this email is
   MEANT to send, and the two ids below default from siteconfig. That distinction matters -- when
   the email is meant to send and the audience is empty, this warns loudly on every run instead of
@@ -86,6 +89,12 @@ PREVIEW    = os.environ.get("DIGEST_PREVIEW") or os.path.join(REPO, "digest_prev
 # unchanged until the Resend audience/topic are wired. Reads the same card files the watch writes.
 LEG_JSON_PATH  = os.path.join(REPO, "legislation.json")
 REG_JSON_PATH  = os.path.join(REPO, "regulations.json")
+# The page carries four watch sections; this email carried two. Court rules have been rendering
+# publicly since 2026-07 and Formal Advisory Opinions since 2026-08, and neither reached an
+# inbox -- a subscriber to "Legislative & Regulatory Watch" was told about statutes and agency
+# rules while 31 court-rule cards published silently. Same window, same select_leg, same email.
+CR_JSON_PATH   = os.path.join(REPO, "courtrules.json")
+ETH_JSON_PATH  = os.path.join(REPO, "ethics.json")
 LEG_SEGMENT_ID = os.environ.get("RESEND_LEGISLATION_SEGMENT_ID") or siteconfig.RESEND_LEGISLATION_SEGMENT_ID
 LEG_TOPIC_ID   = os.environ.get("RESEND_LEGISLATION_TOPIC_ID") or siteconfig.RESEND_LEGISLATION_TOPIC_ID
 LEG_SITE       = (os.environ.get("LEGISLATION_SITE_URL")
@@ -484,9 +493,24 @@ def select_leg(cards, days):
     return new, since
 
 
-def leg_subject_line(leg, reg):
+def _leg_counts(leg, reg, crs=(), eth=()):
+    """The one phrase every surface counts with -- the intro, the plain-text header, and the
+    NOT SENT warning -- so a fourth section cannot be added to one and forgotten in another.
+    Empty buckets are omitted rather than printed as '0 rules'."""
+    parts = [(len(leg), "new law", "new laws"), (len(reg), "new rule", "new rules"),
+             (len(crs), "court-rule amendment", "court-rule amendments"),
+             (len(eth), "ethics opinion", "ethics opinions")]
+    said = ["%d %s" % (n, one if n == 1 else many) for n, one, many in parts if n]
+    if not said:
+        return "nothing new"
+    if len(said) == 1:
+        return said[0]
+    return ", ".join(said[:-1]) + " and " + said[-1]
+
+
+def leg_subject_line(leg, reg, crs=(), eth=()):
     today = fmt_date(datetime.date.today().isoformat())
-    n = len(leg) + len(reg)
+    n = len(leg) + len(reg) + len(crs) + len(eth)
     what = "1 update" if n == 1 else "%d updates" % n
     return "Legislative & Regulatory Watch: %s (week of %s)" % (what, today)
 
@@ -533,6 +557,38 @@ def rule_block(c):
     return _leg_row(heading, " · ".join(bits), body, tags, (c.get("url") or "").strip())
 
 
+def courtrule_block(c):
+    """One Federal Rules amendment. Court rules carry no practice-area tags (see render.py), so the
+    tag row is empty and the rule set doubles as the heading's qualifier."""
+    rs, rule = (c.get("rule_set") or "").strip().upper(), (c.get("rule") or "").strip()
+    heading = ("%s — %s" % (rs, rule)).strip(" —") or rule or "(unnamed rule)"
+    status = (c.get("status") or "pending").strip().lower()
+    bits = [b for b in ("Effective" if status == "effective" else "Pending",
+                        ("effective %s" % fmt_date(c["effective_date"])) if c.get("effective_date") else "") if b]
+    body = " ".join(x for x in [(c.get("summary") or "").strip(),
+                                ("Why it matters: " + c["impact"].strip()) if (c.get("impact") or "").strip() else ""] if x)
+    return _leg_row(heading, " · ".join(bits), body, [], (c.get("url") or "").strip())
+
+
+def ethics_block(c):
+    """One State Bar Formal Advisory Opinion. The status is the news here -- proposed, pending with
+    the Court, approved -- so it leads the meta line, with the Rules of Professional Conduct next."""
+    num = (c.get("number") or "").strip()
+    subject = (c.get("subject") or "").strip()
+    heading = ("Formal Advisory Opinion %s — %s" % (num, subject)).strip(" —")
+    status = (c.get("status") or "proposed").strip().lower()
+    rules = [str(r).strip() for r in (c.get("rules") or []) if str(r).strip()]
+    bits = [b for b in (_ETH_STATUS.get(status, status.title()),
+                        ("Rule%s %s" % ("s" if len(rules) > 1 else "", ", ".join(rules))) if rules else "") if b]
+    body = " ".join(x for x in [(c.get("summary") or "").strip(),
+                                ("Why it matters: " + c["impact"].strip()) if (c.get("impact") or "").strip() else ""] if x)
+    return _leg_row(heading, " · ".join(bits), body, [], (c.get("url") or "").strip())
+
+
+_ETH_STATUS = {"proposed": "Proposed", "pending": "Pending with the Supreme Court of Georgia",
+               "approved": "Approved — binding", "withdrawn": "Withdrawn"}
+
+
 def _leg_section(label, rows_html):
     return ('<tr><td style="padding:18px 28px 0;">'
             '<div style="font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;color:%s;'
@@ -541,7 +597,7 @@ def _leg_section(label, rows_html):
               'cellpadding="0" cellspacing="0">%s</table></td></tr>' % rows_html)
 
 
-def build_leg_html(leg, reg):
+def build_leg_html(leg, reg, crs=(), eth=()):
     foot = ["You are receiving this because you subscribed to the horowitz.law Legislative & "
             "Regulatory Watch.",
             'To stop receiving it, <a href="%s" style="color:%s;">unsubscribe</a>.' % (UNSUB_TAG, MUTED)]
@@ -554,9 +610,12 @@ def build_leg_html(leg, reg):
         sections += _leg_section("Georgia legislation", "".join(law_block(c) for c in leg))
     if reg:
         sections += _leg_section("Federal regulations", "".join(rule_block(c) for c in reg))
-    intro = ("%d new law%s and %d new rule%s this week. Each links to the source; the site carries "
-             "the plain-English summary." % (len(leg), "" if len(leg) == 1 else "s",
-                                             len(reg), "" if len(reg) == 1 else "s"))
+    if crs:
+        sections += _leg_section("Court rules", "".join(courtrule_block(c) for c in crs))
+    if eth:
+        sections += _leg_section("Ethics opinions", "".join(ethics_block(c) for c in eth))
+    intro = ("%s this week. Each links to the source; the site carries the plain-English summary."
+             % _leg_counts(leg, reg, crs, eth))
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -587,9 +646,9 @@ def build_leg_html(leg, reg):
     )
 
 
-def build_leg_text(leg, reg):
+def build_leg_text(leg, reg, crs=(), eth=()):
     lines = ["horowitz.law — Legislative & Regulatory Watch",
-             "%d new law(s) and %d new rule(s) this week." % (len(leg), len(reg)),
+             "%s this week." % _leg_counts(leg, reg, crs, eth),
              "", "Read the summaries: %s" % LEG_SITE, ""]
     if leg:
         lines += ["Georgia legislation:", ""]
@@ -614,6 +673,37 @@ def build_leg_text(leg, reg):
             if (c.get("url") or "").strip():
                 lines.append("  %s" % c["url"].strip())
             lines.append("")
+    if crs:
+        lines += ["Court rules:", ""]
+        for c in crs:
+            heading = ("%s — %s" % ((c.get("rule_set") or "").strip().upper(),
+                                    (c.get("rule") or "").strip())).strip(" —")
+            st = "Effective" if (c.get("status") or "").lower() == "effective" else "Pending"
+            if (c.get("effective_date") or "").strip():
+                st += " · effective %s" % fmt_date(c["effective_date"])
+            lines += ["- %s" % heading, "  %s" % st]
+            syn = (c.get("summary") or "").strip()
+            if syn:
+                lines += ["  %s" % ln for ln in textwrap.wrap(syn, 76)]
+            if (c.get("url") or "").strip():
+                lines.append("  %s" % c["url"].strip())
+            lines.append("")
+    if eth:
+        lines += ["Ethics opinions:", ""]
+        for c in eth:
+            heading = ("Formal Advisory Opinion %s — %s" % ((c.get("number") or "").strip(),
+                                                            (c.get("subject") or "").strip())).strip(" —")
+            rules = [str(r).strip() for r in (c.get("rules") or []) if str(r).strip()]
+            st = _ETH_STATUS.get((c.get("status") or "").lower(), (c.get("status") or "").title())
+            if rules:
+                st += " · Rule%s %s" % ("s" if len(rules) > 1 else "", ", ".join(rules))
+            lines += ["- %s" % heading, "  %s" % st]
+            syn = (c.get("summary") or "").strip()
+            if syn:
+                lines += ["  %s" % ln for ln in textwrap.wrap(syn, 76)]
+            if (c.get("url") or "").strip():
+                lines.append("  %s" % c["url"].strip())
+            lines.append("")
     lines.append("You are receiving this because you subscribed to the horowitz.law "
                  "Legislative & Regulatory Watch.")
     lines.append("Unsubscribe: %s" % UNSUB_TAG)
@@ -633,16 +723,19 @@ def send_legislation_digest():
     siteconfig.LEGISLATION_DIGEST, which is what makes an unconfigured-but-expected send loud."""
     leg, _ = select_leg(_load_leg_cards(LEG_JSON_PATH), DAYS)
     reg, _ = select_leg(_load_leg_cards(REG_JSON_PATH), DAYS)
-    if not leg and not reg:
+    crs, _ = select_leg(_load_leg_cards(CR_JSON_PATH), DAYS)
+    eth, _ = select_leg(_load_leg_cards(ETH_JSON_PATH), DAYS)
+    if not (leg or reg or crs or eth):
         print("legislation digest: nothing new in the window; not sending.")
         return
-    subject = leg_subject_line(leg, reg)
-    html_body, text_body = build_leg_html(leg, reg), build_leg_text(leg, reg)
+    subject = leg_subject_line(leg, reg, crs, eth)
+    html_body = build_leg_html(leg, reg, crs, eth)
+    text_body = build_leg_text(leg, reg, crs, eth)
     if DRY_RUN or not API_KEY:
         open(LEG_PREVIEW, "w", encoding="utf-8").write(html_body)
         why = "DIGEST_DRY_RUN" if DRY_RUN else "no RESEND_API_KEY"
-        print("[%s] legislation preview -> %s (%d law(s), %d rule(s))"
-              % (why, LEG_PREVIEW, len(leg), len(reg)))
+        print("[%s] legislation preview -> %s (%s)"
+              % (why, LEG_PREVIEW, _leg_counts(leg, reg, crs, eth)))
         print("  subject: %s" % subject)
         print("  target segment: %s | topic: %s" % (LEG_SEGMENT_ID or "(unset)", LEG_TOPIC_ID or "(unset)"))
         return
@@ -660,8 +753,8 @@ def send_legislation_digest():
         if getattr(siteconfig, "LEGISLATION_DIGEST", False):
             msg = ("legislation digest: NOT SENT -- the audience is unset. Set "
                    "RESEND_LEGISLATION_SEGMENT_ID (and _TOPIC_ID) in scripts/siteconfig.py from "
-                   "the Resend dashboard. %d law(s) and %d rule(s) went unsent this week."
-                   % (len(leg), len(reg)))
+                   "the Resend dashboard. %s went unsent this week."
+                   % _leg_counts(leg, reg, crs, eth))
             print("::warning::" + msg)
             safeio.step_summary("## Legislative & Regulatory Watch · NOT SENT\n\n" + msg)
         else:
@@ -683,8 +776,8 @@ def send_legislation_digest():
     print("legislation digest: %s broadcast id=%s to segment %s (topic %s)."
           % ("drafted" if DRAFT else "sent", res.get("id", "?"), LEG_SEGMENT_ID, LEG_TOPIC_ID or "none"))
     safeio.step_summary("## Legislative & Regulatory Watch · weekly digest\n\n"
-                        "%s %d new law(s) and %d new rule(s)."
-                        % ("Drafted" if DRAFT else "Sent", len(leg), len(reg)))
+                        "%s %s." % ("Drafted" if DRAFT else "Sent",
+                                    _leg_counts(leg, reg, crs, eth)))
 
 
 def main():
