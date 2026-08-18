@@ -192,12 +192,13 @@ sends. To activate: create a Resend Topic + Segment for legislation, set
 
 `.github/workflows/legislation.yml` — one **Legislative & Regulatory Watch** job — runs weekly
 (Sundays) under Harden-Runner block mode with `api.legiscan.com`, `www.federalregister.gov`,
-`www.uscourts.gov`, `api.anthropic.com`, and the install/GitHub hosts on its allowlist. It runs all
-three watches, renders once, and mirrors the opinion pipeline's commit model:
+`www.uscourts.gov`, `www.gabar.org`, `api.anthropic.com`, and the install/GitHub hosts on its
+allowlist. It runs all four watches, renders once, and mirrors the opinion pipeline's commit model:
 
 - **New/updated cards in any watch** → re-render the shared page + both feeds and open (or update)
   the one `bot/legislation-review` PR (a combined body) for a person to confirm. Merge to publish;
-  edit `legislation.json` / `regulations.json` / `courtrules.json` on the branch to correct.
+  edit `legislation.json` / `regulations.json` / `courtrules.json` / `ethics.json` on the branch
+  to correct.
 - **Nothing new** → commit only the advanced seen-state and run logs straight to `main` with
   `[skip ci]`.
 
@@ -238,5 +239,21 @@ guards `LEGISCAN_SESSIONLIST_MIN` / `LEGISCAN_MASTERLIST_MIN` (seconds; default 
 - **Shipped (court rules):** the **FRCP/FRE court-rules watch** (`scripts/courtrules.py` +
   `test_courtrules.py`) — Federal Rules amendments extracted from uscourts.gov, rendered in the
   "Court rules" section, run by the same weekly workflow.
+- **Shipped (ethics):** the **Formal Advisory Opinion watch** (`scripts/ethics.py` +
+  `test_ethics.py`) — State Bar of Georgia FAOs on the Rules of Professional Conduct, extracted
+  from gabar.org, rendered in the "Ethics opinions" section, run by the same weekly workflow.
+  It exists because these reach the practice through no other channel: they are **not indexed on
+  CourtListener** (searched 2025–2026, Georgia court and then all courts — no Georgia FAO), and
+  the opinions funnel excludes "attorney discipline or bar admission" at all three gates, which
+  is right for a disbarment and wrong for an opinion about a duty every litigator owes. FAO 24-1
+  (supervising vendors that obtain medical records, Rule 5.3) was filed with the Court
+  2025-09-05, acted on around 2026-08-12, and invisible to this repo throughout.
+
+  Two design points differ from the sibling watches, both deliberate. **Identity is the parsed
+  opinion number**, not a hash of the extractor's wording — court rules shipped the opposite and
+  FRE 707 reached three cards on the public page. And **a card updates**: an FAO's life is
+  proposed → pending with the Court → approved, so a known opinion is re-carded and merged, with
+  a change counted only when a meaningful field actually differs (a moved source URL is not news).
+
 - **Later:** additional regulatory agencies (NHTSA vehicle-safety, PHMSA hazmat) — one entry in the
   `REGULATION_AGENCIES` Variable each; and additional court-rule source pages via `COURTRULES_URLS`.

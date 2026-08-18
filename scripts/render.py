@@ -66,6 +66,10 @@ REG_XML_PATH  = os.path.join(WEB, "regulations.xml")
 # Court-rules watch (FRCP/FRE amendments; see scripts/courtrules.py). A third section of the
 # /legislation page, page-only (no feed): a few items a year, so the section is the right surface.
 CR_JSON_PATH  = os.path.join(REPO, "courtrules.json")
+# Ethics watch (Georgia Formal Advisory Opinions; see scripts/ethics.py). A fourth section of
+# the /legislation page, page-only. These are not on CourtListener and the opinions funnel
+# excludes bar matters at all three gates, so this section is the only surface they have.
+ETH_JSON_PATH = os.path.join(REPO, "ethics.json")
 # Pages outside the marker-injection set whose footer year would otherwise rot on
 # Jan 1 (the injected pages are stamped in _inject). render() re-stamps these in
 # place, writing only when the year actually changed, so it is a no-op all year;
@@ -1296,23 +1300,92 @@ def render_courtrules():
         _inject(LEG_HTML_PATH, "courtrules", body)
 
 
+# ---- Georgia Formal Advisory Opinions (a fourth section; page-only, no feed) ----
+_ETH_EMPTY = ('      <div class="leg-empty">No Formal Advisory Opinions are carded yet. This section '
+              'fills as the State Bar\'s Formal Advisory Opinion Board issues opinions on the Georgia '
+              'Rules of Professional Conduct and the Supreme Court of Georgia acts on them — read for '
+              'litigation-practice impact and confirmed by hand.</div>')
+_ETH_STATUS = {"proposed": ("proposed", "Proposed"), "pending": ("proposed", "Pending with the Court"),
+               "approved": ("final", "Approved"), "withdrawn": ("proposed", "Withdrawn")}
+
+
+def load_ethics():
+    try:
+        with open(ETH_JSON_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except FileNotFoundError:
+        return []
+    except Exception:
+        return []
+
+
+def _eth_key(c):
+    """Newest opinion number first, compared numerically so 24-10 follows 24-9."""
+    m = re.search(r"(\d{2})\D+(\d{1,3})", str(c.get("number") or ""))
+    return (int(m.group(1)), int(m.group(2))) if m else (-1, -1)
+
+
+def ethics_card_html(c):
+    status = (c.get("status") or "proposed").strip().lower()
+    status_class, status_label = _ETH_STATUS.get(status, ("proposed", status.title() or "Proposed"))
+    rules = [str(r).strip() for r in (c.get("rules") or []) if str(r).strip()]
+    rules_html = (f'          <span class="leg-eff">Rule{"s" if len(rules) > 1 else ""} '
+                  f'{_esc(", ".join(rules))}</span>\n' if rules else "")
+    impact = (c.get("impact") or "").strip()
+    impact_html = (f'        <p class="leg-why"><strong>Why it matters:</strong> {_esc(impact)}</p>\n'
+                   if impact else "")
+    url = _safe_url(c.get("url") or "")
+    src = (f'<a href="{_attr(url)}" target="_blank" rel="noopener noreferrer">gabar.org →</a>'
+           if url else "")
+    num = str(c.get("number") or "")
+    subject = (c.get("subject") or "").strip()
+    return (
+        f'      <article id="eth-{_attr(str(c.get("id") or ""))}" class="leg" '
+        f'data-ruleset="fao" data-status="{status_class}">\n'
+        f'        <div class="leg-head"><span class="leg-type leg-type-{status_class}">{_esc(status_label)}</span>'
+        f'<span class="leg-juris">FAO</span><span class="leg-number">{_esc(num)}</span></div>\n'
+        + (f'        <div class="leg-title">Formal Advisory Opinion {_esc(num)}'
+           f'{(" · " + _esc(subject)) if subject else ""}</div>\n')
+        + f'        <p class="leg-synopsis">{_esc((c.get("summary") or "").strip())}</p>\n'
+        + impact_html
+        + '        <div class="leg-foot">\n'
+        + (f'          <span class="leg-source">{src}</span>\n' if src else "")
+        + rules_html
+        + '          <span class="leg-disclaimer">AI-extracted · verify against the opinion</span>\n'
+        + '        </div>\n'
+        + '      </article>'
+    )
+
+
+def render_ethics():
+    """Project ethics.json onto the /legislation page (between the ethics markers). Page-only."""
+    cards = sorted([c for c in load_ethics() if isinstance(c, dict) and c.get("id")],
+                   key=_eth_key, reverse=True)
+    if os.path.exists(LEG_HTML_PATH):
+        body = "\n\n".join(ethics_card_html(c) for c in cards) if cards else _ETH_EMPTY
+        _inject(LEG_HTML_PATH, "ethics", body)
+
+
 def _legislation_has_cards():
-    """True if any of the three /legislation subsections (statutes, regulations, court rules) holds a
-    card. Drives the page's noindex meta and its sitemap presence: while all three are empty the page
-    is a stub, so it is held out of the index and the sitemap, then re-enters automatically on the
+    """True if any of the four /legislation subsections (statutes, regulations, court rules, ethics
+    opinions) holds a card. Drives the page's noindex meta and its sitemap presence: while all four
+    are empty the page is a stub, so it is held out of the index and the sitemap, then re-enters automatically on the
     next render once real content lands. Data-driven, so no manual toggle to remember to flip."""
     return bool([c for c in load_legislation() if isinstance(c, dict) and c.get("bill_id") is not None]
                 or [c for c in load_regulations() if isinstance(c, dict) and c.get("document_number")]
-                or [c for c in load_courtrules() if isinstance(c, dict) and c.get("id")])
+                or [c for c in load_courtrules() if isinstance(c, dict) and c.get("id")]
+                or [c for c in load_ethics() if isinstance(c, dict) and c.get("id")])
 
 
 def render_legislation_page():
-    """Render the three sections of the /legislation page (statutes + federal regulations + court
-    rules) and the two feeds, then stamp the page once (tokens + footer year + identity hooks).
+    """Render the four sections of the /legislation page (statutes + federal regulations + court
+    rules + Formal Advisory Opinions) and the two feeds, then stamp the page once (tokens + footer year + identity hooks).
     Deterministic; the CI idempotency gate covers legislation.html, legislation.xml, regulations.xml."""
     render_legislation()
     render_regulations()
     render_courtrules()
+    render_ethics()
     if os.path.exists(LEG_HTML_PATH):
         # Hold an all-empty page out of the search index (noindex, follow: links still flow), so the
         # stub does not get indexed as thin content. Self-heals: the meta clears when the first card
