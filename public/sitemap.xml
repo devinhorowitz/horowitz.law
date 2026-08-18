@@ -39,7 +39,7 @@
   </url>
   <url>
     <loc>https://horowitz.law/digests</loc>
-    <lastmod>2026-08-14</lastmod>
+    <lastmod>2026-08-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.4</priority>
   </url>
@@ -76,6 +76,12 @@
     <priority>0.3</priority>
   </url>
   <url>
+    <loc>https://horowitz.law/o/10948454</loc>
+    <lastmod>2026-08-18</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://horowitz.law/o/10947292</loc>
     <lastmod>2026-08-13</lastmod>
     <changefreq>yearly</changefreq>
@@ -96,6 +102,12 @@
   <url>
     <loc>https://horowitz.law/o/10942104</loc>
     <lastmod>2026-08-07</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://horowitz.law/o/10942060</loc>
+    <lastmod>2026-08-18</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>

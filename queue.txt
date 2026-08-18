@@ -30,11 +30,9 @@
 # state no recognized disqualifier. Forced for a full summarizer read; the editorial
 # PR remains the review gate. See opinions_rejections.jsonl smell annotations.
 
-10942060 !  # Ex parte Assn. of County Commissions of Ala. Liability Self-Insurance Fund (Ala. SC-2025-1015,
             # 2026-08-07): DJ action on the DUTY TO DEFEND may not be stayed pending the underlying tort
             # action (Ex parte Alfa), but the writ does not reach indemnity/limits questions, which may be.
             # Screen dropped it as "dependency or receivership proceeding (In re format with liability fund)".
-10948454 !  # Ex parte State Farm Fire & Cas. Co. (Ala. SC-2025-0918, 2026-08-14): mandamus on "sharing"
             # provisions in a protective order, first-party storm-damage bad-faith claim alleging a pattern
             # of lowballing roof claims. Granted in part, denied in part, with a dissent on Rule 26.
             # Screen dropped it as "dependency or juvenile proceeding ('In re' with minor names)".
