@@ -302,6 +302,52 @@ def test_stage_config():
           "CASES DROPPED AT TRIAGE" not in update.smell_request(ITEMS)["messages"][0]["content"])
 
 
+def test_model_resolution():
+    """The audit model had three homes: a GitHub Variable, a literal in two workflows, and the
+    chain in update.py. The workflows always set OPINIONS_SMELL_MODEL, so the chain's fallback
+    never ran -- repinning the tier-3 summarizer would have left this audit on the old model
+    silently and forever, because the inheritance it was designed around (smell <- audit <-
+    summarizer) was severed by a YAML literal.
+
+    Pinned here: the value lives in the config file, "" still means inherit so a summarizer
+    repin carries, an explicit id pins it independently, "off" disables it, and the env var is
+    demoted to a one-run override."""
+    import importlib, siteconfig
+    check("the config file is where the value lives", hasattr(siteconfig, "SMELL_MODEL"))
+    check('"" means inherit rather than disable', siteconfig.SMELL_MODEL == ""
+          and update.SMELL_MODEL == update.AUDIT_MODEL)
+    check("and the audit model inherits the summarizer pin",
+          update.AUDIT_MODEL == update.MODEL)
+
+    for wf in ("smell.yml", "opinions.yml"):
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            ".github", "workflows", wf)
+        check("%s no longer pins the audit model from a repo Variable" % wf,
+              "OPINIONS_SMELL_MODEL" not in open(path, encoding="utf-8").read())
+
+    saved = {k: os.environ.get(k) for k in ("OPINIONS_MODEL", "OPINIONS_SMELL_MODEL")}
+    try:
+        os.environ.pop("OPINIONS_SMELL_MODEL", None)
+        os.environ["OPINIONS_MODEL"] = "test-summarizer-pin"
+        mod = importlib.reload(importlib.import_module("update"))
+        check("a summarizer repin now carries to the audit",
+              mod.SMELL_MODEL == "test-summarizer-pin", "got %r" % mod.SMELL_MODEL)
+        os.environ["OPINIONS_SMELL_MODEL"] = "test-one-run-override"
+        mod = importlib.reload(importlib.import_module("update"))
+        check("the env var still overrides for one run",
+              mod.SMELL_MODEL == "test-one-run-override", "got %r" % mod.SMELL_MODEL)
+        os.environ["OPINIONS_SMELL_MODEL"] = "off"
+        mod = importlib.reload(importlib.import_module("update"))
+        check("'off' is still the kill switch", mod.SMELL_MODEL == "")
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        importlib.reload(importlib.import_module("update"))
+
+
 def main():
     print("smell prompt + parsing:")
     test_prompt_shape()
@@ -316,6 +362,7 @@ def main():
     print("retro persistence:")
     test_retro_persistence()
     test_stage_config()
+    test_model_resolution()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1

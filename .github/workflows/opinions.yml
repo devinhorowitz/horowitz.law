@@ -118,7 +118,6 @@ jobs:
           # Tier-2.5 drop-reason audit: the smell model reads each triage drop's stated REASON
           # (no opinion text) and escalates keep-shaped drops to the summarizer in the same run.
           # Set the repo Variable to 'off' to disable the pass.
-          OPINIONS_SMELL_MODEL: ${{ vars.OPINIONS_SMELL_MODEL || 'claude-opus-5' }}
           # Batch wait budgets. The defaults in update.py total 90 minutes of in-job sleeping
           # (1500 triage + 900 smell + 1500 summarize + 1500 guard), and sleeping is exactly
           # the exposure that gets a run reclaimed: seven reclamations since 2026-07-17, all

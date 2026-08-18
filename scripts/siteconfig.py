@@ -173,6 +173,15 @@ MAINT_REVIEW = False
 # watching, not on symmetry. Override for one run with SMELL_STAGES=triage,screen,pretriage.
 SMELL_STAGES = ["triage", "screen"]
 
+# Which model audits those drop reasons. "" means INHERIT: update.py resolves the smell model from
+# the treatment-audit model, which in turn inherits the tier-3 summarizer pin, so repinning the
+# summarizer once carries the whole chain. That inheritance was severed in practice -- two
+# workflows set OPINIONS_SMELL_MODEL to a hardcoded 'claude-opus-5', which always won over the
+# fallback, so a repin of the summarizer would have left the audit on the old model silently and
+# forever. Set a model id here to pin the audit independently of the summarizer, or "off" to
+# disable the drop-reason audit entirely. OPINIONS_SMELL_MODEL remains a one-run override.
+SMELL_MODEL = ""
+
 # ---- Top-level page registry --------------------------------------------
 # The site's top-level pages, as (path, label, changefreq, priority, lastmod).
 # render.py drives both the /404 "ls /" listing and the sitemap's static URLs

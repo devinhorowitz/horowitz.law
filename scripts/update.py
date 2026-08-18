@@ -195,8 +195,12 @@ TRIAGE_BATCH_SEC = int(os.environ.get("OPINIONS_TRIAGE_BATCH_SEC", "1500"))  # w
 # second opinion the queue's "!" force flag buys, automated. Fail-open at every step: a smell
 # failure, a deferred batch, or the escalation cap leaves each drop exactly as triage decided it,
 # so the pass can only ADD recall, never lose a card.
-SMELL_MODEL = os.environ.get("OPINIONS_SMELL_MODEL", AUDIT_MODEL)
-if SMELL_MODEL.strip().lower() in ("", "off", "none", "0"):   # 'off' via the repo Variable is the kill switch
+# Resolution order: the env var (a one-run override) -> siteconfig.SMELL_MODEL -> AUDIT_MODEL,
+# which itself inherits the summarizer pin. Empty at every level means "inherit", so the
+# chain holds and a summarizer repin carries. "off" anywhere in the chain is the kill switch.
+_SMELL_ENV = os.environ.get("OPINIONS_SMELL_MODEL")
+SMELL_MODEL = _SMELL_ENV if _SMELL_ENV is not None else (siteconfig.SMELL_MODEL or AUDIT_MODEL)
+if SMELL_MODEL.strip().lower() in ("", "off", "none", "0"):   # the kill switch, wherever it is set
     SMELL_MODEL = ""
 SMELL_BATCH = os.environ.get("OPINIONS_SMELL_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
 SMELL_BATCH_SEC = int(os.environ.get("OPINIONS_SMELL_BATCH_SEC", "900"))  # wait budget for the (single-request) smell batch, between triage and summarize
@@ -1208,7 +1212,7 @@ def anthropic_json(body, label="call"):
                 raise ConfigError(last)
             if e.code == 404 or ("model" in lo and any(s in lo for s in ("not found", "not_found", "does not exist", "deprecated", "retired"))):
                 print("  ! Anthropic MODEL problem (HTTP %s) for %r. It may be retired or misspelled; update the model id "
-                      "(repo Variable OPINIONS_SCREEN_MODEL / OPINIONS_PRETRIAGE_MODEL / OPINIONS_TRIAGE_MODEL / OPINIONS_MODEL / OPINIONS_AUDIT_MODEL)." % (e.code, model))
+                      "(the pins in scripts/update.py; OPINIONS_SCREEN_MODEL / OPINIONS_PRETRIAGE_MODEL / OPINIONS_TRIAGE_MODEL / OPINIONS_MODEL / OPINIONS_AUDIT_MODEL override one run)." % (e.code, model))
                 raise ConfigError(last)
             if e.code == 400 and any(s in lo for s in ("credit", "billing", "balance")):
                 print("  ! Anthropic CREDIT/billing problem (HTTP 400): %s. Check the account balance and limits." % (detail[:200].strip() or "see body"))
