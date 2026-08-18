@@ -1709,15 +1709,20 @@
     10952026,
     10952027,
     10952028,
-    10952029
+    10952029,
+    10952032,
+    10952049,
+    10952066,
+    10952067,
+    10952068,
+    10952069,
+    10952070,
+    10952071,
+    10952072,
+    10952073,
+    10952074,
+    10952075
   ],
-  "updated": "2026-08-17T20:51:50Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-smell": {
-      "id": "msgbatch_01WFTQqVnQYSiYwdgPsENhVx",
-      "at": 1786999814.9126303,
-      "n": 1
-    }
-  }
+  "updated": "2026-08-18T01:53:44Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
