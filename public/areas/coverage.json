@@ -1,7 +1,7 @@
 {
   "area": "coverage",
   "label": "coverage",
-  "count": 25,
+  "count": 26,
   "opinions": [
     {
       "cluster_id": 10948474,
@@ -73,6 +73,24 @@
       "why": "The decision construes an umbrella policy exhaustion clause tied to \"policy limits\" as requiring full consumption of the underlying limits rather than any settlement of the underlying claim, and illustrates when a federal court sitting in diversity will decline to follow a state intermediate appellate decision on insurance interpretation.",
       "dockets": [
         "24-10600"
+      ]
+    },
+    {
+      "cluster_id": 10942060,
+      "name": "Ex parte Association of County Commissions of Alabama Liability Self-Insurance Fund, Inc.",
+      "court": "Supreme Court of Alabama",
+      "date": "2026-08-07",
+      "disposition": "petition granted; writ issued",
+      "areas": [
+        "coverage",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10942060/in-re-association-of-county-commissions-of-alabama-liability/",
+      "synopsis": "A self-insurance fund that was defending a county commission under a reservation of rights in a tort action brought by county workers filed a declaratory-judgment action seeking rulings that it owed no duty to defend and that certain coverage limits applied. The trial court stayed the entire declaratory-judgment action pending resolution of the underlying tort action. The supreme court held that the stay exceeded the trial court's discretion insofar as it prevented adjudication of the insurer's present duty to defend, because that question turns on the nature and character of the claims pleaded against the insured under the policy language and is a different issue from the insured's liability in the tort action. The court issued the writ directing the trial court to vacate the stay and proceed on the duty-to-defend question, while expressing no opinion on how that question should be resolved or on the applicability of any exclusion.",
+      "why": "It confirms that a pending underlying tort action does not justify staying a declaratory-judgment action seeking a determination of an insurer's present duty to defend, and restates the framework under which that duty is measured by the allegations against the insured and by evidence developed between insurer and insured.",
+      "dockets": [
+        "SC-2025-1015"
       ]
     },
     {
