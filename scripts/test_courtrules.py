@@ -229,6 +229,36 @@ def main():
             today=__import__("datetime").date(2026, 8, 16))
     check("a relabelled, already-seen rule cards nothing", cards == [], "got %d card(s)" % len(cards))
 
+    # ---- impact must come from the page ------------------------------------------------------
+    # 29 of 31 published cards carried an "impact" the source page does not support: the page is a
+    # docket of rule numbers and dates, and the model was reasoning from what it knows the rule
+    # covers. "Self-authentication procedures, often used for electronic records, may change and
+    # alter trial exhibit preparation" is an inference about FRE 902, not a statement the page made
+    # about the amendment -- a fabricated consequence attached to a real citation, on a site lawyers
+    # read. The same shape as the O.C.G.A. insertion the review lane caught in a case card.
+    print("\nimpact is grounded, not inferred:")
+    check("the extractor is told impact usually comes back empty",
+          "IMPACT MUST COME FROM THE PAGE" in C.EXTRACT_SYSTEM)
+    check("and is told not to reason from what the rule covers",
+          "Do NOT reason from what you know the rule covers" in C.EXTRACT_SYSTEM)
+    check("with the actual failure named, so the instruction is not abstract",
+          "902" in C.EXTRACT_SYSTEM and "fabricated consequence" in C.EXTRACT_SYSTEM)
+    check("and it still says a docket-only listing is WORTH reporting",
+          "still worth reporting" in C.EXTRACT_SYSTEM)
+    check("an empty impact survives build_card",
+          C.build_card({"rule_set": "FRE", "rule": "Rule 902", "summary": "s", "impact": "",
+                        "status": "pending", "effective_date": "2028-12-01"}, "u",
+                       today=__import__("datetime").date(2026, 8, 18))["impact"] == "")
+
+    # The published set must stay clean: no card may carry an impact the page cannot support.
+    import json as _json
+    import os as _os
+    cards = _json.load(open(_os.path.join(_os.path.dirname(_os.path.dirname(
+        _os.path.abspath(__file__))), "courtrules.json"), encoding="utf-8"))
+    withimpact = [c for c in cards if (c.get("impact") or "").strip()]
+    check("no published court-rule card carries an inferred impact", not withimpact,
+          "%d do: %s" % (len(withimpact), [c.get("rule") for c in withimpact][:3]))
+
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
