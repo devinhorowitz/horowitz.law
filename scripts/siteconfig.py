@@ -159,6 +159,20 @@ RESEND_AREA_TOPICS = {}
 # choice someone makes deliberately. Override for one run with OPINIONS_MAINT_REVIEW=on.
 MAINT_REVIEW = False
 
+# Which rejection-log stages the weekly retro drop-reason audit (scripts/smell_check.py) reads.
+# It audited "triage" only, on the stated premise that "screen/pretriage reasons are category
+# labels, already drop-shaped" -- safe by construction. They are not. The screen sees a caption
+# and an opening excerpt, and on 2026-08-16 an audit of the log found 12 adversarial
+# "In re: A v. B" captions discarded on the prefix alone, two of them Supreme Court of Alabama
+# insurance decisions (SC-2025-0918, State Farm protective-order sharing; SC-2025-1015, a
+# self-insurance fund's duty to defend). Screen is the blindest gate and was the only unwatched
+# one: of 1,502 logged drops, the 1,163 screen drops had never had a reason checked.
+#
+# "pretriage" is deliberately NOT here yet. Its 214 drops are also unaudited, but it reads the
+# full opinion, so its reasons are not caption guesses; add it when there is evidence it needs
+# watching, not on symmetry. Override for one run with SMELL_STAGES=triage,screen,pretriage.
+SMELL_STAGES = ["triage", "screen"]
+
 # ---- Top-level page registry --------------------------------------------
 # The site's top-level pages, as (path, label, changefreq, priority, lastmod).
 # render.py drives both the /404 "ls /" listing and the sitemap's static URLs

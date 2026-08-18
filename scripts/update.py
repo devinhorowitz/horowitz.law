@@ -1355,7 +1355,9 @@ SMELL_SYSTEM = (
     "clarifies an in-scope point while stating no disqualifier); is a bare topic label with no "
     "disqualifier; rests on a ground the standard does not recognize (for example that the "
     "decision is unpublished, or that it comes from Florida or Alabama -- supplementary states "
-    "are kept on the same terms as Georgia); or contradicts itself. Verdict 'ok' when it states "
+    "are kept on the same terms as Georgia); contradicts itself; or is contradicted by the case "
+    "NAME you are shown -- a reason of juvenile, dependency or probate for a case captioned against a named insurer, company or government body is a guess from the caption, not a "
+    "disqualifier, and the 'In re' and 'Ex parte' prefixes carry no subject at all. Verdict 'ok' when it states "
     "a disqualifier the standard recognizes, however tersely: out-of-scope subject matter, an "
     "in-scope topic mentioned only in passing, a routine fact-bound application of a settled "
     "rule, a procedural disposition that announces no rule, and the like. A 'suspect' verdict "
@@ -1377,7 +1379,7 @@ def smell_request(items):
                 it.get("name") or "(unnamed)", (it.get("reason") or "").strip() or "(none given)")
              for i, it in enumerate(items)]
     return {"model": SMELL_MODEL, "max_tokens": SMELL_TOKENS, "system": SMELL_SYSTEM,
-            "messages": [{"role": "user", "content": "CASES DROPPED AT TRIAGE:\n" + "\n".join(lines)}]}
+            "messages": [{"role": "user", "content": "CASES DROPPED BY THE JUNIOR REVIEWER:\n" + "\n".join(lines)}]}
 
 
 SMELL_CHUNK = 40   # reasons per request; keeps each verdict list well inside the 2000-token budget

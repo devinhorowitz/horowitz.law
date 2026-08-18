@@ -28,8 +28,12 @@ to the next weekly run. Records whose in-run escalation was deferred (smell_outc
 Env:
   ANTHROPIC_API_KEY        required
   OPINIONS_SMELL_MODEL     the audit model (update.py default: OPINIONS_AUDIT_MODEL -> Opus)
-  SMELL_STAGES             comma list of stages to audit (default "triage"; screen/pretriage
-                           reasons are category labels, already drop-shaped)
+  SMELL_STAGES             comma list of stages to audit; OVERRIDE only -- the value lives in
+                           siteconfig.SMELL_STAGES. It read "triage" alone on the premise that
+                           screen/pretriage reasons are category labels and so safe by
+                           construction. False for screen: it judges a caption and an opening
+                           excerpt, and 12 "In re: A v. B" captions were dropped on the prefix
+                           alone, two of them Alabama Supreme Court insurance decisions.
   SMELL_ALL=1              re-audit records that already carry a smell verdict
   SMELL_LIMIT              most-recent records to consider per run (default 500)
   SMELL_BUDGET_SEC         soft wall clock for one run (default 1200, under the 30-min watchdog)
@@ -45,8 +49,11 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import update     # noqa: E402  (sys.path shim must run first)
 import safeio     # noqa: E402
+import siteconfig # noqa: E402
 
-STAGES  = [s.strip() for s in os.environ.get("SMELL_STAGES", "triage").split(",") if s.strip()]
+_STAGES_ENV = os.environ.get("SMELL_STAGES", "")
+STAGES  = ([s.strip() for s in _STAGES_ENV.split(",") if s.strip()]
+           or list(siteconfig.SMELL_STAGES))   # config file is the source of truth; env overrides for one run
 ALL     = os.environ.get("SMELL_ALL", "") in ("1", "true", "True", "yes")
 LIMIT   = int(os.environ.get("SMELL_LIMIT", "500"))
 DRY_RUN = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
