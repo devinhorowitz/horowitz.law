@@ -42,6 +42,7 @@ jobs:
       # Supply-chain hardening (block mode). Egress this job needs:
       #   api.legiscan.com          the enacted-bill data (getSessionList / getMasterList / getBill).
       #   www.federalregister.gov   the FMCSA rulemaking data (documents.json; keyless).
+      #   www.gabar.org            the State Bar's Formal Advisory Opinion pages.
       #   api.anthropic.com         the relevance screen and the card writer.
       #   pypi.org / files.pythonhosted.org  the requirements install.
       #   github.com / api.github.com  checkout + PR push, the PR-open and failure-alert gh steps.
@@ -54,6 +55,7 @@ jobs:
             api.legiscan.com:443
             www.federalregister.gov:443
             www.uscourts.gov:443
+            www.gabar.org:443
             api.anthropic.com:443
             pypi.org:443
             files.pythonhosted.org:443
@@ -88,6 +90,8 @@ jobs:
           LEGISLATION_DEBUG: ${{ vars.LEGISLATION_DEBUG }}
           REGULATION_DEBUG: ${{ vars.REGULATION_DEBUG }}
           COURTRULES_DEBUG: ${{ vars.COURTRULES_DEBUG }}
+          ETHICS_DEBUG: ${{ vars.ETHICS_DEBUG }}
+          ETHICS_URLS: ${{ vars.ETHICS_URLS }}
         run: |
           set -o pipefail
           if [ "${{ inputs.dry_run }}" = "true" ]; then
@@ -97,6 +101,8 @@ jobs:
             python scripts/regulations.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
             echo "== court rules ==" | tee -a "$RUNNER_TEMP/run.log"
             python scripts/courtrules.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+            echo "== ethics opinions ==" | tee -a "$RUNNER_TEMP/run.log"
+            python scripts/ethics.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
             echo "changed=0" >> "$GITHUB_OUTPUT"
           else
             echo "== statutes ==" | tee    "$RUNNER_TEMP/run.log"
@@ -105,11 +111,15 @@ jobs:
             python scripts/regulations.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
             echo "== court rules ==" | tee -a "$RUNNER_TEMP/run.log"
             python scripts/courtrules.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+            echo "== ethics opinions ==" | tee -a "$RUNNER_TEMP/run.log"
+            python scripts/ethics.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
             leg=$(grep -oE 'LEGISLATION_CONTENT_CHANGED=[01]' "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
             reg=$(grep -oE 'REGULATION_CONTENT_CHANGED=[01]'  "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
             crc=$(grep -oE 'COURTRULES_CONTENT_CHANGED=[01]'  "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
+            eth=$(grep -oE 'ETHICS_CONTENT_CHANGED=[01]'      "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
             changed=0
-            { [ "${leg:-0}" = "1" ] || [ "${reg:-0}" = "1" ] || [ "${crc:-0}" = "1" ]; } && changed=1
+            { [ "${leg:-0}" = "1" ] || [ "${reg:-0}" = "1" ] || [ "${crc:-0}" = "1" ] \
+              || [ "${eth:-0}" = "1" ]; } && changed=1
             echo "changed=${changed}" >> "$GITHUB_OUTPUT"
             # One combined review-PR body from whichever watches produced cards.
             # `if`, not `[ -f ] && { }`. A for loop's exit status is its last iteration's,
@@ -122,7 +132,7 @@ jobs:
             # An `if` whose condition is false returns 0, so a missing body is now what it
             # always was in intent: nothing to append.
             : > scripts/pr_body_legreg.md
-            for b in pr_body_legislation pr_body_regulations pr_body_courtrules; do
+            for b in pr_body_legislation pr_body_regulations pr_body_courtrules pr_body_ethics; do
               if [ -f "scripts/$b.md" ]; then
                 cat "scripts/$b.md" >> scripts/pr_body_legreg.md
                 echo >> scripts/pr_body_legreg.md
@@ -142,7 +152,7 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           branch: bot/legislation-review
-          title: 'Georgia Legislative & Regulatory Watch: new law for review'
+          title: 'Georgia Legislative & Regulatory Watch: new law, rules and opinions for review'
           commit-message: 'legislation/regulation: new law and rules for review'
           body-path: scripts/pr_body_legreg.md
           labels: legislation, automated, review
@@ -157,6 +167,9 @@ jobs:
             courtrules.json
             courtrules_state.json
             courtrules_log.jsonl
+            ethics.json
+            ethics_state.json
+            ethics_log.jsonl
             public/.well-known/security.txt
             public/404.html
             public/archive.html
