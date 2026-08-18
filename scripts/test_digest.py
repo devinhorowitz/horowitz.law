@@ -217,6 +217,49 @@ def test_every_email_setting_has_a_home_in_the_repo():
     print("  ok  every fallback name exists in siteconfig")
 
 
+def test_the_email_carries_every_watch_section():
+    """The /legislation page has four sections; this email had two. Court rules had been rendering
+    publicly since 2026-07 and Formal Advisory Opinions since 2026-08, and a subscriber to the
+    "Legislative & Regulatory Watch" was told about neither -- 31 court-rule cards published in
+    silence. Nothing failed, which is why it went unnoticed for weeks.
+
+    Pinned in both bodies, because HTML and plain text are built separately and a section added to
+    one and forgotten in the other is the same silence in half the clients."""
+    print("every watch section reaches the inbox")
+    leg = [law_card("HB 1", "enacted", days_ago(1))]
+    reg = [{"agency": "FMCSA", "title": "A rule", "type": "Final rule", "synopsis": "Body.",
+            "first_seen": days_ago(1), "url": "https://reg.example"}]
+    crs = [{"rule_set": "FRCP", "rule": "Rule 26", "status": "pending",
+            "effective_date": "2027-12-01", "summary": "Discovery changes.",
+            "impact": "Affects scheduling.", "first_seen": days_ago(1), "url": "https://cr.example"}]
+    eth = [{"number": "24-1", "status": "approved", "subject": "records vendors", "rules": ["5.3"],
+            "summary": "Rule 5.3 governs a records vendor.", "impact": "Supervise it.",
+            "first_seen": days_ago(1), "url": "https://eth.example"}]
+    html_body = digest.build_leg_html(leg, reg, crs, eth)
+    text_body = digest.build_leg_text(leg, reg, crs, eth)
+    for label in ("Georgia legislation", "Federal regulations", "Court rules", "Ethics opinions"):
+        check("html has the %s section" % label, label in html_body)
+        check("text has the %s section" % label, (label + ":") in text_body)
+    check("the court rule is named in both", "Rule 26" in html_body and "Rule 26" in text_body)
+    check("the opinion is named in both",
+          "Formal Advisory Opinion 24-1" in html_body and "Formal Advisory Opinion 24-1" in text_body)
+    check("the source links survive",
+          "cr.example" in html_body and "eth.example" in html_body
+          and "cr.example" in text_body and "eth.example" in text_body)
+    # An approved FAO binds; the email must not present it as merely proposed.
+    check("an approved opinion is labelled as binding", "Approved — binding" in html_body)
+    # Empty buckets must not print as "0 ...", and the four surfaces must agree on the phrasing.
+    check("counts omit empty buckets", digest._leg_counts(leg, [], [], []) == "1 new law",
+          digest._leg_counts(leg, [], [], []))
+    check("counts join the rest", digest._leg_counts(leg, reg, crs, eth)
+          == "1 new law, 1 new rule, 1 court-rule amendment and 1 ethics opinion",
+          digest._leg_counts(leg, reg, crs, eth))
+    check("nothing new says so", digest._leg_counts([], [], [], []) == "nothing new")
+    check("the subject line counts all four", "4 updates" in digest.leg_subject_line(leg, reg, crs, eth))
+    # Backward compatible: the two-argument form still builds, so no caller breaks silently.
+    check("the two-argument form still works", "Georgia legislation" in digest.build_leg_html(leg, reg))
+
+
 def test_an_unset_audience_is_loud_when_the_email_is_meant_to_send():
     """Dormant-but-expected must never look like a clean run again.
 
@@ -231,7 +274,17 @@ def test_an_unset_audience_is_loud_when_the_email_is_meant_to_send():
              siteconfig.LEGISLATION_DIGEST, digest._load_leg_cards)
     try:
         # Cards in the window, a key present, not a dry run: everything ready except the audience.
-        digest._load_leg_cards = lambda path: [law_card("HB 1", "enacted", days_ago(1))]
+        # Path-aware, so this also proves all FOUR watch files are read. They were not: court rules
+        # and ethics opinions rendered on the page and reached no inbox until 2026-08-18.
+        def _by_path(path):
+            if path.endswith("courtrules.json"):
+                return [{"rule_set": "FRCP", "rule": "Rule 26", "status": "pending",
+                         "summary": "s", "first_seen": days_ago(1)}]
+            if path.endswith("ethics.json"):
+                return [{"number": "24-1", "status": "approved", "subject": "vendors",
+                         "summary": "s", "first_seen": days_ago(1)}]
+            return [law_card("HB 1", "enacted", days_ago(1))]
+        digest._load_leg_cards = _by_path
         digest.API_KEY, digest.DRY_RUN, digest.LEG_SEGMENT_ID = "k", False, ""
 
         siteconfig.LEGISLATION_DIGEST = True
@@ -242,7 +295,11 @@ def test_an_unset_audience_is_loud_when_the_email_is_meant_to_send():
         check("an expected-but-unconfigured send warns", "::warning::" in out, out[:160])
         check("and says it did not send", "NOT SENT" in out, out[:160])
         check("and says where to fix it", "siteconfig.py" in out, out[:160])
-        check("and says how much went unsent", "law(s)" in out, out[:160])
+        # Assert the COUNT, not the old wording: the phrase is built by digest._leg_counts, which
+        # every surface shares so a fifth section cannot be added to one and missed in another.
+        check("and says how much went unsent", "went unsent" in out, out[:200])
+        for stream in ("new law", "court-rule amendment", "ethics opinion"):
+            check("and counts %ss among them" % stream, stream in out, out[:200])
 
         siteconfig.LEGISLATION_DIGEST = False
         buf = io.StringIO()
@@ -266,6 +323,7 @@ def main():
     test_build_smoke()
     test_legislation_digest()
     test_every_email_setting_has_a_home_in_the_repo()
+    test_the_email_carries_every_watch_section()
     test_an_unset_audience_is_loud_when_the_email_is_meant_to_send()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
