@@ -1724,8 +1724,45 @@
     10952075,
     10952610,
     10952611,
-    10952645
+    10952645,
+    10952851,
+    10952852,
+    10952872,
+    10952873,
+    10952875,
+    10953045,
+    10953049,
+    10953050,
+    10953051,
+    10953052,
+    10953053,
+    10953054,
+    10953055,
+    10953093,
+    10953094,
+    10953164,
+    10953165,
+    10953166,
+    10953167,
+    10953168,
+    10953169,
+    10953170,
+    10953171,
+    10953172,
+    10953173
   ],
-  "updated": "2026-08-18T13:12:39Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-08-18T16:59:14Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-triage": {
+      "id": "msgbatch_01Fu7uqVofURAnCAbDfwZ1LB",
+      "at": 1787071984.1385548,
+      "n": 1
+    },
+    "funnel-summarize": {
+      "id": "msgbatch_01HTgTcRNKw5MoKRGBnveky5",
+      "at": 1787072144.233161,
+      "n": 1
+    }
+  }
 }
