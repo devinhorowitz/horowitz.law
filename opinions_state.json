@@ -1767,6 +1767,7 @@
     10953288,
     10953290,
     10953292,
+    10953294,
     10953430,
     10953432,
     10953433,
@@ -1803,7 +1804,7 @@
     10953594,
     10953595
   ],
-  "updated": "2026-08-19T16:57:21Z",
+  "updated": "2026-08-19T18:29:46Z",
   "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
   "pending_batches": {
     "funnel-triage": {

@@ -1,8 +1,26 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 70,
+  "count": 71,
   "opinions": [
+    {
+      "cluster_id": 10953294,
+      "name": "Clark v. Northeast Georgia Medical Center, Inc.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-08-18",
+      "disposition": "reversed",
+      "areas": [
+        "expert",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10953294/brenda-clark-v-northeast-georgia-medical-center-inc/",
+      "synopsis": "Plaintiff alleged that an unidentified hospital employee dropped her husband while transferring him from one bed to another, causing injuries that led to his death, and pleaded ordinary negligence without the expert affidavit required by OCGA 9-11-9.1. The trial court dismissed, finding that transferring a patient is an exercise of expert medical judgment. The Court of Appeals reversed, holding that, construing the complaint favorably to plaintiff, the alleged drop does not necessarily implicate a medical question and may instead be a physical act of strength and dexterity, and noting that the record did not establish that the unidentified employee was among the professionals covered by OCGA 9-11-9.1 (g).",
+      "why": "It clarifies that a patient fall during a physical transfer is not automatically a professional negligence claim requiring an expert affidavit, and that a defendant's status as a covered professional matters at the pleading stage.",
+      "dockets": [
+        "A26A1000"
+      ]
+    },
     {
       "cluster_id": 10953092,
       "name": "Travelers Property Casualty Insurance Company v. Kamesha Davis",
