@@ -1,8 +1,28 @@
 {
   "area": "damages",
   "label": "damages",
-  "count": 37,
+  "count": 38,
   "opinions": [
+    {
+      "cluster_id": 10953750,
+      "name": "Jackson v. Cantrell",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-08-19",
+      "disposition": "reversed",
+      "areas": [
+        "coverage",
+        "procedure",
+        "auto",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10953750/bryson-jackson-v-parker-cantrell/",
+      "synopsis": "Plaintiff was shot accidentally by a 15-year-old passenger inside a truck owned by the teen's father, and after suit he signed a limited release under OCGA 33-24-41.1 that released the settling insurer and the individual defendants except to the extent other insurance coverage is available covering his claims. Applying Harvey v. Hall, the court held that a defendant moving for summary judgment on the release as an affirmative defense bears the initial burden of establishing the prima facie defense, including that no other coverage applies, before the burden shifts to the plaintiff. The court noted that affirmative evidence of coverage denial is unnecessary for a policy plainly inapplicable on its face, but here the movants did not address the commercial auto policy's non-owned auto provision covering vehicles owned by LLC members used in the business or personal affairs, or its permissive-user definition of insured, so they failed to carry that initial burden. The court expressly did not decide whether coverage actually exists, and reversed the grant of summary judgment.",
+      "why": "It clarifies how the burden-shifting framework for a limited-release affirmative defense operates when other policies exist, requiring the movant to account for the policy's own coverage-granting provisions rather than relying on scheduled vehicles and drivers alone.",
+      "dockets": [
+        "A26A1027"
+      ]
+    },
     {
       "cluster_id": 10948520,
       "name": "Estancia US Limited Partnership v. Aji-Dawkins",
