@@ -1,8 +1,27 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 69,
+  "count": 70,
   "opinions": [
+    {
+      "cluster_id": 10953092,
+      "name": "Travelers Property Casualty Insurance Company v. Kamesha Davis",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2026-08-18",
+      "disposition": "affirmed in part, reversed in part, and remanded",
+      "areas": [
+        "coverage",
+        "auto",
+        "procedure"
+      ],
+      "precedential": "unpublished",
+      "url": "https://www.courtlistener.com/opinion/10953092/travelers-property-casualty-insurance-company-v-kamesha-davis/",
+      "synopsis": "An insurer sought a declaration that the policyholder's adult daughter, injured in a collision while staying at one of the policyholder's houses, was not a \"resident relative\" entitled to uninsured motorist coverage. Applying Georgia law, the Eleventh Circuit affirmed the conclusion that the daughter was a resident of that house rather than a transient visitor, because she was living there exclusively at the relevant time and Georgia law requires only an intent to live in a place \"for the time being,\" not permanently; her earlier plans to relocate to another state did not defeat residency. The court treated residence and household membership as separate requirements under the policy definition.",
+      "why": "The decision separates the residency inquiry from the household inquiry in Georgia \"resident relative\" UM disputes and confirms that unrealized plans to move elsewhere do not by themselves negate residence at the place where a claimant is actually living.",
+      "dockets": [
+        "24-13310"
+      ]
+    },
     {
       "cluster_id": 10948520,
       "name": "Estancia US Limited Partnership v. Aji-Dawkins",
