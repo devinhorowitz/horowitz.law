@@ -9,6 +9,12 @@ healthy would silently swallow the one signal we have. This drives every branch 
 status.json/opinions.json files in a temp dir, with a pinned "now", so it needs no clock or disk
 state of its own.
 
+skill_manifest_check() is covered the same way (5 = stale, 0 = fresh/absent/off). Its branches are
+easy to get backwards in the direction that hurts: an ABSENT manifest must read as 0, because a
+deployment that never adopted the skill-authority watch must not get a permanent issue about a file
+it does not want -- while a manifest that is present but UNDATABLE must read as 5, because a
+freshness net that cannot read its own timestamp must never report fresh.
+
 Run directly: `python scripts/test_heartbeat.py`.
 """
 import datetime
@@ -65,6 +71,31 @@ def stamp(days_ago, with_time=True):
     return t.strftime("%Y-%m-%dT%H:%M:%SZ") if with_time else t.strftime("%Y-%m-%d")
 
 
+def run_manifest(manifest, days=90.0, write=True):
+    """Point heartbeat's manifest path at a synthetic file with a pinned clock, restoring after.
+
+    manifest: the object written as skill-authorities.json; pass write=False to omit the file.
+    Returns the exit code from skill_manifest_check()."""
+    saved = (heartbeat.SA_PATH, heartbeat.SA_ALERT_PATH, heartbeat._now, heartbeat.SA_DAYS)
+    with tempfile.TemporaryDirectory() as d:
+        mp = os.path.join(d, "skill-authorities.json")
+        if write:
+            with open(mp, "w") as f:
+                if isinstance(manifest, str):
+                    f.write(manifest)      # deliberately-corrupt payload
+                else:
+                    json.dump(manifest, f)
+        heartbeat.SA_PATH = mp
+        heartbeat.SA_ALERT_PATH = os.path.join(d, "sm.md")
+        heartbeat._now = lambda: NOW
+        heartbeat.SA_DAYS = days
+        try:
+            return heartbeat.skill_manifest_check()
+        finally:
+            (heartbeat.SA_PATH, heartbeat.SA_ALERT_PATH,
+             heartbeat._now, heartbeat.SA_DAYS) = saved
+
+
 def main():
     print("heartbeat exit codes:")
 
@@ -115,10 +146,45 @@ def main():
     code = run({"scanned_at": stamp(0.1)}, [{"first_seen": stamp(2, with_time=False)}], content_days=1.0)
     check("content threshold override tightens to 4", code == 4, "got %r" % code)
 
+    # --- the skill-authority manifest's age (a separate signal, separate exit code) ---
+    def gen(days_ago):
+        return (NOW - datetime.timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    code = run_manifest({"generated_at": gen(10), "skills": [1, 2]})
+    check("manifest generated 10d ago (threshold 90) -> 0", code == 0, "got %r" % code)
+
+    code = run_manifest({"generated_at": gen(120), "skills": [1, 2], "skills_root": "/mnt/skills/user"})
+    check("manifest generated 120d ago (threshold 90) -> 5", code == 5, "got %r" % code)
+
+    # Exactly at the threshold is fresh; one day past it is not. Pins the boundary so a later
+    # rewrite can't quietly flip the comparison and move the alert by a day in either direction.
+    check("manifest exactly at the threshold -> 0", run_manifest({"generated_at": gen(90)}) == 0)
+    check("manifest one day past the threshold -> 5", run_manifest({"generated_at": gen(91)}) == 5)
+
+    # Absent -> 0. update.py treats a missing manifest as "the watch is not in use"; this must
+    # agree, or a deployment that never adopted it gets a permanent issue about a file it does
+    # not want.
+    code = run_manifest(None, write=False)
+    check("manifest absent (watch not in use) -> 0", code == 0, "got %r" % code)
+
+    # Present but undatable -> 5, never a silent 0: same reasoning as the malformed-opinions.json
+    # branch. A net that cannot read its own timestamp must not report fresh.
+    check("manifest present, no generated_at -> 5", run_manifest({"skills": []}) == 5)
+    check("manifest present, unparseable date -> 5", run_manifest({"generated_at": "last June"}) == 5)
+    check("manifest present, corrupt JSON -> 5", run_manifest("{not json") == 5)
+    check("manifest present, JSON but not an object -> 5", run_manifest([1, 2, 3]) == 5)
+
+    # The kill switch is deliberate, and must beat every alerting branch above -- including a
+    # corrupt file -- or "retire this check" would not actually retire it.
+    check("threshold 0 disables the check (stale manifest)",
+          run_manifest({"generated_at": gen(9999)}, days=0.0) == 0)
+    check("threshold 0 disables the check (corrupt manifest)",
+          run_manifest("{not json", days=0.0) == 0)
+
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (11 checks)")
+    print("\nALL TESTS PASSED (22 checks)")
     return 0
 
 

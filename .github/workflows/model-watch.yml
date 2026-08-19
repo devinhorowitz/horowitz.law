@@ -8,13 +8,17 @@ name: Model watch (Claude model pins)
 # against the candidate, and opens a review PR. It proposes; a human merges. A tier above
 # Opus (Fable/Mythos) is reported, never auto-proposed.
 #
-# TOKEN: a bump rewrites the `|| 'id'` fallback in the funnel workflows, and GitHub
-# forbids the default GITHUB_TOKEN from pushing changes to .github/workflows/. So the PR
-# step uses a PAT in the MODEL_WATCH_TOKEN secret: a fine-grained token scoped to this repo
-# with Contents, Pull requests, and Workflows set to write. Without it, detection and the
-# golden-set eval still run and report on the Actions summary, but no PR opens (the run
-# says so). This is the one elevated credential here, and it is the same scope Dependabot
-# needs to bump action versions in workflow files.
+# TOKEN: the PR step uses a PAT in the MODEL_WATCH_TOKEN secret, a fine-grained token
+# scoped to this repo with Contents and Pull requests set to write. Without it, detection
+# and the golden-set eval still run and report on the Actions summary, but no PR opens
+# (the run says so).
+#
+# WORKFLOWS SCOPE IS NO LONGER NEEDED, and should be revoked on the token. It was required
+# because a bump rewrote each funnel workflow's `|| 'id'` model fallback, and GitHub forbids
+# the default GITHUB_TOKEN from pushing to .github/workflows/. Those 25 fallbacks were
+# removed on 2026-08-18 -- the pins live in scripts/update.py and scripts/treatment.py only
+# -- so model_watch.PIN_FILES no longer touches this directory and the elevated scope is
+# standing privilege with nothing behind it.
 
 on:
   schedule:
@@ -110,8 +114,9 @@ jobs:
           fi
           if [ "$rc" -eq 0 ]; then echo "regressed=false" >> "$GITHUB_OUTPUT"; else echo "regressed=true" >> "$GITHUB_OUTPUT"; fi
 
-      # Open (or update) the review PR with the staged bump. Needs the workflow-scope PAT
-      # because the diff touches .github/workflows/*. Skipped cleanly when the PAT is unset.
+      # Open (or update) the review PR with the staged bump. The PAT is still needed to open
+      # the PR; since 2026-08-18 the diff no longer touches .github/workflows/*, so it no
+      # longer needs Workflows scope. Skipped cleanly when the PAT is unset.
       - name: Open the bump PR
         id: pr
         if: steps.watch.outputs.upgrade == 'true' && steps.pat.outputs.has == 'true'
@@ -145,8 +150,8 @@ jobs:
             echo "## Model watch"
             echo ""
             echo "A newer model is available and was validated against the golden set, but"
-            echo "MODEL_WATCH_TOKEN is not set, so no PR was opened. Add a workflow-scope PAT in"
-            echo "that secret to enable the auto-PR, or apply the bump by hand from the run log."
+            echo "MODEL_WATCH_TOKEN is not set, so no PR was opened. Add a PAT with Contents"
+            echo "and Pull requests write in that secret, or apply the bump by hand from the log."
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Fail the run if the golden set regressed on the candidate, so the PR is clearly

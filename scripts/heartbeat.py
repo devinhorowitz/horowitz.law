@@ -24,6 +24,15 @@ opinions.json that can't be read as a list, or has entries but no parseable date
 content-stale (exit 4): the freshness net must not silently pass when the data it reads is malformed.
 
 Prints a one-paragraph diagnosis and writes it to scripts/heartbeat_alert.md for the issue body.
+
+A THIRD signal runs SEPARATELY, under --skill-manifest (exit 5 = stale, 0 = fresh or not in use):
+the age of skill-authorities.json, the join key alert-out reads to decide which adverse treatments
+matter. It is deliberately not folded into check() above. That manifest is generated from a skill
+tree at /mnt/skills/user, which no workflow has, so it cannot regenerate in CI -- it is committed by
+hand and goes stale on its own. Its being stale says nothing about whether the funnel is alive, and
+folding it in would both mislabel the issue ("possible stall") and suppress the healthy-run ping to
+the external monitor, making a rotting manifest look like GitHub's crons had died. Separate signal,
+separate exit code, separate issue.
 """
 import datetime
 import json
@@ -34,8 +43,16 @@ STATUS_PATH = os.path.join(REPO, "public", "status.json")
 JSON_PATH = os.path.join(REPO, "opinions.json")
 ALERT_PATH = os.path.join(REPO, "scripts", "heartbeat_alert.md")
 
+SA_PATH = os.path.join(REPO, "skill-authorities.json")
+SA_ALERT_PATH = os.path.join(REPO, "scripts", "skill_manifest_alert.md")
+
 SCAN_HOURS = float(os.environ.get("HEARTBEAT_SCAN_HOURS", "48"))
 CONTENT_DAYS = float(os.environ.get("HEARTBEAT_CONTENT_DAYS", "30"))
+
+# Config lives in siteconfig, not in a GitHub Variable; the env var is a one-run override.
+import siteconfig   # noqa: E402  (after the constants it feeds, kept beside them on purpose)
+SA_DAYS = float(os.environ.get("HEARTBEAT_SKILL_MANIFEST_DAYS",
+                               siteconfig.SKILL_MANIFEST_MAX_AGE_DAYS))
 
 
 def _now():
@@ -62,9 +79,9 @@ def _parse(ts):
     return None
 
 
-def _write_alert(body):
+def _write_alert(body, path=None):
     try:
-        with open(ALERT_PATH, "w", encoding="utf-8") as f:
+        with open(path or ALERT_PATH, "w", encoding="utf-8") as f:
             f.write(body + "\n")
     except OSError:
         pass
@@ -141,6 +158,61 @@ def check():
     return 0
 
 
+def skill_manifest_check():
+    """Age of skill-authorities.json. 5 = stale (or present but undatable), 0 = fresh, not in use,
+    or the check is switched off.
+
+    Absent is NOT an alert: update.py treats a missing manifest as "the skill-authority watch is
+    not in use," and this must agree with it, or a deployment that never adopted the watch gets a
+    permanent issue about a file it does not want.
+
+    Present but carrying no readable generated_at IS an alert, on the same reasoning as the
+    malformed-opinions.json branch above: a freshness net that cannot read its own timestamp must
+    not report fresh."""
+    if not SA_DAYS:
+        print("Skill manifest: age check disabled (siteconfig.SKILL_MANIFEST_MAX_AGE_DAYS = 0).")
+        return 0
+    if not os.path.exists(SA_PATH):
+        print("Skill manifest: skill-authorities.json is absent; the skill-authority watch is not "
+              "in use. Nothing to check.")
+        return 0
+    try:
+        man = json.load(open(SA_PATH, encoding="utf-8"))
+        gen = _parse(man.get("generated_at")) if isinstance(man, dict) else None
+    except (OSError, ValueError, TypeError):
+        man, gen = None, None
+    if gen is None:
+        body = ("Skill manifest: `skill-authorities.json` is present but has no readable "
+                "`generated_at`, so its age can't be confirmed -- it may be corrupt, truncated, or "
+                "written by an older generator. Regenerate it with `python "
+                "scripts/skill_authorities.py` on a machine with the skill tree mounted, and commit "
+                "the result.")
+        print(body)
+        _write_alert(body, SA_ALERT_PATH)
+        return 5
+    age_d = (_now() - gen).total_seconds() / 86400.0
+    if age_d <= SA_DAYS:
+        print("Skill manifest OK: generated %s (%.0f days ago; threshold %.0fd)."
+              % (gen.date(), age_d, SA_DAYS))
+        return 0
+    root = (man or {}).get("skills_root") or "(unrecorded)"
+    n = len((man or {}).get("skills") or [])
+    body = ("Skill manifest: `skill-authorities.json` was generated **%.0f days ago** (%s; threshold "
+            "%.0fd) from `%s`, covering %d skills. It is the join key alert-out uses to decide which "
+            "adverse treatments matter, and it cannot regenerate in CI -- no workflow has that skill "
+            "tree -- so it only moves when someone regenerates and commits it. Until then every "
+            "authority added to or dropped from a skill since that date is invisible to the watch, "
+            "and nothing errors: `skill_alert.py` fails open, so a stale manifest looks exactly like "
+            "a working one.\n\nRun `python scripts/skill_authorities.py` where the skill tree is "
+            "mounted and commit the result. Curated edits are preserved across regeneration. If the "
+            "skill tree is no longer maintained, set `SKILL_MANIFEST_MAX_AGE_DAYS = 0` in "
+            "`scripts/siteconfig.py` to retire this check deliberately rather than ignoring it."
+            % (age_d, gen.date(), SA_DAYS, root, n))
+    print(body)
+    _write_alert(body, SA_ALERT_PATH)
+    return 5
+
+
 if __name__ == "__main__":
     import sys
-    sys.exit(check())
+    sys.exit(skill_manifest_check() if "--skill-manifest" in sys.argv[1:] else check())

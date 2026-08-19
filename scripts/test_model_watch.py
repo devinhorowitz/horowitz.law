@@ -181,11 +181,84 @@ def test_parse_dt():
     print("  ok  created_at parsing (Z and offset forms, bad input -> None)")
 
 
+def _pin_literals(path, ids):
+    """The ids in `ids` that appear in `path` as a BARE string literal -- the only form a bump
+    has to rewrite. Parsing rather than grepping is what makes the reverse check below usable:
+    prose names a model inside a longer sentence (a docstring line, a `# comment`), and a
+    comment is not in the AST at all while a docstring's value is the whole paragraph, never
+    the bare id. So this sees `os.environ.get("ETHICS_MODEL", "claude-opus-5")` and does not
+    see the sentence explaining what that default is."""
+    import ast as _ast
+    tree = _ast.parse(open(path, encoding="utf-8").read())
+    return {n.value for n in _ast.walk(tree)
+            if isinstance(n, _ast.Constant) and isinstance(n.value, str) and n.value in ids}
+
+
+def test_pin_files_all_actually_hold_a_pin():
+    """PIN_FILES is the list a bump rewrites. Both directions of it can rot, and both have.
+
+    FORWARD -- an entry that no longer contains a model id is a silent no-op: the bump reports
+    success while leaving that file untouched, and the list stops describing where the pins
+    live. It drifted exactly that way. The list carried six workflow files because each
+    restated its tier's pin as `${{ vars.X || 'claude-...' }}`; those 25 restatements were
+    removed on 2026-08-18 and the entries became dead weight -- while the comment above them
+    still explained that a bump edits the workflow fallbacks, and model-watch.yml still asked
+    for a PAT with Workflows scope to do it.
+
+    REVERSE -- a file holding a bare literal of a pinned id but NOT listed gets left on the old
+    id by a bump, which is worse than not bumping: half the repo moves and nothing errors. Four
+    watch scripts were in exactly that state when this test was written (see PIN_FILES).
+
+    The reverse direction checks only the ids TIER_PINS actually manages, and only where they
+    appear as bare literals. A watch pinning some other tier (claude-fable-5) is not a bump
+    target and is not flagged; neither is prose that names an id in a sentence."""
+    import re as _re
+    import glob as _glob
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pin_re = _re.compile(r"claude-(?:opus|sonnet|haiku|fable|mythos)-[0-9a-z-]+")
+
+    for rel in model_watch.PIN_FILES:
+        path = os.path.join(root, rel)
+        assert os.path.exists(path), "PIN_FILES names a file that does not exist: %s" % rel
+        assert pin_re.search(open(path, encoding="utf-8").read()), \
+            "PIN_FILES entry holds no model pin (dead entry): %s" % rel
+
+    managed = set(model_watch.TIER_PINS.values())
+    assert managed, "TIER_PINS resolved empty; the reverse check below would pass vacuously"
+    listed = set(model_watch.PIN_FILES)
+
+    stray = []
+    for path in sorted(_glob.glob(os.path.join(root, "scripts", "*.py"))):
+        rel = os.path.relpath(path, root)
+        base = os.path.basename(rel)
+        if rel in listed or base.startswith(("test_", "stress_")):
+            continue    # fixtures carry ids on purpose and are not rewrite targets
+        found = _pin_literals(path, managed)
+        if found:
+            stray.append("%s %s" % (rel, sorted(found)))
+    assert not stray, ("a currently pinned id is a bare literal outside PIN_FILES, so a bump "
+                       "would rewrite some pins and leave these on the old id: %s" % stray)
+
+    # Workflows must hold NO pin at all. The 25 `|| 'claude-...'` fallbacks removed on
+    # 2026-08-18 could each silently outrank the repo via a UI Variable and severed the
+    # inheritances the scripts build; this fails if one is ever reintroduced, and it is also
+    # what lets model-watch.yml run without `workflow` scope on its token.
+    wf = [os.path.relpath(p, root)
+          for p in sorted(_glob.glob(os.path.join(root, ".github", "workflows", "*.yml")))
+          if pin_re.search(open(p, encoding="utf-8").read())]
+    assert not wf, ("a workflow restates a model pin again; keep pins in the scripts so the "
+                    "inheritance holds and no repo Variable can outrank them: %s" % wf)
+
+    print("  ok  PIN_FILES matches where the pins actually live (%d files, both directions; "
+          "no workflow holds a pin)" % len(model_watch.PIN_FILES))
+
+
 TESTS = [test_tier, test_vkey, test_canon, test_detect_one_upgrade, test_detect_no_upgrade_when_current,
          test_alias_same_date_not_upgrade, test_undated_pin_dated_listing_is_current,
          test_undated_pin_real_upgrade_still_fires, test_higher_tier_reported_not_proposed,
          test_deprecation_note_and_replacement, test_version_fallback_when_no_dates,
-         test_bump_text, test_parse_dt]
+         test_bump_text, test_parse_dt,
+         test_pin_files_all_actually_hold_a_pin]
 
 
 def main():
