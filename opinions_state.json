@@ -1768,13 +1768,13 @@
     10953290,
     10953292
   ],
-  "updated": "2026-08-19T01:58:20Z",
+  "updated": "2026-08-19T05:00:07Z",
   "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
   "pending_batches": {
-    "funnel-guards": {
-      "id": "msgbatch_017SzPoeeyki4MhQRk7gUcgq",
-      "at": 1787104557.956436,
-      "n": 2
+    "funnel-triage": {
+      "id": "msgbatch_01812v7tRb4BZq7kFhY4gWSm",
+      "at": 1787115302.798046,
+      "n": 1
     }
   }
 }
