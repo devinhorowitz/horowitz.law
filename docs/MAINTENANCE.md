@@ -262,9 +262,20 @@ Run by hand, from the Actions tab:
   on the narrow incremental window, so an old citer can't be stranded by the sweep completing. After
   `TREATMENT_PENDING_TRIES` (default 4) failed runs it's given up — marked seen so it stops recurring,
   and surfaced in the sweep PR ("CHECK MANUALLY") for a human, never silently dropped.
-  `diagnose` / `dep-review` models are repo Variables
-  (`DIAGNOSE_MODEL` / `DEP_REVIEW_MODEL`, default Fable) if you ever want to trade quality for a
-  still-lower price.
+  `diagnose` / `dep-review` are pinned to Fable in `scripts/diagnose.py` and
+  `scripts/dep_review.py`; change the pin there if you ever want to trade quality for a still-lower
+  price (`DIAGNOSE_MODEL` / `DEP_REVIEW_MODEL` in the environment override one run). They are
+  deliberately outside `model_watch.PIN_FILES`: Fable is a tier above Opus that the watch reports
+  and never auto-proposes, so a funnel bump leaves them alone.
+- `heartbeat` also checks, as a **separate** signal with its own issue, how old
+  `skill-authorities.json` is (`siteconfig.SKILL_MANIFEST_MAX_AGE_DAYS`, default 90 days). That
+  manifest is alert-out's join key and is generated from a skill tree no workflow can see, so it
+  cannot regenerate in CI -- it only goes stale, and `skill_alert.py` fails open, so a stale one is
+  indistinguishable from a working one. It is deliberately not folded into the stall verdict below:
+  a rotting manifest says nothing about whether the funnel is alive, and folding it in would both
+  mislabel the issue and suppress the healthy-run external ping, making it look like GitHub's crons
+  had died. Regenerate with `python scripts/skill_authorities.py` where the tree is mounted and
+  commit; set the threshold to `0` to retire the check on purpose.
 - `heartbeat` is the backstop for silent stalls. Every other alert is an issue opened by a
   workflow that *failed* — which only helps if that workflow still runs. Heartbeat instead
   reads the committed freshness markers (`public/status.json` `scanned_at`, newest card

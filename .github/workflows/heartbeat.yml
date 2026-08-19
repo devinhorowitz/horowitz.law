@@ -13,6 +13,11 @@ name: opinions-heartbeat
 # HEARTBEAT_PING_URL secret to an external cron-monitor ping URL (e.g. a free healthchecks.io
 # check) and add its host to allowed-endpoints below: this job pings it only on a healthy run, so
 # the external monitor alerts you when the pings stop -- even if all of GitHub's crons are disabled.
+#
+# This job also carries a SECOND, independent check: the age of skill-authorities.json (exit 5, its
+# own issue, its own self-heal). Same family of problem -- a file that rots silently because nothing
+# in CI can refresh it -- but a separate verdict, so it never contaminates the stall signal or the
+# healthy-run ping. See the step comment below.
 
 on:
   schedule:
@@ -73,6 +78,48 @@ jobs:
           else
             bash scripts/gh_retry.sh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
           fi
+
+      # --- Second, independent signal: the skill-authority manifest's age. -----------------
+      # skill-authorities.json is the join key alert-out reads to decide which adverse treatments
+      # matter, and it is generated from a skill tree at /mnt/skills/user that NO workflow has --
+      # so it cannot regenerate here, only go stale, and a stale one looks exactly like a working
+      # one (skill_alert.py fails open). This is a separate step with its own exit code, its own
+      # issue and its own self-heal because a stale manifest says nothing about whether the funnel
+      # is alive: folding it into the check above would mislabel the issue "possible stall" and,
+      # worse, suppress the healthy-run ping below, making a rotting file look like GitHub's crons
+      # had died.
+      - name: Check the skill-authority manifest's age
+        id: sm
+        run: |
+          set +e
+          python scripts/heartbeat.py --skill-manifest
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+
+      - name: Alert on a stale skill manifest
+        if: ${{ steps.sm.outputs.code == '5' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body=$(cat scripts/skill_manifest_alert.md 2>/dev/null || echo "The skill-authority manifest check failed; see the run log.")
+          title="Skill-authority manifest is stale"
+          num=$(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$num" ]; then
+            bash scripts/gh_retry.sh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            bash scripts/gh_retry.sh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi
+
+      - name: Close the stale-manifest issue once it is regenerated
+        if: ${{ steps.sm.outputs.code == '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Skill-authority manifest is stale"
+          for n in $(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number --jq '.[].number' 2>/dev/null || true); do
+            bash scripts/gh_retry.sh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Recovered: skill-authorities.json is within its age threshold again." || true
+            bash scripts/gh_retry.sh issue close "$n" --repo "$GITHUB_REPOSITORY" || true
+          done
 
       # Healthy: close any open heartbeat issue (self-heal) and ping the optional external monitor.
       - name: Recover and ping

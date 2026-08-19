@@ -66,19 +66,39 @@ TIER_PINS = {
     "haiku":  update.SCREEN_MODEL,  # tier 1 screen (and pretriage)
 }
 
-# Every place a model id is pinned. A bump rewrites the old id to the new one in all
-# of them so a merged PR is complete: the source defaults AND each workflow's
-# ``|| 'id'`` fallback, the value that actually runs when no repo Variable overrides.
-# Editing a workflow file needs a token with `workflow` scope (see model-watch.yml).
+# Every place a model id is pinned. A bump rewrites the old id to the new one in all of
+# them so a merged PR is complete.
+#
+# This list used to carry six workflow files too, because each one restated its tier's pin
+# as a ``${{ vars.X || 'claude-...' }}`` fallback. Those 25 restatements were removed on
+# 2026-08-18: a UI Variable could silently outrank the repo, and the duplicated literal
+# severed inheritances the scripts had built (SMELL_MODEL from AUDIT_MODEL from MODEL).
+# The pins now live only in the two source files below, so this list matches them --
+# and, since nothing here edits .github/workflows any more, MODEL_WATCH_TOKEN no longer
+# needs `workflow` scope.
+#
+# The four watch scripts below were added on 2026-08-19. They are not funnel stages, but each
+# defaults to a tier id this file already manages -- courtrules/ethics pin claude-opus-5, and
+# legislation/regulations pin claude-opus-5 for the card writer and claude-haiku-4-5 for the
+# screen. They were written after this list was, and nobody added them to it, so an Opus bump
+# would have moved update.py and treatment.py and left four watches running the old weights
+# with nothing erroring: the repo half-bumped, silently, until someone happened to grep. A
+# partial bump is worse than none, so they ride along. The bump PR shows the whole diff for a
+# human to veto, and any watch that wants a different model still has its env override.
+#
+# Not listed on purpose: diagnose.py, dep_review.py and fable_review.py pin claude-fable-5, a
+# tier above Opus that this script reports and never auto-proposes (HIGHER_TIERS), so a funnel
+# bump has no business touching them.
+#
+# test_model_watch checks both directions -- every entry holds a pin, and no unlisted file holds
+# a bare literal of a currently pinned id -- so this cannot quietly drift again in either sense.
 PIN_FILES = [
     "scripts/update.py",
     "scripts/treatment.py",
-    ".github/workflows/opinions.yml",
-    ".github/workflows/backfill.yml",
-    ".github/workflows/queue.yml",
-    ".github/workflows/golden-check.yml",
-    ".github/workflows/treatment.yml",
-    ".github/workflows/maintain.yml",
+    "scripts/courtrules.py",
+    "scripts/ethics.py",
+    "scripts/legislation.py",
+    "scripts/regulations.py",
 ]
 
 TIER_RE = re.compile(r"^claude-(opus|sonnet|haiku|fable|mythos)\b")

@@ -65,8 +65,9 @@ to clear one unless the text makes plain it does not change existing law -- a ba
 
 Every Fable verdict is logged to `opinions_fable_review.jsonl` (bounded), and an auto-cleared card's
 publish PR records that it was Fable-cleared and why, so nothing clears invisibly. To watch Fable's
-judgment before trusting it, set the `OPINIONS_FABLE_REVIEW` repo Variable to `advisory`; to turn it
-off, `off`.
+judgment before trusting it, set `OPINIONS_FABLE_REVIEW=advisory` in the environment of the run; to
+turn it off, `off`. It is an env var, not a repo Variable -- no workflow plumbs one (see "Changing a
+model" below).
 
 If you maintain this: do not assume a card on the site was reviewed by a person -- most were not,
 and in `clear` mode even some *held* cards were resolved by Fable, not you. Raise the bar -- route
@@ -102,7 +103,7 @@ touches confirmed keepers:
   only what the full text shows cannot belong, so the costly Sonnet read lands only on
   plausible keepers. High-recall: anything in scope or in doubt passes. On by default in the
   workflow (the `python scripts/golden_check.py recall` gate passed before it went live);
-  the `OPINIONS_PRETRIAGE_MODEL` repo Variable is a break-glass override, `""` disables.
+  `OPINIONS_PRETRIAGE_MODEL` in the run's environment is a break-glass override, `""` disables.
 - Tier 2, triage (Sonnet): reads the full opinion and decides, against a narrow bar, whether
   it belongs in the feed.
 - Tier 3, summarize (Opus): reads the full opinion plus the triage note and writes the
@@ -117,13 +118,32 @@ quote is not present is dismissed, and on a flag each re-asks and stands only on
 attempts (`OPINIONS_CROSSCHECK_TRIES`, `OPINIONS_COMPLETENESS_TRIES`). Screen
 and triage drops are appended to `opinions_rejections.jsonl` for periodic recall review.
 
-The recall review of triage drops is itself automated (tier 2.5, the "smell test",
-`OPINIONS_SMELL_MODEL`, Opus by default; the repo Variable `off` disables it). The one-line
-triage reason is the only trace a drop leaves, so after each run the smell model reads that
-run's drop reasons on their face -- no opinion text -- and marks any that state no disqualifier
+That recall review is itself automated (tier 2.5, the "smell test"). Which stages it watches is
+`siteconfig.SMELL_STAGES`, today `["triage", "screen"]`. Screen was added on 2026-08-16 after an
+audit of the log found 12 adversarial `In re: A v. B` captions discarded on the prefix alone, two
+of them Supreme Court of Alabama insurance decisions that belonged in the feed: of 1,502 logged
+drops, the 1,163 screen drops had never had a reason checked, because screen is the blindest gate
+and was the only unwatched one. Pretriage is deliberately still absent -- its drops are unaudited
+too, but it reads the full opinion, so its reasons are not caption guesses; it goes in when there
+is evidence it needs watching, not on symmetry. `SMELL_STAGES=triage,screen,pretriage` overrides
+for one run.
+
+The audit model is `siteconfig.SMELL_MODEL`. Empty (the default) means INHERIT: it resolves to the
+treatment-audit model, which inherits the tier-3 summarizer pin, so repinning the summarizer once
+carries the whole chain. Set an id there to pin the audit independently, or `"off"` to disable the
+pass; `OPINIONS_SMELL_MODEL` is a one-run override only. It is written that way because the
+inheritance had been severed in practice -- two workflows set `OPINIONS_SMELL_MODEL` to a
+hardcoded id, which always won over the fallback, so a repin of the summarizer would have left the
+audit on the old model silently and forever.
+
+The one-line drop reason is the only trace a drop leaves, so after each run the smell model reads
+that run's reasons on their face -- no opinion text -- and marks any that state no disqualifier
 the triage standard recognizes (a keep-shaped topic label, a ground like "unpublished" that the
-standard does not use, a missing reason). A suspect drop is escalated to the tier-3 summarizer
-for one full read in the same run, which cards it or confirms the drop -- the same second
+standard does not use, a missing reason). It is also shown the case NAME, which is what makes the
+pass work on screen drops specifically: a reason of juvenile, dependency or probate for a case
+captioned against a named insurer, company or government body is a guess from the caption rather
+than a disqualifier, and `In re` / `Ex parte` carry no subject at all. A suspect drop is
+escalated to the tier-3 summarizer for one full read in the same run, which cards it or confirms the drop -- the same second
 opinion the queue's `!` force flag buys, automated, capped at
 `OPINIONS_SMELL_MAX_ESCALATIONS` per run (default 5) and twin-checked against the run's dedup
 index like every other route to the summarizer. The pass is fail-open in both senses: nothing
@@ -163,7 +183,19 @@ statutes and controlling cases each depends on into `skill-authorities.json`. `s
 adds the case authorities to the triage watch-list, most of them older controlling cases that are
 not in the feed at all; when a new opinion is confirmed to treat one adversely, the finding is
 recorded in `skill_alert_state.json` and routed back to the skills that rely on it. This is the
-alert-out half of a feed-to-drafting integration. Its per-area drip-in half now has a source:
+alert-out half of a feed-to-drafting integration.
+
+One thing to know about that manifest: it is generated from the skill tree at `/mnt/skills/user`,
+which no workflow has, so it cannot regenerate in CI. It is regenerated by hand and committed, and
+between those commits it is frozen against a skill tree that keeps moving -- while `skill_alert.py`
+fails open on a manifest it cannot read, so a stale one looks exactly like a working watch. The
+daily heartbeat therefore checks its `generated_at` as a separate signal
+(`python scripts/heartbeat.py --skill-manifest`, exit 5) and files its own tracking issue past
+`siteconfig.SKILL_MANIFEST_MAX_AGE_DAYS` (90). Regenerate with `python scripts/skill_authorities.py`
+where the tree is mounted; curated edits survive. Set the threshold to `0` to retire the check if
+the skill tree is no longer maintained -- deliberately, rather than by ignoring the issue.
+
+Its per-area drip-in half now has a source:
 `scripts/render.py` publishes `/areas/<area>.json` per practice area, a deterministic extract of
 `opinions.json` carrying each opinion's synopsis and treatment state. What remains is wiring a
 drafting skill to read its area slice at draft time.
@@ -249,8 +281,27 @@ double-advances.
    - Select "Read and write permissions".
    - Check "Allow GitHub Actions to create and approve pull requests".
 
-The model ids live in repository Variables (Settings > Secrets and variables > Actions > Variables)
-and fall back to built-in defaults when unset, so a model id can be changed without editing code.
+## Changing a model
+
+The model ids live **in the code**, not in repository Variables. Every funnel tier is pinned in
+`scripts/update.py` (`MODEL`, `TRIAGE_MODEL`, `SCREEN_MODEL`, and the audit/crosscheck models that
+inherit from them), and each watch pins its own in its own script. Changing one is a commit, which
+is the point: the pin is reviewable, it is what the golden set runs against, and `model_watch.py`
+can find and rewrite every occurrence of it (its `PIN_FILES`).
+
+It used to work the other way. Each funnel workflow restated its tier's pin as
+`${{ vars.OPINIONS_X_MODEL || 'claude-...' }}`, 25 restatements in six files. Two things were wrong
+with that. A repository Variable set once in the GitHub UI silently outranked the repo forever, so
+the id the code said it used and the id it actually used could differ with nothing erroring. And
+the duplicated literal severed the inheritances the scripts had deliberately built -- the smell
+model inherits the treatment-audit model, which inherits the tier-3 summarizer -- so repinning the
+summarizer moved only the summarizer. All 25 were removed on 2026-08-18, and
+`test_model_watch.py` now fails if a workflow ever restates a pin again.
+
+The corresponding environment variables (`OPINIONS_MODEL`, `OPINIONS_TRIAGE_MODEL`,
+`OPINIONS_SCREEN_MODEL`, `OPINIONS_SMELL_MODEL`, ...) still exist and still win when set. They are
+**one-run overrides** for a local experiment or a `workflow_dispatch` you edit by hand -- not the
+place a model id lives.
 
 ## Test it before trusting the schedule
 
