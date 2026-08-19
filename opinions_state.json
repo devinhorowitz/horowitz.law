@@ -1766,14 +1766,20 @@
     10953286,
     10953288,
     10953290,
-    10953292
+    10953292,
+    10953430,
+    10953432,
+    10953433,
+    10953434,
+    10953435,
+    10953436
   ],
-  "updated": "2026-08-19T05:00:07Z",
+  "updated": "2026-08-19T13:17:14Z",
   "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
   "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_01812v7tRb4BZq7kFhY4gWSm",
-      "at": 1787115302.798046,
+    "funnel-summarize": {
+      "id": "msgbatch_01RDKnf386YQdC2qgFsJqY5k",
+      "at": 1787145224.4038353,
       "n": 1
     }
   }
