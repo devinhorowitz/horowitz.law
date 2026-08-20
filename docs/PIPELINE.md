@@ -118,8 +118,23 @@ quote is not present is dismissed, and on a flag each re-asks and stands only on
 attempts (`OPINIONS_CROSSCHECK_TRIES`, `OPINIONS_COMPLETENESS_TRIES`). Screen
 and triage drops are appended to `opinions_rejections.jsonl` for periodic recall review.
 
-That recall review is itself automated (tier 2.5, the "smell test"). Which stages it watches is
-`siteconfig.SMELL_STAGES`, today `["triage", "screen"]`. Screen was added on 2026-08-16 after an
+That recall review is itself automated (tier 2.5, the "smell test"), and it runs in TWO passes
+that cover different stages. Keep them apart, because which drops get a same-run second opinion
+and which wait a week is not obvious from the config:
+
+- **In-run**, inside `update.py`: **triage drops only**, held as they are dropped and audited
+  before the run ends, so a suspect one can be escalated to the summarizer in the same run and
+  still be carded. This is hardcoded at the triage drop site; `SMELL_STAGES` does not reach it.
+- **Weekly**, `smell.yml` running `scripts/smell_check.py` (Mondays 13:43 UTC): the retro pass
+  over the logged backlog, and the ONLY pass that audits **screen** drops. It reads
+  `siteconfig.SMELL_STAGES`, and a suspect it finds is surfaced on a tracking issue with
+  ready-to-paste `queue.txt` force lines rather than escalated automatically.
+
+So a screen drop's recall check is weekly and editor-mediated, not same-run and automatic. That
+is the deliberate trade: screen runs on every candidate, so auditing it in-run would put the
+audit in the funnel's hot path for the cheapest, highest-volume gate.
+
+`siteconfig.SMELL_STAGES` is today `["triage", "screen"]`. Screen was added on 2026-08-16 after an
 audit of the log found 12 adversarial `In re: A v. B` captions discarded on the prefix alone, two
 of them Supreme Court of Alabama insurance decisions that belonged in the feed: of 1,502 logged
 drops, the 1,163 screen drops had never had a reason checked, because screen is the blindest gate
@@ -136,14 +151,15 @@ inheritance had been severed in practice -- two workflows set `OPINIONS_SMELL_MO
 hardcoded id, which always won over the fallback, so a repin of the summarizer would have left the
 audit on the old model silently and forever.
 
-The one-line drop reason is the only trace a drop leaves, so after each run the smell model reads
-that run's reasons on their face -- no opinion text -- and marks any that state no disqualifier
+Both passes judge the same way. The one-line drop reason is the only trace a drop leaves, so the
+smell model reads those reasons on their face -- no opinion text -- and marks any that state no disqualifier
 the triage standard recognizes (a keep-shaped topic label, a ground like "unpublished" that the
 standard does not use, a missing reason). It is also shown the case NAME, which is what makes the
 pass work on screen drops specifically: a reason of juvenile, dependency or probate for a case
 captioned against a named insurer, company or government body is a guess from the caption rather
-than a disqualifier, and `In re` / `Ex parte` carry no subject at all. A suspect drop is
-escalated to the tier-3 summarizer for one full read in the same run, which cards it or confirms the drop -- the same second
+than a disqualifier, and `In re` / `Ex parte` carry no subject at all. In the in-run pass a
+suspect drop is escalated to the tier-3 summarizer for one full read in the same run, which cards
+it or confirms the drop -- the same second
 opinion the queue's `!` force flag buys, automated, capped at
 `OPINIONS_SMELL_MAX_ESCALATIONS` per run (default 5) and twin-checked against the run's dedup
 index like every other route to the summarizer. The pass is fail-open in both senses: nothing
