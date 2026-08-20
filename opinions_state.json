@@ -1816,15 +1816,10 @@
     10953750,
     10953763,
     10953768,
-    10953769
+    10953769,
+    10953946,
+    10953947
   ],
-  "updated": "2026-08-19T20:52:54Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-guards": {
-      "id": "msgbatch_01A4d9Ns4XLuiu9na5eLaYHy",
-      "at": 1787172634.2142327,
-      "n": 2
-    }
-  }
+  "updated": "2026-08-20T13:14:54Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
