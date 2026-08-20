@@ -1,8 +1,26 @@
 {
   "area": "expert",
   "label": "expert",
-  "count": 12,
+  "count": 13,
   "opinions": [
+    {
+      "cluster_id": 10954168,
+      "name": "Fulton v. Fayette Community Hospital, Inc.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-08-20",
+      "disposition": "affirmed in part and reversed in part",
+      "areas": [
+        "expert",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10954168/erika-fulton-v-fayette-community-hospital-inc/",
+      "synopsis": "A pro se plaintiff sued a hospital and providers over emergency-room care following a motor vehicle collision, supporting her claims with affidavits from a primary care physician. The trial court found the affiant unqualified under OCGA 24-7-702(c)(2), which supplies the competency standard for affidavits required by OCGA 9-11-9.1, because he had not shown regular active practice in emergency medicine for at least three of the five years preceding the alleged malpractice. The Court of Appeals reviewed for abuse of discretion, noting the affiant's curriculum vitae showed only primary care and personal injury practice plus continuing medical education, and affirmed the competency ruling.",
+      "why": "The decision reiterates that adding a specialty to an expert affidavit's list of areas of expertise does not satisfy OCGA 24-7-702(c)(2) without a showing of regular active practice in that specialty during the statutory period.",
+      "dockets": [
+        "A26A1637"
+      ]
+    },
     {
       "cluster_id": 10953294,
       "name": "Clark v. Northeast Georgia Medical Center, Inc.",

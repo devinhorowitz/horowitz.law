@@ -1,5 +1,5 @@
 {
-  "last_filed": "2026-08-19",
+  "last_filed": "2026-08-20",
   "seen_clusters": [
     2812616,
     3209755,
@@ -1848,20 +1848,26 @@
     10954052,
     10954053,
     10954105,
-    10954109
+    10954109,
+    10954167,
+    10954168,
+    10954201,
+    10954204,
+    10954205,
+    10954206,
+    10954214,
+    10954215,
+    10954220,
+    10954224,
+    10954225
   ],
-  "updated": "2026-08-20T16:59:39Z",
+  "updated": "2026-08-20T20:56:24Z",
   "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
   "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_016H29bVPsG3QqkNncEYb336",
-      "at": 1787244934.0244863,
-      "n": 1
-    },
-    "funnel-smell": {
-      "id": "msgbatch_01U1oodKc8GU5JgCCrMp237v",
-      "at": 1787245087.0234756,
-      "n": 1
+    "funnel-guards": {
+      "id": "msgbatch_01A3i2JDhdJU2YNWSeHcd2WR",
+      "at": 1787259221.7551246,
+      "n": 2
     }
   }
 }
