@@ -1875,20 +1875,33 @@
     10954408,
     10954409,
     10954410,
-    10954411
+    10954411,
+    10954412,
+    10954425,
+    10954426,
+    10954427,
+    10954428,
+    10954429,
+    10954430,
+    10954433,
+    10954434,
+    10954435,
+    10954436,
+    10954437,
+    10954438,
+    10954439,
+    10954440,
+    10954447,
+    10954448,
+    10954451,
+    10954452,
+    10954454,
+    10954468,
+    10954469,
+    10954470,
+    10954473,
+    10954542
   ],
-  "updated": "2026-08-21T13:19:27Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_01JR3XnxjzKUsCoc1UUYTZgx",
-      "at": 1787318118.2352233,
-      "n": 1
-    },
-    "funnel-smell": {
-      "id": "msgbatch_01Cqc3Sj8rfAVD5GRpaeDtUq",
-      "at": 1787318273.0336354,
-      "n": 1
-    }
-  }
+  "updated": "2026-08-21T16:56:55Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
