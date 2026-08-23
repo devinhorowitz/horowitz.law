@@ -93,8 +93,28 @@ CASES = [
     ("tries1_fabricated_dismissed", [flag(FAB_QUOTE)], 1, "match", 1, 0, None),
     # A too-short quote does not substantiate a flag.
     ("short_quote_dismissed", [flag("is")] * 3, 3, "match", 2, 0, None),
-    # An error then two substantiated flags: the two attempts actually made carry the majority.
+    # An error then two substantiated flags: 2 of the 3 BUDGETED attempts flagged, a real majority.
     ("error_then_two_flags", [RuntimeError("x"), flag(REAL_QUOTE), flag(REAL_QUOTE)], 3, "flag", 3, 2, None),
+
+    # --- the denominator, added 2026-08-23 after a false flag reached a published card ---
+    # THE REGRESSION ITSELF: attempts 1 and 3 lost (Gemini v. Zurich lost them to a max_tokens
+    # truncation), leaving one roll that flagged. Resolving on attempts-that-returned made that
+    # 1-of-1, a "majority", and the outlier stood alone against a card that was right. It is 1 of 3
+    # budgeted, no majority, so the verdict is unavailable: undecided and surfaced, not asserted.
+    ("two_errors_one_flag_is_undecided",
+     [RuntimeError("x"), flag(REAL_QUOTE), RuntimeError("x")], 3, "unavailable", 3, 1, "no majority"),
+    # The same shortfall on the clean side must not resolve either. One surviving clear is not the
+    # consensus the budget promised, and stamping the card "match" would assert a check that did not
+    # happen -- the silent-green shape this guard exists to prevent.
+    ("two_errors_one_match_is_undecided",
+     [RuntimeError("x"), match(), RuntimeError("x")], 3, "unavailable", 3, 0, "no majority"),
+    # One attempt lost and the survivors split 1-1: genuinely undecided, so neither side wins.
+    ("one_error_split_is_undecided",
+     [RuntimeError("x"), flag(REAL_QUOTE), match()], 3, "unavailable", 3, 1, "no majority"),
+    # The rule must not fire when nothing was lost: 1 flag of 3 attempts all made is ordinary noise,
+    # cleared as before. Otherwise every minority flag would escalate to a human instead of resolving.
+    ("full_budget_minority_still_clears",
+     [flag(REAL_QUOTE), match(), match()], 3, "match", 3, 1, None),
 ]
 
 
@@ -164,6 +184,12 @@ CASES_COMP = [
     ("comp_tries1_substantiated_flag", [cflag(COMP_REAL)], 1, "flag", 1, 1, COMP_REAL),
     # Consensus off, invented omission: still dismissed by grounding.
     ("comp_tries1_fabricated_dismissed", [cflag(COMP_FAB)], 1, "complete", 1, 0, None),
+    # The denominator rule applies to this half too -- both guards share _guard_consensus, and a
+    # completeness flag that stands alone because the other attempts were lost is just as unproven.
+    ("comp_two_errors_one_flag_is_undecided",
+     [RuntimeError("x"), cflag(COMP_REAL), RuntimeError("x")], 3, "unavailable", 3, 1, "no majority"),
+    ("comp_two_errors_one_complete_is_undecided",
+     [RuntimeError("x"), complete(), RuntimeError("x")], 3, "unavailable", 3, 0, "no majority"),
 ]
 
 
@@ -499,11 +525,17 @@ def test_guard_token_budget():
     the fidelity cross-check for Universal Property & Casualty burned all three attempts on
     "hit max_tokens (400); response truncated" and that card went un-cross-checked.
 
+    2048 was not enough either. On 2026-08-23 the fidelity check on Gemini Ins. Co. v. Zurich
+    American lost two of three attempts to "hit max_tokens (2048)", and the single survivor
+    carried a flag that was wrong. Raised to 8000, and the floor below moved to 4096 so a
+    revert to either known-bad value fails here.
+
     Pin it here because nothing else would notice it shrinking back: no test asserts on a
     verdict that only appears when the budget is too small.
     """
-    assert update.GUARD_TOKENS >= 1024, update.GUARD_TOKENS
-    assert update.GUARD_TOKENS > 400, "400 is the value that truncated in production"
+    assert update.GUARD_TOKENS >= 4096, update.GUARD_TOKENS
+    assert update.GUARD_TOKENS not in (400, 2048), \
+        "%d is a value that truncated in production" % update.GUARD_TOKENS
     # Both guard kinds build through one function, so both must get the budget.
     entry = {"areas": ["procedure"], "synopsis": "s", "why": "w", "disposition": "affirmed"}
     for kind in ("fidelity", "completeness"):
