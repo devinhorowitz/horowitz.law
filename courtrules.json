@@ -220,6 +220,28 @@
     "first_seen": "2026-07-19"
   },
   {
+    "id": "efda23c6c24c",
+    "rule_set": "FRAP",
+    "rule": "Rule 32",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "Appellate Rule 32 is among the amendments projected to take effect on December 1, 2027.",
+    "impact": "",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-23"
+  },
+  {
+    "id": "1fab547db42c",
+    "rule_set": "FRAP",
+    "rule": "Rule 29",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "Appellate Rule 29 is among the amendments projected to take effect on December 1, 2027.",
+    "impact": "",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-23"
+  },
+  {
     "id": "2f9d43f48d1f",
     "rule_set": "FRAP",
     "rule": "Rule 15",
@@ -229,6 +251,17 @@
     "impact": "",
     "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
     "first_seen": "2026-07-19"
+  },
+  {
+    "id": "561f61b38ef1",
+    "rule_set": "FRAP",
+    "rule": "Appendix of Length Limits",
+    "status": "pending",
+    "effective_date": "2027-12-01",
+    "summary": "The Appellate Appendix of Length Limits is among the amendments projected to take effect on December 1, 2027.",
+    "impact": "",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-08-23"
   },
   {
     "id": "c9daa89c354e",
