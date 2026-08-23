@@ -53,4 +53,4 @@
 # The description sits ABOVE the entry, not as a trailing continuation, so the drain removes one
 # self-contained line and takes the whole note with it. Trailing continuations are what left the
 # orphaned fragments cleared above.
-10937583
+# 10937583   -- could not determine a supported court for cluster 10937583; if it maps to a supported court, replace this line with "10937583:<court_id>" (one of: ala, alacivapp, ca11, fla, fladistctapp, ga, gactapp, scotus)
