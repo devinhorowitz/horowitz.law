@@ -53,4 +53,13 @@
 # The description sits ABOVE the entry, not as a trailing continuation, so the drain removes one
 # self-contained line and takes the whole note with it. Trailing continuations are what left the
 # orphaned fragments cleared above.
-10937583
+#
+# COURT PINNED EXPLICITLY. As a bare id this line could not be screened: the queue run on
+# 2026-08-23 resolved the cluster fine (3 CourtListener calls) but derived court '?', and gated it
+# "out of scope: court '?' not in {ala, alacivapp, ca11, fla, fladistctapp, ga, gactapp, scotus}",
+# then parked the line with instructions to name a court. Derivation reads the court off the
+# docket, and Florida's DCAs report per-district ids that are not the supported token. The feed
+# does cover this court -- jurisdictions.COURT_MAP maps fladistctapp -> dcafl, and dcafl is exactly
+# what the screen logged when it dropped this case. So the id is supplied here as the fallback
+# seed_result takes when derivation fails.
+10937583:fladistctapp
