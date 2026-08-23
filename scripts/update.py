@@ -224,7 +224,22 @@ SMELL_TOKENS = int(os.environ.get("OPINIONS_SMELL_MAX_TOKENS", "8000"))
 #
 # Same defect the smell tier had (cb243e5, 2026-07-25); this tier was missed then. A raised
 # cap costs nothing unless the model actually writes more.
-GUARD_TOKENS = int(os.environ.get("OPINIONS_GUARD_MAX_TOKENS", "2048"))
+#
+# RAISED AGAIN 2026-08-23, 400 -> 2048 -> 8000, because 2048 was not enough either. The fidelity
+# check on Gemini Ins. Co. v. Zurich American (11th Cir., a two-appeal allocation dispute) lost
+# attempts 1 and 3 to
+#     crosscheck claude-sonnet-5 hit max_tokens (2048); response truncated
+# and the one surviving attempt raised a flag that turned out to be wrong. That is the shape of
+# the damage: truncation does not merely mute the guard, it DECIDES with it, because the loss is
+# not random. Long, tangled opinions are both the ones a verbatim-quoting guard needs the most
+# room to answer about and the ones a single read is most likely to misjudge -- so the attempts
+# that go missing are exactly the ones that would have out-voted the outlier. crosscheck() now
+# refuses to resolve on a shrunken denominator (see its consensus rule), which stops a lost
+# attempt from deciding; this cap is the other half, and stops attempts being lost at all.
+#
+# 8000 matches SMELL_TOKENS. These are output budgets, billed on what is actually written, so a
+# cap that is never reached costs nothing; the only thing a tight one buys is this failure.
+GUARD_TOKENS = int(os.environ.get("OPINIONS_GUARD_MAX_TOKENS", "8000"))
 STATUS_URL   = os.environ.get("ANTHROPIC_STATUS_URL", "https://status.claude.com/api/v2/summary.json")
 STATUS_MODE  = (os.environ.get("ANTHROPIC_STATUS", "on") or "on").strip().lower()  # on | warn | off
 
@@ -1592,6 +1607,47 @@ def _quote_substantiated(quote, source):
     return q in _normalize_for_match(source)
 
 
+def _guard_consensus(flags, clears, made, tries, clear_verdict, clear_reason, fold, bare, last_error):
+    """Resolve a guard's attempts into one verdict. Shared by crosscheck and completeness, which
+    differ only in wording.
+
+    A flag stands on a majority of the ATTEMPTS BUDGETED (`tries`), not of the attempts that
+    happened to come back. That distinction is the whole point of this function.
+
+    It used to resolve on `made`, the attempts that returned a usable answer, so a run that lost
+    attempts silently shrank the denominator until one roll was a majority of itself. On
+    2026-08-23 the fidelity check on Gemini Ins. Co. v. Zurich American lost attempts 1 and 3 to a
+    max_tokens truncation, and the single surviving attempt carried a flag that was wrong -- the
+    card said the insurer owed "the full $1 million share", which is exactly what the mandate
+    ordered. Consensus had not been overruled; it had been quietly dissolved, and the outlier won
+    by default.
+
+    What makes that worse than random is that the losses are not random. A guard must quote source
+    text verbatim, so it runs out of room on long, tangled opinions -- the same ones a single read
+    is most likely to misjudge. The attempts that vanish are the ones that would have out-voted the
+    outlier.
+
+    So: neither side reaching a majority of `tries` is INCONCLUSIVE, and returns "unavailable"
+    rather than the clear verdict. Fail-open here means the card surfaces for a human, never that
+    an unproven flag stands and never that an undecided card is stamped clean. The threshold now
+    matches the loop's own early-stop test, which always used `tries // 2`; resolving on a
+    different denominator than the loop stopped on was the inconsistency underneath the bug."""
+    if made == 0:
+        return {"verdict": "unavailable", "reason": last_error or "no response"}
+    if len(flags) > tries // 2:
+        reason, quote = flags[-1]
+        reason = (fold % (reason, quote)) if reason else (bare % quote)
+        return {"verdict": "flag", "reason": reason, "quote": quote,
+                "tries": made, "flag_count": len(flags)}
+    if clears > tries // 2:
+        return {"verdict": clear_verdict, "reason": clear_reason,
+                "tries": made, "flag_count": len(flags)}
+    return {"verdict": "unavailable", "flag_count": len(flags), "tries": made,
+            "reason": ("no majority in %d of %d attempts (%d flagged, %d cleared); %s"
+                       % (made, tries, len(flags), clears,
+                          last_error or "attempts lost, so the result is undecided, not clean"))}
+
+
 def crosscheck(name, text, entry):
     """Independent fidelity check on a drafted card: a model other than the Opus summarizer reads the
     opinion against the drafted holding and flags a summary that misstates it. Flag-and-surface, so it
@@ -1603,9 +1659,12 @@ def crosscheck(name, text, entry):
       1. Grounding. A flag must quote, verbatim, the span of the DRAFTED SUMMARY it claims is wrong. A
          flag whose quote is not actually in the drafted summary (an invented premise) is dismissed,
          not surfaced. The quote is folded into the reason so the editor sees exactly what was faulted.
-      2. Consensus. On a substantiated flag, the check re-asks up to OPINIONS_CROSSCHECK_TRIES times and
-         a flag stands only on a majority of the attempts made, so one noisy roll does not flag a sound
-         card. Re-asking happens only after a flag, so a clean card still costs about one call.
+      2. Consensus. On a substantiated flag, the check re-asks up to OPINIONS_CROSSCHECK_TRIES times
+         and a flag stands only on a majority of the attempts BUDGETED, so one noisy roll does not
+         flag a sound card -- and an attempt that never came back cannot shrink the denominator until
+         one roll is a majority of itself, which is how a false flag got through on 2026-08-23 (see
+         _guard_consensus). If neither side reaches a majority of the budget, the verdict is
+         "unavailable": undecided, surfaced for a human, never stamped clean.
     Set OPINIONS_CROSSCHECK_TRIES=1 to keep grounding but disable consensus."""
     if not CROSSCHECK_MODEL:
         return None
@@ -1635,20 +1694,16 @@ def crosscheck(name, text, entry):
         if len(flags) > tries // 2 or clears > tries // 2:
             break
 
-    if made == 0:
-        print("  ! cross-check unavailable for %s: %s" % (name[:40], last_error or "no response"))
-        return {"verdict": "unavailable", "reason": last_error or "no response"}
-
-    if len(flags) > made // 2:
-        reason, quote = flags[-1]
-        reason = ('%s (drafted text at issue: "%s")' % (reason, quote)) if reason else \
-                 ('the drafted summary misstates the holding (drafted text at issue: "%s")' % quote)
-        return {"verdict": "flag", "reason": reason, "quote": quote, "tries": made, "flag_count": len(flags)}
-
-    if flags:
+    out = _guard_consensus(flags, clears, made, tries, "match", "holding matches the opinion",
+                           '%s (drafted text at issue: "%s")',
+                           'the drafted summary misstates the holding (drafted text at issue: "%s")',
+                           last_error)
+    if out["verdict"] == "unavailable":
+        print("  ! cross-check unavailable for %s: %s" % (name[:40], out["reason"]))
+    elif flags:
         print("  . cross-check flag NOT CONFIRMED for %s (%d of %d attempts flagged); clearing as noise"
               % (name[:40], len(flags), made))
-    return {"verdict": "match", "reason": "holding matches the opinion", "tries": made, "flag_count": len(flags)}
+    return out
 
 
 COMPLETENESS_SYSTEM = (
@@ -1691,8 +1746,9 @@ def completeness_check(name, text, entry):
     the verbatim span of the OPINION that states that holding. A flag whose quote is not in the opinion
     (a hallucinated holding) is dismissed, not surfaced; the quote is folded into the reason. On a
     substantiated flag the check re-asks up to OPINIONS_COMPLETENESS_TRIES times and a flag stands only
-    on a majority of the attempts made. Set OPINIONS_COMPLETENESS_TRIES=1 to keep grounding but disable
-    consensus."""
+    on a majority of the attempts BUDGETED (see _guard_consensus for why the denominator is the budget
+    and not the attempts that returned). Set OPINIONS_COMPLETENESS_TRIES=1 to keep grounding but
+    disable consensus."""
     if not COMPLETENESS_MODEL:
         return None
     body, opinion = guard_request("completeness", name, text, entry)
@@ -1721,20 +1777,16 @@ def completeness_check(name, text, entry):
         if len(flags) > tries // 2 or clears > tries // 2:
             break
 
-    if made == 0:
-        print("  ! completeness check unavailable for %s: %s" % (name[:40], last_error or "no response"))
-        return {"verdict": "unavailable", "reason": last_error or "no response"}
-
-    if len(flags) > made // 2:
-        reason, quote = flags[-1]
-        reason = ('%s (opinion text omitted: "%s")' % (reason, quote)) if reason else \
-                 ('the opinion decides a material holding the card omits (opinion text omitted: "%s")' % quote)
-        return {"verdict": "flag", "reason": reason, "quote": quote, "tries": made, "flag_count": len(flags)}
-
-    if flags:
+    out = _guard_consensus(flags, clears, made, tries, "complete", "no material holding omitted",
+                           '%s (opinion text omitted: "%s")',
+                           'the opinion decides a material holding the card omits (opinion text omitted: "%s")',
+                           last_error)
+    if out["verdict"] == "unavailable":
+        print("  ! completeness check unavailable for %s: %s" % (name[:40], out["reason"]))
+    elif flags:
         print("  . completeness flag NOT CONFIRMED for %s (%d of %d attempts flagged); clearing as noise"
               % (name[:40], len(flags), made))
-    return {"verdict": "complete", "reason": "no material holding omitted", "tries": made, "flag_count": len(flags)}
+    return out
 
 
 # --- shared guard request/verdict, so the sync guards above and the batch path build the
