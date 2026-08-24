@@ -2935,5 +2935,37 @@
         "why": "It confirms that a premature notice of appeal from an order denying summary judgment does not divest the trial court of jurisdiction, both for failure to pay costs and for failure to follow interlocutory appeal procedures."
       }
     ]
+  },
+  {
+    "cluster_id": 10956632,
+    "name": "Richardson v. Thunder, LLC",
+    "court": "ctapp",
+    "division": "First Division",
+    "date": "2026-08-24",
+    "dockets": [
+      "A26A1519",
+      "A26A1520"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "negsec",
+      "premises"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10956632/tamia-richardson-v-thunder-llc/",
+    "synopsis": "Guests injured or killed in a multi-shooter shooting at an annual fraternity homecoming block party sued the national fraternity and the limited liability company that owned the house, asserting premises liability, negligence, and nuisance. Applying the Carmichael totality-of-the-circumstances framework, the Court of Appeals held that evidence of occasional fistfights at parties four or more years earlier and three police responses for crowd control or disorderly conduct, none involving weapons, injuries, or arrests, was not substantially similar to a multiparty shootout and did not create a jury issue on reasonable foreseeability. The court also found no other totality factors, such as a high-crime location, weapons previously observed at the parties, or a volatile situation brewing that night, and rejected the contention that a large party with alcohol is itself enough, noting that would make the proprietor an insurer of guest safety. Because no duty to guard against the criminal act arose, summary judgment was proper for both the fraternity and the property owner, and the derivative vicarious-liability claim failed for want of an underlying tort; the court noted the 2025 negligent security statutes, O.C.G.A. sections 51-3-50 through 51-3-57, do not apply to causes of action arising before April 21, 2025. Affirmed.",
+    "why": "The decision applies the Carmichael foreseeability analysis to hold that generalized prior fights and crowd-control police calls are not substantially similar to a mass shooting, and confirms that the invitee/licensee distinction is largely irrelevant to third-party criminal conduct claims while the 2025 negligent security statutes do not reach earlier-arising claims.",
+    "precedential": "published",
+    "first_seen": "2026-08-24",
+    "tort_reform": true,
+    "additional_holdings": [
+      {
+        "areas": [
+          "negsec",
+          "premises"
+        ],
+        "synopsis": "The court separately affirmed summary judgment on claims that the national fraternity negligently failed to supervise and monitor its undergraduate chapter so as to prevent hazardous conditions on the property. It held that negligent supervision or monitoring imposes liability only where it is reasonably foreseeable that the supervised party could cause the type of harm sustained, and that an independent intervening criminal act of a third party is treated as the proximate cause. Given the absence of evidence of foreseeability, the random shooting of partygoers was not a reasonably foreseeable result of any supervisory failure.",
+        "why": "It confirms that a negligent supervision or monitoring theory against a parent organization rises or falls on the same foreseeability and proximate-cause analysis that governs the underlying premises claim for third-party criminal conduct."
+      }
+    ]
   }
 ]

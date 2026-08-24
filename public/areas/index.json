@@ -21,13 +21,13 @@
     {
       "area": "premises",
       "label": "premises",
-      "count": 17,
+      "count": 18,
       "url": "https://horowitz.law/areas/premises.json"
     },
     {
       "area": "negsec",
       "label": "negligent security",
-      "count": 3,
+      "count": 4,
       "url": "https://horowitz.law/areas/negsec.json"
     },
     {

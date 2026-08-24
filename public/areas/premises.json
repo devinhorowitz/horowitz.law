@@ -1,8 +1,27 @@
 {
   "area": "premises",
   "label": "premises",
-  "count": 17,
+  "count": 18,
   "opinions": [
+    {
+      "cluster_id": 10956632,
+      "name": "Richardson v. Thunder, LLC",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-08-24",
+      "disposition": "affirmed",
+      "areas": [
+        "negsec",
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10956632/tamia-richardson-v-thunder-llc/",
+      "synopsis": "Guests injured or killed in a multi-shooter shooting at an annual fraternity homecoming block party sued the national fraternity and the limited liability company that owned the house, asserting premises liability, negligence, and nuisance. Applying the Carmichael totality-of-the-circumstances framework, the Court of Appeals held that evidence of occasional fistfights at parties four or more years earlier and three police responses for crowd control or disorderly conduct, none involving weapons, injuries, or arrests, was not substantially similar to a multiparty shootout and did not create a jury issue on reasonable foreseeability. The court also found no other totality factors, such as a high-crime location, weapons previously observed at the parties, or a volatile situation brewing that night, and rejected the contention that a large party with alcohol is itself enough, noting that would make the proprietor an insurer of guest safety. Because no duty to guard against the criminal act arose, summary judgment was proper for both the fraternity and the property owner, and the derivative vicarious-liability claim failed for want of an underlying tort; the court noted the 2025 negligent security statutes, O.C.G.A. sections 51-3-50 through 51-3-57, do not apply to causes of action arising before April 21, 2025. Affirmed.",
+      "why": "The decision applies the Carmichael foreseeability analysis to hold that generalized prior fights and crowd-control police calls are not substantially similar to a mass shooting, and confirms that the invitee/licensee distinction is largely irrelevant to third-party criminal conduct claims while the 2025 negligent security statutes do not reach earlier-arising claims.",
+      "dockets": [
+        "A26A1519",
+        "A26A1520"
+      ]
+    },
     {
       "cluster_id": 10948520,
       "name": "Estancia US Limited Partnership v. Aji-Dawkins",
