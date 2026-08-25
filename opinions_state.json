@@ -1936,8 +1936,23 @@
     10956805,
     10956806,
     10956807,
-    10956808
+    10956808,
+    10956826,
+    10956827,
+    10956828
   ],
-  "updated": "2026-08-24T20:52:32Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-08-25T02:02:06Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-smell": {
+      "id": "msgbatch_01UquaWfpQbGbfhJRGJVvJ1r",
+      "at": 1787623021.3445437,
+      "n": 1
+    },
+    "funnel-summarize": {
+      "id": "msgbatch_011zWew6aDJ9Xk8PsNSRuAf2",
+      "at": 1787623116.0434594,
+      "n": 1
+    }
+  }
 }
