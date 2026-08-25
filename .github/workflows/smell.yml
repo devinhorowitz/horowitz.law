@@ -71,7 +71,18 @@ jobs:
 
       # The annotations are bookkeeping, exactly like the run-state files the funnel pushes:
       # [skip ci] and straight to main via the retrying rebase-push helper.
+      #
+      # always(), so a FAILED audit still commits the chunks it did finish. smell_check.py rewrites
+      # the log after every chunk precisely so partial progress survives, and the default
+      # if: success() was throwing that away: a ConfigError or a crash 9 chunks in committed
+      # nothing, and those 9 chunks' model spend was repaid on the next run for no reason.
+      #
+      # This does NOT rescue a reclaimed runner. When the host is taken (the 2026-08-24 kill,
+      # issue #284), every remaining step is stamped `skipped` within the same second -- always()
+      # cannot run on a runner that is going away. Exposure to that is bounded by the shorter
+      # SMELL_BUDGET_SEC in smell_check.py, not here.
       - name: Commit annotated log
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -82,8 +93,10 @@ jobs:
 
       # Suspects collect on ONE tracking issue (the queue-failure pattern), so repeated audits
       # never spam new issues. The body is the ready-to-paste report smell_check.py wrote.
+      # always() for the same reason as the commit above: a bare `if` expression still carries an
+      # implicit success(), so a failed audit filed none of the suspects it had already found.
       - name: Surface suspect drops
-        if: ${{ hashFiles('scripts/smell_suspects.md') != '' }}
+        if: ${{ always() && hashFiles('scripts/smell_suspects.md') != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

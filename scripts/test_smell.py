@@ -348,6 +348,45 @@ def test_model_resolution():
         importlib.reload(importlib.import_module("update"))
 
 
+def test_reclamation_exposure():
+    """The audit is the repo's most reclamation-exposed job, and both ways it could lose finished
+    work are pinned here.
+
+    On 2026-08-24 run 32738308741 was killed at 18.4 minutes -- inside both the 20-minute soft
+    budget and the 30-minute job timeout -- by hosted-runner reclamation. The old budget comment
+    claimed being under the watchdog meant "progress persists, never a kill", which is false:
+    reclamation is not a timeout and respects neither limit. It cost that run's model spend and a
+    week until the next Monday cron, though no data (select_records re-picks anything un-stamped).
+
+    1. BUDGET bounds the exposure. The probe reads reclamation as a hazard that scales with
+       exposure rather than a duration cliff, so a shorter run is hit less often AND forfeits less
+       when it is hit. Pinned at most 900 so a revert to 1200 fails here.
+    2. The workflow must commit and file suspects on always(). smell_check rewrites the log after
+       every chunk so partial progress survives a crash -- but the default if: success() threw
+       that away, and a bare `if` expression carries an implicit success() too, which is why the
+       suspects step needed always() explicitly and not just its hashFiles guard. Neither rescues
+       a reclaimed runner (every remaining step is stamped `skipped`); that is what BUDGET is for.
+    """
+    import importlib
+    mod = importlib.import_module("smell_check")
+    check("run budget is bounded against reclamation exposure", mod.BUDGET <= 900,
+          "got %r" % mod.BUDGET)
+    check("budget is not back at the value that was killed", mod.BUDGET != 1200)
+    check("budget is still env-overridable for a watched drain",
+          'os.environ.get("SMELL_BUDGET_SEC"' in open(
+              os.path.join(os.path.dirname(os.path.abspath(__file__)), "smell_check.py"),
+              encoding="utf-8").read())
+
+    wf = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           ".github", "workflows", "smell.yml"), encoding="utf-8").read()
+    commit = wf.split("- name: Commit annotated log")[1].split("- name:")[0]
+    check("the commit step runs on always(), so a failed audit keeps finished chunks",
+          "if: always()" in commit)
+    suspects = wf.split("- name: Surface suspect drops")[1].split("- name:")[0]
+    check("the suspects step defeats the implicit success() on its bare if",
+          "always()" in suspects)
+
+
 def main():
     print("smell prompt + parsing:")
     test_prompt_shape()
@@ -363,6 +402,8 @@ def main():
     test_retro_persistence()
     test_stage_config()
     test_model_resolution()
+    print("reclamation exposure:")
+    test_reclamation_exposure()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
