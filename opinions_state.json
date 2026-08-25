@@ -1939,20 +1939,30 @@
     10956808,
     10956826,
     10956827,
-    10956828
+    10956828,
+    10957408,
+    10957409,
+    10957410,
+    10957411,
+    10957412,
+    10957413,
+    10957414,
+    10957415,
+    10957416,
+    10957417,
+    10957418,
+    10957419,
+    10957420,
+    10957421,
+    10957422,
+    10957423,
+    10957424,
+    10957425,
+    10957426,
+    10957427,
+    10957428,
+    10957429
   ],
-  "updated": "2026-08-25T02:02:06Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-smell": {
-      "id": "msgbatch_01UquaWfpQbGbfhJRGJVvJ1r",
-      "at": 1787623021.3445437,
-      "n": 1
-    },
-    "funnel-summarize": {
-      "id": "msgbatch_011zWew6aDJ9Xk8PsNSRuAf2",
-      "at": 1787623116.0434594,
-      "n": 1
-    }
-  }
+  "updated": "2026-08-25T13:18:05Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
