@@ -57,9 +57,24 @@ STAGES  = ([s.strip() for s in _STAGES_ENV.split(",") if s.strip()]
 ALL     = os.environ.get("SMELL_ALL", "") in ("1", "true", "True", "yes")
 LIMIT   = int(os.environ.get("SMELL_LIMIT", "500"))
 DRY_RUN = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
-BUDGET  = int(os.environ.get("SMELL_BUDGET_SEC", "1200"))   # soft wall clock for one run; kept
-                                                            # under the workflow's 30-min watchdog
-                                                            # so progress persists, never a kill
+# Soft wall clock for one run. LOWERED 1200 -> 600 on 2026-08-25.
+#
+# The old value carried the comment "kept under the workflow's 30-min watchdog so progress
+# persists, never a kill". That was wrong, and Monday proved it: run 32738308741 was killed at
+# 18.4 minutes -- inside both the 20-minute budget and the 30-minute timeout -- by hosted-runner
+# reclamation (the exit-143 shape reclaim-probe.yml studies: the step concludes `failure`, every
+# later step is stamped within the same second, `Post Harden the runner` is skipped, the job ends
+# `Complete job: success`). Reclamation does not respect either limit, because it is not a timeout.
+#
+# What that costs is WORK, not data: select_records skips anything already carrying a verdict, so
+# a killed run simply re-audits the same records next time. The loss is the model spend for the
+# chunks it had finished and a week until the next Monday cron. The probe's reading is that
+# reclamation is a hazard that scales with exposure rather than a duration cliff, so halving the
+# run halves both the chance of being hit and the work forfeited when it happens.
+#
+# 600s still clears the backlog, just in smaller bites -- the leftovers roll to the next run by
+# design. Raise SMELL_BUDGET_SEC for a one-off drain when you are watching it.
+BUDGET  = int(os.environ.get("SMELL_BUDGET_SEC", "600"))
 CHUNK   = 40      # reasons per model request; keeps each verdict list well inside max_tokens
 OUT     = os.path.join(update.REPO, "scripts", "smell_suspects.md")
 
