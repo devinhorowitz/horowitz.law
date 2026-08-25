@@ -26,39 +26,16 @@
 # with the reason, for you to fix or delete.
 #
 # --- queue below this line ---
-# (Cleared 2026-08-23: the orphaned comment fragments that sat here were the tails of the two
-# Alabama escalations from issue #191 -- Ex parte ACCA Liability Self-Insurance Fund SC-2025-1015
-# and Ex parte State Farm SC-2025-0918. Both are carded and live; the drain removed their active
-# lines but left these indented continuations behind.)
+#
+# THE DRAIN REMOVES THE ENTRY LINE AND NOTHING ELSE. Comments never go with it, wherever they sit.
+#
+# Learned twice. First from indented continuations trailing a drained id (the Alabama escalations
+# from issue #191, cleared 2026-08-23), which at least LOOKED like litter. Then from a note placed
+# ABOVE its id on the theory that the drain would "take the whole note with it" -- it did not, and
+# the 2026-08-25 drain of the Zoll line left ~25 orphaned lines including that very claim, cleared
+# here. A block above an id reads as deliberate, which makes it worse litter than the indented
+# kind, not better.
+#
+# So: keep a queued line's note to a word or two, and put the real reasoning in the commit message
+# and PR body, where it is durable and does not need sweeping up afterwards.
 
-# Screen-drop audit, issue #283 -- the first run of the screen-stage smell test flagged 22 drops
-# whose logged reason states no recognized disqualifier. Verified against the opinions before
-# queueing, and only what survives that read goes below.
-#
-# NOT forced. The earlier escalations carried "!" because they were TRIAGE drops -- triage had
-# already read the full opinion and said no, so only a force could get a second look. This is a
-# SCREEN drop, and the queue skips the Tier-1 screen entirely, so triage has never seen this case
-# at all. Queueing it plain gets it the full-text read the caption guess denied it. Forcing would
-# skip the one check that has not yet happened.
-
-# Fla. Dept. of Environmental Protection & Fla. DOT v. Estate of Zoll (Fla. 5th DCA, 2026-07-31).
-# Wrongful death of a pedestrian struck crossing SR A1A between two state-park campgrounds.
-# Reverses the denial of the agencies' motion to dismiss on SOVEREIGN IMMUNITY: siting the
-# campgrounds was a discretionary, planning-level decision, and the agencies did not create a
-# known dangerous condition that was not readily apparent to someone who could be injured by it.
-# Published, and it decides the immunity question rather than applying it to settled facts.
-# Screen dropped it as "Probate/estate dispute" -- read straight off "the Estate of" in the
-# caption. Nothing about the case is probate.
-#
-# The description sits ABOVE the entry, not as a trailing continuation, so the drain removes one
-# self-contained line and takes the whole note with it. Trailing continuations are what left the
-# orphaned fragments cleared above.
-#
-# COURT PINNED EXPLICITLY. As a bare id this line could not be screened: the queue run on
-# 2026-08-23 resolved the cluster fine (3 CourtListener calls) but derived court '?', and gated it
-# "out of scope: court '?' not in {ala, alacivapp, ca11, fla, fladistctapp, ga, gactapp, scotus}",
-# then parked the line with instructions to name a court. Derivation reads the court off the
-# docket, and Florida's DCAs report per-district ids that are not the supported token. The feed
-# does cover this court -- jurisdictions.COURT_MAP maps fladistctapp -> dcafl, and dcafl is exactly
-# what the screen logged when it dropped this case. So the id is supplied here as the fallback
-# seed_result takes when derivation fails.
