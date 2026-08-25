@@ -62,4 +62,3 @@
 # does cover this court -- jurisdictions.COURT_MAP maps fladistctapp -> dcafl, and dcafl is exactly
 # what the screen logged when it dropped this case. So the id is supplied here as the fallback
 # seed_result takes when derivation fails.
-10937583:fladistctapp
