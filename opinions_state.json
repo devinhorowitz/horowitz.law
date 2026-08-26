@@ -2034,15 +2034,15 @@
     10958407,
     10958432,
     10958458,
-    10958460
+    10958460,
+    10958489,
+    10958490,
+    10958520,
+    10958521,
+    10958562,
+    10958599,
+    10958615
   ],
-  "updated": "2026-08-26T18:14:40Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_015JTpGrkvZSLDanaMLaaUvN",
-      "at": 1787767598.9732502,
-      "n": 1
-    }
-  }
+  "updated": "2026-08-26T23:42:51Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
