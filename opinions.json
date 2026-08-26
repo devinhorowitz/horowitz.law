@@ -2967,5 +2967,43 @@
         "why": "It confirms that a negligent supervision or monitoring theory against a parent organization rises or falls on the same foreseeability and proximate-cause analysis that governs the underlying premises claim for third-party criminal conduct."
       }
     ]
+  },
+  {
+    "cluster_id": 10957668,
+    "name": "Jane Doe v. Carnival Corporation",
+    "court": "ca11",
+    "division": null,
+    "date": "2026-08-25",
+    "dockets": [
+      "24-13159"
+    ],
+    "disposition": "reversed in part, vacated in part, and remanded for new trial",
+    "areas": [
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10957668/jane-doe-v-carnival-corporation/",
+    "synopsis": "A cruise passenger sued the cruise line on general maritime law theories arising from an encounter with a crewmember; the district court granted the passenger partial summary judgment on false imprisonment liability after excluding FBI reports in their entirety as hearsay, and a jury later found the cruise line liable for sexual assault and awarded about $10.25 million. The Eleventh Circuit held that the district court erred by treating the reports as a single hearsay unit: while the crewmember's embedded statements were inadmissible double hearsay, the investigating agent's own conclusions required their own analysis under Federal Rule of Evidence 803(8), and the opponent of admission bears the burden of showing a lack of trustworthiness under the timeliness, skill and experience, hearing, and bias factors. The court found that burden unmet, held the agent's consensual-encounter conclusion was not barred by Rule 403 at the summary judgment stage (while noting the fact of a declination to prosecute is likely unduly prejudicial), and noted that hearsay may be considered on summary judgment if it can be reduced to admissible form, such as by live testimony. Because that conclusion created a genuine dispute on consent, partial summary judgment was reversed.",
+    "why": "The decision clarifies that an investigator's own factual findings in a government report receive an independent Federal Rule of Evidence 803(8) analysis separate from third-party statements quoted within the report, and that the party opposing admission carries the burden of showing untrustworthiness.",
+    "precedential": "published",
+    "first_seen": "2026-08-25",
+    "law_applied": "federal",
+    "additional_holdings": [
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "Addressing its own jurisdiction, the court explained that a partial summary judgment order resolving liability but leaving damages and other claims for further proceedings is never final for purposes of 28 U.S.C. section 1291, so an immediate appeal would have been dismissed as premature. After trial and entry of final judgment, however, the interlocutory order merged into the final judgment and became reviewable. The court therefore reached the partial summary judgment ruling even though the appeal followed a jury verdict.",
+        "why": "It confirms both that a partial summary judgment on liability cannot be appealed when entered and that the ruling remains reviewable after final judgment through merger."
+      },
+      {
+        "areas": [
+          "procedure",
+          "expert"
+        ],
+        "synopsis": "The court then considered the effect of the erroneous partial summary judgment on the trial and found it could have affected the outcome in three respects: the same hearsay analysis led to wholesale exclusion of the reports at trial, which barred the agent from testifying to her conclusions and barred cross-examination of the passenger's security and damages experts about the reports they had relied on; the jury was instructed that liability for false imprisonment was established and that the passenger was unlawfully restrained against her will, which could color its view of consent; and the finding of consent was relevant to both the false imprisonment and the sexual assault claims, which arose from the same events. The court vacated the judgment on those two claims and remanded for a new trial on them, while holding that the negligence and intentional infliction claims decided for the cruise line would not be relitigated because the passenger did not cross-appeal.",
+        "why": "The opinion illustrates that an erroneous pretrial liability ruling entangled with the evidence and jury instructions can require a new trial on related claims, and that the scope of the new trial is limited by the absence of a cross-appeal on claims resolved adversely to the appellee."
+      }
+    ],
+    "official_url": "https://media.ca11.uscourts.gov/opinions/pub/files/202413159.pdf"
   }
 ]

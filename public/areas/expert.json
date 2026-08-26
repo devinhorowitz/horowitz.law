@@ -1,8 +1,26 @@
 {
   "area": "expert",
   "label": "expert",
-  "count": 13,
+  "count": 14,
   "opinions": [
+    {
+      "cluster_id": 10957668,
+      "name": "Jane Doe v. Carnival Corporation",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2026-08-25",
+      "disposition": "reversed in part, vacated in part, and remanded for new trial",
+      "areas": [
+        "procedure",
+        "expert"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10957668/jane-doe-v-carnival-corporation/",
+      "synopsis": "A cruise passenger sued the cruise line on general maritime law theories arising from an encounter with a crewmember; the district court granted the passenger partial summary judgment on false imprisonment liability after excluding FBI reports in their entirety as hearsay, and a jury later found the cruise line liable for sexual assault and awarded about $10.25 million. The Eleventh Circuit held that the district court erred by treating the reports as a single hearsay unit: while the crewmember's embedded statements were inadmissible double hearsay, the investigating agent's own conclusions required their own analysis under Federal Rule of Evidence 803(8), and the opponent of admission bears the burden of showing a lack of trustworthiness under the timeliness, skill and experience, hearing, and bias factors. The court found that burden unmet, held the agent's consensual-encounter conclusion was not barred by Rule 403 at the summary judgment stage (while noting the fact of a declination to prosecute is likely unduly prejudicial), and noted that hearsay may be considered on summary judgment if it can be reduced to admissible form, such as by live testimony. Because that conclusion created a genuine dispute on consent, partial summary judgment was reversed.",
+      "why": "The decision clarifies that an investigator's own factual findings in a government report receive an independent Federal Rule of Evidence 803(8) analysis separate from third-party statements quoted within the report, and that the party opposing admission carries the burden of showing untrustworthiness.",
+      "dockets": [
+        "24-13159"
+      ]
+    },
     {
       "cluster_id": 10954168,
       "name": "Fulton v. Fayette Community Hospital, Inc.",
