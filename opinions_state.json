@@ -2085,20 +2085,48 @@
     10960565,
     10960566,
     10960567,
-    10960568
+    10960568,
+    10960821,
+    10960835,
+    10960846,
+    10960851,
+    10960856,
+    10960858,
+    10960874,
+    10960876,
+    10960879,
+    10960881,
+    10960882,
+    10960885,
+    10960886,
+    10960931,
+    10960935,
+    10960936,
+    10960941,
+    10960951,
+    10960954,
+    10960959,
+    10960961,
+    10960963,
+    10961015,
+    10961016,
+    10961017,
+    10961032,
+    10961034,
+    10961036,
+    10961044,
+    10961291,
+    10961292,
+    10961323,
+    10961466,
+    10961527,
+    10961545,
+    10961546,
+    10961575,
+    10961588,
+    10961609,
+    10961613
   ],
-  "updated": "2026-08-27T22:33:54Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_01Evt34LsGESEDQJyKnhQx3Q",
-      "at": 1787869570.5397255,
-      "n": 2
-    },
-    "funnel-smell": {
-      "id": "msgbatch_01XcnCu9TfkJVfwpcbom3DZL",
-      "at": 1787869733.1302047,
-      "n": 1
-    }
-  }
+  "updated": "2026-08-28T22:33:01Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
