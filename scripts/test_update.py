@@ -394,6 +394,54 @@ def test_triage_batch():
         assert sorted(sync_calls) == ["A v. B", "C v. D", "E v. F"], (label, sync_calls)
         print("  ok  batch %s: every candidate falls back to synchronous triage (gate unchanged)" % label)
 
+    # --- containment, added 2026-08-25 after issue #292 ---
+    # A candidate whose synchronous fallback RAISES must not take the run down with it. Before this,
+    # the fallback loop had no per-candidate guard: one truncated verdict
+    # ("triage claude-sonnet-5 hit max_tokens (2048); response truncated") raised out of
+    # _triage_batch, out of main(), and killed the whole scheduled run -- discarding the verdicts
+    # already collected for every other candidate. The non-batch path in main() had always contained
+    # this, so the two paths disagreed, and batch is the default.
+    #
+    # "Never skip" means no candidate is silently dropped from the gate. It does not mean one bad
+    # candidate costs every other candidate. A verdict-less candidate is read with .get() in PASS 2,
+    # is never marked seen, and returns on the next run.
+    sync_calls.clear()
+
+    def one_bad(name, docket, text, feed_index=""):
+        sync_calls.append(name)
+        if name == "C v. D":
+            raise RuntimeError("triage claude-sonnet-5 hit max_tokens (2048); response truncated")
+        return {"relevant": True, "significance": "high", "note": "sync:%s" % name}
+
+    def all_missing(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+        raise update.batch.BatchTimeout("bid", "still running")
+    update.batch.run, update.triage = all_missing, one_bad
+    try:
+        verdicts = update._triage_batch(items, "", deadline=123.0)
+    finally:
+        update.batch.run, update.triage = real_run, real_triage
+    assert set(verdicts) == {111, 333}, verdicts            # the survivors kept their verdicts
+    assert 222 not in verdicts, verdicts                    # the bad one has none: it rolls forward
+    assert sorted(sync_calls) == ["A v. B", "C v. D", "E v. F"], sync_calls   # and 333 was still tried
+    print("  ok  one candidate raising leaves the others triaged and rolls itself to the next run")
+
+    # ConfigError is NOT per-candidate. A bad key or a retired model would fail identically for every
+    # remaining candidate, so it propagates and main() stops the run and commits nothing, rather than
+    # burning the rest of the list rediscovering the same misconfiguration.
+    def cfg_bad(name, docket, text, feed_index=""):
+        raise update.ConfigError("invalid x-api-key")
+    update.batch.run, update.triage = all_missing, cfg_bad
+    try:
+        raised = None
+        try:
+            update._triage_batch(items, "", deadline=123.0)
+        except update.ConfigError as e:
+            raised = e
+    finally:
+        update.batch.run, update.triage = real_run, real_triage
+    assert raised is not None, "ConfigError must propagate, not be swallowed per candidate"
+    print("  ok  a ConfigError still stops the run instead of being retried per candidate")
+
 
 def test_treatment_citer_seen():
     """Claim-1 regression (the vetoed-treatment loop): route_and_publish marks a treatment citer SEEN,
@@ -533,6 +581,17 @@ def test_guard_token_budget():
     Pin it here because nothing else would notice it shrinking back: no test asserts on a
     verdict that only appears when the budget is too small.
     """
+    # The triage tier has its own budget and its own history of being too small, and until
+    # 2026-08-25 nothing pinned it -- which is how it drifted from 1024 to 2048 to overflowing
+    # again. Issue #292: a scheduled run died on "triage claude-sonnet-5 hit max_tokens (2048)"
+    # mid-sentence through a good verdict. Pinned alongside the guards so all three of this file's
+    # model-output budgets are defended by one test.
+    assert update.TRIAGE_TOKENS >= 4096, update.TRIAGE_TOKENS
+    assert update.TRIAGE_TOKENS not in (1024, 2048), \
+        "%d is a value that truncated in production" % update.TRIAGE_TOKENS
+    assert 'os.environ.get("OPINIONS_TRIAGE_MAX_TOKENS"' in open(
+        os.path.join(HERE, "update.py"), encoding="utf-8").read(), "must stay env-overridable"
+
     assert update.GUARD_TOKENS >= 4096, update.GUARD_TOKENS
     assert update.GUARD_TOKENS not in (400, 2048), \
         "%d is a value that truncated in production" % update.GUARD_TOKENS
