@@ -172,6 +172,38 @@ audits the logged backlog plus anything un-stamped or deferred, persisting progr
 every chunk, and surfaces suspects on a tracking issue with ready-to-paste `queue.txt` force
 lines for editor review.
 
+### Standing decision: the recall audit runs to 2026-11-30
+
+**Decided 2026-08-29 by the owner of the feed. Revisit on or after 2026-11-30.**
+
+Two audits read **37 drops through the full opinions and recovered nothing** (#283, then #293).
+That is the entire recorded history of the model-driven recall audit finding a lost case: zero. The
+question it was built to answer — *is the funnel throwing away cases that belong?* — now has an
+answer for every drop anyone has actually checked, and the answer is no.
+
+The call is to **keep it in rotation for one more quarter, then take it out**, and the reason is not
+sentiment about the recall question. It is that three signals shipped in August have no history yet:
+
+| Signal | Reading on 2026-08-29 | What to look for |
+|---|---|---|
+| `category_invalid` | 0 (contract is new; 1,800 records predate it) | Any sustained non-zero rate means a gate is emitting tokens off its own closed list |
+| unsupported quotes, **firm** | 0 firm / 46 provisional | Firm findings only accrue on records carrying `evidence`; a rising firm rate is fabricated evidence, live |
+| `hedge` | 55 of 1,634 (3.4%) | A jump follows a prompt edit that loosened the commit rule |
+
+None of those can be read yet, because all three depend on drops logged *after* the contract
+existed. A quarter is roughly how long it takes the log to fill with records that carry evidence and
+a token. Pulling the audit now would remove the weekly job that surfaces them before anyone has seen
+a single quarter of data.
+
+**At review, the question is not "did it find recoveries."** It is whether the three deterministic
+signals above have made the model pass redundant. If they have, retire it: set `siteconfig.SMELL_MODEL`
+to `"off"` and drop the Monday cron, leaving the lints and `audit_log.py` in place. If a firm
+unsupported-quote or invalid-category rate is doing real work by then, the model pass was never the
+thing carrying the load and retiring it costs nothing either way.
+
+Recorded here rather than in an issue comment on purpose. A decision that lives only in a thread is
+the same failure the `audit` block exists to end — see the section above.
+
 ### The hedge lint, and why it does not gate anything
 
 Two audits of the same log (#283, then #293) read **36 drops through the full opinions and
