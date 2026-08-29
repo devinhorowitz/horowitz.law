@@ -14,6 +14,10 @@ when OPINIONS_SMELL_BATCH is on, via update.smell_reasons), and:
   - writes scripts/smell_suspects.md when suspects are found: a human report plus ready-to-paste
     queue.txt lines (bare cluster id + "!"), so the editor's "cursory double check" is one
     copy-paste away from the queue's force path -- the same recovery Queen v. Berkley took;
+  - runs the hedge lint (update.hedged_reason) over every logged reason in the audited stages and
+    reports it as a SEPARATE section of that same file. No model, no queue lines: a hedge says the
+    REASON is unsupported, not that the case was lost -- see write_report for why the two must not
+    be mixed;
   - prints the row-by-row report and a GitHub step summary.
 
 The escalation itself stays HUMAN here, unlike the in-run pass: these drops are weeks old and
@@ -112,6 +116,61 @@ def queue_line(rec, note):
         (rec.get("name") or "").strip(), rec.get("court") or "?", rec.get("date") or "?")
 
 
+HEDGE_CAP = 40    # rows listed in the hedge section; the count above it is always the full number
+
+
+def write_report(suspects, audited, hedged):
+    """Write scripts/smell_suspects.md, the file the workflow surfaces on the tracking issue.
+
+    Two INDEPENDENT sections, and keeping them apart is the point:
+
+      - Suspect drops: the smell model's verdict that a reason states no disqualifier. A RECALL
+        claim -- these carry queue lines because the case underneath may be recoverable.
+      - Hedged reasons: the zero-cost lint (update.hedged_reason). A reason-QUALITY claim only,
+        and deliberately given NO queue lines. The 2026-08-29 pass read every hedged drop on
+        issue #293 through the full opinions and all six were correct drops, so queueing them
+        would spend an Opus read and an editor's attention re-confirming a right answer. What
+        they are evidence of is the screen writing reasons it cannot support -- worth fixing at
+        the prompt, not at the queue.
+
+    Written when either section has content, skipped when neither does, so the workflow's
+    hashFiles guard never opens an issue that says nothing.
+    """
+    if not suspects and not hedged:
+        return
+    L = []
+    if suspects:
+        L += ["## Drop-reason audit: %d suspect drop(s) of %d audited" % (len(suspects), audited), ""]
+        L += ["The smell model read each logged drop REASON on its face (not the opinions) against "
+              "the feed's triage standard. The reasons below state no recognized disqualifier, so "
+              "the drops deserve one full read. To escalate, paste the line(s) into queue.txt: the "
+              "`!` forces the case past the triage gate and the summarizer (the final editor) cards "
+              "or declines it -- the editorial PR is still your review gate.", ""]
+        for r, note in suspects:
+            L += ["- **%s** (%s %s) -- dropped for: “%s” -- smell: %s"
+                  % ((r.get("name") or "").strip(), r.get("court") or "?", r.get("date") or "?",
+                     r.get("reason") or "(none)", note or "suspect reason"),
+                  "  ```", "  " + queue_line(r, note), "  ```", ""]
+    if hedged:
+        L += ["## Hedged drop reasons: %d in the log" % len(hedged), ""]
+        L += ["Reason quality only -- **not recall claims, and no queue action is wanted.** Each "
+              "reason below uses a word the screen prompt bans (`likely`, `appears to be`, "
+              "`suggests`, `indicates`); by that prompt's own rule the model was guessing from the "
+              "caption and should have passed the case on instead. Every hedged drop read so far has "
+              "nonetheless been the right call, so what this measures is an unsupported REASON, not a "
+              "lost case. Fix them at the prompt -- do not paste them into queue.txt.", ""]
+        for r in hedged[:HEDGE_CAP]:
+            L += ["- `%s` **%s** (%s %s) -- “%s” -- hedge: %s"
+                  % (r.get("cluster_id"), (r.get("name") or "").strip()[:80],
+                     r.get("court") or "?", r.get("date") or "?", r.get("reason") or "(none)",
+                     ", ".join(r.get("hedge") or update.hedged_reason(r.get("reason"))))]
+        if len(hedged) > HEDGE_CAP:
+            L += ["- ... and %d more (see opinions_rejections.jsonl, field `hedge`)"
+                  % (len(hedged) - HEDGE_CAP)]
+        L += [""]
+    open(OUT, "w", encoding="utf-8").write("\n".join(L) + "\n")
+
+
 def main():
     if not update.SMELL_MODEL:
         print("OPINIONS_SMELL_MODEL is empty; the smell test is off. Nothing to do.")
@@ -125,8 +184,19 @@ def main():
     with open(update.REJECT_PATH, encoding="utf-8") as f:
         lines = f.read().splitlines()
     records, parsed = select_records(lines)
+    # The hedge lint needs no model and costs nothing, so it runs over the WHOLE log for the audited
+    # stages rather than this run's un-audited slice: its value is that the count is complete, and a
+    # slice would understate it. Unlike the model audit it is not annotated-once -- it is recomputed
+    # every run, so it stays correct when a reason is rewritten or a stage is added.
+    in_stage = [r for r in parsed if r.get("stage") in STAGES]
+    hedged = [r for r in in_stage if update.hedged_reason(r.get("reason"))]
+    if hedged:
+        print("hedge lint: %d of %d %s-stage reason(s) use a banned hedge word (reason quality; "
+              "no queue action)" % (len(hedged), len(in_stage), "/".join(STAGES)))
     if not records:
-        print("no un-audited %s-stage rejection record(s); nothing to do." % "/".join(STAGES))
+        print("no un-audited %s-stage rejection record(s); nothing to audit." % "/".join(STAGES))
+        if not DRY_RUN:
+            write_report([], 0, hedged)     # a hedge-only finding still gets reported
         return 0
     print("auditing %d drop reason(s) [stages: %s] with %s%s"
           % (len(records), "/".join(STAGES), update.SMELL_MODEL, " (DRY_RUN)" if DRY_RUN else ""))
@@ -135,23 +205,12 @@ def main():
         """Rewrite the annotated log and the suspects report NOW. Called after every chunk, so a
         crash, a ConfigError, or the workflow watchdog can discard at most one chunk's worth of
         already-billed verdicts; everything persisted stays audited-once."""
-        if DRY_RUN or not audited_so_far:
+        if DRY_RUN:
             return
-        new = "\n".join(json.dumps(r, separators=(",", ":"), ensure_ascii=False) for r in parsed)
-        safeio.atomic_write_text(update.REJECT_PATH, new + "\n")
-        if suspects:
-            L = ["## Drop-reason audit: %d suspect drop(s) of %d audited" % (len(suspects), audited_so_far), ""]
-            L += ["The smell model read each logged drop REASON on its face (not the opinions) against "
-                  "the feed's triage standard. The reasons below state no recognized disqualifier, so "
-                  "the drops deserve one full read. To escalate, paste the line(s) into queue.txt: the "
-                  "`!` forces the case past the triage gate and the summarizer (the final editor) cards "
-                  "or declines it -- the editorial PR is still your review gate.", ""]
-            for r, note in suspects:
-                L += ["- **%s** (%s %s) -- dropped for: “%s” -- smell: %s"
-                      % ((r.get("name") or "").strip(), r.get("court") or "?", r.get("date") or "?",
-                         r.get("reason") or "(none)", note or "suspect reason"),
-                      "  ```", "  " + queue_line(r, note), "  ```", ""]
-            open(OUT, "w", encoding="utf-8").write("\n".join(L) + "\n")
+        if audited_so_far:
+            new = "\n".join(json.dumps(r, separators=(",", ":"), ensure_ascii=False) for r in parsed)
+            safeio.atomic_write_text(update.REJECT_PATH, new + "\n")
+        write_report(suspects, audited_so_far, hedged)
 
     suspects = []
     audited = 0
@@ -200,11 +259,14 @@ def main():
     print("\n%d audited, %d suspect." % (audited, len(suspects)))
     if not DRY_RUN and audited:
         print("rejections log annotated (%d record(s))." % audited)
-    if suspects and not DRY_RUN:
-        print("suspects report written to %s." % OUT)
+    if (suspects or hedged) and not DRY_RUN:
+        print("report written to %s." % OUT)
 
     summary = ["### Drop-reason audit", "",
                "- %d reason(s) audited, %d suspect" % (audited, len(suspects))]
+    if hedged:
+        summary += ["- %d of %d logged %s-stage reason(s) hedge (reason quality, not recall)"
+                    % (len(hedged), len(in_stage), "/".join(STAGES))]
     summary += ["- SUSPECT: %s -- %s" % ((r.get("name") or "")[:60], n or "suspect reason")
                 for r, n in suspects[:20]]
     safeio.step_summary("\n".join(summary))
