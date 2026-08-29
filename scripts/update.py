@@ -152,8 +152,21 @@ OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
 # Tier-2 triage output budget. Was a hardcoded 1024, which a verbose model (Sonnet 5) can overflow
 # on an opinion with a substantive `note` plus several `treats` entries -- the anthropic_json guard
 # then (correctly) raises on the truncated JSON rather than card a partial verdict, which crashed the
-# maintenance golden check and would stall that candidate in the live funnel. 2x headroom, env-tunable.
-TRIAGE_TOKENS = int(os.environ.get("OPINIONS_TRIAGE_MAX_TOKENS", "2048"))
+# maintenance golden check and would stall that candidate in the live funnel.
+#
+# RAISED AGAIN 2026-08-25, 1024 -> 2048 -> 8000. 2048 was not enough either: the scheduled run in
+# issue #292 died on
+#     triage claude-sonnet-5 hit max_tokens (2048); response truncated
+# mid-sentence through a perfectly good verdict ("Clarifies the FRE 803(8) public-records hearsay
+# exception in a tort context: distinguishes between a public offic..."). The model was not
+# misbehaving; it was writing the substantive note this tier asks for and ran out of room.
+#
+# This is the fourth time one budget in this file has been too small: the smell tier (2026-07-25),
+# the guards at 400 (2026-08-05), the guards at 2048 (2026-08-23, issue #276), and now triage. The
+# pattern is that every "2x headroom" estimate ages out as models get more verbose, so this goes to
+# 8000 to match SMELL_TOKENS and GUARD_TOKENS rather than doubling again. Output budgets bill on what
+# is actually written, so a cap that is never reached costs nothing; a tight one buys only this.
+TRIAGE_TOKENS = int(os.environ.get("OPINIONS_TRIAGE_MAX_TOKENS", "8000"))
 DRY_RUN      = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "yes")
 BUDGET_SEC   = int(os.environ.get("OPINIONS_BUDGET_SEC", "480"))
@@ -1359,8 +1372,28 @@ def _triage_batch(items, feed_index, deadline=None):
             except Exception:
                 still.append(p)
         missing = still
-    for p in missing:      # batch unavailable/unparseable for these -> synchronous triage (never skip)
-        verdicts[p["cid"]] = triage(p["name"], p["docket"], p["text"], feed_index)
+    # Batch unavailable/unparseable for these -> synchronous triage. "Never skip" means no candidate
+    # is silently dropped from the gate, NOT that one bad candidate may take the run down with it.
+    #
+    # It could, until 2026-08-25. This loop had no per-candidate guard, so a single truncated verdict
+    # raised out of here, out of main(), and killed the whole run (issue #292) -- discarding the
+    # verdicts already collected for every other candidate and every downstream stage with them. The
+    # non-batch path twenty lines up in main() has always had exactly the containment below, so the
+    # two paths that do the same work disagreed about what one bad candidate costs; batch is the
+    # default, so the uncontained one was the live path.
+    #
+    # A candidate left without a verdict is not skipped: PASS 2 reads triage_verdicts.get(cid), it is
+    # never marked seen, and the next run picks it up. Fail-open for recall, exactly as elsewhere.
+    # ConfigError still propagates -- a bad key or a retired model is not a per-candidate problem, and
+    # main() stops the run and commits nothing rather than retrying it fifteen times.
+    for p in missing:
+        try:
+            verdicts[p["cid"]] = triage(p["name"], p["docket"], p["text"], feed_index)
+        except ConfigError:
+            raise
+        except Exception as te:
+            print("  ! triage unavailable for %s (%s); rolls to next run" % (p["name"][:50], te),
+                  flush=True)
     return verdicts
 
 
