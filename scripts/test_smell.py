@@ -296,6 +296,17 @@ def test_stage_config():
 
     sysp = update.SMELL_SYSTEM
     check("a reason contradicted by the caption is suspect", "contradicted by the case" in sysp)
+    # ...but NOT a criminal one. The caption-contradiction rule names juvenile/dependency/probate;
+    # the model generalized it to "criminal" and flagged Blount v. Columbia County (Ga. Ct. App.,
+    # 2026-07-23), whose screen reason "Criminal case - DUI conviction review" was exactly right.
+    # Georgia traffic and DUI appeals from probate court reach the Court of Appeals captioned
+    # against the county, so a government-entity caption does not refute a criminal reason. That was
+    # the first FALSE SUSPECT in 26 verified drops -- the audit guessing from the caption, which is
+    # the very failure it exists to catch.
+    check("a criminal reason is exempt from the caption-contradiction rule",
+          "A CRIMINAL reason is the" in sysp)
+    check("and the carve-out names the county-caption shape that produced the false positive",
+          "v. <County>" in sysp)
     check("the wrapper prefixes are named as carrying no subject",
           "'In re'" in sysp and "Ex parte" in sysp)
     check("the request header no longer claims every drop came from triage",
