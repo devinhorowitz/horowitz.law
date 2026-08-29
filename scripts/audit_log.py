@@ -103,6 +103,28 @@ def apply_audits(records, rows, depth, by, dry_run=False):
     return applied, skipped, missing
 
 
+def categories(records, stage=None):
+    """Drop counts per category token, and the invalid ones. This is the whole point of storing a
+    token instead of prose: 'how many probate drops last month, and from which court' is a question
+    free text cannot answer, and a category whose rate jumps is how a prompt regression announces
+    itself before anyone reads a reason."""
+    counts, invalid, untokened = {}, {}, 0
+    for r in records:
+        if stage and r.get("stage") != stage:
+            continue
+        if r.get("stage") not in update.STAGE_CATEGORIES:
+            continue                      # a stage with no closed list has nothing to count
+        bad = r.get("category_invalid")
+        cat = (r.get("category") or "").strip()
+        if bad:
+            invalid[bad] = invalid.get(bad, 0) + 1
+        if not cat:
+            untokened += 1
+            continue
+        counts[cat] = counts.get(cat, 0) + 1
+    return counts, invalid, untokened
+
+
 def summarize(records):
     by_verdict, by_depth, unaudited = {}, {}, 0
     for r in records:
@@ -128,6 +150,8 @@ def main(argv=None):
     ap.add_argument("--from-file", help="TSV batch: cluster_id<TAB>verdict[<TAB>note]")
     ap.add_argument("--list-unaudited", action="store_true", help="print drops carrying no audit")
     ap.add_argument("--summary", action="store_true", help="print what is known so far")
+    ap.add_argument("--categories", action="store_true",
+                    help="drop counts per closed-list token, and any invalid ones")
     ap.add_argument("--stage", help="restrict --list-unaudited to one stage")
     ap.add_argument("--limit", type=int, default=40, help="rows for --list-unaudited (default 40)")
     ap.add_argument("--path", default=update.REJECT_PATH, help="rejection log (default: the repo's)")
@@ -146,6 +170,22 @@ def main(argv=None):
             print("  verdict %-14s %d" % (k, v[k]))
         for k in sorted(d):
             print("  depth   %-14s %d" % (k, d[k]))
+        return 0
+
+    if a.categories:
+        counts, invalid, untokened = categories(records, a.stage)
+        total = sum(counts.values())
+        print("%d tokened drop(s)%s" % (total, " in stage %s" % a.stage if a.stage else ""))
+        for k in sorted(counts, key=lambda x: -counts[x]):
+            print("  %-24s %4d  (%.0f%%)" % (k, counts[k], 100.0 * counts[k] / total) if total
+                  else "  %-24s %4d" % (k, counts[k]))
+        if untokened:
+            print("\n%d drop(s) carry no token (logged before the category contract, or omitted)"
+                  % untokened)
+        if invalid:
+            print("\ninvalid tokens:")
+            for k in sorted(invalid, key=lambda x: -invalid[x]):
+                print("  %-24s %4d" % (k, invalid[k]))
         return 0
 
     if a.list_unaudited:
@@ -172,7 +212,8 @@ def main(argv=None):
             ap.error("--verdict is required with --cluster")
         rows += [(c, a.verdict, a.note) for c in a.cluster]
     if not rows:
-        ap.error("nothing to do: pass --cluster, --from-file, --list-unaudited or --summary")
+        ap.error("nothing to do: pass --cluster, --from-file, --list-unaudited, "
+                 "--categories or --summary")
 
     applied, skipped, missing = apply_audits(records, rows, a.depth, a.by, a.dry_run)
     for cid, verdict, name in applied:
