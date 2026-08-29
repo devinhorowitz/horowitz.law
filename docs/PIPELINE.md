@@ -196,6 +196,62 @@ hedges under 137 good reasons. `SCREEN_SYSTEM` now draws that line explicitly (a
 the *category*; naming the marker for a category you already committed to does not), so the prompt
 and the lint agree in meaning even though their word lists differ.
 
+### What a drop record has to carry
+
+The rejection log is the only trace a drop leaves, and for 1,939 records it carried nine fields:
+`ts stage cluster_id name court docket date url reason`. Two things were missing, and between them
+they cost the #293 audit 37 full-opinion reads.
+
+**The evidence.** The screen is shown a caption, a docket, and up to 1,500 characters of
+CourtListener search snippet. The log kept the first two and threw the snippet away. So when a
+reason asserted `'In the Interest of' caption indicates juvenile dependency` for a case captioned
+*A. P. v. Department of Children and Families*, nothing in the repo could tell you whether the
+model invented the phrase, whether it was in the excerpt, or whether the excerpt was empty.
+
+That snippet is **ephemeral** in a way the opinion is not: a full opinion is refetchable from the
+cluster id forever, but a query-dependent search highlight is not stored anywhere and cannot be
+reconstructed. So the screen drop now records it, bounded by `EVIDENCE_CAP` (240 characters — enough
+to check a quoted marker, not a second copy of the corpus). Written even when blank, because an
+empty excerpt beside a confident subject-matter reason is itself the finding, and an absent key
+would be indistinguishable from a record logged before capture existed.
+
+**What anyone later established.** `update.record_audit` writes an `audit` block —
+`{verdict, depth, by, ts, note}` — and `scripts/audit_log.py` is the CLI that applies it, one
+cluster or a TSV batch at a time. `depth` is the load-bearing field: `reason_only` is what the smell
+model does and can only ever find a bad *reason*; `full_opinion` means someone read the case, and
+that is the claim that retires a drop. A weaker finding never overwrites a stronger one, and
+`smell_check` skips anything already audited at `full_opinion`.
+
+This exists because the #283 and #293 findings lived in GitHub issue comments. The log did not know
+them, so the next tool — a better citator, a cheaper model, whatever comes next — would have re-read
+the same 37 opinions and still been unable to tell *never checked* from *checked hard, confirmed
+correct*. The 37 are backfilled; `python scripts/audit_log.py --summary` and `--list-unaudited`
+report the standing state.
+
+### Lint the reason against its evidence
+
+Once the evidence is on the record, a second zero-cost check falls out beside the hedge lint.
+`update.unsupported_quotes` takes every marker a reason puts in quotes and tests it against the
+caption, the docket, and the stored excerpt. A hedge says a reason **will not commit**; an
+unsupported quote says it **cites evidence that does not exist**, which is worse and wholly
+invisible from the outcome.
+
+Calibrated on all 1,939 logged reasons: 451 quote something and 388 of those quotes (86%) really are
+in the caption, so a flag means something. The two dominant misses are opposite cases:
+
+- **`'v. The State'` (22x)** — caption actually reads *Dobbs v. State*. The model quotes the
+  canonical Georgia form that `SCREEN_SYSTEM` itself uses; the claim is true and the caption
+  supports it. Normalised away by dropping the article, because flagging 22 correct reasons would
+  bury the class below — the same trap `indicat*` set for the hedge lint.
+- **`'In the Interest of'` (26x)** — caption actually reads *J.S., a Child v. State of Florida* or
+  *C.M. v. Mobile County Department of Human Resources*. The marker is not there. These are mostly
+  still **correct drops**, reached through evidence the model made up.
+
+The haystack includes the docket because `'DR'`, `'FC'` and `'LT Case No.'` are real markers that
+live in the docket number rather than the caption. On records predating evidence capture a finding
+is **provisional** — the marker may have been in the discarded excerpt — so the report counts those
+separately and lists only the firm ones.
+
 ### A bare affirmance has no subject
 
 Four of #293's eleven suspects were per curiam affirmances -- `PER CURIAM. Affirmed.` and a panel
