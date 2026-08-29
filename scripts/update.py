@@ -277,9 +277,15 @@ SCREEN_SYSTEM = (
     "'United States v.'), habeas or post-conviction (including 28 U.S.C. 2254 or 2255), "
     "immigration, prisoner civil rights, Social Security or veterans' benefits, family or "
     "domestic, juvenile or dependency ('In the Interest of'), probate or wills, tax, workers' "
-    "compensation, attorney discipline or bar admission, or election; or it is a one-line order "
-    "that merely grants or denies an application or dismisses for failure to file, with no "
-    "merits.\n\n"
+    "compensation, attorney discipline or bar admission, or election; or it DECIDES NOTHING ON "
+    "THE MERITS -- a one-line order that merely grants or denies an application or dismisses for "
+    "failure to file, or a bare per curiam disposition whose entire text is its own result "
+    "('PER CURIAM. Affirmed.', a judgment line and the panel) with no reasoning at all.\n\n"
+    "A NO-MERITS DISPOSITION IS ITS OWN GROUND, and when the excerpt shows one, that is the "
+    "ground you must give: say the opinion decides nothing on the merits. Do NOT reach past it "
+    "for a subject. A bare affirmance HAS no discoverable subject -- having none is what makes "
+    "it one -- so a guess at what the case was about below is invented, and invented in exactly "
+    "the spot where nothing you were shown could have told you.\n\n"
     "A CAPTION IS NOT A CATEGORY. 'In re', 'Ex parte' and 'In the Matter of' are procedural "
     "wrappers: in the Supreme Court of Alabama they head a mandamus or certiorari petition, and "
     "the case underneath is whatever the parties were litigating below. Read the PARTIES and the "
@@ -287,8 +293,13 @@ SCREEN_SYSTEM = (
     "LLC as a party is not a juvenile, dependency or probate matter. What marks those is the "
     "SUBJECT: 'In the Interest of', 'In re Estate of', 'In re Amendments to ... Rules', or parties "
     "given only as initials.\n\n"
-    "If your reason needs a hedge -- 'likely', 'appears to be', 'suggests', 'indicates' -- you are "
-    "guessing from the caption, which is exactly the case you must PASS.\n\n"
+    "If your reason needs a hedge -- 'likely', 'appears to be', 'suggests' -- you are "
+    "guessing from the caption, which is exactly the case you must PASS. A hedge is a word that "
+    "qualifies your CATEGORY, as in 'likely a family matter'. Naming the marker that settles a "
+    "category you have already committed to is NOT a hedge and is the reason shape you should "
+    "prefer: 'family/domestic (DR docket number indicates domestic relations)' commits and then "
+    "shows its work. Two categories joined by 'or' is always a hedge, however confident it "
+    "sounds -- if you cannot tell probate from domestic, you do not know either one.\n\n"
     "That list is CLOSED, and each entry means the DISPUTE is of that kind, not that the case "
     "touches it. Your reason must name one of the categories above; if you cannot, PASS. Note what "
     "is NOT on it: a landlord-tenant or dispossessory posture (a slip-and-fall at an apartment "
@@ -300,6 +311,46 @@ SCREEN_SYSTEM = (
     "about. A later step reads the full opinion, so when in doubt, PASS. "
     "Output ONLY a JSON object: {\"pass\": true or false, \"reason\": \"a few words\"}."
 )
+
+# The hedge words SCREEN_SYSTEM bans from a drop reason. Kept beside that prompt so the two cannot
+# drift apart -- test_smell.test_hedge_prompt_drift pins them.
+#
+# This is an AUDIT signal, NOT a routing rule, and the difference is the whole point. The 2026-08-29
+# pass read all eleven unread suspects on issue #293 through the full opinions: five of the fifteen
+# reported reasons hedge by the list below and ALL FIVE were correct drops. Enforcing the prompt's
+# rule literally -- PASS anything hedged -- would have pushed five right answers down to pretriage
+# for nothing, buying no recall at all. What a hedge
+# marks is an unreliable REASON, which is what the drop-reason audit exists to measure, so the flag
+# rides on the rejection record and surfaces in the weekly report rather than changing what the
+# funnel does with the case.
+#
+# WHAT IS NOT HERE, and why. The prompt's own list names 'indicates', and this deliberately omits
+# it: across the 1,495 logged screen reasons, indicat* fires 137 times and is EXPLANATORY in nearly
+# all of them -- "Family/domestic case (FC designation indicates family court)", "Criminal case -
+# State v. defendant format indicates prosecution". Those commit to a category and then cite the
+# docket marker that settles it, which is the best reason shape in the log, not a guess. Linting
+# them would bury the 55 real hedges under 137 good reasons and the report would be ignored. A
+# hedge qualifies the CATEGORY ("likely a family matter"); naming the evidence for a category you
+# have already committed to does not. SCREEN_SYSTEM now says exactly that, so the prompt and this
+# list agree in meaning even though they differ in word count.
+#
+# 'probable' and 'possible' are left out for the same reason in miniature: "probable cause" is a
+# holding. Only the adverb forms are listed.
+#
+# Applied at every stage, not just the screen: a reason that will not commit is weak wherever it is
+# written.
+HEDGE_RE = re.compile(
+    r"\b(?:likely|probably|presumably|possibly|seem(?:s|ed)?|appears?\s+to\s+be|"
+    r"suggest(?:s|ed|ing)?|may\s+be|might\s+be)\b")
+
+
+def hedged_reason(reason):
+    """The banned hedge words present in a drop REASON, deduped and sorted; empty when it commits.
+
+    A drop reason is a few words long by construction, so a match is the writer hedging rather than
+    prose that happens to contain the word."""
+    return sorted(set(HEDGE_RE.findall((reason or "").lower())))
+
 
 PRETRIAGE_SYSTEM = (
     "You are a cheap full-read screener for a curated feed of court decisions for a "
@@ -2120,6 +2171,13 @@ def _log_rejections(records):
     them on the run page."""
     if not records:
         return
+    # Zero-cost reason lint at the single choke point every stage funnels through, so a stage added
+    # later is covered without anyone remembering to. Annotate only; see HEDGE_RE for why a hedge
+    # never changes the funnel's decision.
+    for r in records:
+        h = hedged_reason(r.get("reason"))
+        if h:
+            r["hedge"] = h
     try:
         old = []
         if os.path.exists(REJECT_PATH):

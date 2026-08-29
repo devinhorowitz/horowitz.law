@@ -398,6 +398,156 @@ def test_reclamation_exposure():
           "always()" in suspects)
 
 
+
+# The fifteen drop reasons issue #293 reported, verbatim, paired with whether the screen prompt's
+# own hedge rule condemns them. Every one was read through the full opinion on 2026-08-29 and every
+# one was a CORRECT drop -- which is exactly why the lint must stay an audit signal and never gate
+# the funnel. Kept as a corpus so a widened HEDGE_RE that starts flagging committed reasons (or a
+# narrowed one that stops flagging these six) fails here instead of in a weekly report.
+HEDGE_CORPUS = [
+    # Commits to a category, then names its marker -- the good shape, even though the marker it
+    # cites is not actually in this caption (the parties are "A. P. v. Department of Children and
+    # Families"). Fabricated evidence is a real defect and this lint cannot see it; that is the
+    # audit's job, not the regex's.
+    ("Dependency/child welfare case - 'In the Interest of' caption indicates juvenile dependency proceeding", False),
+    ("Domestic/family matter (name-based parties, likely divorce or personal dispute)", True),
+    ("Captioned 'In re:' - likely dependency/family/domestic matter", True),
+    ("Likely landlord-tenant or property dispute involving residential parties; minimal detail suggests dispossessory or eviction context", True),
+    ("Likely family/domestic case (individual names suggest personal dispute, 'In re' caption format)", True),
+    ("Family/domestic case (LT case number format indicates domestic relation; names suggest spousal dispute)", True),
+    ("Probate/estate matter ('In re' caption with individual name)", False),
+    ("Prisoner civil rights case involving DOC defendant", False),
+    ("Criminal case - DUI conviction review", False),
+    ("Dependency/child welfare case ('In the Interest of' minor); juvenile matter", False),
+    ("Family/domestic case - private dispute between named individuals", False),
+    ("Probate/estate administration matter", False),
+    ("Civil forfeiture case from Florida supplementary court; outside Georgia focus", False),
+    ("Election/political challenge to Governor; out-of-area Florida case", False),
+    ("Family/domestic matter involving natural guardianship of minor; supplementary Florida state court", False),
+]
+
+
+def test_hedge_lint():
+    for reason, want in HEDGE_CORPUS:
+        got = bool(update.hedged_reason(reason))
+        check("hedge %s: %s" % ("flags" if want else "clears", reason[:44]), got == want,
+              "got %r" % (update.hedged_reason(reason),))
+    check("five of the fifteen #293 reasons hedge",
+          sum(1 for r, _ in HEDGE_CORPUS if update.hedged_reason(r)) == 5)
+    # The 137 explanatory indicat* reasons in the live log are the reason indicat* is not linted.
+    # If it ever comes back, these fail and the report goes back to being 75% noise.
+    for good in ("Family/domestic case (FC designation indicates family court)",
+                 "Criminal case - State v. defendant format indicates prosecution",
+                 "Landlord-tenant (LT case number indicates dispossessory)"):
+        check("explanatory 'indicates' is not a hedge: %s" % good[:40], not update.hedged_reason(good))
+    # A disjunction of categories is the shape the prompt now calls out by name.
+    check("category disjunction still caught",
+          bool(update.hedged_reason("Matter involving individual (likely probate, domestic, or bar discipline)")))
+    # "probable cause" is a holding, not a hedge: the lint must not fire on legal vocabulary that
+    # merely shares a stem with one, or every forfeiture and Fourth Amendment drop reads as guessing.
+    check("probable cause is not a hedge",
+          not update.hedged_reason("Forfeiture reversed: no probable cause for the seizure"))
+    check("possible-cause prose is not a hedge",
+          not update.hedged_reason("Sanctions affirmed; no possible prejudice shown"))
+    check("empty reason is not a hedge", update.hedged_reason("") == [])
+    check("None reason is not a hedge", update.hedged_reason(None) == [])
+    check("hedges are deduped and sorted",
+          update.hedged_reason("Likely X; likely Y; suggests Z") == ["likely", "suggests"])
+
+
+def test_hedge_prompt_drift():
+    """The lint enforces a rule written in SCREEN_SYSTEM. If someone edits the words the prompt
+    bans without editing HEDGE_RE, the funnel starts telling the model one thing and grading it by
+    another -- silently, and in the direction that under-reports. Pin them together."""
+    sys_text = update.SCREEN_SYSTEM
+    for word in ("likely", "appears to be", "suggests"):
+        check("prompt still bans %r" % word, word in sys_text)
+        check("HEDGE_RE catches the prompt's %r" % word,
+              bool(update.hedged_reason("dropped because it %s a family matter" % word)))
+    # The prompt and the lint agree in MEANING, which is what matters, and the prompt has to carry
+    # the distinction explicitly or the omission of indicat* reads as an oversight.
+    check("prompt defines a hedge as qualifying the category", "qualifies your CATEGORY" in sys_text)
+    check("prompt blesses naming the settling marker", "shows its work" in sys_text)
+    check("prompt names the disjunction tell", "joined by 'or' is always a hedge" in sys_text)
+    check("prompt no longer bans explanatory 'indicates'", "'indicates'" not in sys_text)
+
+
+def test_screen_names_a_no_merits_ground():
+    """A bare per curiam affirmance has no discoverable subject, so a screen forced to name a
+    subject-matter category invents one -- the confabulation issue #293 measured (four of its
+    eleven were PCAs). The prompt must offer the truthful ground instead."""
+    t = update.SCREEN_SYSTEM
+    check("screen has a no-merits ground", "DECIDES NOTHING ON" in t)
+    check("screen names the per curiam shape", "per curiam" in t.lower())
+    check("screen forbids reaching past it for a subject",
+          "Do NOT reach past it" in t and "invented" in t)
+    # pretriage reads full text and already had this ground; it must keep it, since the screen now
+    # passes nothing extra to it -- both gates independently refuse a no-merits opinion.
+    check("pretriage keeps its no-merits ground",
+          "decides nothing on the merits" in update.PRETRIAGE_SYSTEM.lower())
+
+
+def test_hedge_annotation():
+    """_log_rejections is the one choke point every stage funnels through, so the stamp lands there
+    and a stage added later is covered without anyone remembering to wire it up."""
+    import tempfile
+    recs = [{"stage": "screen", "cluster_id": 1, "name": "A v. B", "reason": "likely a family matter"},
+            {"stage": "pretriage", "cluster_id": 2, "name": "C v. D", "reason": "workers' compensation"},
+            {"stage": "triage", "cluster_id": 3, "name": "E v. F", "reason": "names suggest a divorce"}]
+    d = tempfile.mkdtemp()
+    old_path, old_env = update.REJECT_PATH, os.environ.pop("GITHUB_STEP_SUMMARY", None)
+    try:
+        update.REJECT_PATH = os.path.join(d, "rej.jsonl")
+        update._log_rejections(recs)
+        written = [json.loads(l) for l in open(update.REJECT_PATH, encoding="utf-8").read().splitlines() if l.strip()]
+    finally:
+        update.REJECT_PATH = old_path
+        if old_env is not None:
+            os.environ["GITHUB_STEP_SUMMARY"] = old_env
+    check("hedged screen reason stamped", written[0].get("hedge") == ["likely"])
+    check("committed reason carries no hedge key", "hedge" not in written[1])
+    check("lint covers non-screen stages too", written[2].get("hedge") == ["suggest"])
+
+
+def test_hedge_report():
+    """The two sections are independent claims and the file must reflect that: a hedge-only run
+    still reports, and a run with neither writes nothing at all (the workflow surfaces the file
+    whenever it exists, so an empty one would open an issue that says nothing)."""
+    import tempfile
+    d = tempfile.mkdtemp()
+    old = smell_check.OUT
+    hedged = [{"cluster_id": 7, "name": "G v. H", "court": "dcafl", "date": "2026-07-24",
+               "reason": "likely a family matter", "hedge": ["likely"]}]
+    susp = [({"cluster_id": 9, "name": "I v. J", "court": "ctapp", "date": "2026-07-25",
+              "reason": "probate"}, "probate guessed")]
+    try:
+        smell_check.OUT = os.path.join(d, "a.md")
+        smell_check.write_report([], 0, [])
+        check("neither section -> no file written", not os.path.exists(smell_check.OUT))
+
+        smell_check.OUT = os.path.join(d, "b.md")
+        smell_check.write_report([], 0, hedged)
+        body = open(smell_check.OUT, encoding="utf-8").read()
+        check("hedge-only run still reports", "Hedged drop reasons: 1" in body)
+        check("hedge-only run has no suspect header", "suspect drop(s)" not in body)
+        check("hedge section carries no queue line", "!  #" not in body)
+        check("hedge section says not a recall claim", "not recall claims" in body)
+
+        smell_check.OUT = os.path.join(d, "c.md")
+        smell_check.write_report(susp, 5, hedged)
+        body = open(smell_check.OUT, encoding="utf-8").read()
+        check("both sections present",
+              "suspect drop(s) of 5 audited" in body and "Hedged drop reasons: 1" in body)
+        check("suspect section still carries its queue line", "9 !  #" in body)
+
+        smell_check.OUT = os.path.join(d, "d.md")
+        smell_check.write_report(susp, 5, [])
+        body = open(smell_check.OUT, encoding="utf-8").read()
+        check("suspects-only run unchanged", "Hedged drop reasons" not in body and "9 !  #" in body)
+    finally:
+        smell_check.OUT = old
+
+
 def main():
     print("smell prompt + parsing:")
     test_prompt_shape()
@@ -415,6 +565,14 @@ def main():
     test_model_resolution()
     print("reclamation exposure:")
     test_reclamation_exposure()
+    print("hedge lint:")
+    test_hedge_lint()
+    test_hedge_prompt_drift()
+    test_hedge_annotation()
+    print("no-merits ground:")
+    test_screen_names_a_no_merits_ground()
+    print("report sections:")
+    test_hedge_report()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1

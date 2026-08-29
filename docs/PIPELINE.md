@@ -172,6 +172,44 @@ audits the logged backlog plus anything un-stamped or deferred, persisting progr
 every chunk, and surfaces suspects on a tracking issue with ready-to-paste `queue.txt` force
 lines for editor review.
 
+### The hedge lint, and why it does not gate anything
+
+Two audits of the same log (#283, then #293) read **36 drops through the full opinions and
+recovered nothing**. The screen is not losing in-scope cases; it is writing reasons that do not
+support the drop it made. Those are different defects, and only the second one is still open.
+
+So a second, deterministic pass runs beside the model: `update.hedged_reason` flags any logged
+reason that hedges its category (`likely`, `appears to be`, `suggests`). It is stamped onto the
+rejection record as `hedge` at the single choke point in `_log_rejections`, costs nothing, needs no
+model, and reports as a **separate section** of `scripts/smell_suspects.md` with **no queue lines**.
+
+The separation is the design, not tidiness. Every hedged drop read so far was the *right* drop, so
+routing them to the queue would spend an Opus read and an editor's attention re-confirming a
+correct answer. A hedge is evidence about the REASON; a smell suspect is a claim about the CASE.
+Mixing them would turn a reason-quality report into false recall alarms.
+
+`indicates` is in the prompt's ban list but deliberately **not** in the lint: across 1,495 logged
+screen reasons it fires 137 times and is explanatory in nearly all of them -- `Criminal case -
+State v. defendant format indicates prosecution` commits to a category and then cites the docket
+marker that settles it, which is the best reason shape in the log. Linting it would bury 55 real
+hedges under 137 good reasons. `SCREEN_SYSTEM` now draws that line explicitly (a hedge qualifies
+the *category*; naming the marker for a category you already committed to does not), so the prompt
+and the lint agree in meaning even though their word lists differ.
+
+### A bare affirmance has no subject
+
+Four of #293's eleven suspects were per curiam affirmances -- `PER CURIAM. Affirmed.` and a panel
+line, nothing else. The screen sees only a caption and an opening excerpt, and its reason "must
+name one of the categories", so for an opinion with no discoverable subject it had no truthful
+output available and invented one: a Florida PCA became "prisoner civil rights", another became
+"landlord-tenant". The PCA gate lives in `pretriage`, which reads full text, but a case dropped at
+screen never reaches it.
+
+The fix is a truthful ground rather than a new gate. `SCREEN_SYSTEM`'s no-merits clause now covers
+a bare per curiam disposition alongside the one-line order, and says that when the excerpt shows
+one, that IS the ground -- do not reach past it for a subject, because a bare affirmance has none
+to find. `pretriage` keeps its own no-merits ground, so both gates independently refuse one.
+
 ## Catching law that moves
 
 A published card can be overtaken by a later decision. Two processes watch for it, and both
