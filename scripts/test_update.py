@@ -747,7 +747,20 @@ def test_screen_caption_rule():
         assert marker in sys_prompt, "screen prompt lost the true subject marker %r" % marker
     # The exclusion list must still be closed; that is what makes "if you cannot, PASS" bite.
     assert "That list is CLOSED" in sys_prompt
-    print("  ok  screen prompt separates caption wrappers from subject markers, and bans hedged reasons")
+
+    # State of origin is not a ground, and may not ride along on one. The prompt already said to
+    # screen supplementary states "on the same out-of-area grounds as any other" -- and the model
+    # wrote it into the reason anyway, twice in the 2026-08-25 batch (issue #293): "Civil forfeiture
+    # case from Florida supplementary court; outside Georgia focus" and "Election/political challenge
+    # to Governor; out-of-area Florida case". The second even named a valid closed-list category
+    # (election) and appended the invalid one. Guidance on the DECISION was not a rule about the
+    # REASON TEXT, so the ban is now explicit and pinned here.
+    assert "NEVER WRITE THE STATE INTO YOUR REASON" in sys_prompt, \
+        "screen prompt lost the ban on citing state of origin"
+    for banned in ("outside Georgia focus", "out-of-area", "supplementary court"):
+        assert banned in sys_prompt, "screen prompt lost the named bad-reason example %r" % banned
+    print("  ok  screen prompt separates caption wrappers from subject markers, bans hedged reasons "
+          "and state-of-origin grounds")
 
 
 def main():
