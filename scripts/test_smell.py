@@ -687,6 +687,74 @@ def test_evidence_capture():
     check("empty evidence is still a written key", '(snip or "")[:EVIDENCE_CAP]' in src)
 
 
+
+def test_category_contract():
+    """The prompts have always said "your reason must name one of the categories" and nothing ever
+    checked it. These pin the token contract that makes the claim verifiable."""
+    for cats, sys_text, label in ((update.SCREEN_CATEGORIES, update.SCREEN_SYSTEM, "screen"),
+                                  (update.PRETRIAGE_CATEGORIES, update.PRETRIAGE_SYSTEM, "pretriage")):
+        check("%s prompt asks for a category" % label, "`category`" in sys_text)
+        check("%s prompt lists every token" % label, all(c in sys_text for c in cats))
+        check("%s prompt ties token to reason" % label, "SAME ground your reason states" in sys_text)
+        check("%s prompt says pick the token first" % label, "Pick the token FIRST" in sys_text)
+        check("%s output shape names category" % label, '"category"' in sys_text)
+    # The two lists differ ON PURPOSE. SCREEN_SYSTEM routes landlord-tenant and bankruptcy to the
+    # full-text gate because neither can be told from an in-scope claim by a caption -- a
+    # slip-and-fall at an apartment complex is a premises case. Handing the screen those tokens
+    # would invite exactly the drops that reasoning forbids, so this must never be "simplified".
+    for tok in ("landlord_tenant", "bankruptcy"):
+        check("screen has no %r token" % tok, tok not in update.SCREEN_CATEGORIES)
+        check("pretriage has the %r token" % tok, tok in update.PRETRIAGE_CATEGORIES)
+        check("%r rejected at screen" % tok, not update.category_ok(tok, "screen"))
+        check("%r accepted at pretriage" % tok, update.category_ok(tok, "pretriage"))
+    check("screen list is a subset of pretriage's",
+          set(update.SCREEN_CATEGORIES) <= set(update.PRETRIAGE_CATEGORIES))
+    # workers_comp is the token whose absence let Altamira be dropped as "probate" for a month.
+    check("workers_comp is on both lists",
+          update.category_ok("workers_comp", "screen") and update.category_ok("workers_comp", "pretriage"))
+    check("no_merits token exists for a bare disposition", update.category_ok("no_merits", "screen"))
+    check("an invented token is rejected", not update.category_ok("probate_or_wills", "screen"))
+    check("an empty token is rejected", not update.category_ok("", "screen"))
+    # triage has no closed list, so nothing is judged there rather than guessed at.
+    check("a stage with no list judges nothing", update.category_ok("anything", "triage"))
+
+
+def test_category_is_recorded_not_enforced():
+    """Fail-open, exactly like the reason lints: an invalid token is a finding about the record, not
+    a reason to reroute the case. If this ever starts changing verdicts, a formatting slip begins
+    flipping correct drops."""
+    import tempfile
+    recs = [{"stage": "screen", "cluster_id": 1, "name": "A v. B", "reason": "wc", "category": "workers_comp"},
+            {"stage": "screen", "cluster_id": 2, "name": "C v. D", "reason": "p", "category": "landlord_tenant"},
+            {"stage": "screen", "cluster_id": 3, "name": "E v. F", "reason": "p", "category": ""},
+            {"stage": "pretriage", "cluster_id": 4, "name": "G v. H", "reason": "lt", "category": "landlord_tenant"},
+            {"stage": "triage", "cluster_id": 5, "name": "I v. J", "reason": "no"}]
+    d = tempfile.mkdtemp()
+    old_path, old_env = update.REJECT_PATH, os.environ.pop("GITHUB_STEP_SUMMARY", None)
+    try:
+        update.REJECT_PATH = os.path.join(d, "r.jsonl")
+        update._log_rejections(recs)
+        w = [json.loads(l) for l in open(update.REJECT_PATH, encoding="utf-8").read().splitlines() if l.strip()]
+    finally:
+        update.REJECT_PATH = old_path
+        if old_env is not None:
+            os.environ["GITHUB_STEP_SUMMARY"] = old_env
+    check("a valid token is left unflagged", "category_invalid" not in w[0])
+    check("a pretriage-only token is invalid at screen", w[1].get("category_invalid") == "landlord_tenant")
+    check("a missing token at a listed stage is flagged", w[2].get("category_invalid") == "(none)")
+    check("the same token is valid at pretriage", "category_invalid" not in w[3])
+    check("a stage with no closed list is not judged", "category_invalid" not in w[4])
+    check("every record still survives logging", len(w) == 5)
+    # Hand-built records cannot prove the funnel actually emits the field, so assert the drop sites
+    # themselves -- the gap that let a mutation removing the screen's category line pass silently.
+    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "update.py"),
+               encoding="utf-8").read()
+    check("the screen drop writes a category",
+          src.count('"category": (s.get("category") or "").strip()') == 1)
+    check("the pretriage drop writes a category",
+          src.count('"category": (ps.get("category") or "").strip()') == 1)
+
+
 def main():
     print("smell prompt + parsing:")
     test_prompt_shape()
@@ -717,6 +785,9 @@ def main():
     test_quote_report_section()
     print("evidence capture:")
     test_evidence_capture()
+    print("category contract:")
+    test_category_contract()
+    test_category_is_recorded_not_enforced()
     print("audit provenance:")
     test_audit_block()
     test_audit_retires_from_queue()

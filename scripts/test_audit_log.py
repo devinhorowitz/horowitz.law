@@ -153,6 +153,33 @@ def test_corrupt_line_survives():
     check("good records survive", recs[0]["audit"]["verdict"] == "confirmed")
 
 
+
+def test_categories_report():
+    """Counting drops per token is the reason a token exists at all -- free text cannot be grouped,
+    and a category whose rate jumps is how a prompt regression shows itself before anyone reads a
+    reason. Untokened history must read as untokened, never as invalid."""
+    recs = [
+        {"stage": "screen", "cluster_id": 1, "category": "probate"},
+        {"stage": "screen", "cluster_id": 2, "category": "probate"},
+        {"stage": "screen", "cluster_id": 3, "category": "criminal"},
+        {"stage": "screen", "cluster_id": 4, "category": "landlord_tenant",
+         "category_invalid": "landlord_tenant"},
+        {"stage": "screen", "cluster_id": 5},                       # predates the contract
+        {"stage": "pretriage", "cluster_id": 6, "category": "bankruptcy"},
+        {"stage": "triage", "cluster_id": 7},                       # no closed list, not counted
+    ]
+    counts, invalid, untokened = audit_log.categories(recs)
+    check("counts group by token", counts.get("probate") == 2 and counts.get("criminal") == 1)
+    check("an invalid token is reported separately", invalid.get("landlord_tenant") == 1)
+    check("untokened history is untokened, not invalid", untokened == 1)
+    check("a stage with no closed list is excluded", "triage" not in counts and counts.get(None) is None)
+    check("pretriage tokens are counted", counts.get("bankruptcy") == 1)
+    only, _, _ = audit_log.categories(recs, stage="pretriage")
+    check("stage filter narrows the count", only == {"bankruptcy": 1})
+    p = write_log()
+    check("--categories exits 0", audit_log.main(["--categories", "--path", p]) == 0)
+
+
 def main():
     print("stamping:")
     test_stamp_and_persist()
@@ -166,6 +193,7 @@ def main():
     test_corrupt_line_survives()
     print("reporting:")
     test_summary_and_listing()
+    test_categories_report()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1

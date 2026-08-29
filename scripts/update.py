@@ -262,6 +262,34 @@ VALID_KEYS  = jurisdictions.VALID_KEYS      # internal court keys (fallback vali
 VALID_AREAS = set(render.AREA_LABELS)
 CITE_RE = jurisdictions.CITE_RE
 
+# The closed FAIL list, as tokens. The prompts say "your reason must name one of the categories
+# above" and nothing has ever verified that it did -- which is how Altamira, an Alabama workers'
+# compensation case, was dropped as "Probate/estate matter" while workers' comp sat on the same
+# closed list, and stayed unnoticed for a month (#293). Free text cannot be validated, counted,
+# grouped or trended; a token can.
+#
+# The two stages carry DIFFERENT lists on purpose and must not be merged. SCREEN_SYSTEM explicitly
+# routes landlord-tenant and bankruptcy to the later gate -- "neither can be told apart from an
+# in-scope claim by a caption and an opening excerpt" -- because a slip-and-fall at an apartment
+# complex is a premises case and a debtor's schedules often sit inside a personal-injury claim.
+# Giving the screen those tokens would invite exactly the drops that reasoning forbids.
+SCREEN_CATEGORIES = (
+    "criminal", "habeas", "immigration", "prisoner_civil_rights", "benefits", "family",
+    "juvenile", "probate", "tax", "workers_comp", "attorney_discipline", "election", "no_merits",
+)
+PRETRIAGE_CATEGORIES = SCREEN_CATEGORIES + (
+    "landlord_tenant", "bankruptcy", "intellectual_property", "employment_discrimination",
+)
+STAGE_CATEGORIES = {"screen": SCREEN_CATEGORIES, "pretriage": PRETRIAGE_CATEGORIES}
+
+
+def category_ok(category, stage):
+    """True when `category` is on the closed list for `stage`. An unknown stage has no list to check
+    against, so nothing is judged -- never guessed at."""
+    allowed = STAGE_CATEGORIES.get(stage)
+    return True if allowed is None else (category in allowed)
+
+
 SCREEN_SYSTEM = (
     "You are a fast first-pass screener for a curated feed of court decisions for a "
     "civil-litigation and insurance audience focused on Georgia. The feed covers the Georgia, Florida, and "
@@ -309,7 +337,14 @@ SCREEN_SYSTEM = (
     "later step that reads the whole opinion, not for you.\n\n"
     "PASS everything else, including any general civil case and anything you are not sure "
     "about. A later step reads the full opinion, so when in doubt, PASS. "
-    "Output ONLY a JSON object: {\"pass\": true or false, \"reason\": \"a few words\"}."
+    "On a FAIL you must also return `category`, exactly one token from this closed list:\n"
+    + ", ".join(SCREEN_CATEGORIES) + "\n"
+    "The token is the machine-readable form of the SAME ground your reason states, so the two must "
+    "agree: if the token is `workers_comp` the reason cannot say probate. Pick the token FIRST -- "
+    "if no token fits, that is the signal to PASS, not to write prose around it. Use `no_merits` "
+    "for a disposition that decides nothing on the merits. On a PASS omit it or send \"\".\n\n"
+    "Output ONLY a JSON object: {\"pass\": true or false, \"reason\": \"a few words\", "
+    "\"category\": \"one token, on a FAIL\"}."
 )
 
 # The hedge words SCREEN_SYSTEM bans from a drop reason. Kept beside that prompt so the two cannot
@@ -484,7 +519,12 @@ PRETRIAGE_SYSTEM = (
     "liability, dram shop, spoliation, Georgia tort reform, expert or Daubert issues, arbitration, "
     "or a civil procedure or evidence question; and PASS anything you are not sure about. The next "
     "reviewer applies the narrow bar, so when in doubt, PASS. "
-    'Output ONLY a JSON object: {"pass": true or false, "reason": "a few words"}.'
+    "On a FAIL you must also return `category`, exactly one token from this closed list:\n"
+    + ", ".join(PRETRIAGE_CATEGORIES) + "\n"
+    "It is the machine-readable form of the SAME ground your reason states, so the two must agree. "
+    "Pick the token FIRST -- if none fits, PASS. On a PASS omit it or send \"\".\n\n"
+    'Output ONLY a JSON object: {"pass": true or false, "reason": "a few words", '
+    '"category": "one token, on a FAIL"}.'
 )
 
 # The include/exclude bar, factored out of TRIAGE_SYSTEM so the drop-reason audit below
@@ -2296,6 +2336,13 @@ def _log_rejections(records):
             u = unsupported_quotes(r.get("reason"), r.get("name"), r.get("docket"), r.get("evidence"))
             if u:
                 r["unsupported_quote"] = u
+        # Membership in the stage's closed list. Recorded, never acted on: a drop is not rerouted
+        # because a token was misspelled, or a formatting slip would start flipping correct verdicts
+        # -- the same fail-open rule the reason lints follow. A missing token on a stage that has a
+        # list is itself the finding, so it is flagged rather than skipped.
+        if r.get("stage") in STAGE_CATEGORIES and not category_ok((r.get("category") or "").strip(),
+                                                                  r.get("stage")):
+            r["category_invalid"] = (r.get("category") or "").strip() or "(none)"
     try:
         old = []
         if os.path.exists(REJECT_PATH):
@@ -2954,6 +3001,7 @@ def main():
                         rejections.append({"ts": run_ts, "stage": "screen", "cluster_id": cid, "name": name,
                                            "court": COURT_MAP.get(court_id) or court_id, "docket": docket,
                                            "date": date_filed, "url": url, "reason": (s.get("reason") or "").strip(),
+                                           "category": (s.get("category") or "").strip(),
                                            "evidence": (snip or "")[:EVIDENCE_CAP]})
                         consec = 0; evaluated.add(cid); continue
                 time.sleep(0.4)
@@ -3013,7 +3061,8 @@ def main():
                         skipped.append((name, "pretriage: %s" % (ps.get("reason") or "not a fit")))
                         rejections.append({"ts": run_ts, "stage": "pretriage", "cluster_id": cid, "name": name,
                                            "court": COURT_MAP.get(court_id) or court_id, "docket": docket,
-                                           "date": date_filed, "url": url, "reason": (ps.get("reason") or "").strip()})
+                                           "date": date_filed, "url": url, "reason": (ps.get("reason") or "").strip(),
+                                           "category": (ps.get("category") or "").strip()})
                         consec = 0; evaluated.add(cid); continue
                 time.sleep(0.4)
             # Survivor: collect for the tier-2 triage gate (pass 2 applies each verdict).

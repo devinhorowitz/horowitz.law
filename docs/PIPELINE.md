@@ -228,6 +228,29 @@ the same 37 opinions and still been unable to tell *never checked* from *checked
 correct*. The 37 are backfilled; `python scripts/audit_log.py --summary` and `--list-unaudited`
 report the standing state.
 
+### The closed list, as a token
+
+Both screens have always said *"your reason must name one of the categories above"*, and nothing
+ever verified that it did. That is how *Altamira* — an Alabama **workers' compensation** case — was
+dropped as `Probate/estate matter` while workers' comp sat on the same closed list, and went
+unnoticed for a month. Free text cannot be validated, counted, grouped or trended; a token can.
+
+A FAIL now returns `category` alongside the prose reason, from a per-stage enum, and the record
+carries it. Membership is checked at log time and a bad token is stamped `category_invalid` —
+**recorded, never enforced**. Rerouting a case because a token was misspelled would let a formatting
+slip start flipping correct verdicts, the same fail-open rule the reason lints follow.
+
+`python scripts/audit_log.py --categories` reports drop counts per token, so *"how many probate
+drops last month, and from which court"* becomes answerable — and a category whose rate jumps is how
+a prompt regression announces itself before anyone reads a reason.
+
+**The two stages carry different lists on purpose, and merging them would be a bug.** `SCREEN_SYSTEM`
+deliberately routes landlord-tenant and bankruptcy to the full-text gate, because *"neither can be
+told apart from an in-scope claim by a caption and an opening excerpt"* — a slip-and-fall at an
+apartment complex is a premises case, and a debtor's schedules often sit inside a personal-injury
+claim. Giving the screen those tokens would invite exactly the drops that reasoning forbids, so the
+screen list is a strict subset of pretriage's and a test pins it.
+
 ### Lint the reason against its evidence
 
 Once the evidence is on the record, a second zero-cost check falls out beside the hedge lint.
