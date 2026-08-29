@@ -14,10 +14,15 @@ when OPINIONS_SMELL_BATCH is on, via update.smell_reasons), and:
   - writes scripts/smell_suspects.md when suspects are found: a human report plus ready-to-paste
     queue.txt lines (bare cluster id + "!"), so the editor's "cursory double check" is one
     copy-paste away from the queue's force path -- the same recovery Queen v. Berkley took;
-  - runs the hedge lint (update.hedged_reason) over every logged reason in the audited stages and
-    reports it as a SEPARATE section of that same file. No model, no queue lines: a hedge says the
-    REASON is unsupported, not that the case was lost -- see write_report for why the two must not
-    be mixed;
+  - runs two zero-cost reason lints over every logged reason in the audited stages and reports each
+    as a SEPARATE section of that same file. No model, no queue lines, because both speak to the
+    REASON rather than to the case: update.hedged_reason (a reason that will not commit) and
+    update.unsupported_quotes (a reason citing a marker that is in neither the caption, the docket,
+    nor the stored excerpt -- evidence that does not exist). See write_report for why these must not
+    be mixed with the model's suspect verdicts;
+  - skips any drop already carrying a full_opinion audit (see update.record_audit and
+    scripts/audit_log.py): reading a one-line reason cannot unsettle a finding someone reached by
+    reading the opinion, so effort accumulates instead of being repeated;
   - prints the row-by-row report and a GitHub step summary.
 
 The escalation itself stays HUMAN here, unlike the in-run pass: these drops are weeks old and
@@ -102,7 +107,12 @@ def select_records(lines, stages=None, all_flag=False, limit=None):
         parsed.append(r)
     stages = stages if stages is not None else STAGES
     picked = [r for r in parsed if r.get("stage") in stages
-              and (all_flag or "smell" not in r or r.get("smell_outcome") == "deferred")]
+              and (all_flag or "smell" not in r or r.get("smell_outcome") == "deferred")
+              # A drop somebody has read to the bottom is settled, and re-reading its one-line
+              # reason cannot unsettle it: full_opinion strictly dominates what this pass can
+              # establish. Skipping them is how the 37 opinions already read stop being re-audited
+              # by every tool that comes along. SMELL_ALL=1 still forces a re-read.
+              and (all_flag or not update.audited_to_depth(r, "full_opinion"))]
     if limit is None:
         limit = LIMIT
     return picked[-limit:], parsed
@@ -119,7 +129,7 @@ def queue_line(rec, note):
 HEDGE_CAP = 40    # rows listed in the hedge section; the count above it is always the full number
 
 
-def write_report(suspects, audited, hedged):
+def write_report(suspects, audited, hedged, quoted=()):
     """Write scripts/smell_suspects.md, the file the workflow surfaces on the tracking issue.
 
     Two INDEPENDENT sections, and keeping them apart is the point:
@@ -136,7 +146,7 @@ def write_report(suspects, audited, hedged):
     Written when either section has content, skipped when neither does, so the workflow's
     hashFiles guard never opens an issue that says nothing.
     """
-    if not suspects and not hedged:
+    if not suspects and not hedged and not quoted:
         return
     L = []
     if suspects:
@@ -151,6 +161,28 @@ def write_report(suspects, audited, hedged):
                   % ((r.get("name") or "").strip(), r.get("court") or "?", r.get("date") or "?",
                      r.get("reason") or "(none)", note or "suspect reason"),
                   "  ```", "  " + queue_line(r, note), "  ```", ""]
+    if quoted:
+        firm = [r for r in quoted if "evidence" in r]
+        prov = [r for r in quoted if "evidence" not in r]
+        L += ["## Unsupported quoted markers: %d in the log" % len(quoted), ""]
+        L += ["A reason that puts a marker in quotes is making a checkable claim about what the "
+              "model was shown. These quote something that appears in neither the caption, the "
+              "docket, nor the stored excerpt. This is a worse finding than a hedge: a hedge is a "
+              "reason that will not commit, an unsupported quote is one that **cites evidence "
+              "which does not exist**. The drop itself may still be correct -- most are -- which "
+              "is exactly why it cannot be seen from the outcome.", ""]
+        for r in firm[:HEDGE_CAP]:
+            L += ["- `%s` **%s** (%s %s) -- “%s” -- unsupported: %s"
+                  % (r.get("cluster_id"), (r.get("name") or "").strip()[:80],
+                     r.get("court") or "?", r.get("date") or "?", r.get("reason") or "(none)",
+                     ", ".join(repr(q) for q in r.get("unsupported_quote") or []))]
+        if len(firm) > HEDGE_CAP:
+            L += ["- ... and %d more" % (len(firm) - HEDGE_CAP)]
+        if prov:
+            L += ["", "%d of these predate evidence capture, so the marker *may* have been in the "
+                  "excerpt that was not kept. They are counted, not listed: only records carrying "
+                  "an `evidence` field support a firm finding." % len(prov)]
+        L += [""]
     if hedged:
         L += ["## Hedged drop reasons: %d in the log" % len(hedged), ""]
         L += ["Reason quality only -- **not recall claims, and no queue action is wanted.** Each "
@@ -190,13 +222,19 @@ def main():
     # every run, so it stays correct when a reason is rewritten or a stage is added.
     in_stage = [r for r in parsed if r.get("stage") in STAGES]
     hedged = [r for r in in_stage if update.hedged_reason(r.get("reason"))]
+    quoted = [r for r in in_stage
+              if update.unsupported_quotes(r.get("reason"), r.get("name"),
+                                           r.get("docket"), r.get("evidence"))]
+    if quoted:
+        print("quote lint: %d of %d %s-stage reason(s) quote a marker not in the caption, docket "
+              "or excerpt" % (len(quoted), len(in_stage), "/".join(STAGES)))
     if hedged:
         print("hedge lint: %d of %d %s-stage reason(s) use a banned hedge word (reason quality; "
               "no queue action)" % (len(hedged), len(in_stage), "/".join(STAGES)))
     if not records:
         print("no un-audited %s-stage rejection record(s); nothing to audit." % "/".join(STAGES))
         if not DRY_RUN:
-            write_report([], 0, hedged)     # a hedge-only finding still gets reported
+            write_report([], 0, hedged, quoted)   # a lint-only finding still gets reported
         return 0
     print("auditing %d drop reason(s) [stages: %s] with %s%s"
           % (len(records), "/".join(STAGES), update.SMELL_MODEL, " (DRY_RUN)" if DRY_RUN else ""))
@@ -210,7 +248,7 @@ def main():
         if audited_so_far:
             new = "\n".join(json.dumps(r, separators=(",", ":"), ensure_ascii=False) for r in parsed)
             safeio.atomic_write_text(update.REJECT_PATH, new + "\n")
-        write_report(suspects, audited_so_far, hedged)
+        write_report(suspects, audited_so_far, hedged, quoted)
 
     suspects = []
     audited = 0
@@ -259,7 +297,7 @@ def main():
     print("\n%d audited, %d suspect." % (audited, len(suspects)))
     if not DRY_RUN and audited:
         print("rejections log annotated (%d record(s))." % audited)
-    if (suspects or hedged) and not DRY_RUN:
+    if (suspects or hedged or quoted) and not DRY_RUN:
         print("report written to %s." % OUT)
 
     summary = ["### Drop-reason audit", "",
@@ -267,6 +305,8 @@ def main():
     if hedged:
         summary += ["- %d of %d logged %s-stage reason(s) hedge (reason quality, not recall)"
                     % (len(hedged), len(in_stage), "/".join(STAGES))]
+    if quoted:
+        summary += ["- %d quote a marker that is not in the caption, docket or excerpt" % len(quoted)]
     summary += ["- SUSPECT: %s -- %s" % ((r.get("name") or "")[:60], n or "suspect reason")
                 for r, n in suspects[:20]]
     safeio.step_summary("\n".join(summary))

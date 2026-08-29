@@ -352,6 +352,117 @@ def hedged_reason(reason):
     return sorted(set(HEDGE_RE.findall((reason or "").lower())))
 
 
+# The screen's whole input is a caption, a docket and a CourtListener search snippet. The snippet is
+# EPHEMERAL -- it is a query-dependent highlight, not a stored field, so it cannot be reconstructed
+# later from the cluster id the way a full opinion can. Keeping a bounded copy on the rejection
+# record is what makes a screen reason falsifiable after the fact, by any tool, with no network call.
+# 240 characters is sized to verify a quoted marker, not to mirror the corpus: at REJECT_CAP the log
+# grows by roughly a megabyte, and a reason that needs more than 240 characters of context to check
+# was not reading a caption.
+EVIDENCE_CAP = int(os.environ.get("OPINIONS_EVIDENCE_CAP", "240"))
+
+# A drop reason that puts a marker in quotes is making a checkable claim about what the model was
+# shown. Extract those claims and test them. This is the sibling of hedged_reason and a strictly
+# worse finding: a hedge says the reason is UNSUPPORTED, an unsupported quote says it is INVENTED.
+#
+# Calibrated on all 1,939 logged reasons. 451 quote something and 388 of those quotes (86%) really
+# are in the caption, so the model is usually accurate and a flag means something. Of the misses,
+# two classes dominate and only one is a defect:
+#
+#   'v. The State' (22x) -- caption actually reads "Dobbs v. State". The model is quoting the
+#       canonical Georgia form, which SCREEN_SYSTEM itself uses; the claim (a criminal appeal) is
+#       true and the caption does support it. Dropping the article normalizes this away, because
+#       flagging 22 correct reasons would bury the class below and get the report ignored -- the
+#       same trap indicat* set for the hedge lint.
+#   'In the Interest of' (26x) -- caption actually reads "J.S., a Child v. State of Florida" or
+#       "C.M. v. Mobile County Department of Human Resources". The marker is simply not there. These
+#       are mostly still CORRECT drops, reached through evidence the model made up, which is exactly
+#       the thing an audit cannot see from the outcome and the reason alone.
+_QUOTE_RE = re.compile(r'"([^"]{2,60})"|\u201c([^\u201d]{2,60})\u201d'
+                       r"|(?<![A-Za-z])'([^']{2,60})'(?![A-Za-z])")
+
+
+def _quote_norm(s):
+    """Fold a quote and its haystack to the same shape: case, whitespace, edge punctuation, and the
+    article 'the' (see the canonical-form class above)."""
+    t = re.sub(r"\s+", " ", (s or "")).lower()
+    t = re.sub(r"\bthe\b", " ", t)
+    return re.sub(r"\s+", " ", t).strip(" .,:;-\u2014")
+
+
+def quoted_markers(reason):
+    """Every string the reason puts in quotes. Single quotes only count when not flanked by letters,
+    so a possessive ("defendant's") is never read as an opening quote."""
+    return [g for m in _QUOTE_RE.findall(reason or "") for g in m if g]
+
+
+def unsupported_quotes(reason, name, docket="", evidence=""):
+    """Quoted markers that appear in NONE of the caption, the docket or the stored evidence.
+
+    Docket matters: 'DR', 'FC', 'LT Case No.' are real markers that live in the docket number rather
+    than the caption, and checking the caption alone would flag them wrongly.
+
+    On a record with no `evidence` (anything logged before it was captured) a finding is PROVISIONAL
+    -- the marker may have been in the excerpt that was thrown away. Callers tell the two apart by
+    whether the record carries an evidence field; this function does not guess."""
+    hay = _quote_norm("%s | %s | %s" % (name or "", docket or "", evidence or ""))
+    out, seen = [], set()
+    for q in quoted_markers(reason):
+        n = _quote_norm(q)
+        if n and n not in hay and n not in seen:
+            seen.add(n)
+            out.append(q)
+    return out
+
+
+# A drop that has been read to the bottom is a settled fact, and it has to live in the repo or it is
+# not one. Two audits (#283, #293) read 37 opinions in full and recovered nothing; that finding
+# survived only in issue comments, so the next tool -- a better citator, a cheaper model, whatever
+# 2027 brings -- would re-read all 37 and could not tell "never checked" from "checked hard,
+# confirmed correct". The `audit` block is the cure: it records WHAT was established, at WHAT depth,
+# by WHOM, so effort accumulates across tools instead of resetting with each one.
+#
+# depth is the claim's strength and is the whole point of the field:
+#   reason_only  -- judged from the logged reason (what the smell model does). Cheap, and it can
+#                   only ever find a bad REASON; it is not evidence about the case.
+#   full_opinion -- the opinion itself was read. This is the claim that retires a drop.
+# verdict: confirmed (the drop was right), recovered (it was not; the case belonged), inconclusive
+# (read, still unresolved -- recorded so the next tool knows it is hard, not merely untouched).
+AUDIT_DEPTHS = ("reason_only", "full_opinion")
+AUDIT_VERDICTS = ("confirmed", "recovered", "inconclusive")
+
+
+def record_audit(rec, verdict, depth="full_opinion", by="", note="", ts=None):
+    """Stamp an audit finding onto a rejection record, in place. Returns the record.
+
+    Deliberately last-writer-wins rather than append-only: the useful question is always "what is
+    the strongest thing anyone has established about this drop", and a list of verdicts would invite
+    a reader to average them. A weaker claim never silently overwrites a stronger one, though --
+    a reason_only pass cannot erase a full_opinion read."""
+    if verdict not in AUDIT_VERDICTS:
+        raise ValueError("verdict must be one of %s" % (AUDIT_VERDICTS,))
+    if depth not in AUDIT_DEPTHS:
+        raise ValueError("depth must be one of %s" % (AUDIT_DEPTHS,))
+    prior = rec.get("audit") or {}
+    if prior.get("depth") == "full_opinion" and depth != "full_opinion":
+        return rec
+    rec["audit"] = {"verdict": verdict, "depth": depth,
+                    "by": by or "unknown",
+                    "ts": ts or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    if note:
+        rec["audit"]["note"] = note
+    return rec
+
+
+def audited_to_depth(rec, depth="full_opinion"):
+    """True when this record already carries an audit at `depth` or stronger."""
+    a = rec.get("audit") or {}
+    got, want = a.get("depth"), depth
+    if got not in AUDIT_DEPTHS or want not in AUDIT_DEPTHS:
+        return False
+    return AUDIT_DEPTHS.index(got) >= AUDIT_DEPTHS.index(want)
+
+
 PRETRIAGE_SYSTEM = (
     "You are a cheap full-read screener for a curated feed of court decisions for a "
     "civil-litigation and insurance audience focused on Georgia. The feed covers the Georgia, Florida, and "
@@ -2178,6 +2289,13 @@ def _log_rejections(records):
         h = hedged_reason(r.get("reason"))
         if h:
             r["hedge"] = h
+        # Only meaningful where the model's whole input is on the record. A stage that read the full
+        # opinion can quote it legitimately, and the opinion is refetchable from the cluster id, so
+        # there is nothing here to reconstruct and nothing to falsify.
+        if "evidence" in r:
+            u = unsupported_quotes(r.get("reason"), r.get("name"), r.get("docket"), r.get("evidence"))
+            if u:
+                r["unsupported_quote"] = u
     try:
         old = []
         if os.path.exists(REJECT_PATH):
@@ -2815,7 +2933,8 @@ def main():
             # SCREEN_EXEMPT_COURTS, whose volume never justified it (see the constant).
             if SCREEN_MODEL and court_id not in SCREEN_EXEMPT_COURTS:
                 n_screen += 1
-                s = screen(name, docket, snippet_of(r))
+                snip = snippet_of(r)
+                s = screen(name, docket, snip)
                 if not s.get("pass"):
                     # A repeat appearance of a carded case (same parties, e.g. the
                     # Supreme Court reviewing a decision we carded from the Court of
@@ -2828,9 +2947,14 @@ def main():
                               % (name[:60]))
                     else:
                         skipped.append((name, "screen: %s" % (s.get("reason") or "not a fit")))
+                        # `evidence` is the screen's whole ephemeral input (see EVIDENCE_CAP). Written
+                        # even when empty -- an empty excerpt beside a confident subject-matter reason
+                        # is itself the finding, and an absent key would be indistinguishable from a
+                        # record logged before capture existed.
                         rejections.append({"ts": run_ts, "stage": "screen", "cluster_id": cid, "name": name,
                                            "court": COURT_MAP.get(court_id) or court_id, "docket": docket,
-                                           "date": date_filed, "url": url, "reason": (s.get("reason") or "").strip()})
+                                           "date": date_filed, "url": url, "reason": (s.get("reason") or "").strip(),
+                                           "evidence": (snip or "")[:EVIDENCE_CAP]})
                         consec = 0; evaluated.add(cid); continue
                 time.sleep(0.4)
             # Full text, fetched once and reused by tiers 2 and 3.

@@ -548,6 +548,145 @@ def test_hedge_report():
         smell_check.OUT = old
 
 
+
+# Calibrated on all 1,939 logged reasons: 451 quote something, 388 of those quotes really are in the
+# caption. The two dominant misses are opposite cases and the lint must split them.
+QUOTE_CORPUS = [
+    # The caption reads "v. State"; the model quotes the canonical form SCREEN_SYSTEM itself uses.
+    # The claim is TRUE and the caption supports it -- flagging 22 of these would bury the real
+    # class below, the same trap indicat* set for the hedge lint.
+    ("Criminal case - 'v. The State' indicates prosecution appeal", "Chaz M. Dobbs v. State", "A26A2203", "", False),
+    ("Criminal (v. The State)", "Ismael Gomez v. State", "A26A2119", "", False),
+    # The caption contains no such phrase. Correct drop, invented evidence -- the class an audit
+    # cannot see from the outcome and the reason alone.
+    ("Dependency - 'In the Interest of' caption", "J.S., a Child v. State of Florida", "1D2025-0696", "", True),
+    ("Juvenile: 'In the Interest of' minor", "C.M. v. Mobile County Department of Human Resources", "", "", True),
+    # Real markers that live in the DOCKET, not the caption. Checking the caption alone flags these
+    # wrongly, so the haystack has to include the docket number.
+    ("Family/domestic ('DR' case number)", "Smith v. Smith", "2024-DR-1188", "", False),
+    ("Landlord-tenant ('LT Case No.' shown)", "Dodge v. Almeida", "LT Case No. 22-114", "", False),
+    # A marker genuinely present in the stored excerpt is supported.
+    ("Probate ('In re Estate of' in the opening)", "Kudler v. Bethesda", "4D2025-1", "IN RE ESTATE OF HOWARD KUDLER", False),
+    # ... and the same quote with the excerpt kept but silent is not.
+    ("Probate ('In re Estate of' in the opening)", "Kudler v. Bethesda", "4D2025-1", "PER CURIAM. AFFIRMED.", True),
+    # A possessive must never be read as an opening single quote.
+    ("Dismissed on the defendant's own motion; no merits", "A v. B", "1", "", False),
+]
+
+
+def test_quote_lint():
+    for reason, name, docket, ev, want in QUOTE_CORPUS:
+        got = bool(update.unsupported_quotes(reason, name, docket, ev))
+        check("quote %s: %s" % ("flags" if want else "clears", reason[:42]), got == want,
+              "got %r" % (update.unsupported_quotes(reason, name, docket, ev),))
+    check("no quotes -> no finding", update.unsupported_quotes("family/domestic matter", "A v. B") == [])
+    check("both quote styles extracted",
+          sorted(update.quoted_markers("saw 'In re' and \"v. State\"")) == ["In re", "v. State"])
+    check("curly quotes extracted",
+          update.quoted_markers("caption \u201cIn the Interest of\u201d") == ["In the Interest of"])
+    # A single character is an initial or a stray apostrophe far more often than a marker, so the
+    # extractor requires two: 'A' in "A. P. v. Department" must not read as a quoted claim.
+    check("one-character quote is ignored", update.quoted_markers("parties given as 'A' only") == [])
+    check("possessive is not a quote", update.quoted_markers("the defendant's motion") == [])
+    check("a supported quote repeated once is not double-reported",
+          update.unsupported_quotes("'In the Interest of' and again 'In the Interest of'",
+                                    "A v. B", "", "") == ["In the Interest of"])
+
+
+def test_audit_block():
+    r = {}
+    update.record_audit(r, "confirmed", "full_opinion", by="tool/x", note="bare PCA")
+    check("audit stamped", r["audit"]["verdict"] == "confirmed" and r["audit"]["depth"] == "full_opinion")
+    check("audit records who", r["audit"]["by"] == "tool/x")
+    check("audit records when", r["audit"]["ts"].endswith("Z"))
+    check("audit keeps the note", r["audit"]["note"] == "bare PCA")
+    # A cheap reason-only pass must never erase an expensive full-opinion read, or the log would
+    # silently lose the strongest thing anyone established about the drop.
+    update.record_audit(r, "recovered", "reason_only", by="smell")
+    check("weaker depth cannot overwrite stronger",
+          r["audit"]["verdict"] == "confirmed" and r["audit"]["by"] == "tool/x")
+    # A later full read may legitimately change the verdict.
+    update.record_audit(r, "recovered", "full_opinion", by="tool/y")
+    check("equal depth may revise", r["audit"]["verdict"] == "recovered")
+    check("audited_to_depth true at depth", update.audited_to_depth(r, "full_opinion"))
+    check("audited_to_depth true below depth", update.audited_to_depth(r, "reason_only"))
+    check("unaudited record is not audited", not update.audited_to_depth({}))
+    shallow = {}
+    update.record_audit(shallow, "confirmed", "reason_only", by="smell")
+    check("reason_only does not satisfy full_opinion",
+          not update.audited_to_depth(shallow, "full_opinion"))
+    for bad in ("maybe", "", None):
+        try:
+            update.record_audit({}, bad)
+            check("bad verdict %r rejected" % (bad,), False)
+        except ValueError:
+            check("bad verdict %r rejected" % (bad,), True)
+    try:
+        update.record_audit({}, "confirmed", depth="skimmed")
+        check("bad depth rejected", False)
+    except ValueError:
+        check("bad depth rejected", True)
+
+
+def test_audit_retires_from_queue():
+    """The whole durability claim: a drop read to the bottom stops being re-audited by every tool
+    that comes along. If this regresses, the 37 opinions already read get re-read forever."""
+    settled = {"stage": "screen", "cluster_id": 1, "name": "A v. B", "reason": "probate",
+               "audit": {"verdict": "confirmed", "depth": "full_opinion", "by": "x", "ts": "t"}}
+    shallow = {"stage": "screen", "cluster_id": 2, "name": "C v. D", "reason": "probate",
+               "audit": {"verdict": "confirmed", "depth": "reason_only", "by": "x", "ts": "t"}}
+    fresh = {"stage": "screen", "cluster_id": 3, "name": "E v. F", "reason": "probate"}
+    lines = [json.dumps(x) for x in (settled, shallow, fresh)]
+    picked, _ = smell_check.select_records(lines, stages=["screen"])
+    ids = [r["cluster_id"] for r in picked]
+    check("full_opinion audit retires the drop", 1 not in ids)
+    check("reason_only audit does not retire it", 2 in ids)
+    check("unaudited drop is still queued", 3 in ids)
+    picked_all, _ = smell_check.select_records(lines, stages=["screen"], all_flag=True)
+    check("SMELL_ALL still forces a re-read", len(picked_all) == 3)
+
+
+def test_quote_report_section():
+    """Firm and provisional findings are different claims and the report must not blur them: a
+    record logged before evidence capture cannot rule out that the marker was in the excerpt."""
+    import tempfile
+    d = tempfile.mkdtemp()
+    old = smell_check.OUT
+    firm = {"cluster_id": 5, "name": "J.S., a Child v. State of Florida", "court": "dcafl",
+            "date": "2026-07-01", "reason": "Dependency - 'In the Interest of' caption",
+            "evidence": "PER CURIAM. AFFIRMED.", "unsupported_quote": ["In the Interest of"]}
+    prov = {"cluster_id": 6, "name": "C.M. v. Mobile County DHR", "court": "civappal",
+            "date": "2026-07-02", "reason": "Juvenile: 'In the Interest of'"}
+    try:
+        smell_check.OUT = os.path.join(d, "q.md")
+        smell_check.write_report([], 0, [], [firm, prov])
+        body = open(smell_check.OUT, encoding="utf-8").read()
+        check("quote section reports the total", "Unsupported quoted markers: 2" in body)
+        check("firm finding is listed", "J.S., a Child" in body)
+        check("provisional finding is counted, not listed",
+              "1 of these predate evidence capture" in body and "Mobile County DHR" not in body)
+        check("quote section says evidence does not exist", "which does not exist" in body)
+        check("quote section carries no queue line", "!  #" not in body)
+        smell_check.OUT = os.path.join(d, "n.md")
+        smell_check.write_report([], 0, [], [])
+        check("no findings at all -> still no file", not os.path.exists(smell_check.OUT))
+    finally:
+        smell_check.OUT = old
+
+
+def test_evidence_capture():
+    """The screen's excerpt is ephemeral -- not reconstructible from the cluster id later -- so if
+    this stops being written, every future screen reason becomes unfalsifiable again."""
+    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "update.py"),
+               encoding="utf-8").read()
+    check("screen drop records the excerpt it was shown", '"evidence": (snip or "")[:EVIDENCE_CAP]' in src)
+    check("the excerpt passed to screen is the one recorded", "s = screen(name, docket, snip)" in src)
+    check("evidence is bounded", update.EVIDENCE_CAP > 0 and update.EVIDENCE_CAP <= 1000)
+    # An empty excerpt beside a confident subject reason is itself the finding, so the key must be
+    # written even when blank -- an absent key means "logged before capture existed", not "empty".
+    check("empty evidence is still a written key", '(snip or "")[:EVIDENCE_CAP]' in src)
+
+
 def main():
     print("smell prompt + parsing:")
     test_prompt_shape()
@@ -573,6 +712,14 @@ def main():
     test_screen_names_a_no_merits_ground()
     print("report sections:")
     test_hedge_report()
+    print("quote lint:")
+    test_quote_lint()
+    test_quote_report_section()
+    print("evidence capture:")
+    test_evidence_capture()
+    print("audit provenance:")
+    test_audit_block()
+    test_audit_retires_from_queue()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
