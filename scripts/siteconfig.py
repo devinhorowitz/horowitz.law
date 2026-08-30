@@ -213,6 +213,7 @@ PAGES = [
     ("/stats",     "stats",      "weekly",  "0.3", ""),
     ("/digests",   "digests",    "weekly",  "0.4", ""),
     ("/subscribe", "subscribe",  "monthly", "0.4", "2026-06-10"),
+    ("/follow",    "follow",     "monthly", "0.5", "2026-08-30"),
     ("/resume",    "resume",     "monthly", "0.8", "2026-05-30"),
     ("/colophon",  "colophon",   "monthly", "0.5", "2026-05-30"),
 ]

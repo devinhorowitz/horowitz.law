@@ -150,6 +150,7 @@ jobs:
             public/sitemap.xml
             public/stats.html
             public/subscribe.html
+            public/follow.html
       # Surfaces a broken run instead of letting it fail silently: comments on the one
       # open tracking issue, or opens it the first time, so repeated failures collect
       # on a single issue rather than spamming new ones.
