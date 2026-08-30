@@ -533,6 +533,77 @@ def main():
     check("batch timeout leaves the writes un-seen (retry); only the screen drop is seen",
           "111" not in tseen and "222" not in tseen and "444" in tseen)
 
+
+    # ---- the writer never sees the bill text -------------------------------------------------
+    # HB625 said the bill "does not identify the appointing authority... the length of the initial
+    # term". The Act names both, and adds TWO judgeships where the singular caption ("provide
+    # additional judge") implied one. _bill_brief shows a title and LegiScan's description and
+    # explicitly never fetches bill text, so that clause was a claim about an unread document --
+    # the same failure the opinion screen had, in its most persuasive form, because a gap reported
+    # as a gap reads as candour.
+    check("the brief still does not include bill text",
+          "bill text" not in L._bill_brief({"number": "HB1", "title": "t", "description": "d"}).lower())
+    sysm = L._write_system("GA")
+    check("prompt says the bill text is NOT shown", "NOT shown" in sysm)
+    check("prompt forbids characterizing the bill's silence", "is silent on" in sysm)
+    check("prompt says omit, do not report as missing", "OMIT" in sysm)
+    check("prompt guards counts and quantities", "COUNTS AND QUANTITIES" in sysm)
+    check("prompt warns that captions are singular where acts are plural",
+          "provide additional judge" in sysm)
+    # "on a full read" promised a read that never happens; a keep/decline must not rest on it.
+    check("prompt no longer claims a full read", "on a full read" not in sysm)
+
+    # The discriminator, calibrated on the live cards: WHAT the silence is pinned on. Pinning it on
+    # the material actually read is honest and must survive; pinning it on the bill is the defect.
+    for text, want in (
+        ("The bill text as described does not identify the appointing authority", True),
+        ("The bill text does not specify the new reference date", True),
+        ("The act is silent on the compensation figure", True),
+        ("The statute does not spell out which circumstances trigger it", True),
+        ("the provided title and description do not specify the claim filing deadlines", False),
+        ("The description does not identify which proceedings may be digital", False),
+        ("The text supplied does not identify which specific records fall within", False),
+        ("the provided text does not identify which code sections change", False),
+        # Substantive negation is the point of many of these cards and must never be flagged.
+        ("The act does not apply to ride share drivers or ride share network services", False),
+        ("The statute does not preempt local ordinances", False),
+        ("The bill does not take effect until January 1", False),
+        ("", False),
+    ):
+        got = bool(L.unsourced_silence_claim(text))
+        check("silence lint %s: %s" % ("flags" if want else "clears", text[:44] or "(empty)"),
+              got == want, "got %r" % (L.unsourced_silence_claim(text),))
+    # The two guards below are each reachable only by a case that trips the OTHER check first, so
+    # they need their own fixtures -- the first pass of these tests exercised neither, and two
+    # mutations (removing the provided-exemption, removing the clause trim) went undetected.
+    #
+    # (a) the provided-exemption: honest attribution that DOES name the bill. Without the exemption
+    #     this flags, and every card that politely says "the provided bill description" is noise.
+    check("an honest attribution naming the bill is still cleared",
+          not L.unsourced_silence_claim(
+              "the provided bill description does not specify the filing deadline"))
+    # (b) the clause trim: an earlier clause names the Act, the nearest one attributes honestly and
+    #     carries no 'provided' word, so only the trim can clear it.
+    check("an earlier mention of the Act does not taint a later honest attribution",
+          not L.unsourced_silence_claim(
+              "This Act amends Title 40; the excerpt does not state an effective date"))
+    check("but a bill-silence claim in that same shape is still caught",
+          bool(L.unsourced_silence_claim(
+              "This Act amends Title 40; the bill does not state an effective date")))
+
+    # The reviewer sees it at the moment of review, or it may as well not exist.
+    body = L._pr_body(2, 0, [
+        {"number": "HB625", "status": "enacted", "areas": [], "title": "t", "url": "u",
+         "synopsis": "Adds judgeships. The bill text does not identify the appointing authority."},
+        {"number": "HB295", "status": "enacted", "areas": [], "title": "t2", "url": "u2",
+         "synopsis": "Creates a mechanism. The provided description does not specify deadlines."}])
+    check("review PR warns on a bill-silence card", "Check these against the bill first" in body)
+    check("review PR names the offending bill", "**HB625**" in body)
+    check("review PR does not flag an honest attribution", "**HB295**" not in body.split("Check these")[-1])
+    clean = L._pr_body(1, 0, [{"number": "HB1", "status": "enacted", "areas": [], "title": "t",
+                               "url": "u", "synopsis": "The act does not apply to rideshare."}])
+    check("no warning block when nothing is flagged", "Check these against the bill" not in clean)
+
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1

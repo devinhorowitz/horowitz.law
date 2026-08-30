@@ -374,14 +374,64 @@ def _write_system(state):
         "lawyers. Given " + origin + ", write a tight, neutral, plain-English card describing what "
         "the law actually changes and why a civil litigator should care." + fed + " No hype, no "
         "editorializing, no legislative history recap. State what the prior rule was and what it "
-        "now is where you can tell; if the text does not make a detail clear, say so rather than "
-        "guessing. Ground every statement in the provided title and description -- do not invent "
-        "code sections, effective dates, or dollar figures that are not present. Reply with ONLY a "
+        "now is where you can tell.\n\n"
+        "WHAT YOU ARE SHOWN: a TITLE and a third-party DESCRIPTION of the bill. You are NOT shown "
+        "the bill text. So never characterize what the bill, the act or the statute does or does "
+        "not contain -- no \'the bill text does not identify\', no \'the act is silent on\'. A "
+        "detail you were not given is a detail you OMIT, not one you report as missing. Saying the "
+        "statute is silent on a point it in fact addresses is worse than saying nothing, because it "
+        "reads as candor and leaves the reader MORE confident in an error. If you must note a gap, "
+        "pin it on what you were given (\'the provided description does not say\'), never on the "
+        "law.\n\n"
+        "Ground every statement in the provided title and description -- do not invent code "
+        "sections, effective dates, dollar figures, or COUNTS AND QUANTITIES that are not present. "
+        "Captions are abbreviated and are frequently singular where the act is plural (\'provide "
+        "additional judge\' for an act that adds two), so never take a number from the title "
+        "alone. Reply with ONLY a "
         "JSON object: {\"keep\": true|false, \"areas\": [codes], \"synopsis\": \"2-4 sentences\", "
         "\"impact\": \"one sentence, <=30 words\", \"effective_date\": \"YYYY-MM-DD or empty if not "
-        "stated\"}. Set keep=false if, on a full read, the bill does not in fact affect a Georgia "
+        "stated\"}. Set keep=false if the title and description show the bill does not affect a Georgia "
         "civil practice. Valid area codes: " + AREA_CODES_STR + "."
     )
+
+
+# A card that reports what the STATUTE fails to say is making a claim about a document the writer
+# never saw: _bill_brief shows a title and LegiScan\'s description, never the bill text. That is the
+# same failure the opinion screen had -- asserting something about an unread source -- and it is the
+# more dangerous shape, because a gap reported as a gap reads as candour and leaves the reader MORE
+# confident. HB625 said the bill "does not identify the appointing authority... the length of the
+# initial term"; the Act names both (the Governor; terms expiring 2026-12-31), and it added two
+# judgeships rather than the one the singular caption implied.
+#
+# Calibrated on the live cards, which split cleanly and gave the discriminator: pinning the gap on
+# what the writer WAS given ("the provided title and description do not specify", "the text
+# supplied does not identify") is honest and stays; pinning it on the bill ("the bill text does not
+# specify") is the defect. So the subject the silence hangs on is what decides it, not the silence.
+_SILENCE_RE = re.compile(
+    r"\b(?:does\s+not|doesn\'?t|do\s+not|don\'?t|fails?\s+to|never)\s+(?:\w+\s+){0,2}?"
+    r"(?:identify|identifies|specify|specifies|state|states|say|says|indicate|indicates|"
+    r"mention|mentions|disclose|discloses|define|defines|spell\s+out|set\s+out|make\s+clear)\b"
+    r"|\b(?:is|are|was|were)\s+silent\b"
+    r"|\bnot\s+(?:identified|specified|stated|spelled\s+out)\b", re.I)
+_SOURCE_RE = re.compile(r"\b(?:bill|act|statute|legislation|enrolled)\b", re.I)
+_PROVIDED_RE = re.compile(r"\b(?:provided|supplied|given|description|title|summary|available)\b", re.I)
+
+
+def unsourced_silence_claim(text, window=70):
+    """Phrases in `text` that report the BILL as silent on something.
+
+    Returns a list of the offending silence phrases; empty when the card either makes no silence
+    claim or pins it on the material the writer actually read. Only the nearest clause before the
+    phrase is inspected, so an earlier mention of "the Act" elsewhere in the sentence cannot drag an
+    honest attribution into a flag."""
+    out = []
+    text = text or ""
+    for m in _SILENCE_RE.finditer(text):
+        pre = text[max(0, m.start() - window):m.start()]
+        pre = pre.rsplit(";", 1)[-1].rsplit(". ", 1)[-1]
+        if _SOURCE_RE.search(pre) and not _PROVIDED_RE.search(pre):
+            out.append(m.group(0))
+    return out
 
 
 def _bill_brief(bill, state=DEFAULT_STATE):
@@ -836,8 +886,24 @@ def _pr_body(added, updated, cards):
             c.get("number") or "?", c.get("status") or "?",
             ", ".join(c.get("areas") or []) or "—",
             (c.get("title") or "")[:80], c.get("url") or ""))
-    lines += ["", "%d new, %d updated." % (added, updated), "",
-              "_AI-drafted summaries; the enrolled bill is the authority._"]
+    lines += ["", "%d new, %d updated." % (added, updated)]
+    # Put the lint in front of the reviewer at the moment of review. A card that reports what the
+    # STATUTE fails to say is describing a document the writer never saw (see
+    # unsourced_silence_claim), and that shape reads as candour -- so it is the least likely thing
+    # to catch the eye unaided and the most likely to be believed.
+    flagged = [(c, unsourced_silence_claim(c.get("synopsis") or "")) for c in cards]
+    flagged = [(c, hits) for c, hits in flagged if hits]
+    if flagged:
+        lines += ["", "### \u26a0 Check these against the bill first", "",
+                  "These cards state what the **bill** does not say. The writer is shown only the "
+                  "title and LegiScan's description, never the bill text, so a gap reported this "
+                  "way is a claim about a document it did not read -- and it reads as candour, "
+                  "which makes it more likely to be believed than caught. Confirm the point really "
+                  "is absent from the enrolled bill, or cut the clause.", ""]
+        for c, hits in flagged:
+            lines.append("- **%s** \u2014 %s" % (c.get("number") or "?",
+                                                 ", ".join('"%s"' % h for h in hits)))
+    lines += ["", "_AI-drafted summaries; the enrolled bill is the authority._"]
     return "\n".join(lines) + "\n"
 
 
