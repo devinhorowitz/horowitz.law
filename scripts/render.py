@@ -80,7 +80,7 @@ ETH_JSON_PATH = os.path.join(REPO, "ethics.json")
 # place, writing only when the year actually changed, so it is a no-op all year;
 # render-sync's add-paths carries the rollover PR.
 STATIC_PAGES = [os.path.join(WEB, p) for p in
-                ("index.html", "resume.html", "colophon.html", "subscribe.html", "404.html")]
+                ("index.html", "resume.html", "colophon.html", "subscribe.html", "follow.html", "404.html")]
 
 
 def _rel(p):

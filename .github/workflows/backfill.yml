@@ -170,6 +170,7 @@ jobs:
             public/sitemap.xml
             public/stats.html
             public/subscribe.html
+            public/follow.html
       - name: Report a failed run
         if: failure()
         env:

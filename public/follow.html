@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Follow · horowitz.law</title>
+<meta name="description" content="Three ways to follow Georgia Appellate Watch: a weekly email digest, RSS feeds, and a public MCP server your own model can poll.">
+<meta name="theme-color" content="#0d0e10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5ede0" media="(prefers-color-scheme: light)">
+
+<link rel="canonical" href="https://horowitz.law/follow">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://horowitz.law/follow">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Follow · horowitz.law">
+<meta property="og:description" content="Three ways to follow Georgia Appellate Watch: a weekly email digest, RSS feeds, and a public MCP server your own model can poll.">
+<meta property="og:image" content="https://horowitz.law/og-card.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Devin R. Horowitz — Partner, Civil Litigation Attorney, Georgia state and federal courts.">
+<meta property="og:site_name" content="horowitz.law">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Follow · horowitz.law">
+<meta name="twitter:description" content="Three ways to follow Georgia Appellate Watch: a weekly email digest, RSS feeds, and a public MCP server your own model can poll.">
+<meta name="twitter:image" content="https://horowitz.law/og-card.jpg">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Horowitz">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="/manifest.json">
+
+<!-- Shared foundation: @font-face, color-scheme, text-wrap -->
+<!-- Font preloads. colophon.html renders weight 400 (body, the default since
+     body sets no font-weight), 500 (page title), and 600/700 (section headers),
+     so each is preloaded to fetch in parallel rather than chaining behind
+     base.css. crossorigin is required for fonts even when same-origin. -->
+<link rel="preload" href="/fonts/jetbrains-mono-400.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-500.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-600.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-700.subset.woff2" as="font" type="font/woff2" crossorigin>
+
+<!-- Shared foundation: @font-face, color-scheme, text-wrap -->
+<!-- pre-paint theme + .js marker: set data-theme before paint to avoid a saved-vs-OS flash (mirrors app.js), and tag <html> with .js so JS-gated styling fails open when scripts are blocked; CSP hash-pinned -->
+<script>(function(){try{var t=localStorage.getItem('horowitz-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}document.documentElement.className+=' js';})();</script>
+<link rel="stylesheet" href="/base.css?v=47cf79ff75">
+
+<style>
+  :root {
+    --measure: 820px;
+    --bg: #0d0e10;
+    --fg: #e8e3d8;
+    --fg-muted: #807a72;
+    --accent: #ff9e5e;
+    --border: #25262a;
+    --grain-opacity: 0.04;
+    --scanline-opacity: 0.018;
+  }
+
+  [data-theme="light"] {
+    --bg: #f5ede0;
+    --fg: #1a1a1a;
+    --fg-muted: #6a6560;
+    --accent: #a4471a;
+    --border: #d4cab8;
+    --grain-opacity: 0.025;
+    --scanline-opacity: 0;
+  }
+
+  /* First-visit: honor an OS light preference on initial paint, before any
+     explicit choice exists. The :not([data-theme="dark"]) guard ensures an
+     explicit dark toggle still wins on a light-mode OS. Keep vars in sync
+     with the [data-theme="light"] block above. */
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f5ede0;
+      --fg: #1a1a1a;
+      --fg-muted: #6a6560;
+      --accent: #a4471a;
+      --border: #d4cab8;
+      --grain-opacity: 0.025;
+      --scanline-opacity: 0;
+    }
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--fg);
+    background: var(--bg);
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+    overflow-wrap: break-word;
+  }
+
+  .container {
+    max-width: var(--measure);
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+    position: relative;
+    z-index: 3;
+  }
+
+  /* topbar */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 72px;
+    font-size: 13px;
+  }
+
+  .topbar-prompt {
+    color: var(--fg-muted);
+    letter-spacing: 0.05em;
+  }
+
+  .topbar-prompt a {
+    color: var(--fg-muted);
+    text-decoration: none;
+    border-bottom: 1px dotted transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .topbar-prompt a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .theme-toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--fg-muted);
+    font: inherit;
+    font-size: 11px;
+    text-transform: lowercase;
+    letter-spacing: 0.05em;
+    padding: 5px 11px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.2s;
+  }
+
+  /* page title */
+  h1.page-title {
+    font-size: clamp(28px, 4.5vw, 38px);
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    margin-bottom: 12px;
+  }
+
+  .subtitle {
+    color: var(--accent);
+    font-size: 13px;
+    margin-bottom: 48px;
+    letter-spacing: 0.03em;
+  }
+
+  /* sections */
+  section { margin-bottom: 44px; }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 22px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--fg-muted);
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+
+  .section-header::before {
+    content: '>';
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  section p {
+    margin-bottom: 16px;
+    color: var(--fg);
+  }
+
+  section p:last-child {
+    margin-bottom: 0;
+  }
+
+  .terminal-line {
+    margin: 16px 0;
+    color: var(--fg-muted);
+    font-size: 13px;
+  }
+  .terminal-line::before {
+    content: '$ ';
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .terminal-line a {
+    color: var(--fg);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--fg-muted);
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .terminal-line a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  em {
+    font-style: italic;
+    color: var(--fg-muted);
+  }
+
+  /* footer */
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--fg-muted);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  footer a {
+    color: var(--fg-muted);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--fg-muted);
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  /* theme transition flicker — matches main site */
+  @keyframes themeFlicker {
+    0%   { opacity: 1; }
+    18%  { opacity: 0.78; }
+    34%  { opacity: 0.95; }
+    50%  { opacity: 0.68; }
+    68%  { opacity: 0.92; }
+    85%  { opacity: 0.96; }
+    100% { opacity: 1; }
+  }
+
+  html.theme-flickering .container > *:not(.topbar) {
+    animation: themeFlicker var(--flicker-duration, 550ms) ease-out forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html.theme-flickering .container > *:not(.topbar) {
+      animation: none !important;
+    }
+    body::after { display: none !important; }
+  }
+
+  /* skip-to-content link (keyboard accessibility) */
+  .skip-link {
+    position: absolute;
+    inset-inline-start: -9999px;
+    top: 0;
+    background: var(--accent);
+    color: var(--bg);
+    padding: 8px 16px;
+    font-size: 12px;
+    text-decoration: none;
+    z-index: 100;
+  }
+  .skip-link:focus {
+    inset-inline-start: 16px;
+    top: 16px;
+  }
+
+  /* focus indicators for keyboard navigation */
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  @media (max-width: 600px) {
+    .container { padding: 36px 22px 80px; }
+    .topbar { margin-bottom: 50px; }
+    footer { flex-direction: column; align-items: flex-start; }
+  }
+
+  /* --- follow page: delivery methods ------------------------------------ */
+  .method {
+    border: 1px solid var(--border);
+    padding: 20px 22px;
+    margin-bottom: 18px;
+  }
+  .method-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .method h3 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .method h3::before { content: '> '; color: var(--accent); }
+  .method .for {
+    font-size: 11px;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  .method p { font-size: 13px; margin-bottom: 12px; }
+  .method p:last-child { margin-bottom: 0; }
+  .method a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent); }
+  .method a:hover { border-bottom-style: solid; }
+  pre.snippet {
+    background: color-mix(in srgb, var(--fg) 5%, transparent);
+    border: 1px solid var(--border);
+    padding: 12px 14px;
+    margin: 0 0 12px;
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-x: auto;
+    color: var(--fg);
+  }
+  .tools { list-style: none; padding: 0; margin: 0 0 12px; }
+  .tools li { font-size: 12.5px; margin-bottom: 7px; color: var(--fg-muted); }
+  .tools code { color: var(--fg); }
+  .caveat {
+    border-left: 2px solid var(--accent);
+    padding: 10px 0 10px 14px;
+    margin: 0 0 12px;
+    font-size: 12.5px;
+    color: var(--fg-muted);
+  }
+  .caveat strong { color: var(--fg); }
+  .feedrow { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .feedrow a {
+    border: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--fg-muted);
+  }
+  .feedrow a:hover { color: var(--accent); border-color: var(--accent); }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<div class="container">
+  <div class="topbar">
+    <span class="topbar-prompt"><a href="/">~ horowitz.law</a>/follow</span>
+    <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false" aria-label="Toggle light or dark theme">[ light ]</button>
+  </div>
+  <main id="main-content">
+    <h1 class="page-title">Follow the watch</h1>
+    <div class="subtitle">// three ways to get it: your inbox, your reader, or your model</div>
+
+    <section>
+      <p><a href="/opinions" style="color:var(--accent);">Georgia Appellate Watch</a> tracks new decisions from the Georgia appellate courts, the Eleventh Circuit, and the U.S. Supreme Court, plus Florida and Alabama, filtered for civil litigation and insurance practice. Everything below carries the same content. Pick whichever fits how you work.</p>
+    </section>
+
+    <section>
+      <h2 class="section-header">by email</h2>
+      <div class="method">
+        <div class="method-top">
+          <h3>Weekly digest</h3>
+          <span class="for">for reading</span>
+        </div>
+        <p>A short email linking each new decision, with a one-line note on why it matters. Pick the practice areas you want, or take everything. Double opt-in, one-click unsubscribe, no tracking pixels.</p>
+        <p><a href="/subscribe">Subscribe &rarr;</a></p>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-header">by feed reader</h2>
+      <div class="method">
+        <div class="method-top">
+          <h3>RSS</h3>
+          <span class="for">for watching</span>
+        </div>
+        <p>Standard RSS. No account, nothing to confirm. Three separate feeds so you can take only the one you want.</p>
+        <div class="feedrow">
+          <a href="/opinions.xml">opinions.xml</a>
+          <a href="/changes.xml">changes.xml</a>
+          <a href="/legislation.xml">legislation.xml</a>
+        </div>
+        <p><em>opinions</em> is new decisions. <em>changes</em> is the one to watch if you cite from here: it carries adverse-treatment flags raised on decisions already published. <em>legislation</em> covers Georgia bills and federal rulemaking.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-header">by model</h2>
+      <div class="method">
+        <div class="method-top">
+          <h3>MCP server</h3>
+          <span class="for">for automating</span>
+        </div>
+        <p>A public, read-only <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer">Model Context Protocol</a> endpoint. Point your own assistant at it and ask what has changed since a date you choose &mdash; no key, no account, nothing stored about you.</p>
+        <pre class="snippet">{
+  "mcpServers": {
+    "horowitz-law": {
+      "type": "http",
+      "url": "https://horowitz.law/mcp"
+    }
+  }
+}</pre>
+        <p>Drop that into your client's MCP configuration. In Claude Code it is one line:</p>
+        <pre class="snippet">claude mcp add --transport http horowitz-law https://horowitz.law/mcp</pre>
+        <p>Three tools:</p>
+        <ul class="tools">
+          <li><code>hlaw_whats_new</code> &mdash; what changed since your date, filtered to the practice areas you name. Includes decisions published earlier that have since been flagged.</li>
+          <li><code>hlaw_check_authorities</code> &mdash; hand it the cases you are relying on; it reports which carry an adverse-treatment flag here.</li>
+          <li><code>hlaw_feed_status</code> &mdash; whether the pipeline is current, and how many decisions sit behind each practice area.</li>
+        </ul>
+        <div class="caveat">
+          <strong>Read the health field before trusting a quiet answer.</strong> Every response says whether the pipeline has run recently. If it has not, an empty result means the feed cannot vouch for the silence &mdash; not that nothing happened.
+        </div>
+        <div class="caveat">
+          <strong>An unflagged case is not a cleared case.</strong> The treatment sweep is incomplete and covers only what is published here. Absence of a flag is not a statement that a decision remains good law. Use a citator.
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-header">what you are getting</h2>
+      <p>Summaries are AI-drafted from the published opinions and reviewed before they go up. They are a reading aid, not primary law and not legal advice. Every entry links the decision itself &mdash; verify there before relying on anything here.</p>
+      <div class="terminal-line">curl <a href="/mcp">horowitz.law/mcp</a> &nbsp;·&nbsp; <a href="https://github.com/devinhorowitz/horowitz.law/blob/main/docs/MCP.md" target="_blank" rel="noopener noreferrer">how it is built</a></div>
+    </section>
+  </main>
+  <footer>
+    <span>&copy; 2026 &middot; Hand-coded by <span data-cfg-text="name">Devin R. Horowitz</span></span>
+    <span><a href="/">&larr; back to horowitz.law</a></span>
+  </footer>
+</div>
+<script src="/app.js?v=92092578f8" defer></script>
+</body>
+</html>
