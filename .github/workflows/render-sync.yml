@@ -112,6 +112,7 @@ jobs:
             public/legislation.html
             public/legislation.xml
             public/regulations.xml
+            public/api/feed.json
             public/o
             public/.well-known/security.txt
             public/devin-horowitz.vcf

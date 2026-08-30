@@ -165,6 +165,7 @@ jobs:
             public/opinions.html
             public/opinions.xml
             public/regulations.xml
+            public/api/feed.json
             public/resume.html
             public/sitemap.xml
             public/stats.html

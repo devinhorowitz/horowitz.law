@@ -99,13 +99,16 @@ jobs:
           node --check functions/api/subscribe/index.js
           node --check functions/api/subscribe/confirm.js
           node --check functions/_middleware.js
+          node --check functions/mcp/index.js
 
       # Behavior, not just syntax, for the Pages Functions -- the only user-facing,
       # secret-handling code here (Turnstile, the IP/address rate limits, the HMAC confirm
       # link, the Resend writes). node:test is built in, so this adds no dependency and no
       # package.json; the suite stubs globalThis.fetch and reaches no network.
       - name: Cloudflare Functions tests
-        run: node --test scripts/test_functions.mjs
+        # Glob-derived, like the Python line above: a new scripts/test_*.mjs runs automatically
+        # rather than waiting for someone to remember a hand-maintained list.
+        run: node --test scripts/test_*.mjs
 
       - name: Site invariants (CSP hash, ?v tokens, scripts/ names, XML)
         run: python scripts/check_site.py

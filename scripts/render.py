@@ -61,6 +61,11 @@ LEG_XML_PATH  = os.path.join(WEB, "legislation.xml")
 # Federal regulatory watch (FMCSA rulemaking; see scripts/regulations.py). Regulation cards render
 # in their own section of the SAME /legislation page (statutes + regulations are the two halves of
 # "law that moved" for this practice); regulations.json is the source, regulations.xml the feed.
+# Machine-readable change feed for the MCP server (functions/mcp/index.js). Same content as the
+# XML feeds and the email digest, addressed to a model: a routine polls it with its own watermark
+# and digests the delta. Built by scripts/mcp_feed.py; see that module for why each card carries a
+# single `changed` timestamp and why health lives in status.json rather than here.
+MCP_FEED_PATH = os.path.join(WEB, "api", "feed.json")
 REG_JSON_PATH = os.path.join(REPO, "regulations.json")
 REG_XML_PATH  = os.path.join(WEB, "regulations.xml")
 # Court-rules watch (FRCP/FRE amendments; see scripts/courtrules.py). A third section of the
@@ -94,7 +99,7 @@ def _rel(p):
 OUTPUT_PATHS = sorted({_rel(p) for p in (
     STATIC_PAGES + [HTML_PATH, ARCHIVE_PATH, XML_PATH, SITEMAP_PATH, CHANGES_PATH, STATS_PATH,
                     CHANGES_XML_PATH, DIGESTS_PATH, SECURITY_TXT_PATH, VCARD_PATH,
-                    LEG_HTML_PATH, LEG_XML_PATH, REG_XML_PATH,
+                    LEG_HTML_PATH, LEG_XML_PATH, REG_XML_PATH, MCP_FEED_PATH,
                     PERMA_DIR, AREAS_DIR])})
 
 _YEAR_RE = re.compile(r'(&copy;|\u00a9)\s*\d{4}')
@@ -551,6 +556,24 @@ def _flagged(entries):
     doctrine that a cleared card stands again."""
     f = [e for e in entries if (e.get("treatment") or "ok") != "ok"]
     return sorted(f, key=lambda e: (e.get("treatment_date") or e["date"], int(e.get("cluster_id", 0))), reverse=True)
+
+def _write_mcp_feed():
+    """Write public/api/feed.json, the MCP server's content source.
+
+    Best-effort by design: a render must not fail because the machine feed could not be built. A
+    failed render would strand the HUMAN site too, and the MCP already treats an unreadable feed as
+    `health: unavailable` rather than as silence -- so the safe failure is a stale feed the server
+    correctly refuses to vouch for, never a broken deploy."""
+    try:
+        import mcp_feed
+        os.makedirs(os.path.dirname(MCP_FEED_PATH), exist_ok=True)
+        doc = mcp_feed.build_from_repo(
+            generated=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+        safeio.atomic_write_text(
+            MCP_FEED_PATH, json.dumps(doc, separators=(",", ":"), ensure_ascii=False) + "\n")
+    except Exception as e:
+        print("  . mcp feed skipped: %s" % e)
+
 
 def changes_block(entries):
     """The /changes ledger rows, injected between the changes markers."""
@@ -1914,6 +1937,7 @@ def render(entries=None):
     out += [rss_item(e) for e in recent]
     out += ['  </channel>', '</rss>', '']
     safeio.atomic_write_text(XML_PATH, "\n".join(out))
+    _write_mcp_feed()
 
     # The Legislative & Regulatory Watch page + feeds: sibling projections from legislation.json
     # (statutes) and regulations.json (FMCSA rulemaking), two sections of the same /legislation
