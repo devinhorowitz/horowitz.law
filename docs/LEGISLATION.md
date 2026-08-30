@@ -257,3 +257,48 @@ guards `LEGISCAN_SESSIONLIST_MIN` / `LEGISCAN_MASTERLIST_MIN` (seconds; default 
 
 - **Later:** additional regulatory agencies (NHTSA vehicle-safety, PHMSA hazmat) — one entry in the
   `REGULATION_AGENCIES` Variable each; and additional court-rule source pages via `COURTRULES_URLS`.
+
+## The writer never sees the bill
+
+`_bill_brief` is explicit that it does not fetch bill text: the writer gets a **title** and
+**LegiScan's description**, and that is all. Everything downstream has to be read in that light.
+
+HB625 is what happens when it is not. The card said the bill *"does not identify the appointing
+authority, the length of the initial term, or the specific compensation figure."* The Act names two
+of the three — appointment by the Governor, terms expiring 2026-12-31 — and it adds **two**
+judgeships where the singular caption (*"provide additional judge"*) implied one.
+
+Two failures, and the second is the worse one:
+
+- **A count taken from a caption.** Captions are abbreviated and frequently singular where the act
+  is plural. The prompt now forbids taking a number from the title alone, and extends the
+  don't-invent list from code sections, dates and dollar figures to **counts and quantities**.
+- **A gap attributed to a document the writer never read.** This is the dangerous shape, and it is
+  the same one the opinion screen had: asserting something about an unread source. It is worse here
+  because a reported gap *reads as candour* — the summary appears to be disclosing its own limits,
+  so it leaves the reader more confident rather than less.
+
+The prompt now states plainly what the writer is shown, forbids characterizing what the bill does or
+does not contain, and says a detail it was not given is one to **omit**, not to report as missing.
+The old wording invited the failure: it said *"if the text does not make a detail clear, say so"* —
+conflating the provided description with the statute — and promised a `keep=false` decision made
+*"on a full read"* that never happens. Both are gone.
+
+### The lint, and what calibrating it showed
+
+`unsourced_silence_claim` flags a synopsis that reports the **bill** as silent. Calibrated against
+the live cards, which turned out to split cleanly and supply the discriminator:
+
+| Attribution | Cards | Verdict |
+|---|---|---|
+| *"the provided title and description do not specify"*, *"The text supplied does not identify"* | HB295, HB185, HB94, HB179, HB268 | **Honest** — that is what it read. Kept. |
+| *"**The bill text** does not specify"* | HB339, HB114 | **Flagged** — a claim about an unread document |
+
+So the flag turns on *what the silence is pinned to*, not on the silence itself. Substantive
+negation — *"the act does not apply to ride share drivers"* — is the point of many of these cards
+and is never flagged.
+
+The flag surfaces in the review PR body, above the sign-off line, because a gap reported as a gap is
+the least likely thing to catch the eye unaided. Two cards already published (HB339, HB114) carry
+the shape and are worth a look on their own schedule; the lint is advisory and changes nothing about
+what the pipeline publishes.
