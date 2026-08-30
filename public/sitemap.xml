@@ -50,6 +50,12 @@
     <priority>0.4</priority>
   </url>
   <url>
+    <loc>https://horowitz.law/follow</loc>
+    <lastmod>2026-08-30</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://horowitz.law/resume</loc>
     <lastmod>2026-05-30</lastmod>
     <changefreq>monthly</changefreq>

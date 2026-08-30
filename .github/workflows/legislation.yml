@@ -186,10 +186,12 @@ jobs:
             public/opinions.html
             public/opinions.xml
             public/regulations.xml
+            public/api/feed.json
             public/resume.html
             public/sitemap.xml
             public/stats.html
             public/subscribe.html
+            public/follow.html
       # Nothing new: the seen-state and run logs still advanced (a settled non-match must not be
       # re-screened), so commit only that bookkeeping straight to main, like the opinion no-op run.
       - name: Commit bookkeeping (nothing new)
