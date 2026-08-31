@@ -2153,15 +2153,11 @@
     10962924,
     10962925,
     10962940,
-    10962941
+    10962941,
+    10962978,
+    10962979,
+    10963015
   ],
-  "updated": "2026-08-31T16:19:29Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-smell": {
-      "id": "msgbatch_01XU9z9pmUTzhvZuDVh2Vc6b",
-      "at": 1788192905.5652215,
-      "n": 1
-    }
-  }
+  "updated": "2026-08-31T21:32:35Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
