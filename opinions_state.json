@@ -2125,8 +2125,43 @@
     10961575,
     10961588,
     10961609,
-    10961613
+    10961613,
+    10962843,
+    10962844,
+    10962845,
+    10962846,
+    10962852,
+    10962853,
+    10962854,
+    10962863,
+    10962864,
+    10962865,
+    10962875,
+    10962881,
+    10962882,
+    10962883,
+    10962884,
+    10962885,
+    10962886,
+    10962887,
+    10962888,
+    10962889,
+    10962890,
+    10962891,
+    10962892,
+    10962923,
+    10962924,
+    10962925,
+    10962940,
+    10962941
   ],
-  "updated": "2026-08-28T22:33:01Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-08-31T16:19:29Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-smell": {
+      "id": "msgbatch_01XU9z9pmUTzhvZuDVh2Vc6b",
+      "at": 1788192905.5652215,
+      "n": 1
+    }
+  }
 }
