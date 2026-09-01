@@ -58,6 +58,24 @@
     "first_seen": "2026-08-09"
   },
   {
+    "bill_id": 1985859,
+    "state": "GA",
+    "number": "HB625",
+    "title": "Fulton County; State Court; provide additional judge",
+    "status": "enacted",
+    "status_date": "2025-05-13",
+    "effective_date": "",
+    "areas": [
+      "procedure"
+    ],
+    "synopsis": "This local Act amends the 1976 consolidation Act creating the State Court of Fulton County (as amended in 1994 and 2003) to add two judgeships to that court, increasing its bench to twelve judges. The two additional judges are to be appointed by the Governor as soon as practicable after the Act's effective date, for terms beginning on the date of appointment and expiring December 31, 2026, and until successors are elected and qualified; thereafter the seats are filled by election. The additional judges have the same powers and privileges as the other judges of the court, and provision is made for compensation and expenses.",
+    "impact": "Fulton County State Court gains two judges, bringing its bench to twelve and adding civil trial capacity in a high-volume venue for tort and insurance-defense cases.",
+    "url": "https://legiscan.com/GA/bill/HB625/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/70802",
+    "change_hash": "8bdd34c6a61a25ebcadd9081694259c7",
+    "first_seen": "2026-08-30"
+  },
+  {
     "bill_id": 1929066,
     "state": "GA",
     "number": "HB114",
