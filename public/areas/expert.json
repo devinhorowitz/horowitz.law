@@ -1,8 +1,29 @@
 {
   "area": "expert",
   "label": "expert",
-  "count": 14,
+  "count": 15,
   "opinions": [
+    {
+      "cluster_id": 10963742,
+      "name": "Robertson v. Toyota Motor Corporation",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-09-01",
+      "disposition": "affirmed in case no. a26a0988; affirmed in part and reversed in part in case no. a26a0989",
+      "areas": [
+        "premises",
+        "procedure",
+        "expert",
+        "damages"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10963742/toyota-motor-corporation-v-james-louis-robertson/",
+      "synopsis": "A tenant died in his sleep of carbon monoxide poisoning after leaving his keyless-ignition vehicle running in the attached garage below his apartment, and his estate sued the out-of-possession landlord for failing to install a carbon monoxide detector. The Court of Appeals affirmed summary judgment for the landlord, holding that O.C.G.A. section 44-7-14 imposes only a duty arising from defective construction or a failure to keep the premises in repair and does not create a duty of maintenance, and that the absence of a detector from the outset did not show the apartment had deteriorated from its original condition so as to require repair. The court also rejected the estate's implied-warranty-of-habitability theory drawn from Thompson v. Crownover, noting that the duties imposed by O.C.G.A. section 44-7-13 sound in contract rather than tort and that any expansion of an out-of-possession landlord's duty must come from the legislature. It further held that arguments about the condition of the premises before the tenant took possession were not preserved.",
+      "why": "The decision reinforces that an out-of-possession landlord's tort exposure under O.C.G.A. section 44-7-14 is confined to defective construction and failure to repair, and that a claim framed as a failure to maintain or as a breach of an implied warranty of habitability does not state a tort claim against such a landlord.",
+      "dockets": [
+        "A26A0988",
+        "A26A0989"
+      ]
+    },
     {
       "cluster_id": 10957668,
       "name": "Jane Doe v. Carnival Corporation",
