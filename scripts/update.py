@@ -328,6 +328,17 @@ SCREEN_SYSTEM = (
     "prefer: 'family/domestic (DR docket number indicates domestic relations)' commits and then "
     "shows its work. Two categories joined by 'or' is always a hedge, however confident it "
     "sounds -- if you cannot tell probate from domestic, you do not know either one.\n\n"
+    "QUOTE ONLY WHAT YOU WERE SHOWN. Naming the marker is right; putting it in quotation marks "
+    "is a further claim -- that those exact words appear in the caption, the docket line or the "
+    "excerpt in front of you. The markers named in THESE INSTRUCTIONS are a vocabulary of what to "
+    "look for, not a record of what you saw. Copying one back as though you had seen it invents "
+    "evidence, and invents it in the first place an auditor looks. It is the most common "
+    "invention in this feed's log: an appeal captioned 'Z.H., Mother of S.R., a Child v. "
+    "Department of Children and Families', docket 'LT Case No. 05-2024-DP-001765', was dropped "
+    "for a caption that shows 'In the Interest of'. The DP docket and the initials were right "
+    "there, were enough on their own, and were named in the very same reason -- the quoted phrase "
+    "appears nowhere in the case, and it turned a correct drop into one no auditor can confirm. "
+    "Name the marker THIS case gives you, or name none.\n\n"
     "That list is CLOSED, and each entry means the DISPUTE is of that kind, not that the case "
     "touches it. Your reason must name one of the categories above; if you cannot, PASS. Note what "
     "is NOT on it: a landlord-tenant or dispossessory posture (a slip-and-fall at an apartment "
@@ -409,10 +420,21 @@ EVIDENCE_CAP = int(os.environ.get("OPINIONS_EVIDENCE_CAP", "240"))
 #       true and the caption does support it. Dropping the article normalizes this away, because
 #       flagging 22 correct reasons would bury the class below and get the report ignored -- the
 #       same trap indicat* set for the hedge lint.
-#   'In the Interest of' (26x) -- caption actually reads "J.S., a Child v. State of Florida" or
+#   'In the Interest of' (27x) -- caption actually reads "J.S., a Child v. State of Florida" or
 #       "C.M. v. Mobile County Department of Human Resources". The marker is simply not there. These
 #       are mostly still CORRECT drops, reached through evidence the model made up, which is exactly
 #       the thing an audit cannot see from the outcome and the reason alone.
+#
+# Re-calibrated at 2,020 reasons, and the second class turned out to have a NAME. 53 quotes are
+# unsupported; 33 of them (62%) are phrases SCREEN_SYSTEM ITSELF puts in quotes, and 'In the
+# Interest of' -- which the prompt names twice as the marker of a dependency case -- is 27 of those
+# on its own. The model was not misreading captions. It was reciting its instructions as
+# observation, which is why a prompt that says "show your work by naming the marker" while handing
+# over a quoted list of markers produces exactly this. echoed_quotes separates that subset, because
+# an echo is repaired by writing and a misread is not. The prompt now carries the rule (QUOTE ONLY
+# WHAT YOU WERE SHOWN) and this line names the trap it was calibrated against. The remaining 20 are
+# docket-code guesses -- 'DR', 'FC', 'CF', 'LT Case No.' asserted of a docket that does not show
+# them -- a different failure with a different fix, and deliberately left unmerged with this one.
 _QUOTE_RE = re.compile(r'"([^"]{2,60})"|\u201c([^\u201d]{2,60})\u201d'
                        r"|(?<![A-Za-z])'([^']{2,60})'(?![A-Za-z])")
 
@@ -429,6 +451,14 @@ def quoted_markers(reason):
     """Every string the reason puts in quotes. Single quotes only count when not flanked by letters,
     so a possessive ("defendant's") is never read as an opening quote."""
     return [g for m in _QUOTE_RE.findall(reason or "") for g in m if g]
+
+
+# The quoted vocabulary SCREEN_SYSTEM hands the model. Derived from the prompt rather than listed
+# here, so the two cannot drift: add a quoted exemplar to the prompt and this learns it. Short
+# fragments are dropped -- 'or' and the JSON-format scaffolding are quoted in the prompt too and
+# would match a real reason by accident.
+PROMPT_MARKERS = frozenset(n for n in (_quote_norm(q) for q in quoted_markers(SCREEN_SYSTEM))
+                           if len(n) >= 4)
 
 
 def unsupported_quotes(reason, name, docket="", evidence=""):
@@ -448,6 +478,21 @@ def unsupported_quotes(reason, name, docket="", evidence=""):
             seen.add(n)
             out.append(q)
     return out
+
+
+def echoed_quotes(reason, name, docket="", evidence=""):
+    """Unsupported quotes that SCREEN_SYSTEM itself supplies in quotation marks.
+
+    The strictly diagnosable subset of unsupported_quotes: the model did not misread the caption, it
+    recited its own instructions as though they were the case. That is worth separating because the
+    two have different fixes -- a misread is a model error, an echo is a PROMPT error, and only the
+    second is repaired by writing.
+
+    It is also the dominant class. Across all 2,020 logged reasons, 53 quote a marker that is in
+    neither the caption, the docket nor the excerpt; 33 of those (62%) are echoes, and a single
+    phrase -- 'In the Interest of', which the prompt names twice -- accounts for 27."""
+    return [q for q in unsupported_quotes(reason, name, docket, evidence)
+            if _quote_norm(q) in PROMPT_MARKERS]
 
 
 # A drop that has been read to the bottom is a settled fact, and it has to live in the repo or it is
@@ -2336,6 +2381,9 @@ def _log_rejections(records):
             u = unsupported_quotes(r.get("reason"), r.get("name"), r.get("docket"), r.get("evidence"))
             if u:
                 r["unsupported_quote"] = u
+                e = [q for q in u if _quote_norm(q) in PROMPT_MARKERS]
+                if e:
+                    r["echoed_quote"] = e
         # Membership in the stage's closed list. Recorded, never acted on: a drop is not rerouted
         # because a token was misspelled, or a formatting slip would start flipping correct verdicts
         # -- the same fail-open rule the reason lints follow. A missing token on a stage that has a
