@@ -61,20 +61,36 @@ This is not hypothetical: the live feed has reported a scan 0.7 hours old agains
 changed 113.9 hours ago — a genuinely quiet stretch behind a healthy pipeline, which a consumer
 reading only content could not have told from an outage.
 
-### Known limitation: `scanned_at` is only as fresh as the last deploy
+### `scanned_at` used to be only as fresh as the last deploy
 
-`opinions.yml` commits `public/status.json` with `[skip ci]`, and Cloudflare Pages honours that
-token — so the freshness marker reaches production only on the next commit that *does* deploy,
-which in practice means the next content change. `scan_age_hours` therefore measures **deploy age,
-not scan age**, and in a quiet stretch it will cross `stale_after_hours` while the funnel is
-scanning normally every four hours. Over one recent 60-day window, 7 gaps between deploying commits
-exceeded 36 hours (the longest 113.2h).
+`opinions.yml` committed `public/status.json` with `[skip ci]` — and **Cloudflare Pages honours that
+token too**, which was never the intent. The freshness marker reached production only on the next
+commit that *did* deploy, in practice the next content change. `scan_age_hours` therefore measured
+**deploy age, not scan age**, and in a quiet stretch it crossed `stale_after_hours` while the funnel
+was scanning normally every four hours. Over one 60-day window, 7 gaps between deploying commits
+exceeded 36 hours, the longest 113.2h — the canary calling itself dead while perfectly healthy.
 
-The error is in the safe direction — a canary that cries wolf, never one that vouches for a dead
-pipeline — and `scripts/heartbeat.py` reads the *committed* `status.json`, so the dead-man's switch
-is unaffected. But a routine that halts on `trust_silence: false` will halt during quiet weeks for
-the wrong reason. The 0.7-hour reading above was only possible because an unrelated merge had just
-deployed. Not yet fixed; deploying `status.json` on its own is the obvious remedy.
+The error was in the safe direction (crying wolf, never vouching for a dead pipeline), and
+`scripts/heartbeat.py` reads the *committed* file so the dead-man's switch was never affected. But a
+routine that halts on `trust_silence: false` would have halted during quiet weeks for the wrong
+reason — and the "scan 0.7 hours old" reading quoted above was only possible because an unrelated
+merge had just deployed.
+
+**The fix is a one-token swap: `[skip ci]` → `[skip actions]`** on that commit alone. `[skip actions]`
+is a GitHub-only skip token, so Actions still skips (no CI burned on a timestamp) while Cloudflare,
+whose documented skip list is CI- and CF-Pages-based, builds. Only the scan-status commit changes;
+`record run state`, `keepalive` and `record drop-reason audit verdicts` write unpublished files and
+keep `[skip ci]`.
+
+**Verification, and what is still open.** The GitHub half is confirmed: an empty commit carrying
+`[skip actions]` produced zero `ci.yml` and `ruff.yml` runs while the pushes on either side of it
+produced runs. The Cloudflare half is confirmed against **production**, not asserted here — after
+the next scan, `https://horowitz.law/status.json` should carry the newest `scanned_at` rather than
+the last content deploy's. Until that check has been made, treat this section as a change believed
+to work rather than one shown to. If Cloudflare turns out to honour `[skip actions]` as well, the
+swap is a no-op and the live file is no staler than it was: the change cannot make things worse.
+
+The accepted cost is a Cloudflare build per scan, roughly 5/day. CI is untouched.
 
 ## Use the apex host, not the `pages.dev` alias
 
