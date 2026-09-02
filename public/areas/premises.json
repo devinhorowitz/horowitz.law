@@ -1,8 +1,42 @@
 {
   "area": "premises",
   "label": "premises",
-  "count": 19,
+  "count": 21,
   "opinions": [
+    {
+      "cluster_id": 10964915,
+      "name": "Adams v. Lee",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-09-02",
+      "disposition": "affirmed",
+      "areas": [
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10964915/martha-adams-v-jason-lee/",
+      "synopsis": "Plaintiff, an invitee babysitting in defendants' rented home, slipped on rainwater that pooled on the dining room floor after the roof leaked during the afternoon. Defendants knew the roof leaked intermittently and in random locations and had complained repeatedly to the owners and property manager, but the floor was dry and the weather sunny when they left for work. The Court of Appeals held that knowledge of a generally prevailing or recurring hazardous condition, here a leaky roof, does not establish actual knowledge of the specific hazard that caused the fall, following the Drossman line, and rejected the argument that Youngblood supports imputing knowledge from a recurring hazard. The directed verdict for defendants was affirmed as right for any reason, since the specific-hazard distinction had been fairly raised below.",
+      "why": "The decision confirms that in a slip-and-fall case a landowner's or occupier's awareness of a recurring or pervasive condition does not substitute for actual knowledge of the particular hazard on which the plaintiff fell.",
+      "dockets": [
+        "A26A1104"
+      ]
+    },
+    {
+      "cluster_id": 10964770,
+      "name": "Lekas v. Dezer Properties, LLC",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-09-02",
+      "disposition": "affirmed",
+      "areas": [
+        "premises"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10964770/theoharis-lekas-v-dezer-properties-llc/",
+      "synopsis": "A hotel guest who walked barefoot on a cement pool deck and beach sand during an August stay in Sunny Isles suffered burn injuries that led to hospitalizations and a partial foot amputation, and he sued the resort owners and operators for negligence. The Third District held that a hot cement pool deck and hot beach sand under the Florida summer sun are conditions so common, ordinary, and open and obvious that, as a matter of law, they are not dangerous conditions giving rise to a duty to warn or to maintain the premises otherwise. The court further held that the plaintiff's diabetic neuropathy, which prevented him from feeling the heat, neither converted an ordinary and obvious condition into a dangerous one nor created a special duty on the landowner's part. Dismissal with prejudice was affirmed on the threshold ground that no legal duty existed.",
+      "why": "The decision applies the open-and-obvious doctrine to resolve duty as a matter of law at the pleading stage and states that a plaintiff's individual medical inability to perceive a common condition does not itself generate a landowner duty.",
+      "dockets": [
+        "3D25-1446"
+      ]
+    },
     {
       "cluster_id": 10963742,
       "name": "Robertson v. Toyota Motor Corporation",
