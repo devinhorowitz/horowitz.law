@@ -52,14 +52,29 @@ with *different update rules*:
 |---|---|---|
 | `/status.json` → `scanned_at` | every scan, found anything or not | is the pipeline alive |
 | `/status.json` → `content_updated_at` | only when content changed | quiet, or busy |
-| `/api/feed.json` → `generated` | when content is rendered | feed age |
+| `/api/feed.json` → `generated` | when content **changes** (carried over otherwise) | feed age |
 
 `trust_silence` is the field that matters: *if this tool told me nothing changed, should I believe
 it?* A routine should refuse to digest, and refuse to conclude nothing happened, when it is `false`.
 
-This is not hypothetical. As of writing, the live feed reports a scan 0.7 hours old against content
-last changed 113.9 hours ago — a genuinely quiet stretch behind a healthy pipeline. A consumer
-reading only content would have had no way to tell that from an outage.
+This is not hypothetical: the live feed has reported a scan 0.7 hours old against content last
+changed 113.9 hours ago — a genuinely quiet stretch behind a healthy pipeline, which a consumer
+reading only content could not have told from an outage.
+
+### Known limitation: `scanned_at` is only as fresh as the last deploy
+
+`opinions.yml` commits `public/status.json` with `[skip ci]`, and Cloudflare Pages honours that
+token — so the freshness marker reaches production only on the next commit that *does* deploy,
+which in practice means the next content change. `scan_age_hours` therefore measures **deploy age,
+not scan age**, and in a quiet stretch it will cross `stale_after_hours` while the funnel is
+scanning normally every four hours. Over one recent 60-day window, 7 gaps between deploying commits
+exceeded 36 hours (the longest 113.2h).
+
+The error is in the safe direction — a canary that cries wolf, never one that vouches for a dead
+pipeline — and `scripts/heartbeat.py` reads the *committed* `status.json`, so the dead-man's switch
+is unaffected. But a routine that halts on `trust_silence: false` will halt during quiet weeks for
+the wrong reason. The 0.7-hour reading above was only possible because an unrelated merge had just
+deployed. Not yet fixed; deploying `status.json` on its own is the obvious remedy.
 
 ## Use the apex host, not the `pages.dev` alias
 
@@ -113,10 +128,16 @@ rather than stranding the file — which is exactly what happened while building
 
 ## Tests
 
-- `scripts/test_mcp_feed.py` — 28 checks on the feed builder
-- `scripts/test_mcp.mjs` — 30 checks on the server (`node --test`, no dependencies)
+- `scripts/test_mcp_feed.py` — 37 checks on the feed builder
+- `scripts/test_mcp.mjs` — 31 checks on the server (`node --test`, no dependencies)
 
 Both run in CI, glob-derived so a new `test_*.mjs` is picked up without editing a hand list.
+
+`test_mcp.mjs` builds its freshness fixtures from `Date.now()`, never a frozen epoch, and a
+tripwire test asserts it. An earlier version pinned `NOW` to the day it was written while the
+server compared against the real clock: the suite was correct for 33 hours and then began failing
+on the calendar rather than on a defect, turning CI red for a day and a half. A test for
+*silence is not success* that fails silently is the joke writing itself.
 
 Six mutations were run and all six caught: hardcoding `trust_silence` true, reading a missing
 `status.json` as healthy, treating an unreadable feed as ordinary silence, implying clearance in

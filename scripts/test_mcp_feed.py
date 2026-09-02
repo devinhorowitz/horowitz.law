@@ -123,6 +123,62 @@ def test_build_is_total():
           "editor_note" not in mcp_feed.build([NEW_CARD])["cards"][0])
 
 
+def test_generated_only_moves_when_content_moves():
+    """`generated` is the feed's age as the MCP publishes it, and the input render-sync diffs.
+
+    If it advances on every render, an unchanged feed is never byte-equal to the committed one:
+    the daily sync opens a one-line PR that merging cannot resolve, and the MCP reports a fresh
+    feed for content that has not moved. Both are the same lie in different clothes -- a timestamp
+    claiming freshness it did not earn."""
+    a = mcp_feed.build([NEW_CARD], generated="2026-09-01T00:00:00Z")
+    b = mcp_feed.build([NEW_CARD], generated="2026-09-02T00:00:00Z")
+    settled = mcp_feed.settle_generated(b, a)
+    check("an unchanged feed keeps the older timestamp",
+          settled["generated"] == "2026-09-01T00:00:00Z")
+    check("the rest of the document is untouched",
+          {k: v for k, v in settled.items() if k != "generated"}
+          == {k: v for k, v in b.items() if k != "generated"})
+
+    moved = mcp_feed.build([NEW_CARD, OLD_CARD], generated="2026-09-02T00:00:00Z")
+    check("a new card advances the timestamp",
+          mcp_feed.settle_generated(moved, a)["generated"] == "2026-09-02T00:00:00Z")
+    # The case the whole feed exists for must also move the clock: a treatment flag changes a card
+    # in place, so an equality test that looked only at the card COUNT would miss it.
+    treated = mcp_feed.build([TREATED_CARD], generated="2026-09-02T00:00:00Z")
+    one = mcp_feed.build([dict(TREATED_CARD, treatment=None, treatment_date=None,
+                               treatment_note=None, treated_by=None)],
+                         generated="2026-09-01T00:00:00Z")
+    check("a newly flagged treatment advances the timestamp",
+          mcp_feed.settle_generated(treated, one)["generated"] == "2026-09-02T00:00:00Z")
+
+    check("no previous document leaves the new timestamp alone",
+          mcp_feed.settle_generated(b, None)["generated"] == "2026-09-02T00:00:00Z")
+    check("a previous with no timestamp leaves the new one alone",
+          mcp_feed.settle_generated(b, {k: v for k, v in a.items() if k != "generated"}
+                                    )["generated"] == "2026-09-02T00:00:00Z")
+    check("a junk previous is not trusted",
+          mcp_feed.settle_generated(b, "not a document")["generated"] == "2026-09-02T00:00:00Z")
+
+
+def test_build_for_path_is_idempotent():
+    """The property render-sync actually depends on: rendering unchanged content twice writes the
+    same bytes. This is the regression that reopens PR #310 if it ever comes back."""
+    import json as _json
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "feed.json")
+        first = mcp_feed.build_for_path(path, generated="2026-09-01T00:00:00Z")
+        with open(path, "w", encoding="utf-8") as f:
+            _json.dump(first, f)
+        second = mcp_feed.build_for_path(path, generated="2026-09-02T00:00:00Z")
+        check("a re-render of unchanged content is byte-identical",
+              _json.dumps(first, sort_keys=True) == _json.dumps(second, sort_keys=True))
+    check("an unreadable previous file does not fail the build",
+          mcp_feed.build_for_path(os.path.join("/nonexistent", "feed.json"),
+                                  generated="2026-09-02T00:00:00Z")["generated"]
+          == "2026-09-02T00:00:00Z")
+
+
 def main():
     print("change semantics:")
     test_change_event()
@@ -134,6 +190,9 @@ def main():
     test_watches()
     print("totality:")
     test_build_is_total()
+    print("timestamp discipline:")
+    test_generated_only_moves_when_content_moves()
+    test_build_for_path_is_idempotent()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
