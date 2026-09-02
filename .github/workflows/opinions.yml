@@ -242,7 +242,28 @@ jobs:
           echo "Review PR carries the held cases; accept by merging, veto a case with /veto <cluster_id>." >> "$GITHUB_STEP_SUMMARY"
 
       # Freshness indicator for the opinions page: last-scanned time and whether a review batch
-      # is pending. Pure metadata straight to main, [skip ci]. Best-effort.
+      # is pending. Pure metadata straight to main. Best-effort.
+      #
+      # [skip actions], NOT [skip ci], and the difference is the whole point. This file is the only
+      # evidence that the funnel is ALIVE -- public/api/feed.json is written only when content
+      # changes, so in a quiet stretch it cannot tell "Georgia was quiet" from "the pipeline died".
+      # The MCP server reads the DEPLOYED /status.json to answer that, which means the marker has
+      # to reach production on its own.
+      #
+      # [skip ci] made it invisible: GitHub Actions honours that token AND SO DOES CLOUDFLARE PAGES,
+      # so a scan-status commit skipped the build and the live file stayed as stale as the last
+      # content deploy. scan_age_hours therefore measured DEPLOY age, and over one 60-day window 7
+      # gaps between deploying commits exceeded the 36h stale threshold (longest 113.2h) -- the
+      # canary calling itself dead while scanning normally every four hours.
+      #
+      # [skip actions] is a GitHub-only token (verified: an empty commit carrying it produced zero
+      # ci.yml and ruff.yml runs, while the pushes on either side of it produced runs). Cloudflare's
+      # documented skip list is CI- and CF-Pages-based and does not include it, so the build should
+      # proceed. That half is verified against PRODUCTION rather than asserted here: see
+      # docs/MCP.md. If Cloudflare turns out to honour it too, this line is a no-op and the live
+      # file is no staler than before -- the change cannot make things worse.
+      #
+      # Cost, deliberately accepted: a Cloudflare build per scan, roughly 5/day. CI is untouched.
       - name: Publish scan status
         continue-on-error: true
         env:
@@ -261,7 +282,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "status.json unchanged; nothing to commit."
           else
-            git commit -m "opinions: scan status [skip ci]"
+            git commit -m "opinions: scan status [skip actions]"
             bash scripts/push_main.sh
           fi
 
