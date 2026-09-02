@@ -164,7 +164,12 @@ def write_report(suspects, audited, hedged, quoted=()):
     if quoted:
         firm = [r for r in quoted if "evidence" in r]
         prov = [r for r in quoted if "evidence" not in r]
-        L += ["## Unsupported quoted markers: %d in the log" % len(quoted), ""]
+        # Headline the FIRM count, never firm+provisional. A provisional finding is a record whose
+        # excerpt was discarded, so the lint compares the quote against a haystack NARROWER than
+        # what the model actually saw -- and three spot-checks against the opinions came back TRUE
+        # every time (see the note below). Leading with the combined number reported 47 defects
+        # where 1 was demonstrable, which is how a lint teaches its reader to discount it.
+        L += ["## Unsupported quoted markers: %d firm" % len(firm), ""]
         L += ["A reason that puts a marker in quotes is making a checkable claim about what the "
               "model was shown. These quote something that appears in neither the caption, the "
               "docket, nor the stored excerpt. This is a worse finding than a hedge: a hedge is a "
@@ -191,9 +196,21 @@ def write_report(suspects, audited, hedged, quoted=()):
         if len(firm) > HEDGE_CAP:
             L += ["- ... and %d more" % (len(firm) - HEDGE_CAP)]
         if prov:
-            L += ["", "%d of these predate evidence capture, so the marker *may* have been in the "
-                  "excerpt that was not kept. They are counted, not listed: only records carrying "
-                  "an `evidence` field support a firm finding." % len(prov)]
+            L += ["", "### %d unverifiable (not findings)" % len(prov), "",
+                  "These predate evidence capture, so the excerpt the model actually read was not "
+                  "kept and the lint can only check the stored caption and docket -- a strictly "
+                  "narrower haystack. **Three were checked against the opinions themselves and all "
+                  "three were TRUE markers**, quoted accurately from text the record no longer "
+                  "carries:", "",
+                  "- `'DR'` -- opinion header reads `LT Case No. 27-2020-DR-2233`; the record keeps "
+                  "only the appellate number `5D2025-2554`.",
+                  "- `'FC'` -- header reads `Lower Tribunal No. 24-16088-FC-04`; the record's "
+                  "docket is `24-16088`, the same number with the `-FC-04` truncated off.",
+                  "- `'Executor'` -- the caption in the opinion is *Johnny Brett Gregory v. Cynthia "
+                  "Noles Johnson, EXECUTOR*; CourtListener's `case_name` drops the designation.", "",
+                  "So treat this count as a **coverage gap, not a defect rate**. It cannot grow: "
+                  "every drop logged since evidence capture carries its excerpt and lands in the "
+                  "firm section above or nowhere. A rising FIRM count is the signal to act on."]
         L += [""]
     if hedged:
         L += ["## Hedged drop reasons: %d in the log" % len(hedged), ""]

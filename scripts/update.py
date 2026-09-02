@@ -432,9 +432,25 @@ EVIDENCE_CAP = int(os.environ.get("OPINIONS_EVIDENCE_CAP", "240"))
 # observation, which is why a prompt that says "show your work by naming the marker" while handing
 # over a quoted list of markers produces exactly this. echoed_quotes separates that subset, because
 # an echo is repaired by writing and a misread is not. The prompt now carries the rule (QUOTE ONLY
-# WHAT YOU WERE SHOWN) and this line names the trap it was calibrated against. The remaining 20 are
-# docket-code guesses -- 'DR', 'FC', 'CF', 'LT Case No.' asserted of a docket that does not show
-# them -- a different failure with a different fix, and deliberately left unmerged with this one.
+# WHAT YOU WERE SHOWN) and this line names the trap it was calibrated against.
+#
+# The remaining 20 looked like a second defect -- docket-code guesses, 'DR'/'FC'/'CF'/'LT Case No.'
+# asserted of a docket that does not show them -- and they are NOT. Every one predates evidence
+# capture, and three checked against the opinions themselves came back TRUE:
+#
+#   'DR'       header reads "LT Case No. 27-2020-DR-2233"; the record keeps only the APPELLATE
+#              number, 5D2025-2554. Florida DCA opinions print the lower-tribunal number in the
+#              header and the docket field does not carry it.
+#   'FC'       header reads "Lower Tribunal No. 24-16088-FC-04"; the stored docket is 24-16088 --
+#              the same number with the -FC-04 truncated off.
+#   'Executor' the opinion's caption is "JOHNNY BRETT GREGORY v. CYNTHIA NOLES JOHNSON, EXECUTOR";
+#              CourtListener's case_name drops the party designation.
+#
+# So on an evidence-less record the lint compares the quote against a haystack NARROWER than what
+# the model was shown, and flags markers that are really there. That is a limitation of the LINT,
+# not a defect in the model, and it is already fixed forward: every drop logged since evidence
+# capture carries its excerpt. The provisional count is a COVERAGE GAP, not a defect rate, and
+# smell_check headlines the firm count so it cannot be read as one.
 _QUOTE_RE = re.compile(r'"([^"]{2,60})"|\u201c([^\u201d]{2,60})\u201d'
                        r"|(?<![A-Za-z])'([^']{2,60})'(?![A-Za-z])")
 

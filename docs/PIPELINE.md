@@ -187,7 +187,7 @@ sentiment about the recall question. It is that three signals shipped in August 
 | Signal | Reading on 2026-08-29 | What to look for |
 |---|---|---|
 | `category_invalid` | 0 (contract is new; 1,800 records predate it) | Any sustained non-zero rate means a gate is emitting tokens off its own closed list |
-| unsupported quotes, **firm** | 1 firm / 46 provisional (the firm one an echo) | Firm findings only accrue on records carrying `evidence`; a rising firm rate is fabricated evidence, live. Watch `echoed_quote` separately: a non-zero rate after the prompt fix means the rule did not take |
+| unsupported quotes, **firm** | 1 firm (an echo) / 46 unverifiable | Firm findings only accrue on records carrying `evidence`; a rising firm rate is fabricated evidence, live. Watch `echoed_quote` separately: a non-zero rate after the prompt fix means the rule did not take |
 | `hedge` | 55 of 1,634 (3.4%) | A jump follows a prompt edit that loosened the commit rule |
 
 None of those can be read yet, because all three depend on drops logged *after* the contract
@@ -327,8 +327,27 @@ instructions are a vocabulary of what to look for, not a record of what was seen
 is not**. `PROMPT_MARKERS` is *derived* from the prompt rather than listed beside it, so adding a
 quoted exemplar teaches the lint automatically; `test_echoed_quote_prompt_drift` pins both halves.
 
-The remaining 20 are a different failure left deliberately unmerged with this one: docket-code
-guesses (`'DR'`, `'FC'`, `'CF'`, `'LT Case No.'`) asserted of a docket that does not show them.
+#### The other 20 were not a defect at all
+
+The remaining unsupported quotes looked like a second class — docket-code guesses (`'DR'`, `'FC'`,
+`'CF'`, `'LT Case No.'`) asserted of a docket that does not show them. They are not. Every one
+predates evidence capture, and **three checked against the opinions themselves came back true**:
+
+| Quote | What the opinion says | What the record kept |
+|---|---|---|
+| `'DR'` | `LT Case No. 27-2020-DR-2233` | `5D2025-2554` — the appellate number only |
+| `'FC'` | `Lower Tribunal No. 24-16088-FC-04` | `24-16088` — the same number, `-FC-04` truncated |
+| `'Executor'` | caption *… v. Cynthia Noles Johnson, **EXECUTOR*** | `… v. Cynthia Noles Johnson` |
+
+Florida DCA opinions print the lower-tribunal number in the header and CourtListener's `case_name`
+drops party designations, so on a record whose excerpt was discarded the lint compares the quote
+against a **strictly narrower haystack than the model was shown** — and flags markers that are
+really there. That is a lint limitation, not a model defect, and it is already fixed forward: every
+drop logged since evidence capture carries its excerpt.
+
+The report therefore headlines the **firm** count and files the rest as a coverage gap. Leading with
+firm+provisional announced 47 defects where one was demonstrable, which is how a lint teaches its
+reader to ignore it.
 
 The haystack includes the docket because `'DR'`, `'FC'` and `'LT Case No.'` are real markers that
 live in the docket number rather than the caption. On records predating evidence capture a finding

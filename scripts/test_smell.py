@@ -455,6 +455,45 @@ def test_hedge_lint():
           update.hedged_reason("Likely X; likely Y; suggests Z") == ["likely", "suggests"])
 
 
+def test_report_headlines_firm_not_provisional():
+    """A provisional finding is a record whose excerpt was discarded, so the lint checks the quote
+    against a haystack NARROWER than the model saw. Three were checked against the opinions and all
+    three were TRUE markers -- 'DR' in "LT Case No. 27-2020-DR-2233" where the record keeps only the
+    appellate number, 'FC' in "Lower Tribunal No. 24-16088-FC-04" where the stored docket truncates
+    it, and 'Executor' in a caption CourtListener's case_name shortens.
+
+    So the headline must count FIRM findings only. Summing firm+provisional announced 47 defects
+    where one was demonstrable, which is how a lint teaches its reader to discount it."""
+    firm = {"cluster_id": 1, "name": "A v. B", "court": "ctapp", "date": "2026-08-31", "docket": "",
+            "reason": "juvenile ('In the Interest of')", "evidence": "nothing of the sort",
+            "unsupported_quote": ["In the Interest of"]}
+    prov = [{"cluster_id": 100 + i, "name": "C v. D", "court": "dcafl", "date": "2026-07-01",
+             "docket": "5D2025-2554", "reason": "family/domestic ('DR' case number)",
+             "unsupported_quote": ["DR"]} for i in range(5)]
+    import tempfile
+    saved = smell_check.OUT
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            smell_check.OUT = os.path.join(d, "r.md")
+            smell_check.write_report([], 0, [], [firm] + prov)
+            out = open(smell_check.OUT, encoding="utf-8").read()
+    finally:
+        smell_check.OUT = saved
+    check("headline counts firm only", "## Unsupported quoted markers: 1 firm" in out,
+          out.split("## Unsupported quoted markers")[1][:60] if "## Unsupported" in out else out[:80])
+    check("the combined total is not the headline",
+          "Unsupported quoted markers: 6" not in out)
+    check("provisional are filed as unverifiable, not as findings",
+          "5 unverifiable (not findings)" in out)
+    check("the report says why they cannot be checked", "narrower haystack" in out)
+    check("the three verifications are recorded for the reader",
+          "27-2020-DR-2233" in out and "24-16088-FC-04" in out and "EXECUTOR" in out)
+    check("the actionable signal is named", "rising FIRM count" in out)
+    # The firm one is still listed in full, and still marked as an echo.
+    check("the firm finding is listed", "`1`" in out)
+    check("the firm echo is still marked", "**ECHO**" in out)
+
+
 def test_echoed_quote_prompt_drift():
     """The defect: the model reciting SCREEN_SYSTEM's own quoted markers as though it had observed
     them. 62% of every unsupported quote in the log, and one phrase is 27 of those.
@@ -717,10 +756,13 @@ def test_quote_report_section():
         smell_check.OUT = os.path.join(d, "q.md")
         smell_check.write_report([], 0, [], [firm, prov])
         body = open(smell_check.OUT, encoding="utf-8").read()
-        check("quote section reports the total", "Unsupported quoted markers: 2" in body)
+        # Headline is the FIRM count, not firm+provisional: see
+        # test_report_headlines_firm_not_provisional for why summing them misreports a coverage
+        # gap as a defect rate.
+        check("quote section headlines the firm count", "Unsupported quoted markers: 1 firm" in body)
         check("firm finding is listed", "J.S., a Child" in body)
         check("provisional finding is counted, not listed",
-              "1 of these predate evidence capture" in body and "Mobile County DHR" not in body)
+              "1 unverifiable (not findings)" in body and "Mobile County DHR" not in body)
         check("quote section says evidence does not exist", "which does not exist" in body)
         check("quote section carries no queue line", "!  #" not in body)
         smell_check.OUT = os.path.join(d, "n.md")
@@ -830,6 +872,7 @@ def main():
     test_reclamation_exposure()
     print("hedge lint:")
     test_hedge_lint()
+    test_report_headlines_firm_not_provisional()
     test_echoed_quote_prompt_drift()
     test_hedge_prompt_drift()
     test_hedge_annotation()
