@@ -455,6 +455,62 @@ def test_hedge_lint():
           update.hedged_reason("Likely X; likely Y; suggests Z") == ["likely", "suggests"])
 
 
+def test_echoed_quote_prompt_drift():
+    """The defect: the model reciting SCREEN_SYSTEM's own quoted markers as though it had observed
+    them. 62% of every unsupported quote in the log, and one phrase is 27 of those.
+
+    Two halves have to stay together. PROMPT_MARKERS is DERIVED from the prompt, so adding a quoted
+    exemplar teaches the lint automatically -- these checks pin that derivation, and pin that the
+    prompt still carries the rule that makes the finding actionable. Break either and the funnel
+    goes back to inventing evidence in the one place an auditor looks first."""
+    sys_text = update.SCREEN_SYSTEM
+    check("prompt carries the quoting rule", "QUOTE ONLY WHAT YOU WERE SHOWN" in sys_text)
+    check("rule says instructions are vocabulary, not observation",
+          "not a record of what you saw" in sys_text)
+    check("rule names the real instance", "05-2024-DP-001765" in sys_text)
+    check("rule leaves 'name the marker' intact", "shows its work" in sys_text)
+
+    # Derived, not listed: the two phrases the prompt supplies for dependency cases must be known
+    # to the lint without anyone maintaining a second copy.
+    check("'In the Interest of' is derived from the prompt",
+          update._quote_norm("In the Interest of") in update.PROMPT_MARKERS)
+    check("'In re Estate of' is derived too",
+          update._quote_norm("In re Estate of") in update.PROMPT_MARKERS)
+    # Short fragments the prompt also quotes ('or', the JSON scaffolding) would match real reasons
+    # by accident, so they are excluded by length.
+    check("2-char prompt fragments are not markers", "or" not in update.PROMPT_MARKERS)
+
+    # The live record that prompted this fix, verbatim.
+    name = "Z.H., Mother of S.R., a Child v. Department of Children and Families"
+    reason = ("juvenile/dependency matter (caption shows 'In the Interest of' procedural context "
+              "with child identified only by initials, docket prefix 'DP' indicates dependency)")
+    ev = ("Case No. 5D2026-0764 LT Case No. 05-2024-DP-001765 Z.H., Mother of S.R., a Child, "
+          "Appellant, v. DEPARTMENT OF CHILDREN AND FAMILIES,")
+    check("the live echo is flagged unsupported",
+          update.unsupported_quotes(reason, name, "5D2026-0764", ev) == ["In the Interest of"])
+    check("the live echo is identified AS an echo",
+          update.echoed_quotes(reason, name, "5D2026-0764", ev) == ["In the Interest of"])
+    # 'DP' is in the docket line of the evidence and must NOT be flagged: the model got that one
+    # right, and flagging a true marker is how a lint gets ignored.
+    check("the supported marker in the same reason is untouched",
+          "DP" not in update.unsupported_quotes(reason, name, "5D2026-0764", ev))
+
+    # A docket-code guess is unsupported but NOT an echo: different failure, different fix, and
+    # merging them would hide that the prompt repair does not address it.
+    check("a docket-code guess is unsupported",
+          update.unsupported_quotes("family/domestic ('FC' docket prefix)", "Smith v. Jones",
+                                    "", "no codes here") == ["FC"])
+    check("a docket-code guess is not an echo",
+          update.echoed_quotes("family/domestic ('FC' docket prefix)", "Smith v. Jones",
+                               "", "no codes here") == [])
+    # A quoted marker actually present is neither.
+    check("an observed marker is neither unsupported nor echoed",
+          update.unsupported_quotes("juvenile ('In the Interest of')",
+                                    "In the Interest of J.S., a Child", "", "") == []
+          and update.echoed_quotes("juvenile ('In the Interest of')",
+                                   "In the Interest of J.S., a Child", "", "") == [])
+
+
 def test_hedge_prompt_drift():
     """The lint enforces a rule written in SCREEN_SYSTEM. If someone edits the words the prompt
     bans without editing HEDGE_RE, the funnel starts telling the model one thing and grading it by
@@ -774,6 +830,7 @@ def main():
     test_reclamation_exposure()
     print("hedge lint:")
     test_hedge_lint()
+    test_echoed_quote_prompt_drift()
     test_hedge_prompt_drift()
     test_hedge_annotation()
     print("no-merits ground:")

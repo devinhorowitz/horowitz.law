@@ -187,7 +187,7 @@ sentiment about the recall question. It is that three signals shipped in August 
 | Signal | Reading on 2026-08-29 | What to look for |
 |---|---|---|
 | `category_invalid` | 0 (contract is new; 1,800 records predate it) | Any sustained non-zero rate means a gate is emitting tokens off its own closed list |
-| unsupported quotes, **firm** | 0 firm / 46 provisional | Firm findings only accrue on records carrying `evidence`; a rising firm rate is fabricated evidence, live |
+| unsupported quotes, **firm** | 1 firm / 46 provisional (the firm one an echo) | Firm findings only accrue on records carrying `evidence`; a rising firm rate is fabricated evidence, live. Watch `echoed_quote` separately: a non-zero rate after the prompt fix means the rule did not take |
 | `hedge` | 55 of 1,634 (3.4%) | A jump follows a prompt edit that loosened the commit rule |
 
 None of those can be read yet, because all three depend on drops logged *after* the contract
@@ -298,9 +298,37 @@ in the caption, so a flag means something. The two dominant misses are opposite 
   canonical Georgia form that `SCREEN_SYSTEM` itself uses; the claim is true and the caption
   supports it. Normalised away by dropping the article, because flagging 22 correct reasons would
   bury the class below — the same trap `indicat*` set for the hedge lint.
-- **`'In the Interest of'` (26x)** — caption actually reads *J.S., a Child v. State of Florida* or
+- **`'In the Interest of'` (27x)** — caption actually reads *J.S., a Child v. State of Florida* or
   *C.M. v. Mobile County Department of Human Resources*. The marker is not there. These are mostly
   still **correct drops**, reached through evidence the model made up.
+
+#### The second class had a name: the prompt, read back as observation
+
+Re-calibrating at 2,020 reasons found the pattern behind it. Of 53 unsupported quotes, **33 (62%)
+are phrases `SCREEN_SYSTEM` itself puts in quotation marks** — and `'In the Interest of'`, which the
+prompt names *twice* as the marker of a dependency case, is 27 of those alone.
+
+The model was not misreading captions. It was reciting its own instructions as though they were the
+case in front of it. The prompt asked for exactly that shape — *"naming the marker that settles a
+category … shows its work"* — while handing over a quoted list of markers to name. The live instance:
+
+```
+caption   Z.H., Mother of S.R., a Child v. Department of Children and Families
+docket    LT Case No. 05-2024-DP-001765
+reason    juvenile/dependency matter (caption shows 'In the Interest of' … docket prefix 'DP' …)
+```
+
+The `DP` docket and the initials were real, sufficient, and named in the same sentence. The quoted
+phrase appears nowhere in the case. A correct drop became one no auditor can confirm.
+
+Two halves fix it. `SCREEN_SYSTEM` carries **QUOTE ONLY WHAT YOU WERE SHOWN** — the markers in the
+instructions are a vocabulary of what to look for, not a record of what was seen — and
+`update.echoed_quotes` separates the subset, because **an echo is repaired by writing and a misread
+is not**. `PROMPT_MARKERS` is *derived* from the prompt rather than listed beside it, so adding a
+quoted exemplar teaches the lint automatically; `test_echoed_quote_prompt_drift` pins both halves.
+
+The remaining 20 are a different failure left deliberately unmerged with this one: docket-code
+guesses (`'DR'`, `'FC'`, `'CF'`, `'LT Case No.'`) asserted of a docket that does not show them.
 
 The haystack includes the docket because `'DR'`, `'FC'` and `'LT Case No.'` are real markers that
 live in the docket number rather than the caption. On records predating evidence capture a finding

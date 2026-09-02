@@ -171,11 +171,23 @@ def write_report(suspects, audited, hedged, quoted=()):
               "reason that will not commit, an unsupported quote is one that **cites evidence "
               "which does not exist**. The drop itself may still be correct -- most are -- which "
               "is exactly why it cannot be seen from the outcome.", ""]
+        # Echoes are called out because they have a DIFFERENT FIX. A misread caption is a model
+        # error; a phrase the screen prompt itself supplies in quotes, written back as though it had
+        # been observed, is a prompt error -- and it is the majority of this class.
+        ech = {r.get("cluster_id"): update.echoed_quotes(
+                   r.get("reason"), r.get("name"), r.get("docket"), r.get("evidence"))
+               for r in quoted}
+        n_ech = sum(1 for v in ech.values() if v)
+        if n_ech:
+            L += ["**%d of these quote a phrase the screen prompt itself supplies** (marked `ECHO` "
+                  "below). Those are not misread captions: the model recited its own instructions "
+                  "as observation. Fix them in the prompt, not by re-reading the case." % n_ech, ""]
         for r in firm[:HEDGE_CAP]:
-            L += ["- `%s` **%s** (%s %s) -- “%s” -- unsupported: %s"
+            L += ["- `%s` **%s** (%s %s) -- “%s” -- unsupported: %s%s"
                   % (r.get("cluster_id"), (r.get("name") or "").strip()[:80],
                      r.get("court") or "?", r.get("date") or "?", r.get("reason") or "(none)",
-                     ", ".join(repr(q) for q in r.get("unsupported_quote") or []))]
+                     ", ".join(repr(q) for q in r.get("unsupported_quote") or []),
+                     "  **ECHO**" if ech.get(r.get("cluster_id")) else "")]
         if len(firm) > HEDGE_CAP:
             L += ["- ... and %d more" % (len(firm) - HEDGE_CAP)]
         if prov:
