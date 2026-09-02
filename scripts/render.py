@@ -567,7 +567,11 @@ def _write_mcp_feed():
     try:
         import mcp_feed
         os.makedirs(os.path.dirname(MCP_FEED_PATH), exist_ok=True)
-        doc = mcp_feed.build_from_repo(
+        # build_for_path, not build_from_repo: `generated` is carried over unless the content
+        # itself moved, so a re-render of unchanged content is a byte-identical file. Otherwise the
+        # daily render-sync diff never converges and re-opens the same one-line PR forever.
+        doc = mcp_feed.build_for_path(
+            MCP_FEED_PATH,
             generated=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
         safeio.atomic_write_text(
             MCP_FEED_PATH, json.dumps(doc, separators=(",", ":"), ensure_ascii=False) + "\n")

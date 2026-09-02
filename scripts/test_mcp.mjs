@@ -28,8 +28,22 @@ const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const src = fs.readFileSync(path.join(REPO, "functions/mcp/index.js"), "utf8");
 const mcp = await import("data:text/javascript," + encodeURIComponent(src));
 
-const NOW = Date.parse("2026-08-30T12:00:00Z");
-const hoursAgo = (h) => new Date(NOW - h * 3600000).toISOString().replace(/\.\d+Z$/, "Z");
+// Freshness fixtures are built from the REAL clock, never a frozen date. The server computes
+// staleness against Date.now(), so a hardcoded epoch here does not pin a behaviour -- it decays
+// into a wrong one: fixtures written as "3 hours ago" quietly age past the 36h threshold and the
+// tests that assert `health: "ok"` start failing on a calendar, not on a regression. That is
+// exactly the silent-green failure this file exists to guard, arriving inside the guard itself.
+// Everything that must NOT move -- card dates, the `since` cursor -- stays hardcoded below.
+const hoursAgo = (h) => new Date(Date.now() - h * 3600000).toISOString().replace(/\.\d+Z$/, "Z");
+
+// Meta-check, first because everything below depends on it: the freshness fixtures must track the
+// real clock. A frozen epoch here does not fail loudly -- it drifts, and the health assertions turn
+// red on a date rather than on a defect. This is the tripwire for that.
+test("freshness fixtures track the real clock, not a frozen epoch", () => {
+  assert.ok(Math.abs(Date.now() - Date.parse(hoursAgo(0))) < 60000,
+    "hoursAgo(0) must be now; a hardcoded epoch makes every age assertion below decay");
+  assert.ok(Date.parse(hoursAgo(3)) < Date.now(), "hoursAgo must look backwards");
+});
 
 const FEED = {
   schema: 1,

@@ -114,6 +114,35 @@ def build(cards, legislation=(), courtrules=(), generated=""):
     }
 
 
+def settle_generated(doc, previous):
+    """Carry `generated` over from `previous` when nothing else in the document changed.
+
+    `generated` means WHEN THE CONTENT WAS GENERATED, not when render happened to run. Restamping
+    it every render makes an unchanged feed look new twice over:
+
+      * render-sync re-renders daily and diffs the result against what is committed, so a feed
+        whose only moving part is its own timestamp ALWAYS drifts. It opens a one-line PR that
+        cannot be resolved by merging it, because the next run writes a new timestamp. That is not
+        a hypothetical -- PR #310 sat open for two days doing exactly this.
+      * the MCP publishes this field as the feed's age. Reporting a fresh feed for content that has
+        not moved is a small dishonesty in the one place a caller looks to decide whether silence
+        is trustworthy.
+
+    So the timestamp advances only when something it describes advanced. Pure; the caller supplies
+    the previous document."""
+    if not isinstance(previous, dict):
+        return doc
+    prior = previous.get("generated")
+    if not prior:
+        return doc
+    if ({k: v for k, v in doc.items() if k != "generated"}
+            == {k: v for k, v in previous.items() if k != "generated"}):
+        out = dict(doc)
+        out["generated"] = prior
+        return out
+    return doc
+
+
 def _load(path, default):
     try:
         with open(path, encoding="utf-8") as f:
@@ -133,3 +162,11 @@ def build_from_repo(generated=""):
                  _load(os.path.join(REPO, "legislation.json"), []),
                  _load(os.path.join(REPO, "courtrules.json"), []),
                  generated=generated)
+
+
+def build_for_path(path, generated=""):
+    """build_from_repo, with `generated` settled against whatever already sits at `path`.
+
+    This is what render.py calls: it is the only place that knows both the new document and the
+    committed one, and settling the timestamp anywhere later would mean writing the churn first."""
+    return settle_generated(build_from_repo(generated=generated), _load(path, None))
