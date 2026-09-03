@@ -3049,5 +3049,89 @@
         "why": "The holding confirms that punitive damages remain categorically unavailable in a wrongful death action and that pecuniary claims for funeral and ante mortem expenses arising from the death cannot serve as a predicate for them."
       }
     ]
+  },
+  {
+    "cluster_id": 10964778,
+    "name": "Velez Rivera v. Lopes",
+    "court": "dcafl",
+    "division": null,
+    "date": "2026-09-02",
+    "dockets": [
+      "4D2025-0675"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10964778/norma-i-velez-rivera-v-leidimar-c-lopes/",
+    "synopsis": "In a personal-injury suit arising from a motor-vehicle collision, the trial court excluded as hearsay a treating clinic's notation assigning plaintiff a four-percent permanent impairment rating, and defense counsel then argued in closing that no one at that clinic had rendered a permanency opinion. The Fourth District held it is not improper for counsel to point out the absence of evidence on an issue where the only contrary evidence was properly excluded, distinguishing the line of cases in which evidence had been improperly excluded and counsel then compounded that error by highlighting its absence. The court reasoned that properly excluded evidence does not exist for purposes of the jury's deliberations, and that the rule urged by plaintiff would create an unworkable line. Affirmed.",
+    "why": "The decision clarifies that the prohibition on seeking advantage from the absence of excluded evidence applies where the exclusion was erroneous, not where the evidence was properly kept out, defining the permissible scope of absence-of-evidence closing argument.",
+    "precedential": "published",
+    "first_seen": "2026-09-02",
+    "jurisdiction": "fl",
+    "additional_holdings": [
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "The court separately held that counsel's categorical phrasing, that no one at the clinic ever rendered a permanency opinion, was objectively untrue and therefore improper, because the accurate formulation would have been that the jury heard no evidence of such an opinion. It nonetheless found the imprecision harmless under the civil harmless-error standard, concluding there was no reasonable possibility that the single misstatement contributed to the verdict, and noted that plaintiff waived the claim by rejecting the offered curative instruction.",
+        "why": "It sets out both the preferred phrasing for arguing an absence of evidence and the treatment of an isolated misstatement as harmless, including the effect of declining an offered curative instruction."
+      },
+      {
+        "areas": [
+          "procedure"
+        ],
+        "synopsis": "The court also held that the trial court acted within its discretion in denying plaintiff's request to reopen the evidence to show the jury the unredacted record. Plaintiff identified no newly available admissible evidence and sought only to place before the jury the same impairment opinion already properly excluded as hearsay, so reopening would have admitted material that remained inadmissible.",
+        "why": "It confirms that a motion to reopen evidence cannot be used as a vehicle to introduce material that remains inadmissible, even to counter an opposing argument about the absence of that evidence."
+      }
+    ]
+  },
+  {
+    "cluster_id": 10964770,
+    "name": "Lekas v. Dezer Properties, LLC",
+    "court": "dcafl",
+    "division": null,
+    "date": "2026-09-02",
+    "dockets": [
+      "3D25-1446"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "premises"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10964770/theoharis-lekas-v-dezer-properties-llc/",
+    "synopsis": "A hotel guest who walked barefoot on a cement pool deck and beach sand during an August stay in Sunny Isles suffered burn injuries that led to hospitalizations and a partial foot amputation, and he sued the resort owners and operators for negligence. The Third District held that a hot cement pool deck and hot beach sand under the Florida summer sun are conditions so common, ordinary, and open and obvious that, as a matter of law, they are not dangerous conditions giving rise to a duty to warn or to maintain the premises otherwise. The court further held that the plaintiff's diabetic neuropathy, which prevented him from feeling the heat, neither converted an ordinary and obvious condition into a dangerous one nor created a special duty on the landowner's part. Dismissal with prejudice was affirmed on the threshold ground that no legal duty existed.",
+    "why": "The decision applies the open-and-obvious doctrine to resolve duty as a matter of law at the pleading stage and states that a plaintiff's individual medical inability to perceive a common condition does not itself generate a landowner duty.",
+    "precedential": "published",
+    "first_seen": "2026-09-02",
+    "jurisdiction": "fl"
+  },
+  {
+    "cluster_id": 10964915,
+    "name": "Adams v. Lee",
+    "court": "ctapp",
+    "division": "Second Division",
+    "date": "2026-09-02",
+    "dockets": [
+      "A26A1104"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "premises"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10964915/martha-adams-v-jason-lee/",
+    "synopsis": "Plaintiff, an invitee babysitting in defendants' rented home, slipped on rainwater that pooled on the dining room floor after the roof leaked during the afternoon. Defendants knew the roof leaked intermittently and in random locations and had complained repeatedly to the owners and property manager, but the floor was dry and the weather sunny when they left for work. The Court of Appeals held that knowledge of a generally prevailing or recurring hazardous condition, here a leaky roof, does not establish actual knowledge of the specific hazard that caused the fall, following the Drossman line, and rejected the argument that Youngblood supports imputing knowledge from a recurring hazard. The directed verdict for defendants was affirmed as right for any reason, since the specific-hazard distinction had been fairly raised below.",
+    "why": "The decision confirms that in a slip-and-fall case a landowner's or occupier's awareness of a recurring or pervasive condition does not substitute for actual knowledge of the particular hazard on which the plaintiff fell.",
+    "precedential": "published",
+    "first_seen": "2026-09-02",
+    "additional_holdings": [
+      {
+        "areas": [
+          "premises"
+        ],
+        "synopsis": "The court separately addressed constructive knowledge, holding that Georgia law does not recognize constructive knowledge of a specific hazard derived from knowledge of pervasive hazardous conditions, and that constructive knowledge instead requires evidence that the failure to discover the hazard resulted from a failure to exercise reasonable care in inspecting the premises or that the hazard existed long enough that ordinary diligence would have found it. Because the testimony was uniform that no water was on the floor when defendants left for work and they had no opportunity to return, ordinary diligence would not have revealed the puddle. The court concluded the evidence showed defendants discharged their duty of ordinary care, leaving no room for reasonable minds to differ.",
+        "why": "It restates that constructive knowledge in premises cases turns on the reasonableness of inspection and the duration of the specific hazard, not on generalized awareness that a condition may recur."
+      }
+    ]
   }
 ]

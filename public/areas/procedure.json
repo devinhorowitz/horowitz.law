@@ -1,8 +1,25 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 75,
+  "count": 76,
   "opinions": [
+    {
+      "cluster_id": 10964778,
+      "name": "Velez Rivera v. Lopes",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-09-02",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10964778/norma-i-velez-rivera-v-leidimar-c-lopes/",
+      "synopsis": "In a personal-injury suit arising from a motor-vehicle collision, the trial court excluded as hearsay a treating clinic's notation assigning plaintiff a four-percent permanent impairment rating, and defense counsel then argued in closing that no one at that clinic had rendered a permanency opinion. The Fourth District held it is not improper for counsel to point out the absence of evidence on an issue where the only contrary evidence was properly excluded, distinguishing the line of cases in which evidence had been improperly excluded and counsel then compounded that error by highlighting its absence. The court reasoned that properly excluded evidence does not exist for purposes of the jury's deliberations, and that the rule urged by plaintiff would create an unworkable line. Affirmed.",
+      "why": "The decision clarifies that the prohibition on seeking advantage from the absence of excluded evidence applies where the exclusion was erroneous, not where the evidence was properly kept out, defining the permissible scope of absence-of-evidence closing argument.",
+      "dockets": [
+        "4D2025-0675"
+      ]
+    },
     {
       "cluster_id": 10963742,
       "name": "Robertson v. Toyota Motor Corporation",
