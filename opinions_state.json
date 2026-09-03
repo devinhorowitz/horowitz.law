@@ -2280,20 +2280,13 @@
     10966044,
     10966046,
     10966047,
-    10966070
+    10966070,
+    10966089,
+    10966112,
+    10966113,
+    10966114,
+    10966115
   ],
-  "updated": "2026-09-03T19:27:51Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_01VLPkjdVS78gfdT48WMfyMw",
-      "at": 1788463232.7465637,
-      "n": 5
-    },
-    "funnel-smell": {
-      "id": "msgbatch_01XaJsRZuRAq3vSrsgLqDSyr",
-      "at": 1788463394.7845986,
-      "n": 1
-    }
-  }
+  "updated": "2026-09-03T22:40:43Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
