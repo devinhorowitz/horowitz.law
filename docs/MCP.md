@@ -61,7 +61,7 @@ This is not hypothetical: the live feed has reported a scan 0.7 hours old agains
 changed 113.9 hours ago — a genuinely quiet stretch behind a healthy pipeline, which a consumer
 reading only content could not have told from an outage.
 
-### `scanned_at` used to be only as fresh as the last deploy
+### `scanned_at` used to be only as fresh as the last deploy (fixed 2026-09-02)
 
 `opinions.yml` committed `public/status.json` with `[skip ci]` — and **Cloudflare Pages honours that
 token too**, which was never the intent. The freshness marker reached production only on the next
@@ -82,13 +82,23 @@ whose documented skip list is CI- and CF-Pages-based, builds. Only the scan-stat
 `record run state`, `keepalive` and `record drop-reason audit verdicts` write unpublished files and
 keep `[skip ci]`.
 
-**Verification, and what is still open.** The GitHub half is confirmed: an empty commit carrying
-`[skip actions]` produced zero `ci.yml` and `ruff.yml` runs while the pushes on either side of it
-produced runs. The Cloudflare half is confirmed against **production**, not asserted here — after
-the next scan, `https://horowitz.law/status.json` should carry the newest `scanned_at` rather than
-the last content deploy's. Until that check has been made, treat this section as a change believed
-to work rather than one shown to. If Cloudflare turns out to honour `[skip actions]` as well, the
-swap is a no-op and the live file is no staler than it was: the change cannot make things worse.
+**Verified, both halves.** The GitHub half: an empty commit carrying `[skip actions]` produced zero
+`ci.yml` and `ruff.yml` runs while the pushes on either side of it produced runs.
+
+The Cloudflare half was confirmed **against production** on 2026-09-03, and the reading is clean
+despite a content publish landing four seconds before the scan-status commit — because the two
+carry *different* `status.json` contents, so the live file identifies which one built:
+
+| Commit | Deploys? | `scanned_at` in its tree |
+|---|---|---|
+| `ab81a57` content publish | yes — no skip token | `2026-09-02T19:34:53Z` |
+| `a8a9172` scan status | `[skip actions]` | `2026-09-02T22:46:10Z` |
+| **live `/status.json`** | | **`2026-09-02T22:46:10Z`** |
+
+Had Cloudflare honoured the token, live would show the publish's `19:34:53`. It shows the
+scan-status commit's content, so Cloudflare built it. `hlaw_feed_status` read `scan_age_hours: 2`
+against a 36h threshold minutes later — the first time that field has measured scan age rather than
+deploy age.
 
 The accepted cost is a Cloudflare build per scan, roughly 5/day. CI is untouched.
 
