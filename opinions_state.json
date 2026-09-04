@@ -2286,8 +2286,58 @@
     10966112,
     10966113,
     10966114,
-    10966115
+    10966115,
+    10967268,
+    10967269,
+    10967271,
+    10967274,
+    10967275,
+    10967281,
+    10967282,
+    10967283,
+    10967284,
+    10967285,
+    10967286,
+    10967289,
+    10967323,
+    10967324,
+    10967332,
+    10967333,
+    10967334,
+    10967337,
+    10967338,
+    10967339,
+    10967340,
+    10967377,
+    10967378,
+    10967379,
+    10967380,
+    10967382,
+    10967384,
+    10967385,
+    10967388,
+    10967390,
+    10967393,
+    10967394,
+    10967395,
+    10967425,
+    10967426,
+    10967452,
+    10967465,
+    10967466
   ],
-  "updated": "2026-09-04T12:46:16Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-09-04T19:08:56Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-triage": {
+      "id": "msgbatch_01LdqLWA4756gsnseUXtD4Ja",
+      "at": 1788548512.8949044,
+      "n": 4
+    },
+    "funnel-smell": {
+      "id": "msgbatch_013V1rgfhsPUH3eMW4MT3Pjr",
+      "at": 1788548671.8024194,
+      "n": 1
+    }
+  }
 }
