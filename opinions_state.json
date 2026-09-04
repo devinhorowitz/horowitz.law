@@ -2324,20 +2324,11 @@
     10967426,
     10967452,
     10967465,
-    10967466
+    10967466,
+    10967469,
+    10967482,
+    10967483
   ],
-  "updated": "2026-09-04T19:08:56Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_01LdqLWA4756gsnseUXtD4Ja",
-      "at": 1788548512.8949044,
-      "n": 4
-    },
-    "funnel-smell": {
-      "id": "msgbatch_013V1rgfhsPUH3eMW4MT3Pjr",
-      "at": 1788548671.8024194,
-      "n": 1
-    }
-  }
+  "updated": "2026-09-04T22:24:21Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
