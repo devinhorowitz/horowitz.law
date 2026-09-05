@@ -2327,8 +2327,9 @@
     10967466,
     10967469,
     10967482,
-    10967483
+    10967483,
+    10967687
   ],
-  "updated": "2026-09-04T22:24:21Z",
+  "updated": "2026-09-05T18:22:35Z",
   "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
