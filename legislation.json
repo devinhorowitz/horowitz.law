@@ -58,6 +58,24 @@
     "first_seen": "2026-08-09"
   },
   {
+    "bill_id": 2012771,
+    "state": "GA",
+    "number": "HB816",
+    "title": "Greene County Public Facilities Authority Act; enact",
+    "status": "enacted",
+    "status_date": "2025-05-13",
+    "effective_date": "",
+    "areas": [
+      "procedure"
+    ],
+    "synopsis": "This local act creates the Greene County Public Facilities Authority, an entity that did not previously exist, and sets out its membership, powers, purposes, and authority to issue revenue bonds. Of direct relevance to litigators, the act includes provisions on tort immunity for the authority and fixes the venue and jurisdiction of actions involving it, along with provisions on moneys received and trust funds and tax exemption. Counsel handling claims arising from facilities or projects in Greene County should confirm whether the authority is the correct defendant and how its immunity and venue provisions apply before filing.",
+    "impact": "Adds a Greene County public authority defendant with statutory tort immunity and fixed venue and jurisdiction for actions against it.",
+    "url": "https://legiscan.com/GA/bill/HB816/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/71555",
+    "change_hash": "2f3458b07f7f18017d547b4d137b18d8",
+    "first_seen": "2026-09-06"
+  },
+  {
     "bill_id": 1985859,
     "state": "GA",
     "number": "HB625",

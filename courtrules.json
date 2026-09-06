@@ -372,5 +372,16 @@
     "impact": "",
     "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
     "first_seen": "2026-07-26"
+  },
+  {
+    "id": "556567789bfe",
+    "rule_set": "FRAP",
+    "rule": "Appellate Form 4",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "Appellate Form 4 is among the rules and forms amendments projected to take effect on December 1, 2026; the page does not describe the change.",
+    "impact": "",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-09-06"
   }
 ]
