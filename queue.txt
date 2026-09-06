@@ -38,6 +38,3 @@
 #
 # So: keep a queued line's note to a word or two, and put the real reasoning in the commit message
 # and PR body, where it is durable and does not need sweeping up afterwards.
-
-10936128:fladistctapp !  # audit: recovered
-10936076:fladistctapp !  # audit: recovered
