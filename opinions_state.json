@@ -2367,8 +2367,65 @@
     10969214,
     10969215,
     10969216,
-    10969235
+    10969235,
+    10969845,
+    10969853,
+    10969854,
+    10969866,
+    10969892,
+    10969900,
+    10969902,
+    10969903,
+    10969905,
+    10969908,
+    10969912,
+    10969915,
+    10969918,
+    10969919,
+    10969920,
+    10969922,
+    10969924,
+    10969948,
+    10969949,
+    10969962,
+    10969965,
+    10969966,
+    10969969,
+    10969975,
+    10969976,
+    10970014,
+    10970015,
+    10970016,
+    10970017,
+    10970061,
+    10970121,
+    10970125,
+    10970126,
+    10970127,
+    10970128,
+    10970129,
+    10970153,
+    10970154,
+    10970155,
+    10970156
   ],
-  "updated": "2026-09-08T22:44:40Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-09-09T19:28:39Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-triage": {
+      "id": "msgbatch_018FCpn2qv34z2wxZor5869r",
+      "at": 1788981626.6832552,
+      "n": 4
+    },
+    "funnel-smell": {
+      "id": "msgbatch_01DpKoobocD2XgosWYT3h2WR",
+      "at": 1788981810.6575267,
+      "n": 1
+    },
+    "funnel-summarize": {
+      "id": "msgbatch_01XPoohFCbbMzXo9rEpb76uR",
+      "at": 1788981908.7761924,
+      "n": 2
+    }
+  }
 }
