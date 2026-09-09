@@ -1,8 +1,47 @@
 {
   "area": "coverage",
   "label": "coverage",
-  "count": 29,
+  "count": 31,
   "opinions": [
+    {
+      "cluster_id": 10970013,
+      "name": "Transcontinental Carriers, Inc. v. Bennett",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-09-09",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure",
+        "damages",
+        "auto",
+        "expert",
+        "coverage"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10970013/transcontinental-carriers-inc-v-lewis-bennett/",
+      "synopsis": "In a tractor-trailer collision case tried under the newly effective trifurcation statute, OCGA § 51-12-15, defendants argued that the trial court erred by permitting plaintiff to present evidence of the extent and persistence of his injuries during the first (fault) phase rather than reserving that evidence for the damages phase. The Court of Appeals held that because \"fault\" under the apportionment statute, OCGA § 51-12-33, requires proof of a breach of duty that proximately caused the specific injuries for which recovery is sought, evidence of the nature, development, and persistence of the plaintiff's injuries is within the first phase's scope, while evidence of the extent of compensatory damages remains reserved for the second phase. The court found no abuse of discretion in the evidentiary rulings and rejected the contention that this approach eviscerates the statute. Affirmed.",
+      "why": "This is the first appellate construction of the scope of the fault phase under Georgia's trifurcation statute, OCGA § 51-12-15, holding that injury and proximate-causation evidence belongs in phase one while damages-extent evidence is confined to phase two.",
+      "dockets": [
+        "A26A1643"
+      ]
+    },
+    {
+      "cluster_id": 10969972,
+      "name": "Progressive American Insurance Company v. Randall Marc Heimler",
+      "court": "District Court of Appeal of Florida",
+      "date": "2026-09-09",
+      "disposition": "affirmed",
+      "areas": [
+        "coverage",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10969972/progressive-american-insurance-company-v-randall-marc-heimler/",
+      "synopsis": "An insured settled with the tortfeasor's liability insurer for the $10,000 limit without first obtaining his UM/UIM insurer's consent or a waiver of subrogation under section 627.727(6)(a), Florida Statutes, and the insurer sought to avoid coverage. The Fourth District reaffirmed that an unauthorized settlement creates a rebuttable presumption of prejudice with the burden on the insured to show the absence of prejudice, and it clarified that the measure of prejudice is a counterfactual inquiry into whether a reasonably prudent insurer, had it been asked, would have approved the settlement or instead rejected it and pursued a damages claim against the tortfeasor expecting to come out financially ahead. The court explained that the 'probable insolvency' formulation used in its own precedent and the 'is and will remain judgment proof' formulation used in other districts are not distinct legal standards but explanatory language, and it identified factors a court may weigh, including collectability, homestead and bankruptcy exemptions, and the expected cost of collection compared with the settlement offer. Reviewing the bifurcated bench-trial finding for competent substantial evidence and abuse of discretion, the court held the trial court permissibly found the insurer was not prejudiced given the tortfeasor's finances, and affirmed the partial final judgment denying rescission.",
+      "why": "The decision articulates a unified reasonably-prudent-insurer, but-for framework for measuring prejudice from an insured's unauthorized settlement with a tortfeasor under section 627.727(6)(a), and states that the 'probable insolvency' and 'judgment proof' phrasings in earlier cases do not establish separate tests.",
+      "dockets": [
+        "4D2025-1854"
+      ]
+    },
     {
       "cluster_id": 10953750,
       "name": "Jackson v. Cantrell",

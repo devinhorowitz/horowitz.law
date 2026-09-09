@@ -1,8 +1,29 @@
 {
   "area": "damages",
   "label": "damages",
-  "count": 39,
+  "count": 40,
   "opinions": [
+    {
+      "cluster_id": 10970013,
+      "name": "Transcontinental Carriers, Inc. v. Bennett",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-09-09",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure",
+        "damages",
+        "auto",
+        "expert",
+        "coverage"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10970013/transcontinental-carriers-inc-v-lewis-bennett/",
+      "synopsis": "In a tractor-trailer collision case tried under the newly effective trifurcation statute, OCGA § 51-12-15, defendants argued that the trial court erred by permitting plaintiff to present evidence of the extent and persistence of his injuries during the first (fault) phase rather than reserving that evidence for the damages phase. The Court of Appeals held that because \"fault\" under the apportionment statute, OCGA § 51-12-33, requires proof of a breach of duty that proximately caused the specific injuries for which recovery is sought, evidence of the nature, development, and persistence of the plaintiff's injuries is within the first phase's scope, while evidence of the extent of compensatory damages remains reserved for the second phase. The court found no abuse of discretion in the evidentiary rulings and rejected the contention that this approach eviscerates the statute. Affirmed.",
+      "why": "This is the first appellate construction of the scope of the fault phase under Georgia's trifurcation statute, OCGA § 51-12-15, holding that injury and proximate-causation evidence belongs in phase one while damages-extent evidence is confined to phase two.",
+      "dockets": [
+        "A26A1643"
+      ]
+    },
     {
       "cluster_id": 10963742,
       "name": "Robertson v. Toyota Motor Corporation",

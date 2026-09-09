@@ -3133,5 +3133,90 @@
         "why": "It restates that constructive knowledge in premises cases turns on the reasonableness of inspection and the duration of the specific hazard, not on generalized awareness that a condition may recur."
       }
     ]
+  },
+  {
+    "cluster_id": 10970013,
+    "name": "Transcontinental Carriers, Inc. v. Bennett",
+    "court": "ctapp",
+    "division": "First Division",
+    "date": "2026-09-09",
+    "dockets": [
+      "A26A1643"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "procedure",
+      "damages",
+      "auto"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10970013/transcontinental-carriers-inc-v-lewis-bennett/",
+    "synopsis": "In a tractor-trailer collision case tried under the newly effective trifurcation statute, OCGA § 51-12-15, defendants argued that the trial court erred by permitting plaintiff to present evidence of the extent and persistence of his injuries during the first (fault) phase rather than reserving that evidence for the damages phase. The Court of Appeals held that because \"fault\" under the apportionment statute, OCGA § 51-12-33, requires proof of a breach of duty that proximately caused the specific injuries for which recovery is sought, evidence of the nature, development, and persistence of the plaintiff's injuries is within the first phase's scope, while evidence of the extent of compensatory damages remains reserved for the second phase. The court found no abuse of discretion in the evidentiary rulings and rejected the contention that this approach eviscerates the statute. Affirmed.",
+    "why": "This is the first appellate construction of the scope of the fault phase under Georgia's trifurcation statute, OCGA § 51-12-15, holding that injury and proximate-causation evidence belongs in phase one while damages-extent evidence is confined to phase two.",
+    "precedential": "published",
+    "first_seen": "2026-09-09",
+    "tort_reform": true,
+    "additional_holdings": [
+      {
+        "areas": [
+          "expert",
+          "procedure"
+        ],
+        "synopsis": "Plaintiff's expert testified that the driver did not comply with, and was not qualified under, the Federal Motor Carrier Safety Regulations, contrary to an in limine ruling barring experts from stating legal conclusions. The trial court repeatedly redirected the witness, gave a curative instruction that the jury need not accept expert testimony and alone would decide whether any regulation was violated, and denied a mistrial. The Court of Appeals held there was no manifest abuse of discretion, noting the instruction was proper, counsel did not solicit the improper testimony, the court responded promptly to objections, and the testimony was cumulative of other evidence supporting the inference that the driver's uncontrolled diabetes left him unqualified to drive.",
+        "why": "It confirms that a prompt curative instruction, coupled with judicial policing of an expert who strays into legal conclusions about FMCSR compliance, can suffice in place of a mistrial when the testimony is cumulative and not elicited by counsel."
+      },
+      {
+        "areas": [
+          "damages",
+          "auto"
+        ],
+        "synopsis": "Defendants challenged submission of the OCGA § 13-6-11 attorney fee claim to the jury. The Court of Appeals held that evidence sufficient to warrant punitive damages also supports a finding of bad faith under OCGA § 13-6-11, and that the driver's history of conscious disregard for the dangers of driving without insulin he knew was essential to safety, together with his pattern of erratic highway driving, supported the jury's bad-faith finding.",
+        "why": "It reiterates that a driver's known pattern of impaired or erratic operation can constitute bad faith in the underlying transaction for purposes of expenses of litigation under OCGA § 13-6-11."
+      },
+      {
+        "areas": [
+          "damages",
+          "procedure"
+        ],
+        "synopsis": "Defendants also challenged testimony about customary contingency fee percentages in personal injury litigation as proof of fee reasonableness. The Court of Appeals held that OCGA § 9-15-16 (b) bars only introduction of the contingency fee agreement itself as proof of reasonableness, and because the agreement was not introduced, plaintiff was authorized to prove reasonableness through testimony that a specific percentage fee was reasonable and customary given the work performed, following the Supreme Court of Georgia's decision in Cayamcela.",
+        "why": "It clarifies that testimony about customary contingency fee percentages remains an available method of proving fee reasonableness notwithstanding OCGA § 9-15-16 (b), which reaches only the agreement itself."
+      },
+      {
+        "areas": [
+          "damages",
+          "auto"
+        ],
+        "synopsis": "The jury apportioned fault 30% to the driver and 70% to the employer, and defendants sought to limit the judgment against the employer to 70%. The Court of Appeals held that under respondeat superior the principal is entirely responsible for the agent's negligence and fault cannot be apportioned between principal and agent for purposes of damages, so the trial court did not err in declining to reduce the judgment against the employer to its percentage share.",
+        "why": "It applies the rule that a percentage split between an employer and its employee does not limit the employer's exposure for damages when vicarious liability is established."
+      },
+      {
+        "areas": [
+          "procedure",
+          "coverage"
+        ],
+        "synopsis": "Defendants argued that the trial court erred in making the judgment effective against the motor carrier's insurer in an amount above the policy limits. The Court of Appeals held the issue was not preserved because it was not raised in the trial court until after the notice of appeal was filed, and appellate courts exist to correct errors of law committed in the trial courts.",
+        "why": "It confirms that an objection to a judgment entered against an insurer in excess of policy limits must be raised in the trial court before the notice of appeal to be reviewable."
+      }
+    ]
+  },
+  {
+    "cluster_id": 10969972,
+    "name": "Progressive American Insurance Company v. Randall Marc Heimler",
+    "court": "dcafl",
+    "division": null,
+    "date": "2026-09-09",
+    "dockets": [
+      "4D2025-1854"
+    ],
+    "disposition": "affirmed",
+    "areas": [
+      "coverage",
+      "auto"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10969972/progressive-american-insurance-company-v-randall-marc-heimler/",
+    "synopsis": "An insured settled with the tortfeasor's liability insurer for the $10,000 limit without first obtaining his UM/UIM insurer's consent or a waiver of subrogation under section 627.727(6)(a), Florida Statutes, and the insurer sought to avoid coverage. The Fourth District reaffirmed that an unauthorized settlement creates a rebuttable presumption of prejudice with the burden on the insured to show the absence of prejudice, and it clarified that the measure of prejudice is a counterfactual inquiry into whether a reasonably prudent insurer, had it been asked, would have approved the settlement or instead rejected it and pursued a damages claim against the tortfeasor expecting to come out financially ahead. The court explained that the 'probable insolvency' formulation used in its own precedent and the 'is and will remain judgment proof' formulation used in other districts are not distinct legal standards but explanatory language, and it identified factors a court may weigh, including collectability, homestead and bankruptcy exemptions, and the expected cost of collection compared with the settlement offer. Reviewing the bifurcated bench-trial finding for competent substantial evidence and abuse of discretion, the court held the trial court permissibly found the insurer was not prejudiced given the tortfeasor's finances, and affirmed the partial final judgment denying rescission.",
+    "why": "The decision articulates a unified reasonably-prudent-insurer, but-for framework for measuring prejudice from an insured's unauthorized settlement with a tortfeasor under section 627.727(6)(a), and states that the 'probable insolvency' and 'judgment proof' phrasings in earlier cases do not establish separate tests.",
+    "precedential": "published",
+    "first_seen": "2026-09-09",
+    "jurisdiction": "fl"
   }
 ]
