@@ -38,6 +38,5 @@
 #
 # So: keep a queued line's note to a word or two, and put the real reasoning in the commit message
 # and PR body, where it is durable and does not need sweeping up afterwards.
-10956827:ca11 !  # deferred escalation
 10957421:fladistctapp !  # deferred escalation
 10964714:ca11 !  # deferred escalation
