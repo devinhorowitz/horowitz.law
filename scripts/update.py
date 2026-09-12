@@ -2003,6 +2003,15 @@ def crosscheck(name, text, entry):
                            last_error)
     if out["verdict"] == "unavailable":
         print("  ! cross-check unavailable for %s: %s" % (name[:40], out["reason"]))
+    # Report what consensus DECIDED, not merely that some attempt flagged. This branch used to be
+    # a bare `elif flags`, so it also fired on the confirmed path: a flag that WON its majority
+    # and was about to be reported as a finding printed "NOT CONFIRMED ... clearing as noise" on
+    # the line above it. Six standing findings on published cards sat in issue #302 under that
+    # line -- a log that reassures while the finding stands is worse than no log at all, because
+    # the reader stops at the reassurance. A flag and a cleared flag must never print the same way.
+    elif out["verdict"] == "flag":
+        print("  . cross-check flag CONFIRMED for %s (%d of %d attempts flagged, %d budgeted); "
+              "it stands" % (name[:40], len(flags), made, tries))
     elif flags:
         print("  . cross-check flag NOT CONFIRMED for %s (%d of %d attempts flagged); clearing as noise"
               % (name[:40], len(flags), made))
@@ -2086,6 +2095,11 @@ def completeness_check(name, text, entry):
                            last_error)
     if out["verdict"] == "unavailable":
         print("  ! completeness check unavailable for %s: %s" % (name[:40], out["reason"]))
+    # Same correction as the cross-check above, and for the same reason: a confirmed flag must not
+    # print the sentence that dismisses one.
+    elif out["verdict"] == "flag":
+        print("  . completeness flag CONFIRMED for %s (%d of %d attempts flagged, %d budgeted); "
+              "it stands" % (name[:40], len(flags), made, tries))
     elif flags:
         print("  . completeness flag NOT CONFIRMED for %s (%d of %d attempts flagged); clearing as noise"
               % (name[:40], len(flags), made))
