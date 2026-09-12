@@ -113,9 +113,17 @@ jobs:
           body-path: scripts/queue_cases_pr_body.md
           labels: opinions, automated, queue
           delete-branch: true
+          # add-paths is a literal block scalar, so every line in it is a PATH -- a "#" line
+          # here is a filename, not a comment (test_workflow_state_paths pins that). Notes go
+          # above the key. opinions_rejections.jsonl is listed because a forced queue line
+          # sends the case to the summarizer on the full opinion and queue_cases.stamp_audits
+          # records what that read established onto the drop record; unlisted, the stamp is
+          # written in the runner and thrown away, and the next smell_check run re-escalates a
+          # case the editor already had an answer for.
           add-paths: |
             opinions.json
             queue.txt
+            opinions_rejections.jsonl
             public/.well-known/security.txt
             public/404.html
             public/archive.html

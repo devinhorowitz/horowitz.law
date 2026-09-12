@@ -53,7 +53,7 @@ Env:
 
 Run via .github/workflows/queue.yml (push to queue.txt, or workflow_dispatch).
 """
-import os, re, sys, json, time, datetime
+import io, os, re, sys, json, time, datetime
 from urllib.parse import urlparse
 import update             # daily funnel: screen/triage/summarize, cl_get, text, constants
 import backfill           # cluster resolver (seed_result): cluster -> court/text-url, audited
@@ -180,6 +180,57 @@ def render_report(rows, added, treat_flags, audit_notes, aborted_cfg):
     return "\n".join(L) + "\n"
 
 
+def stamp_audits(stamps):
+    """Record what a FORCED queue read established, onto the matching rejection record(s).
+
+    A queued line with "!" sends the case to the summarizer -- the final editor -- on the full
+    opinion. That is the strongest read this project performs, and until now its result lived only
+    in the PR body: the drop record kept whatever the funnel had decided weeks earlier, so the next
+    tool to look at the log could not tell a drop nobody had checked from one a forced read had
+    settled. smell_check.py re-audits records whose in-run escalation was "deferred" and skips any
+    carrying a full_opinion audit, so an unstamped decline comes back round and is escalated to the
+    editor again -- the exact loop audit_log.py was written to end for issues #283 and #293.
+
+    Found 2026-09-12: queue run 26 read 10956827 (Wells Fargo Fin. Sys. Fla. v. 5307 CWELT-2008)
+    and the summarizer declined it, and the record still read smell_outcome "deferred" with no
+    audit afterwards. queue.yml also had to learn to commit the log; add-paths did not list it, so
+    even a stamped record could not have travelled.
+
+    `stamps` is a list of (cluster_id, verdict, note). Records are matched by cluster_id; a queued
+    case that was never dropped has no record and is silently skipped. Returns the number of
+    records actually changed (record_audit refuses to weaken a stronger prior claim, so a re-run
+    is a no-op rather than a downgrade)."""
+    if not stamps:
+        return 0
+    try:
+        lines = io.open(update.REJECT_PATH, encoding="utf-8").read().splitlines()
+    except OSError:
+        return 0
+    records, changed = [], 0
+    for ln in lines:
+        ln = ln.strip()
+        if not ln:
+            continue
+        try:
+            records.append(json.loads(ln))
+        except ValueError:
+            continue          # a corrupt line is dropped on rewrite, as elsewhere
+    by = "queue-forced/%s" % update.MODEL
+    for cid, verdict, note in stamps:
+        for r in records:
+            if r.get("cluster_id") != cid:
+                continue
+            before = json.dumps(r.get("audit"), sort_keys=True)
+            update.record_audit(r, verdict, depth="full_opinion", by=by, note=note)
+            if json.dumps(r.get("audit"), sort_keys=True) != before:
+                changed += 1
+    if changed:
+        safeio.atomic_write_text(
+            update.REJECT_PATH,
+            "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in records))
+    return changed
+
+
 def _write_pr(report):
     os.makedirs(os.path.dirname(PR_PATH), exist_ok=True)
     open(PR_PATH, "w", encoding="utf-8").write(report)
@@ -242,6 +293,7 @@ def run():
     #   "park"   -> rewrite the line as a "# ... -- reason" comment (unresolved; editor fixes it)
     line_outcome = {}
     added, treat_flags, audit_notes, report_rows = [], [], [], []
+    audit_stamps = []        # (cluster_id, verdict, note) for stamp_audits
     treatment_changed = cfg_error = False
     run_start, processed = time.time(), 0
 
@@ -380,10 +432,14 @@ def run():
         if not v.get("relevant"):
             line_outcome[idx] = ("remove", None)
             report_rows.append((name, "declined", "summarizer judged it not a relevant opinion (check the URL/cluster)"))
+            # The final editor read the full opinion and said no: that SETTLES the drop, so record
+            # it (see stamp_audits) instead of leaving the record as whatever the funnel decided.
+            audit_stamps.append((cid, "confirmed", "queue-forced read: summarizer declined"))
             continue
         if (v.get("significance") or "").lower() == "low" and not force:
             line_outcome[idx] = ("remove", None)
             report_rows.append((name, "gated out", "summarizer: low significance (add \"!\" to force)"))
+            audit_stamps.append((cid, "confirmed", "queue read: summarizer judged significance low"))
             continue
 
         areas = [a for a in (v.get("areas") or []) if a in update.VALID_AREAS]
@@ -410,6 +466,8 @@ def run():
                 "precedential": (v.get("precedential") or "unknown"),
                 "first_seen": today_iso if date_filed >= win_cutoff else date_filed}
         added.append(card)
+        # Carded from the queue: if this cluster was ever dropped, the forced read RECOVERED it.
+        audit_stamps.append((cid, "recovered", "queue read: summarizer carded it"))
         have.add(cid)                              # dedupe within this run
         line_outcome[idx] = ("remove", None)
         report_rows.append((name, "carded",
@@ -452,7 +510,10 @@ def run():
     if queue_changed:
         safeio.atomic_write_text(QUEUE_PATH, new_text)
         print("queue.txt rewritten.")
-    if not (added or treatment_changed or queue_changed):
+    stamped = stamp_audits(audit_stamps)
+    if stamped:
+        print("recorded %d audit verdict(s) from this run's full reads." % stamped)
+    if not (added or treatment_changed or queue_changed or stamped):
         print("nothing to add; files unchanged.")
 
 

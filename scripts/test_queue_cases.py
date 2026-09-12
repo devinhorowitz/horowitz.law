@@ -107,6 +107,56 @@ def test_rewrite_queue():
           queue_cases.rewrite_queue([queue_cases.parse_line("11111")], {0: ("remove", None)}) == "")
 
 
+def test_stamp_audits(tmpdir=None):
+    """A forced queue read must RECORD what it established, so the effort accumulates.
+
+    Queue run 26 (2026-09-12) read cluster 10956827 on the full opinion and the summarizer declined
+    it. The drop record afterwards still said smell_outcome "deferred" with no audit, because
+    stamp_audits did not exist and queue.yml's add-paths did not list the log. smell_check.py
+    re-audits "deferred" records and skips ones carrying a full_opinion audit, so an unstamped
+    decline comes back round and is escalated to the editor again -- the loop audit_log.py was
+    written to end. These checks pin the write, the matching, and the two refusals."""
+    import io, json, tempfile
+    import update
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "rej.jsonl")
+        rows = [
+            {"cluster_id": 10956827, "stage": "triage", "name": "Wells Fargo", "reason": "x",
+             "smell": "suspect", "smell_outcome": "deferred"},
+            {"cluster_id": 999, "stage": "triage", "name": "Other", "reason": "y",
+             "audit": {"verdict": "recovered", "depth": "full_opinion", "by": "someone", "ts": "z"}},
+        ]
+        io.open(path, "w", encoding="utf-8").write(
+            "".join(json.dumps(r) + "\n" for r in rows))
+        real = update.REJECT_PATH
+        try:
+            update.REJECT_PATH = path
+            n = queue_cases.stamp_audits([(10956827, "confirmed", "summarizer declined")])
+            check("a declined forced read stamps one record", n == 1, "changed=%r" % n)
+            out = [json.loads(l) for l in io.open(path, encoding="utf-8") if l.strip()]
+            rec = next(r for r in out if r["cluster_id"] == 10956827)
+            a = rec.get("audit") or {}
+            check("verdict recorded", a.get("verdict") == "confirmed", repr(a))
+            check("depth is full_opinion -- the summarizer read the whole opinion",
+                  a.get("depth") == "full_opinion", repr(a))
+            check("by names the queue path and the model", str(a.get("by", "")).startswith("queue-forced/"),
+                  repr(a.get("by")))
+            check("the other record is untouched",
+                  next(r for r in out if r["cluster_id"] == 999)["audit"]["by"] == "someone")
+            # audited_to_depth is what makes smell_check skip it next time; that is the whole point.
+            check("smell_check will now skip it", update.audited_to_depth(rec, "full_opinion"))
+
+            # A cluster with no rejection record (never dropped) is silently skipped, not an error.
+            check("a cluster with no record changes nothing",
+                  queue_cases.stamp_audits([(5555555, "confirmed", "n/a")]) == 0)
+            # record_audit refuses to weaken a stronger prior claim, so a re-run cannot downgrade.
+            check("re-stamping the same verdict is a no-op",
+                  queue_cases.stamp_audits([(10956827, "confirmed", "summarizer declined")]) == 0)
+            check("no stamps at all is a no-op", queue_cases.stamp_audits([]) == 0)
+        finally:
+            update.REJECT_PATH = real
+
+
 def main():
     print("queue_cases.parse_line:")
     test_blank_and_comment()
@@ -115,10 +165,12 @@ def main():
     test_force_and_inline_comment()
     print("queue_cases.rewrite_queue:")
     test_rewrite_queue()
+    print("queue_cases.stamp_audits:")
+    test_stamp_audits()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (%d checks)" % 26)
+    print("\nALL TESTS PASSED (%d checks)" % 34)
     return 0
 
 
