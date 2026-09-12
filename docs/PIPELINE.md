@@ -401,6 +401,42 @@ it actively stops the reader who would otherwise have looked. `scripts/test_upda
 `test_guard_log_distinguishes_a_standing_flag` asserts on the guards' **stdout**, not their return
 value, because every existing test checked the verdict and all of them passed throughout.
 
+### What the six findings turned out to be (2026-09-12)
+
+Reading the sources behind #302's six findings settled them 3-3, and the split is the useful part.
+
+**Three were real, and one was worse than the flag said.**
+
+| Card | Defect |
+|---|---|
+| Mejia v. SK Battery | The card had the decedent watching a coworker fall through "the same red-taped" louvers. The opinion places the red-taped "Danger" X's AFTER that fall — the defendants added them in response to it, having refused to reinforce the louvers. Their addition is one of the facts the court weighed in rejecting the argument that conditions had changed, so the card's version erased the evidence the court relied on. The coworker also fell through one of 25 louvers, not the identical panel. |
+| Cannon v. Safeco | Covered Division 1 only. Division 2 reversed dismissal of the breach-of-contract and implied-good-faith claims for failure to provide an **adequate** defense — on which the court said it found no Georgia case — plus the appeal-bond-premium claim; Division 3 reinstated the derivative fee and punitive claims. |
+| SFR Services / Wild Oak Bay | Disposition read "affirmed in part" and the card never said which part. The affirmed part is the striking of SFR's acceptance of a § 627.7152(9)(b) presuit settlement offer fifteen days after rendition of summary judgment. |
+
+**Three were the guard flagging the editor's own relevance line.** `SMG Constr. Servs. v. Cook`'s "the
+decision the Mejia panel applied" is true — Mejia says Cook "is particularly applicable to this case"
+and cites S25G0389; the October 2025 opinion simply cannot mention a panel that had not yet sat.
+`Giles v. Greenhouse Apartments`' SB 68 / O.C.G.A. §§ 51-3-50–57 era note is true and is this repo's
+own doctrine, and the `Richardson v. Thunder` card states the same proposition sourced to a court
+that said it. `Monsanto v. Durnell`'s impact note rested on a real citation (Carson v. Monsanto, 92
+F.4th 980 (CA11 2024)) but limited a nationwide holding to one circuit, so only its wording changed.
+
+`CROSSCHECK_SYSTEM` caused that. Its scope sentence says to decide **only** whether the summary states
+the court's holding and disposition, and then its flag list adds "asserts a fact the opinion does not
+support" — which sweeps in a line whose entire job is to supply context the opinion does not contain.
+The guard was obeying its instructions.
+
+The dividing line is **whose claim it is**, not whether the opinion contains it. Forward-looking and
+jurisdictional context in "Why it matters" is the editor's and is exempt; anything the summary asserts
+about *this case* — its facts, its sequence of events, who prevailed — must be in the opinion wherever
+it appears. That limit is what keeps the carve-out from swallowing the Mejia defect, which is a fact
+about the case imported from a later moment in the same case.
+
+Why bother, when the flags reach a human anyway: a FLAG that is usually a false positive teaches the
+editor to skip FLAG lines. That is the same failure the `NOT CONFIRMED` bug above produced, arriving
+from the opposite direction — one dismissed real findings, the other buries them in noise. Both end
+with a reader who has learned that this signal is not worth reading.
+
 ## Catching law that moves
 
 A published card can be overtaken by a later decision. Two processes watch for it, and both

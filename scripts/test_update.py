@@ -304,6 +304,42 @@ def test_guard_log_distinguishes_a_standing_flag():
     print("  ok  guard log distinguishes a standing flag from a cleared one (6 cases)")
 
 
+def test_crosscheck_why_carveout():
+    """The fidelity guard must not report the EDITOR'S relevance line as a misstatement of the
+    holding -- while still catching a fact about THIS case that the opinion does not support.
+
+    Of the four live fidelity flags standing on issue #302, three were false positives of exactly
+    this shape, verified against the sources: SMG Constr. Servs. v. Cook's "the decision the Mejia
+    panel applied" (Mejia does say Cook "is particularly applicable to this case"), Giles v.
+    Greenhouse Apartments' SB 68 era note (this repo's own doctrine, and the Richardson v. Thunder
+    card states it sourced to a court), and Monsanto v. Durnell's Eleventh Circuit impact note (the
+    Court does cite Carson v. Monsanto). The fourth, Mejia's red tape, was real -- the opinion places
+    the red-taped "Danger" X's AFTER the fall the card attached them to -- so the carve-out must not
+    swallow it.
+
+    Pins the INSTRUCTION, like test_screen_caption_rule: a prompt fix can only be guarded by
+    asserting the prompt still carries it. Fails if the carve-out is edited back out, and fails if
+    it is widened into a blanket excuse for unsupported facts."""
+    p = update.CROSSCHECK_SYSTEM
+    # The carve-out itself, scoped to the relevance line and to the editor as its author.
+    for phrase in ('"Why it matters"', "EDITOR'S", "NOT a fidelity defect",
+                   "NOT by itself a", "a later decision that applied it"):
+        assert phrase in p, "cross-check prompt lost the Why-it-matters carve-out: %r" % phrase
+    # The limit on it: facts about THIS case are still checked wherever they appear, so the one
+    # real defect in that batch would still be caught.
+    for phrase in ("WHEREVER", "sequence of events", "imported from somewhere else"):
+        assert phrase in p, "carve-out widened past context into facts about the case: %r" % phrase
+    # The original scope must survive; the carve-out narrows what counts, it does not replace it.
+    for phrase in ("misstates the holding", "overstates how broadly",
+                   "gets the disposition or who prevailed backwards"):
+        assert phrase in p, "cross-check prompt lost its original flag ground: %r" % phrase
+    # The completeness guard is a different question (omission, not import) and must not have
+    # acquired the carve-out: an omitted holding is omitted whoever was speaking.
+    assert '"Why it matters"' not in update.COMPLETENESS_SYSTEM, (
+        "the completeness guard must not exempt the relevance line; it checks omissions")
+    print("  ok  cross-check prompt carries the Why-it-matters carve-out, and its limit")
+
+
 def test_docket_set():
     assert update._docket_set("A26A0526, A26A0550") == {"A26A0526", "A26A0550"}, "comma split"
     assert update._docket_set(["No. 21-1234"]) == {"21-1234"}, "list and No. prefix dropped"
@@ -836,6 +872,7 @@ def main():
     print("helpers:")
     test_substantiation_helper()
     test_guard_log_distinguishes_a_standing_flag()
+    test_crosscheck_why_carveout()
     test_docket_set()
     test_treatment_citer_seen()
     test_quote_substantiated()
@@ -849,7 +886,7 @@ def main():
     test_guard_token_budget()
     test_screen_caption_rule()
     test_batch_carry_over()
-    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 15))
+    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 16))
     return 0
 
 
