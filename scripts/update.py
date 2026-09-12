@@ -1868,6 +1868,44 @@ CROSSCHECK_SYSTEM = (
     "reach, gets the disposition or who prevailed backwards, or asserts a fact the opinion does not "
     "support. Do NOT flag a summary for omitting detail, for word choice, or for emphasis, so long as "
     "what it does say is correct. "
+    # The "Why it matters" carve-out, added 2026-09-12 after auditing the four live fidelity flags
+    # standing on issue #302. Three of the four were not card defects at all -- they were this guard
+    # reporting the EDITOR'S relevance line as a misstatement of the court's holding:
+    #
+    #   SMG Constr. Servs. v. Cook  "this is the decision the Mejia panel applied" -- TRUE. Mejia v.
+    #     SK Battery (Ct. App. 2026-01-27) says "The Supreme Court of Georgia's recent decision in
+    #     Cook is particularly applicable to this case" and cites S25G0389. The Oct. 2025 Cook opinion
+    #     obviously cannot mention a panel that had not yet sat.
+    #   Giles v. Greenhouse Apartments  the SB 68 / O.C.G.A. 51-3-50..57 era note -- TRUE, and this
+    #     repo's own doctrine (see the TORT_REFORM guidance below). The Richardson v. Thunder card
+    #     carries the same proposition, sourced there to a court that actually said it.
+    #   Monsanto v. Durnell  the Georgia/Eleventh Circuit impact note -- the inference was sound (the
+    #     Court does cite Carson v. Monsanto, 92 F.4th 980 (CA11 2024)), though the wording limited a
+    #     nationwide holding to one circuit and has been reworded. Only the wording was wrong.
+    #
+    # The prompt caused this. Its scope sentence says to decide ONLY whether the summary states the
+    # court's holding and disposition, but the flag list then adds "asserts a fact the opinion does
+    # not support" -- which sweeps in a relevance line whose whole job is to supply context the opinion
+    # does not contain. The guard was obeying its instructions; it had no way to tell editorial context
+    # from a misstatement. Left alone this recurs on every card that earns its place in the feed, and a
+    # FLAG that is usually a false positive trains the editor to skip FLAG lines -- the same way the
+    # "NOT CONFIRMED" bug trained them to skip findings.
+    #
+    # The line between the two is WHOSE claim it is, not whether the opinion contains it: anything the
+    # summary asserts about THIS case still has to be in the opinion. That is what caught the one real
+    # defect in the same batch -- Mejia's red tape, which the opinion places AFTER the fall the card
+    # attached it to. Only forward-looking and jurisdictional context is exempt.
+    "The drafted summary ends with a \"Why it matters\" line. That line is the EDITOR'S, not the "
+    "court's, and it may legitimately place the decision in context the opinion itself never "
+    "discusses: a later decision that applied it, which statutory era the facts fall in, what the "
+    "ruling means for litigants in this feed's jurisdiction, or what rule it displaces. Context of "
+    "that kind is NOT a fidelity defect, and \"the opinion does not mention this\" is NOT by itself a "
+    "reason to flag it. Flag that line only if it misdescribes what THIS court held or decided, "
+    "overstates how broadly the court ruled, or contradicts the opinion. "
+    "Everything the summary says about THIS case -- its facts, its procedural history, its sequence "
+    "of events, who prevailed, what the court reasoned -- must be supported by the opinion WHEREVER "
+    "it appears, including in that line. A fact about this case imported from somewhere else is "
+    "exactly what this check is for. "
     "This check is only about statements that are PRESENT in the drafted summary and wrong. To flag, "
     "you MUST copy, verbatim, the exact span of the DRAFTED SUMMARY that is the misstatement into the "
     "\"quote\" field, character for character from the drafted-summary text shown to you. Quote from "
