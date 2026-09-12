@@ -2451,20 +2451,32 @@
     10970565,
     10970566,
     10970567,
-    10970571
+    10970571,
+    10970590,
+    10971902,
+    10971903,
+    10971905,
+    10971914,
+    10971915,
+    10971940,
+    10971941,
+    10971945,
+    10971970,
+    10971978,
+    10971979,
+    10972022,
+    10972039,
+    10972041,
+    10972051,
+    10972052,
+    10972053,
+    10972054,
+    10972072,
+    10972073,
+    10972077,
+    10972080,
+    10972081
   ],
-  "updated": "2026-09-10T19:14:46Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_011iAjgoEVBj76Lgis7VXg74",
-      "at": 1789067426.7749236,
-      "n": 4
-    },
-    "funnel-smell": {
-      "id": "msgbatch_011JFvn1xLMeoHjuPkMFHoeR",
-      "at": 1789067586.259157,
-      "n": 1
-    }
-  }
+  "updated": "2026-09-12T12:47:29Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
