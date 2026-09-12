@@ -368,6 +368,39 @@ a bare per curiam disposition alongside the one-line order, and says that when t
 one, that IS the ground -- do not reach past it for a subject, because a bare affirmance has none
 to find. `pretriage` keeps its own no-merits ground, so both gates independently refuse one.
 
+### A log line that reassured while the finding stood (fixed 2026-09-12)
+
+The guards were right and the log was wrong, in the direction that costs the most.
+
+`_guard_consensus` confirms a flag on a majority of the attempts **budgeted** (`tries`, default 3),
+so two flags out of three stands. Both guards then reported the outcome through a branch that read
+`elif flags:` -- true whenever any attempt flagged, including when the flag had just won its
+majority. So a confirmed finding printed, immediately above itself:
+
+```
+  . cross-check flag NOT CONFIRMED for SMG Construction (2 of 2 attempts flagged); clearing as noise
+  FLAG (fidelity) SMG Construction Services, LLC v. Cook: ...
+```
+
+Both lines came from the same run, one line apart, and only the second was true. The verdict logic
+never wavered -- `MAINTENANCE_FINDING=1` was set, the issue comment was filed, the flag was in the
+returned dict -- but every reader who scanned the log saw the dismissal and stopped. Six standing
+findings on published cards sat in issue #302 for two weeks under that sentence: four fabrications
+(a nonexistent "Mejia panel", a red-tape sequence the opinion reverses, an SB 68 framing the opinion
+never mentions, a geographic claim it never makes) and two omitted holdings.
+
+The fix separates the three outcomes so they cannot be read as one another: a confirmed flag prints
+`CONFIRMED ... (n of m attempts flagged, k budgeted); it stands`, a cleared minority keeps
+`NOT CONFIRMED ... clearing as noise`, and an undecided guard prints neither. Naming the budget lets
+the reader check the majority arithmetic instead of trusting the label.
+
+This is the silent-green class running in reverse. Usually the danger is a green signal over a real
+failure; here it was a *dismissal* over a real finding -- same mechanism, same cost. A signal that is
+false in the reassuring direction is worse than no signal, because it does not merely fail to alert,
+it actively stops the reader who would otherwise have looked. `scripts/test_update.py`'s
+`test_guard_log_distinguishes_a_standing_flag` asserts on the guards' **stdout**, not their return
+value, because every existing test checked the verdict and all of them passed throughout.
+
 ## Catching law that moves
 
 A published card can be overtaken by a later decision. Two processes watch for it, and both

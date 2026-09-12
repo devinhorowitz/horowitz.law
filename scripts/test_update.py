@@ -12,6 +12,7 @@ it in the smoke job; run it directly to check a change to crosscheck:
 
   python scripts/test_update.py        # prints each case; exits nonzero on any failure
 """
+import io
 import os
 import sys
 
@@ -242,6 +243,65 @@ def run_dedup_case(label, ca, da, ka, na, cb, db, kb, nb, expected):
     assert got == expected, "%s: _same_case=%r expected %r" % (label, got, expected)
     assert update._same_case(b, a) == expected, "%s: relation is not symmetric" % label
     print("  ok  %-34s same_case=%s" % (label, got))
+
+
+def _guard_log(fn, seq, tries, tries_attr):
+    """Run one guard with scripted responses and return (verdict, captured stdout)."""
+    import contextlib
+    prev_json, prev_tries = update.anthropic_json, getattr(update, tries_attr)
+    update.anthropic_json = Stub(seq)
+    setattr(update, tries_attr, tries)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            if fn is update.crosscheck:
+                r = fn(CARD["name"], OPINION, CARD)
+            else:
+                r = fn(CARD["name"], COMP_OPINION, CARD)
+    finally:
+        update.anthropic_json = prev_json
+        setattr(update, tries_attr, prev_tries)
+    return r["verdict"], buf.getvalue()
+
+
+def test_guard_log_distinguishes_a_standing_flag():
+    """A CONFIRMED flag must never print the line that dismisses one.
+
+    The verdict logic was always right -- _guard_consensus confirms on a majority of the BUDGET,
+    so 2 of 3 stands. The report was not: the print branch was a bare `elif flags`, which fires
+    on the confirmed path too. Every standing finding in issue #302 carried "NOT CONFIRMED ...
+    clearing as noise" on the line above it, and six real defects on published cards were read as
+    noise for two weeks. This asserts on the STDOUT, because the bug was invisible to every test
+    that only checked the returned verdict."""
+    cases = [
+        # (label, guard, tries-attr, scripted responses, tries, verdict, must appear, must NOT appear)
+        ("fidelity flag stands (2 of 3)", update.crosscheck, "CROSSCHECK_TRIES",
+         [flag(REAL_QUOTE), match(), flag(REAL_QUOTE)], 3, "flag", "CONFIRMED", "NOT CONFIRMED"),
+        ("fidelity flag stands (unanimous)", update.crosscheck, "CROSSCHECK_TRIES",
+         [flag(REAL_QUOTE)] * 3, 3, "flag", "CONFIRMED", "NOT CONFIRMED"),
+        ("fidelity minority is noise", update.crosscheck, "CROSSCHECK_TRIES",
+         [flag(REAL_QUOTE), match(), match()], 3, "match", "NOT CONFIRMED", None),
+        ("completeness flag stands (2 of 3)", update.completeness_check, "COMPLETENESS_TRIES",
+         [cflag(COMP_REAL), complete(), cflag(COMP_REAL)], 3, "flag", "CONFIRMED", "NOT CONFIRMED"),
+        ("completeness minority is noise", update.completeness_check, "COMPLETENESS_TRIES",
+         [cflag(COMP_REAL), complete(), complete()], 3, "complete", "NOT CONFIRMED", None),
+    ]
+    for label, fn, attr, seq, tries, want, must, must_not in cases:
+        verdict, out = _guard_log(fn, seq, tries, attr)
+        assert verdict == want, "%s: verdict %r != %r" % (label, verdict, want)
+        assert must in out, "%s: stdout lacks %r\n%s" % (label, must, out)
+        if must_not:
+            assert must_not not in out, (
+                "%s: a standing flag printed the dismissal line %r\n%s" % (label, must_not, out))
+        # A confirmed flag must also name the budget, so the reader can check the majority itself.
+        if want == "flag":
+            assert "budgeted" in out, "%s: confirmed line omits the budget\n%s" % (label, out)
+    # An unavailable verdict prints neither consensus line: nothing was decided either way.
+    verdict, out = _guard_log(update.crosscheck, [RuntimeError("x"), flag(REAL_QUOTE), RuntimeError("x")],
+                              3, "CROSSCHECK_TRIES")
+    assert verdict == "unavailable", verdict
+    assert "CONFIRMED" not in out, "an undecided guard must not claim a verdict\n%s" % out
+    print("  ok  guard log distinguishes a standing flag from a cleared one (6 cases)")
 
 
 def test_docket_set():
@@ -775,6 +835,7 @@ def main():
         run_dedup_case(*c)
     print("helpers:")
     test_substantiation_helper()
+    test_guard_log_distinguishes_a_standing_flag()
     test_docket_set()
     test_treatment_citer_seen()
     test_quote_substantiated()
@@ -788,7 +849,7 @@ def main():
     test_guard_token_budget()
     test_screen_caption_rule()
     test_batch_carry_over()
-    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 14))
+    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 15))
     return 0
 
 
