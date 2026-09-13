@@ -20,6 +20,42 @@
     "first_seen": "2026-08-09"
   },
   {
+    "bill_id": 2083404,
+    "state": "GA",
+    "number": "HB986",
+    "title": "Motor vehicles; personal delivery devices; revise operation procedures and restrictions",
+    "status": "enacted",
+    "status_date": "2026-05-11",
+    "effective_date": "",
+    "areas": [
+      "auto"
+    ],
+    "synopsis": "Personal delivery devices — the sidewalk/crosswalk delivery robots — are regulated alongside electric personal assistive mobility devices in Part 2A of Article 13 of Chapter 6 of Title 40, which prescribes where and how such devices may operate. This Act revises the operation procedures and restrictions applicable to personal delivery devices. Because those provisions set the statutory operating duties for the devices and their operating entities, they supply the rules-of-the-road framework against which conduct is measured in collision, pedestrian, and property-damage claims involving a device. Practitioners handling such claims should pull the current text of the revised Part 2A rather than relying on prior versions, as negligence per se theories and comparative-fault arguments will track the amended restrictions.",
+    "impact": "Revised operating restrictions for delivery robots reset the statutory duties underlying negligence per se and fault allocation in claims involving such devices.",
+    "url": "https://legiscan.com/GA/bill/HB986/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72246",
+    "change_hash": "d6990deae74e6474ee83c59a0f661b89",
+    "first_seen": "2026-09-13"
+  },
+  {
+    "bill_id": 2072041,
+    "state": "GA",
+    "number": "HB945",
+    "title": "Banking and finance; holds on accounts of eligible adults for suspected financial exploitation; provide",
+    "status": "enacted",
+    "status_date": "2026-05-11",
+    "effective_date": "",
+    "areas": [
+      "procedure"
+    ],
+    "synopsis": "The Act amends Title 7 (banking and finance) to authorize financial institutions to place temporary holds on accounts of eligible adults when financial exploitation is suspected, and sets procedures for placing and lifting those holds. On the litigation finance side, it adds cease and desist procedures aimed at persons providing litigation finance without registration, creates a path for judicial hearings to review Department decisions on litigation finance matters, and imposes disclosure obligations on registrants. It also drops the requirement that independent credit reports be obtained from a consumer reporting agency as defined in the federal Fair Credit Reporting Act, adds definitions, and makes conforming changes.",
+    "impact": "Counsel handling funded claims should track new disclosure duties, unregistered-funder cease and desist exposure, and the judicial review route for Department litigation finance decisions.",
+    "url": "https://legiscan.com/GA/bill/HB945/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72143",
+    "change_hash": "1ea86c7e5c71103ba59778b541e8bb45",
+    "first_seen": "2026-09-13"
+  },
+  {
     "bill_id": 1947610,
     "state": "GA",
     "number": "HB185",
@@ -37,6 +73,24 @@
     "state_link": "https://www.legis.ga.gov/legislation/69666",
     "change_hash": "6438ee094892db25bad2fb5f0aa43d13",
     "first_seen": "2026-08-09"
+  },
+  {
+    "bill_id": 2072013,
+    "state": "GA",
+    "number": "HB944",
+    "title": "Motor vehicles; federal regulations regarding safe operation of commercial motor carriers and commercial vehicles; update reference date",
+    "status": "enacted",
+    "status_date": "2026-05-06",
+    "effective_date": "",
+    "areas": [
+      "auto"
+    ],
+    "synopsis": "O.C.G.A. § 40-1-8 adopts the federal motor carrier safety regulations, and the safe-transportation-of-hazardous-materials regulations, as they exist as of a fixed reference date rather than on a rolling basis. This Act moves that reference date forward, so the version of the federal rules given force in Georgia is the more recent one, and revises a definition used in the Code section. The provided description does not identify the new reference date or the definition revised.",
+    "impact": "In trucking cases, confirm which federal safety-regulation vintage Georgia adopted for the conduct at issue before pleading negligence per se.",
+    "url": "https://legiscan.com/GA/bill/HB944/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72142",
+    "change_hash": "48c9f3f7b60f2b3031a10554780148dc",
+    "first_seen": "2026-09-13"
   },
   {
     "bill_id": 1961012,
