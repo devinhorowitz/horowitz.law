@@ -2480,20 +2480,40 @@
     10973127,
     10973128,
     10973132,
-    10973133
+    10973133,
+    10973141,
+    10973142,
+    10973143,
+    10973149,
+    10973150,
+    10973167,
+    10973186,
+    10973187,
+    10973188,
+    10973189,
+    10973190,
+    10973191,
+    10973192,
+    10973193,
+    10973194,
+    10973195,
+    10973219,
+    10973225,
+    10973226,
+    10973227,
+    10973228,
+    10973229,
+    10973230,
+    10973231,
+    10973232,
+    10973233,
+    10973266,
+    10973267,
+    10973268,
+    10973297,
+    10973298,
+    10973299
   ],
-  "updated": "2026-09-14T15:08:35Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_016Nh9RtdwxcQmnnG9m8pQk6",
-      "at": 1789398268.3452456,
-      "n": 1
-    },
-    "funnel-smell": {
-      "id": "msgbatch_01UNAC3n2XyQmuP7K68JkhgC",
-      "at": 1789398420.8276813,
-      "n": 1
-    }
-  }
+  "updated": "2026-09-14T20:21:10Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
