@@ -2476,8 +2476,24 @@
     10972077,
     10972080,
     10972081,
-    10972165
+    10972165,
+    10973127,
+    10973128,
+    10973132,
+    10973133
   ],
-  "updated": "2026-09-12T18:28:04Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-09-14T15:08:35Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-triage": {
+      "id": "msgbatch_016Nh9RtdwxcQmnnG9m8pQk6",
+      "at": 1789398268.3452456,
+      "n": 1
+    },
+    "funnel-smell": {
+      "id": "msgbatch_01UNAC3n2XyQmuP7K68JkhgC",
+      "at": 1789398420.8276813,
+      "n": 1
+    }
+  }
 }
