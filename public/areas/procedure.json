@@ -1,7 +1,7 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 77,
+  "count": 78,
   "opinions": [
     {
       "cluster_id": 10970013,
@@ -812,6 +812,24 @@
       "why": "Substitute-service proof under O.C.G.A. § 9-11-4(e)(7) that is in the record must be addressed before dismissing for lack of service, and once the limitation period has run the case turns on the plaintiff's diligence in perfecting service.",
       "dockets": [
         "A25A0999"
+      ]
+    },
+    {
+      "cluster_id": 10656665,
+      "name": "Carter v. Davis",
+      "court": "Court of Appeals of Georgia",
+      "date": "2025-08-19",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure",
+        "auto"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10656665/jonathan-carter-v-jessica-davis/",
+      "synopsis": "In a three-car collision case tried to a 12-person jury in the State Court of Bibb County, the trial court failed to pull the alternate juror before deliberations, and the alternate sat in the jury room with the panel — \"We had a jury of 13 back there,\" as the trial court put it in open court. Plaintiff objected and moved for a mistrial; the court denied the motion, took the defense verdict, and later denied a post-trial motion for reconsideration after the alternate testified that she said nothing, cast no vote, and stayed \"quiet as a mouse.\" The trial court refused to consider sworn statements from seven of the regular jurors, finding them untimely and inadmissible hearsay, so the rebuttal rested on the alternate's testimony and on the jury having picked a foreperson and reached a verdict in under ten minutes. The Court of Appeals affirmed. Reaching OCGA § 9-11-47 (b) in the civil context for the first time, the court explained that an alternate who has not replaced a regular juror \"may be discharged prior to deliberations or, if not discharged, must be kept 'separate and apart from the regular jurors until the jury has agreed upon a verdict.'\" Because the operative language of the civil provision and its criminal counterpart, OCGA § 15-12-171, is \"almost identical,\" the court applied the criminal framework: an alternate who improperly enters the jury room is a \"stranger to the jury,\" and the alternate's presence over objection creates a rebuttable presumption of harm, which the proponent of the verdict must rebut by showing no juror was influenced. On this record the trial court did not clearly err in finding the presence harmless. The court separately noted that a mistrial cannot be granted once the verdict is returned, and that the proper vehicle was a motion for new trial, which Carter never filed.",
+      "why": "The first Georgia decision construing OCGA § 9-11-47 (b) in a civil case, importing the criminal rebuttable-presumption-of-harm standard when an alternate sits in on deliberations — and confirming that discharging an unused alternate is discretionary, with sequestration \"separate and apart\" as the alternative. Practical note for the rebuttal: the trial court here refused the seven jurors' sworn statements as untimely hearsay, so a party defending a verdict on this ground should expect to put the alternate on the stand rather than paper the record.",
+      "dockets": [
+        "A25A1283"
       ]
     },
     {

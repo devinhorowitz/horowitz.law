@@ -15,7 +15,7 @@
     {
       "area": "auto",
       "label": "auto",
-      "count": 32,
+      "count": 33,
       "url": "https://horowitz.law/areas/auto.json"
     },
     {
@@ -39,7 +39,7 @@
     {
       "area": "procedure",
       "label": "procedure",
-      "count": 77,
+      "count": 78,
       "url": "https://horowitz.law/areas/procedure.json"
     },
     {
