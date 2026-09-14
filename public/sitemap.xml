@@ -39,7 +39,7 @@
   </url>
   <url>
     <loc>https://horowitz.law/digests</loc>
-    <lastmod>2026-09-09</lastmod>
+    <lastmod>2026-09-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.4</priority>
   </url>
@@ -510,6 +510,12 @@
   <url>
     <loc>https://horowitz.law/o/10669247</loc>
     <lastmod>2025-09-10</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://horowitz.law/o/10656665</loc>
+    <lastmod>2026-09-14</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
