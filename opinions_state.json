@@ -34,6 +34,7 @@
     10588200,
     10614235,
     10620084,
+    10656665,
     10669247,
     10680052,
     10680196,
@@ -2512,8 +2513,9 @@
     10973268,
     10973297,
     10973298,
-    10973299
+    10973299,
+    10973388
   ],
-  "updated": "2026-09-14T20:21:10Z",
+  "updated": "2026-09-15T05:01:27Z",
   "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
