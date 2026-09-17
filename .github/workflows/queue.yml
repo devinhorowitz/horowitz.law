@@ -104,6 +104,30 @@ jobs:
       # and opens no PR. Otherwise it opens or updates one PR with the run report as the
       # body, the new card(s) in opinions.json, the re-rendered html/xml, and the drained
       # queue.txt. Confirm the latest tag at github.com/peter-evans/create-pull-request.
+      # The drop-reason audit verdicts this run established go STRAIGHT TO MAIN, not through
+      # the editorial PR, exactly as smell.yml commits the same file. They are bookkeeping: they
+      # record that a human-grade read happened, and nothing about them needs an editor's eye.
+      #
+      # They used to ride the PR (add-paths, 2026-09-12). That was wrong in a way that only shows
+      # up when the PR sits. queue_cases.stamp_audits rewrites the WHOLE log atomically, so the
+      # branch carries a point-in-time snapshot of a file the 4-hourly funnel appends to every
+      # run. PR #336 sat three days, main gained 131 records, and the merge conflicted -- the
+      # queue.txt drain and the two verdicts in it could not land at all until the file was
+      # reconciled by hand. A file written wholesale by one job and appended to by another does
+      # not belong on a review branch.
+      #
+      # push_main.sh rebases onto freshly fetched main and retries, which is what makes this safe
+      # against the funnel pushing in the same window.
+      - name: Record audit verdicts on main
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add opinions_rejections.jsonl
+          git commit -m "opinions: record queue-read audit verdicts [skip ci]" \
+            || { echo "no audit verdicts to record"; exit 0; }
+          bash scripts/push_main.sh
+
       - name: Open pull request
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
@@ -115,15 +139,12 @@ jobs:
           delete-branch: true
           # add-paths is a literal block scalar, so every line in it is a PATH -- a "#" line
           # here is a filename, not a comment (test_workflow_state_paths pins that). Notes go
-          # above the key. opinions_rejections.jsonl is listed because a forced queue line
-          # sends the case to the summarizer on the full opinion and queue_cases.stamp_audits
-          # records what that read established onto the drop record; unlisted, the stamp is
-          # written in the runner and thrown away, and the next smell_check run re-escalates a
-          # case the editor already had an answer for.
+          # above the key. opinions_rejections.jsonl is deliberately NOT here: it is pushed
+          # straight to main by the step above, because it is bookkeeping and must not wait on
+          # an editorial review. See that step for what happened when it did.
           add-paths: |
             opinions.json
             queue.txt
-            opinions_rejections.jsonl
             public/.well-known/security.txt
             public/404.html
             public/archive.html

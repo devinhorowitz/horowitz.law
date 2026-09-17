@@ -91,6 +91,38 @@ def pr_workflows():
                            scripts)
 
 
+def persisted_logs_written_by(script_name):
+    """The persisted .jsonl logs a script REWRITES wholesale (not just appends to).
+
+    The STATE_JSON rule above only sees `*_state.json`, so a `.jsonl` a script rewrites is
+    outside it -- and that is exactly where the next instance of this bug landed."""
+    path = os.path.join(HERE, script_name + ".py")
+    if not os.path.exists(path):
+        return set()
+    src = open(path, encoding="utf-8").read()
+    found = set()
+    # A wholesale rewrite is the dangerous shape: an append is merge-friendly, a full rewrite
+    # is a point-in-time snapshot that goes stale on a branch.
+    if "atomic_write_text" in src and "REJECT_PATH" in src:
+        found.add("opinions_rejections.jsonl")
+    return found
+
+
+def commits_outside_add_paths(wf_name, filename):
+    """True when the workflow explicitly commits `filename` and pushes it to main itself.
+
+    That is the OTHER legitimate way to persist a file -- the funnel's own mechanism, and what
+    smell.yml does with this very log -- so it must count, or the check below would force a
+    file back onto a review branch where it does not belong."""
+    doc = yaml.safe_load(open(os.path.join(WORKFLOWS, wf_name), encoding="utf-8"))
+    for job in (doc.get("jobs") or {}).values():
+        for st in (job.get("steps") or []):
+            run = st.get("run") or ""
+            if filename in run and "git add" in run and "push_main.sh" in run:
+                return True
+    return False
+
+
 def main():
     print("workflow add-paths vs the state files their scripts write:")
     seen_any, checked = 0, 0
@@ -111,6 +143,22 @@ def main():
             check("%s commits %s (written by a script it runs)" % (wf, state),
                   state in paths,
                   "add-paths has %s" % [p for p in paths if p.endswith(".json")])
+
+        # The 2026-09-17 instance, one file-type over. queue_cases.stamp_audits rewrites
+        # opinions_rejections.jsonl wholesale; on 2026-09-12 that file was added to this
+        # workflow's add-paths so the stamp would travel. It travelled -- onto a review branch,
+        # where it became a snapshot of a file the 4-hourly funnel appends to. PR #336 sat three
+        # days, main gained 131 records, and the merge conflicted: the queue.txt drain and two
+        # audit verdicts could not land until the log was reconciled by hand. The file now goes
+        # straight to main instead. Either route is fine; NEITHER is not.
+        wanted_logs = set()
+        for s_ in sorted(scripts):
+            wanted_logs |= persisted_logs_written_by(s_)
+        for log in sorted(wanted_logs):
+            checked += 1
+            check("%s persists %s (add-paths, or its own commit+push_main)" % (wf, log),
+                  log in paths or commits_outside_add_paths(wf, log),
+                  "not in add-paths and no git add/push_main.sh step names it")
 
     check("PR-opening workflows were actually found", seen_any >= 3, str(seen_any))
     # Without this the suite passes trivially the day the regexes stop matching -- which is
