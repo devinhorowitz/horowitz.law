@@ -1,8 +1,63 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 78,
+  "count": 81,
   "opinions": [
+    {
+      "cluster_id": 10974689,
+      "name": "Woods v. Allstate Property and Casualty Insurance Co.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-09-16",
+      "disposition": "affirmed",
+      "areas": [
+        "coverage",
+        "auto",
+        "badfaith",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10974689/isaac-woods-v-allstate-property-and-casualty-insurance-company/",
+      "synopsis": "Insureds sued their uninsured motorist carrier for breach of contract, breach of the implied covenant of good faith and fair dealing, bad faith, and unfair trade practices after the carrier did not pay their prejudgment UM demand; the underlying tort action against the alleged uninsured motorist and her parents had been dismissed without prejudice and no judgment was ever obtained. The Court of Appeals held that under OCGA section 33-7-11 an antecedent judgment establishing the uninsured motorist's liability is a condition precedent to any action against the UM carrier premised on its failure to pay UM benefits, whether the claim is denominated as contract, bad faith, or deceptive trade practices. The court read Lewis v. Cherokee Insurance Co. as holding only that a prejudgment demand can start the 60-day period under OCGA section 33-7-11(j), not as eliminating the judgment requirement, and stated that subsection (j) does not itself create a cause of action for breach of contract or breach of an implied covenant of good faith and fair dealing. Because the complaint showed on its face that the condition precedent was unsatisfied, dismissal under OCGA section 9-11-12(b)(6) was affirmed.",
+      "why": "The decision clarifies that the antecedent-judgment condition precedent under the Uninsured Motorist Act reaches contract and related claims against a UM carrier, not just statutory bad-faith claims, and that failure to satisfy it may be resolved on the pleadings when it appears from the face of the complaint.",
+      "dockets": [
+        "A26A1623"
+      ]
+    },
+    {
+      "cluster_id": 10974687,
+      "name": "Holston v. Aboebarensi, Inc.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-09-16",
+      "disposition": "affirmed",
+      "areas": [
+        "premises",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10974687/kristina-holston-v-aboebarensi-inc/",
+      "synopsis": "Plaintiff tripped over an air hose at a vehicle repair shop and sued the shop, its owner, and the property owner on premises liability, vicarious liability, and negligent training and supervision theories. The Court of Appeals affirmed summary judgment on the premises claim, holding that plaintiff's undisputed deposition testimony that she saw the air hose before tripping established actual knowledge of the hazard, so she could not show the defendants had superior knowledge. Applying the Supreme Court's SMG Construction Services framework, the court held that a plaintiff's misapprehension of the precise details of a known hazard, here the exact portion of the hose she tripped over, does not negate actual knowledge, and it distinguished cases where evidence showed the plaintiff's perception of the hazard was impaired or she did not realize her proximity to it. The court also held that plaintiff abandoned any challenge to summary judgment on the derivative vicarious liability and negligent training and supervision claims by offering no separate argument or authority.",
+      "why": "The decision applies the actual-knowledge branch of the superior-knowledge rule to hold that testimony of having seen the hazard is dispositive even when the plaintiff claims she did not appreciate the hazard's precise location or extent, while marking the narrow line for cases showing impaired perception of the known hazard.",
+      "dockets": [
+        "A26A1219"
+      ]
+    },
+    {
+      "cluster_id": 10974579,
+      "name": "T. Mueller v. Walmart Corporation",
+      "court": "U.S. Court of Appeals for the Eleventh Circuit",
+      "date": "2026-09-16",
+      "disposition": "affirmed in part, reversed in part, and remanded",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10974579/t-mueller-v-walmart-corporation/",
+      "synopsis": "After plaintiff abandoned his only federal claims, the district court exercised supplemental jurisdiction over his Georgia false-arrest, false-imprisonment, and malicious-prosecution claims and granted summary judgment on them, while declining supplemental jurisdiction over his assault and battery claims. The Eleventh Circuit, noting it had never squarely decided the question, held that 28 U.S.C. section 1367(c) contains no per se bar on a split exercise of supplemental jurisdiction and that a district court may proceed claim by claim, relying on the statute's alternating use of singular 'claim' and plural 'claims' and joining other circuits that have addressed the issue. Applying abuse-of-discretion review, the court found no clear error of judgment in keeping the claims the district court considered readily resolvable and dismissing the fact-bound, credibility-dependent claims, and held that the court's failure to explain the split more explicitly was not itself an abuse of discretion. The court also rejected the argument that Royal Canin v. Wullschleger stripped jurisdiction, explaining that an amendment eliminating federal claims implicates section 1367(a)'s non-discretionary grant while a mid-case dismissal of federal claims implicates the discretionary standard of section 1367(c)(3).",
+      "why": "The decision establishes in the Eleventh Circuit that a district court may retain supplemental jurisdiction over some state-law claims while dismissing others after the federal claims are gone, and it marks the line between Royal Canin's amendment scenario and a mid-case dismissal that leaves jurisdiction discretionary.",
+      "dockets": [
+        "23-12854"
+      ]
+    },
     {
       "cluster_id": 10970013,
       "name": "Transcontinental Carriers, Inc. v. Bennett",

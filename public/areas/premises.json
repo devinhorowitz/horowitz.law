@@ -1,8 +1,26 @@
 {
   "area": "premises",
   "label": "premises",
-  "count": 21,
+  "count": 22,
   "opinions": [
+    {
+      "cluster_id": 10974687,
+      "name": "Holston v. Aboebarensi, Inc.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-09-16",
+      "disposition": "affirmed",
+      "areas": [
+        "premises",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10974687/kristina-holston-v-aboebarensi-inc/",
+      "synopsis": "Plaintiff tripped over an air hose at a vehicle repair shop and sued the shop, its owner, and the property owner on premises liability, vicarious liability, and negligent training and supervision theories. The Court of Appeals affirmed summary judgment on the premises claim, holding that plaintiff's undisputed deposition testimony that she saw the air hose before tripping established actual knowledge of the hazard, so she could not show the defendants had superior knowledge. Applying the Supreme Court's SMG Construction Services framework, the court held that a plaintiff's misapprehension of the precise details of a known hazard, here the exact portion of the hose she tripped over, does not negate actual knowledge, and it distinguished cases where evidence showed the plaintiff's perception of the hazard was impaired or she did not realize her proximity to it. The court also held that plaintiff abandoned any challenge to summary judgment on the derivative vicarious liability and negligent training and supervision claims by offering no separate argument or authority.",
+      "why": "The decision applies the actual-knowledge branch of the superior-knowledge rule to hold that testimony of having seen the hazard is dispositive even when the plaintiff claims she did not appreciate the hazard's precise location or extent, while marking the narrow line for cases showing impaired perception of the known hazard.",
+      "dockets": [
+        "A26A1219"
+      ]
+    },
     {
       "cluster_id": 10964915,
       "name": "Adams v. Lee",

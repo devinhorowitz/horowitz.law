@@ -1,8 +1,28 @@
 {
   "area": "badfaith",
   "label": "bad faith",
-  "count": 4,
+  "count": 5,
   "opinions": [
+    {
+      "cluster_id": 10974689,
+      "name": "Woods v. Allstate Property and Casualty Insurance Co.",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-09-16",
+      "disposition": "affirmed",
+      "areas": [
+        "coverage",
+        "auto",
+        "badfaith",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10974689/isaac-woods-v-allstate-property-and-casualty-insurance-company/",
+      "synopsis": "Insureds sued their uninsured motorist carrier for breach of contract, breach of the implied covenant of good faith and fair dealing, bad faith, and unfair trade practices after the carrier did not pay their prejudgment UM demand; the underlying tort action against the alleged uninsured motorist and her parents had been dismissed without prejudice and no judgment was ever obtained. The Court of Appeals held that under OCGA section 33-7-11 an antecedent judgment establishing the uninsured motorist's liability is a condition precedent to any action against the UM carrier premised on its failure to pay UM benefits, whether the claim is denominated as contract, bad faith, or deceptive trade practices. The court read Lewis v. Cherokee Insurance Co. as holding only that a prejudgment demand can start the 60-day period under OCGA section 33-7-11(j), not as eliminating the judgment requirement, and stated that subsection (j) does not itself create a cause of action for breach of contract or breach of an implied covenant of good faith and fair dealing. Because the complaint showed on its face that the condition precedent was unsatisfied, dismissal under OCGA section 9-11-12(b)(6) was affirmed.",
+      "why": "The decision clarifies that the antecedent-judgment condition precedent under the Uninsured Motorist Act reaches contract and related claims against a UM carrier, not just statutory bad-faith claims, and that failure to satisfy it may be resolved on the pleadings when it appears from the face of the complaint.",
+      "dockets": [
+        "A26A1623"
+      ]
+    },
     {
       "cluster_id": 10948454,
       "name": "Ex parte State Farm Fire and Casualty Company (In re Foor v. State Farm Fire and Casualty Company)",
