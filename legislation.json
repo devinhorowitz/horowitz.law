@@ -20,6 +20,25 @@
     "first_seen": "2026-08-09"
   },
   {
+    "bill_id": 2083404,
+    "state": "GA",
+    "number": "HB986",
+    "title": "Motor vehicles; personal delivery devices; revise operation procedures and restrictions",
+    "status": "enacted",
+    "status_date": "2026-05-11",
+    "effective_date": "",
+    "areas": [
+      "auto",
+      "premises"
+    ],
+    "synopsis": "The Act amends Part 2A of Article 13 of Chapter 6 of Title 40, the portion of the motor vehicle code governing electric personal assistive mobility devices and personal delivery devices, to revise the operation procedures and restrictions that apply to personal delivery devices. Previously, PDD operation on sidewalks, crosswalks, and roadways was governed by the operating requirements as previously enacted in that Part; those requirements are now revised, though the provided description does not state which specific procedures changed. Practitioners handling claims involving sidewalk delivery robots should pull the current text of Part 2A rather than relying on prior versions.",
+    "impact": "Revised statutory operating rules for delivery robots reset the negligence per se and comparative-fault baseline in pedestrian and vehicle collision claims involving personal delivery devices.",
+    "url": "https://legiscan.com/GA/bill/HB986/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72246",
+    "change_hash": "d6990deae74e6474ee83c59a0f661b89",
+    "first_seen": "2026-09-17"
+  },
+  {
     "bill_id": 1947610,
     "state": "GA",
     "number": "HB185",
@@ -37,6 +56,24 @@
     "state_link": "https://www.legis.ga.gov/legislation/69666",
     "change_hash": "6438ee094892db25bad2fb5f0aa43d13",
     "first_seen": "2026-08-09"
+  },
+  {
+    "bill_id": 2072013,
+    "state": "GA",
+    "number": "HB944",
+    "title": "Motor vehicles; federal regulations regarding safe operation of commercial motor carriers and commercial vehicles; update reference date",
+    "status": "enacted",
+    "status_date": "2026-05-06",
+    "effective_date": "",
+    "areas": [
+      "auto"
+    ],
+    "synopsis": "O.C.G.A. § 40-1-8 incorporates the federal motor carrier safety regulations and hazardous materials rules into Georgia law by reference as of a fixed date, and adopting them for intrastate carriers. This Act moves that reference date forward, so the federal rules as amended through the newer date now control, and it revises a definition used in the Code section. The provided description does not identify the new reference date or the definition revised.",
+    "impact": "Trucking cases must be measured against the newly incorporated version of the federal safety regulations, which govern negligence per se and standard-of-care theories.",
+    "url": "https://legiscan.com/GA/bill/HB944/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72142",
+    "change_hash": "48c9f3f7b60f2b3031a10554780148dc",
+    "first_seen": "2026-09-17"
   },
   {
     "bill_id": 1961012,
