@@ -2605,15 +2605,10 @@
     10974689,
     10974777,
     10974795,
-    10975065
+    10975065,
+    10975532,
+    10975533
   ],
-  "updated": "2026-09-17T05:04:02Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-guards": {
-      "id": "msgbatch_01Em9Yr3g8AnkrR3bxxFSkLK",
-      "at": 1789621242.0057926,
-      "n": 6
-    }
-  }
+  "updated": "2026-09-17T13:34:29Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
