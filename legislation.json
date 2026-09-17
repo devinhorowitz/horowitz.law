@@ -203,5 +203,23 @@
     "state_link": "https://www.legis.ga.gov/legislation/69929",
     "change_hash": "9974df9fa53631b78fa6c44327a3c7f7",
     "first_seen": "2026-08-09"
+  },
+  {
+    "bill_id": 2072041,
+    "state": "GA",
+    "number": "HB945",
+    "title": "Banking and finance; holds on accounts of eligible adults for suspected financial exploitation; provide",
+    "status": "enacted",
+    "status_date": "2026-05-11",
+    "effective_date": "",
+    "areas": [
+      "procedure"
+    ],
+    "synopsis": "The Act amends Title 7 (banking and finance) to authorize financial institutions to place temporary holds on accounts of eligible adults when financial exploitation is suspected, and sets procedures for placing and lifting those holds. On the litigation finance side, it adds cease and desist procedures aimed at persons providing litigation finance without registration, creates a path for judicial hearings to review Department decisions on litigation finance matters, and imposes disclosure obligations on registrants. It also drops the requirement that independent credit reports be obtained from a consumer reporting agency as defined in the federal Fair Credit Reporting Act, adds definitions, and makes conforming changes.",
+    "impact": "Counsel handling funded claims should track new disclosure duties, unregistered-funder cease and desist exposure, and the judicial review route for Department litigation finance decisions.",
+    "url": "https://legiscan.com/GA/bill/HB945/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72143",
+    "change_hash": "1ea86c7e5c71103ba59778b541e8bb45",
+    "first_seen": "2026-09-17"
   }
 ]
