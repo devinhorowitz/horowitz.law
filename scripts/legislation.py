@@ -75,6 +75,7 @@ import siteconfig  # shared practice-area taxonomy  # noqa: E402
 JSON_PATH  = os.path.join(REPO, "legislation.json")
 STATE_PATH = os.path.join(REPO, "legislation_state.json")
 LOG_PATH   = os.path.join(REPO, "legislation_log.jsonl")
+DROPS_PATH = os.path.join(REPO, "legislation_rejections.jsonl")
 
 KEY_LEGISCAN = os.environ.get("LEGISCAN_API_KEY", "")
 DEFAULT_STATE = "GA"
@@ -104,6 +105,29 @@ MAX_RUN      = int(os.environ.get("LEGISLATION_MAX", "40"))     # cap on CARDS d
 # left un-seen and simply rolls into the next weekly run, draining the backlog over a few Sundays.
 SCREEN_MAX   = int(os.environ.get("LEGISLATION_SCREEN_MAX", "60"))
 DEBUG        = os.environ.get("LEGISLATION_DEBUG", "") == "1"
+
+# The RECALL check over screen drops. The screen is one cheap Haiku roll per bill and its verdict
+# used to be final AND permanent: a dropped bill was written to `seen` with its change_hash, and
+# legislation.py never re-screens a bill whose hash has not moved -- which an enacted bill's never
+# does. So one bad roll removed a law from the feed forever, silently, with the reason going only
+# to _dbg.
+#
+# That happened. HB945 (2026, Title 7 -- account holds for suspected exploitation of eligible
+# adults, AND cease-and-desist against unregistered litigation financiers plus registrant
+# disclosures) was carded by the 2026-09-13 run and DROPPED by the 2026-09-17 run: same bill, same
+# change_hash 1ea86c7e5c71103ba59778b541e8bb45, opposite verdicts. The second verdict is the one
+# that would have stood, and it contradicts the Georgia screen's own instruction -- "Be PERMISSIVE
+# ... DROP only what is clearly unrelated" -- for a bill whose caption says "litigation finance".
+# It surfaced only because a stale branch forced two passes over the same bill; nothing in the
+# watch would have noticed.
+#
+# The opinions funnel answers the same problem with its smell test over logged drops. This is that,
+# scoped to a weekly watch of <= SCREEN_MAX bills: every drop is recorded with the exact brief the
+# screen read, a stronger model re-reads the drop against the screen's own bar, and a suspect drop
+# is ESCALATED to the writer in the same run rather than deferred -- the writer is the final editor
+# and can still decline, which is how a suspect terminates instead of cycling.
+RECALL         = os.environ.get("LEGISLATION_RECALL", "on").strip().lower() in ("1", "true", "yes", "on")
+RECALL_MODEL   = os.environ.get("LEGISLATION_RECALL_MODEL", WRITE_MODEL)
 
 # Batch the (Opus) card-WRITE pass through the 50%-priced Message Batches API, mirroring the opinion
 # funnel's OPINIONS_BATCH. Screening stays synchronous (Haiku, cheap, and its fail-open keep should be
@@ -361,6 +385,92 @@ def _screen_system(state):
         "Reply with ONLY a JSON object: {\"relevant\": true|false, \"areas\": [codes], "
         "\"reason\": \"<=15 words\"}. Valid area codes: " + AREA_CODES_STR + "."
     )
+
+
+def _recall_system(state):
+    """The recall auditor's brief: judge the DROP, against the screen's own bar.
+
+    Deliberately not "is this bill relevant" -- that would just re-run the screen with a bigger
+    model and inherit the same coin-flip. The question is narrower and checkable: does the stated
+    reason clear the bar the screen was given? For Georgia that bar is explicit and one-sided --
+    "Be PERMISSIVE ... DROP only what is clearly unrelated" -- so the burden sits on the drop, and
+    a reason that merely fails to establish relevance is not enough to keep the bill out.
+
+    Calibrated on the HB945 miss: "banking and finance regulation, not civil litigation" is a
+    defensible sentence about the bill's title and an indefensible ground for dropping a bill whose
+    caption also says "litigation finance". That is the shape this must catch."""
+    bar = ("DROP only what is CLEARLY unrelated to civil litigation; be permissive, and keep "
+           "anything that plausibly touches it or that leaves you unsure")
+    if state == "US":
+        bar = ("DROP unless the bill DIRECTLY changes the ground a state civil tort/insurance "
+               "practice litigates on; the default for federal law is drop")
+    return (
+        "You audit a triage DECISION, not a bill. A cheap first-pass filter read a bill brief for a "
+        "Georgia civil-litigation and insurance-defense practice and DROPPED the bill, giving a short "
+        "reason. You are shown the same brief and that reason. The filter's instruction was: " + bar + ". "
+        "Decide only this: does the reason hold up against that instruction, on this brief? "
+        "Answer SUSPECT if the brief itself shows something the reason overlooks or contradicts -- a "
+        "title, description or last action naming litigation, courts, civil procedure, evidence, "
+        "damages, insurance, tort or negligence liability, premises, motor carriers, wrongful death, "
+        "or a practice the feed covers -- or if the reason characterises the bill more narrowly than "
+        "the brief supports. Answer OK when the brief genuinely shows a clearly unrelated subject "
+        "(appropriations, criminal-only law, licensing boards, local or special acts, elections, "
+        "education, tax administration, procurement, naming or commendation). "
+        "A bill often does several things at once; one covered provision is enough to make a drop "
+        "suspect even if the caption leads with something else. Do NOT answer SUSPECT merely because "
+        "the brief is thin or you would like more detail -- judge what is there. "
+        "Reply with ONLY a JSON object: {\"suspect\": true|false, \"note\": \"<=20 words naming the "
+        "span in the brief that makes it suspect, or why the drop stands\"}."
+    )
+
+
+def recall_drop(drop, ai, model=None):
+    """Audit ONE screen drop. Returns (suspect: bool, note: str).
+
+    Fail-CLOSED on a model or parse error, i.e. suspect=False, which leaves the drop standing. That
+    is the opposite of screen_bill's fail-open and it is deliberate: this pass exists to catch a
+    wrong drop, so an unavailable auditor must not manufacture escalations that each cost a writer
+    call. A missed audit is recoverable -- the drop is on the log with no verdict, so it is
+    findable -- while a flood of false escalations on a broken auditor is not."""
+    model = model or RECALL_MODEL
+    try:
+        v = ai({"model": model, "max_tokens": 200, "system": _recall_system(drop.get("state") or DEFAULT_STATE),
+                "messages": [{"role": "user", "content":
+                              "BRIEF:\n%s\n\nTHE FILTER'S REASON FOR DROPPING IT:\n%s"
+                              % (drop.get("brief") or "", drop.get("reason") or "(none given)")}]},
+               "leg-recall")
+    except Exception as e:
+        _dbg("recall failed for %s, drop stands: %s" % (drop.get("number"), e))
+        return False, ""
+    return v.get("suspect") is True, str(v.get("note") or "")[:160]
+
+
+def log_drops(records, cap=4000):
+    """Append this run's screen drops, verdict included, to the drop log.
+
+    APPEND-ONLY on purpose. The opinions rejection log is rewritten wholesale so a later pass can
+    annotate a record in place, and on 2026-09-12 that put a whole-file snapshot on a review branch
+    which the 4-hourly funnel then conflicted with (#336, fixed in #339). The audit here runs in the
+    SAME run as the drop, so each record is written once already carrying its verdict and nothing
+    ever rewrites it. Bounded like append_log; best-effort, since losing a log line must never fail
+    a run that has already done its work."""
+    if not records:
+        return 0
+    import safeio
+    try:
+        lines = []
+        try:
+            with open(DROPS_PATH, encoding="utf-8") as f:
+                lines = [ln for ln in f.read().splitlines() if ln.strip()]
+        except FileNotFoundError:
+            pass
+        for r in records:
+            lines.append(json.dumps(r, ensure_ascii=False))
+        safeio.atomic_write_text(DROPS_PATH, "\n".join(lines[-cap:]) + "\n")
+        return len(records)
+    except Exception as e:
+        _dbg("drop log append failed: %s" % e)
+        return 0
 
 
 def _write_system(state):
@@ -710,6 +820,10 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
     # this loop -- as one batch (batch_enabled) or a synchronous loop -- so both share the exact
     # downstream seen/card logic. `areas` carries the screen's areas as the writer's fallback.
     pending = []
+    # Screen drops, each with the brief the screen read. Audited after the screen loop so the
+    # recall pass is one pass over the run's drops rather than a call interleaved per bill.
+    drops = []
+    drop_bills = {}          # bill_id -> the master-list bill, for an escalation that cannot re-fetch
     for state in states:
         if stop:
             break
@@ -730,13 +844,71 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
             keep, areas, reason = screen_bill(b, ai, state=state)
             if not keep:
                 _dbg("screen dropped %s %s: %s" % (state, b.get("number"), reason))
-                seen_updates[bid] = ch      # definitively not relevant; do not re-screen unless it changes
+                # RECORD the drop before deciding anything about it. The reason used to go only to
+                # _dbg, so a drop left no trace at all and nothing could audit what was never
+                # written down. `brief` is the exact text the screen read, stored so the audit
+                # judges the same evidence -- the opinions funnel learned that auditing a reason
+                # against a narrower haystack than the model saw produces findings nobody can check.
+                drops.append({
+                    "ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "bill_id": bid, "number": b.get("number") or "", "state": state,
+                    "title": (b.get("title") or "")[:300],
+                    "status": b.get("status"), "status_date": b.get("status_date") or "",
+                    "url": b.get("url") or "", "change_hash": ch,
+                    "reason": reason, "brief": _bill_brief(b, state),
+                })
+                drop_bills[bid] = b
                 continue
             detail = bill_detail(b.get("bill_id"), key, fetch=fetch) or b
             # carry the freshest change_hash (the master list's) onto the detail for carding
             if b.get("change_hash"):
                 detail["change_hash"] = b.get("change_hash")
             pending.append({"bid": bid, "ch": ch, "detail": detail, "state": state, "areas": areas})
+
+    # ---- RECALL: audit this run's screen drops, and escalate a suspect to the writer ----
+    # A drop that survives the audit is recorded seen, exactly as before: settled, never re-screened.
+    # A SUSPECT drop is escalated into `pending` instead, so the writer -- the final editor, which
+    # reads the full detail and can still decline -- makes the call. That is what terminates the
+    # loop: the escalated bill gets a definitive verdict this run either way, so it is never both
+    # dropped and locked out, which is the failure this exists to prevent (see RECALL above).
+    #
+    # Escalations respect max_run, so a pathological audit cannot blow the card budget; anything
+    # over the cap is left un-seen and simply comes back next run.
+    suspect_n = escalated_n = 0
+    for d in drops:
+        bid, ch = d["bill_id"], d["change_hash"]
+        suspect, note_txt = (recall_drop(d, ai) if RECALL else (False, ""))
+        d["recall"] = "suspect" if suspect else ("ok" if RECALL else "off")
+        if note_txt:
+            d["recall_note"] = note_txt
+        if not suspect:
+            seen_updates[bid] = ch          # the drop stands: settled, do not re-screen unless it moves
+            continue
+        suspect_n += 1
+        if len(pending) >= max_run:
+            d["recall"] = "suspect-deferred"   # un-seen, so it returns next run rather than vanishing
+            continue
+        # The escalated bill needs the same full detail a screened-relevant bill gets. Fall back to
+        # the master-list entry when the detail fetch is unavailable (budget, transient) rather than
+        # dropping the escalation: the writer reads what there is, and a bill left unresolved stays
+        # un-seen so it returns next run instead of vanishing.
+        try:
+            detail = bill_detail(int(bid), key, fetch=fetch) or drop_bills.get(bid) or {}
+        except (TypeError, ValueError):
+            detail = drop_bills.get(bid) or {}
+        if not detail:
+            d["recall"] = "suspect-unresolved"  # left un-seen deliberately: retry next run
+            continue
+        if ch:
+            detail["change_hash"] = ch
+        escalated_n += 1
+        d["recall"] = "escalated"
+        pending.append({"bid": bid, "ch": ch, "detail": detail, "state": d["state"], "areas": []})
+        note("LEGISLATION: recall ESCALATED %s %s to the writer -- %s"
+             % (d["state"], d.get("number") or bid, note_txt or "screen drop looks wrong"))
+    if drops:
+        note("LEGISLATION: recall audited %d screen drop(s), %d suspect, %d escalated."
+             % (len(drops), suspect_n, escalated_n))
 
     # Write pass: one batch job, or the synchronous per-bill path. Same verdict space either way.
     if batch_enabled and pending:
@@ -760,6 +932,8 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
         seen_updates[bid] = ch
         print("  + [%s] %s %s  %s" % (state, card.get("number") or "?", card.get("status") or "?",
                                       (card.get("title") or "")[:60]), flush=True)
+    if log_drops(drops):
+        _dbg("recorded %d screen drop(s) to %s" % (len(drops), os.path.basename(DROPS_PATH)))
     note("LEGISLATION: screened %d, drafted %d card(s)." % (screened, len(cards)))
     return cards, notes, seen_updates
 

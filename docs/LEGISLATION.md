@@ -68,6 +68,10 @@ card.
 2. **Screen (cheap, Haiku)** — reads number + title + description and drops the bulk
    (appropriations, licensing boards, local/special acts, criminal-only, elections). **Fails
    open**: a model error keeps the bill for the writer rather than dropping a real law.
+2b. **Recall-check the drops (stronger model)** — every screen drop is recorded and re-read against
+   the screen's own bar; a suspect drop is escalated to the writer in the same run. See
+   [The recall check](#the-recall-check-over-screen-drops) — this is the one place a single cheap
+   roll used to be both final and permanent.
 3. **Detail** — `getBill` for each survivor (title, description, progress, `state_link`).
 4. **Write (Opus)** — a tight, neutral, plain-English card: what the law changes and why a civil
    litigator should care, grounded in the provided text (no invented code sections or dollar
@@ -84,6 +88,69 @@ card.
 Practice areas reuse `siteconfig.AREA_CODES` (the opinion taxonomy transfers cleanly: tort reform →
 `damages`/`procedure`, trucking → `auto`, and so on), so the same filters and RSS categories serve
 both watches.
+
+## The recall check over screen drops
+
+The screen is one Haiku roll per bill, and its verdict used to be **final and permanent**. A dropped
+bill was written to `seen` with its `change_hash`, and `enacted_candidates` never re-screens a bill
+whose hash has not moved — which an enacted bill's never does. The reason went to `_dbg`, printed
+only under `LEGISLATION_DEBUG=1`. So one bad roll removed a law from the feed forever, leaving no
+trace anywhere.
+
+### The miss that produced this
+
+HB945 (2026) amends Title 7 to authorise holds on eligible adults' accounts for suspected financial
+exploitation **and** adds cease-and-desist procedures against unregistered litigation financiers, a
+judicial-review path for Department decisions, and registrant disclosure duties.
+
+| Run | Verdict |
+|---|---|
+| 2026-09-13 | carded |
+| 2026-09-17 | **dropped** |
+
+Same bill, same `change_hash` `1ea86c7e5c71103ba59778b541e8bb45`, opposite verdicts. The second is
+the one that would have stood, and it contradicts the Georgia screen's own instruction — *"Be
+PERMISSIVE … DROP only what is clearly unrelated"* — for a bill whose caption says "litigation
+finance". It surfaced only because a stale review branch forced two passes over the same bill and
+the two could be compared; nothing in the watch would have noticed, then or later.
+
+### What it does
+
+- **Records every drop** — `legislation_rejections.jsonl`, one append-only record per screened-out
+  bill: identity, the screen's `reason`, and `brief`, the exact text the screen read. Storing the
+  brief is deliberate: the opinions funnel learned that auditing a reason against a *narrower*
+  haystack than the model saw produces findings nobody can check (46 of them, all unverifiable).
+- **Audits the decision, not the bill** — `_recall_system` asks only whether the stated reason
+  clears the bar the screen was given. Re-asking "is this bill relevant" with a bigger model would
+  inherit the same coin flip. For Georgia that bar is one-sided, so the burden sits on the drop: a
+  reason that merely fails to establish relevance is not enough. The federal overlay keeps its own
+  stricter bar, where the default really is drop.
+- **Escalates a suspect to the writer, in the same run** — not to a report, not to next week. The
+  writer is the final editor, reads the full detail, and can still decline. That is what makes a
+  suspect *terminate*: it gets a definitive verdict this run either way, so a bill is never both
+  dropped and locked out. Escalations respect `LEGISLATION_MAX`, and anything over the cap is left
+  un-seen so it returns next run rather than vanishing.
+- **Fails closed** — the opposite of the screen. An auditor error leaves the drop standing, because
+  a broken auditor must not manufacture escalations that each cost a writer call. A missed audit is
+  recoverable: the drop is on the log without a verdict, so it is findable.
+
+`LEGISLATION_RECALL=0` disables it and restores the prior behaviour exactly;
+`LEGISLATION_RECALL_MODEL` overrides the auditor (default: the write model).
+
+### Why this log may ride the review PR when the opinions one may not
+
+`log_drops` **appends**. The opinions rejection log is rewritten wholesale so a later pass can
+annotate a record in place, and in September 2026 that put a point-in-time snapshot on a review
+branch which the 4-hourly funnel then conflicted with (#336, fixed in #339 by pushing it straight to
+main). Here the audit runs in the same run as the drop, so each record is written once already
+carrying its verdict and nothing ever rewrites it. An append merges; a wholesale rewrite does not.
+
+### What it is not
+
+It does not cover bills the screen never reached. `LEGISLATION_SCREEN_MAX` bounds screens per run,
+so a backlog drains over successive Sundays and an unscreened bill stays un-seen — correctly, since
+nothing has judged it. The recall check answers for decisions that were *made*, which is where the
+silent, permanent loss lived.
 
 ## Trust model: no auto-publish
 
