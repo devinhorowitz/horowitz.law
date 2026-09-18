@@ -105,6 +105,11 @@ def persisted_logs_written_by(script_name):
     # is a point-in-time snapshot that goes stale on a branch.
     if "atomic_write_text" in src and "REJECT_PATH" in src:
         found.add("opinions_rejections.jsonl")
+    # The legislative watch's recall log. It is APPEND-only (log_drops), so it is safe on a review
+    # branch where the opinions log is not -- but it still has to reach main by one route or the
+    # other, which is what this check is for.
+    if "atomic_write_text" in src and "DROPS_PATH" in src:
+        found.add("legislation_rejections.jsonl")
     return found
 
 

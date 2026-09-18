@@ -14,6 +14,7 @@ Run directly: `python scripts/test_legislation.py`.
 import json
 import os
 import sys
+import tempfile
 import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -152,6 +153,127 @@ def make_ai(script):
     return ai
 
 
+def test_recall(check, L, make_ai, fake_fetch, BILLS):
+    """The RECALL check over screen drops, and the invariant it exists to hold.
+
+    THE BUG. The screen is one cheap Haiku roll and its verdict was final AND permanent: a dropped
+    bill went into `seen` with its change_hash, and legislation.py never re-screens a bill whose
+    hash has not moved -- which an enacted bill's never does. One bad roll removed a law from the
+    feed forever, silently, the reason going only to _dbg.
+
+    It happened to HB945 (2026): Title 7 account holds for suspected exploitation of eligible
+    adults AND cease-and-desist against unregistered litigation financiers plus registrant
+    disclosures. Carded by the 2026-09-13 run, dropped by the 2026-09-17 run -- same bill, same
+    change_hash 1ea86c7e5c71103ba59778b541e8bb45, opposite verdicts -- and the drop is the one that
+    would have stood. It contradicts the Georgia screen's own instruction ("be PERMISSIVE ... DROP
+    only what is clearly unrelated") for a bill whose caption says "litigation finance". Nothing in
+    the watch noticed; it surfaced only because a stale review branch forced two passes.
+
+    Fixture 222 is that bill's shape ("Litigation financing"), and 444 is a drop that should stand
+    ("General appropriations"), so the pair below is the real miss and its control."""
+    import datetime, json, os, tempfile
+
+    # --- the instruction, pinned. A prompt fix can only be guarded by asserting the prompt. ---
+    ga = L._recall_system("GA")
+    check("recall prompt audits the DECISION, not the bill", "audit a triage DECISION" in ga)
+    check("recall prompt carries Georgia's permissive bar",
+          "CLEARLY unrelated" in ga and "permissive" in ga)
+    check("recall prompt says one covered provision is enough",
+          "one covered provision is enough" in ga)
+    check("recall prompt refuses thinness as a ground",
+          "Do NOT answer SUSPECT merely because" in ga and "the brief is thin" in ga)
+    us = L._recall_system("US")
+    check("recall prompt applies the STRICTER federal bar for US", "DIRECTLY changes" in us)
+    check("the federal bar is not the Georgia one", "CLEARLY unrelated" not in us)
+
+    # --- recall_drop: verdicts and the fail-CLOSED default ---
+    drop = {"state": "GA", "number": "HB 945", "reason": "banking regulation, not civil litigation",
+            "brief": "Title: Banking and finance; litigation finance registration"}
+    sus, note = L.recall_drop(drop, make_ai({"leg-recall": {"suspect": True, "note": "brief names litigation finance"}}))
+    check("recall_drop reports a suspect verdict", sus and "litigation finance" in note)
+    ok, _ = L.recall_drop(drop, make_ai({"leg-recall": {"suspect": False, "note": "stands"}}))
+    check("recall_drop reports a clean verdict", not ok)
+    def boom(_body):
+        raise RuntimeError("auditor down")
+    failed, _ = L.recall_drop(drop, make_ai({"leg-recall": boom}))
+    check("recall_drop FAILS CLOSED: an auditor error leaves the drop standing", not failed)
+
+    # --- end to end: the HB945 miss, and its control, in one run ---
+    # The screen drops BOTH. The auditor clears the appropriations bill and flags the litigation
+    # one. 222 must reach the writer and be carded; 444 must stay dropped and recorded seen.
+    def screen(body):
+        txt = body["messages"][0]["content"]
+        return {"relevant": False, "areas": [], "reason":
+                "budget" if "appropriations" in txt.lower() else "banking regulation, not civil litigation"}
+    def recall(body):
+        txt = body["messages"][0]["content"]
+        suspect = "litigation financing" in txt.lower()
+        return {"suspect": suspect, "note": "brief names litigation financing" if suspect else "budget bill"}
+    def write(body):
+        return {"keep": True, "areas": ["procedure"], "synopsis": "Regulates third-party litigation financing.",
+                "impact": "Funded-claim disclosure duties.", "effective_date": ""}
+    ai = make_ai({"leg-screen": screen, "leg-recall": recall, "leg-write": write})
+
+    real = L.DROPS_PATH
+    with tempfile.TemporaryDirectory() as d:
+        L.DROPS_PATH = os.path.join(d, "drops.jsonl")
+        try:
+            cards, notes, seen = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, states=["GA"],
+                                       today=datetime.date(2026, 7, 17))
+            ids = {c["bill_id"] for c in cards}
+            check("a SUSPECT screen drop is escalated and carded (the HB945 recovery)", 222 in ids)
+            check("a drop that stands is not carded", 444 not in ids)
+            check("the escalation is announced", any("recall ESCALATED" in n for n in notes))
+            check("the run reports the audit", any("recall audited" in n for n in notes))
+
+            # THE INVARIANT: never both dropped and locked out. 444's drop stood, so it is settled
+            # and correctly locked; 222 was escalated and carded, so it is seen on the WRITER's
+            # verdict, not the screen's.
+            check("a standing drop is recorded seen (settled, never re-screened)",
+                  seen.get("444") == BILLS[444]["change_hash"])
+            check("the escalated bill is seen on the writer's verdict", seen.get("222") == BILLS[222]["change_hash"])
+
+            # --- the log: every drop recorded, with the brief the screen read and the verdict ---
+            recs = [json.loads(ln) for ln in open(L.DROPS_PATH, encoding="utf-8") if ln.strip()]
+            by = {r["number"]: r for r in recs}
+            # The fixture master list carries more than the two bills of interest, so assert on the
+            # bills rather than a count: every drop logged, and every one carrying a verdict.
+            check("the litigation bill and the appropriations bill are both logged",
+                  "SB 69" in by and "HB 900" in by)
+            check("every logged drop carries a recall verdict",
+                  all(r.get("recall") for r in recs), str([r.get("recall") for r in recs]))
+            check("the log keeps the screen's reason", "banking" in by["SB 69"]["reason"])
+            check("the log keeps the BRIEF the screen actually read -- so an audit sees the same evidence",
+                  "Litigation financing" in by["SB 69"]["brief"])
+            check("the log records the recall verdict", by["SB 69"]["recall"] == "escalated"
+                  and by["HB 900"]["recall"] == "ok")
+            check("the log carries no private plumbing keys",
+                  not any(k.startswith("_") for r in recs for k in r))
+
+            # Append-only: a second run's drops are added, never a rewrite of the file. This is why
+            # the log cannot conflict the way opinions_rejections.jsonl did on a review branch (#336).
+            n_before = len(open(L.DROPS_PATH, encoding="utf-8").read().splitlines())
+            L.log_drops([{"bill_id": "999", "number": "HB 1", "recall": "ok"}])
+            after = open(L.DROPS_PATH, encoding="utf-8").read().splitlines()
+            check("the drop log is APPEND-ONLY (earlier lines untouched)",
+                  len(after) == n_before + 1 and "SB 69" in after[0] + after[1])
+
+            # --- the kill switch restores the exact prior behaviour ---
+            L.RECALL = False
+            try:
+                _, _, seen_off = L.run(key="GOODKEY", fetch=fake_fetch,
+                                       ai=make_ai({"leg-screen": screen, "leg-write": write}),
+                                       states=["GA"], today=datetime.date(2026, 7, 17))
+                check("LEGISLATION_RECALL=off locks every drop again, as before",
+                      seen_off.get("222") == BILLS[222]["change_hash"]
+                      and seen_off.get("444") == BILLS[444]["change_hash"])
+            finally:
+                L.RECALL = True
+        finally:
+            L.DROPS_PATH = real
+    print("  ok   recall check over screen drops (HB945 miss + control, log, invariant, kill switch)")
+
+
 def main():
     print("legislation watch:")
 
@@ -168,6 +290,12 @@ def main():
     # run() only calls _load_pollstate() when pollstate is None.
     L._load_seen = lambda: {}
     L._load_pollstate = lambda: {"polls": {}, "sessioncache": {}}
+    # Same hygiene for the recall check's drop log: every L.run() below screens the fixtures and
+    # drops most of them, and log_drops WRITES. Unstubbed, a test run leaves a 60-line
+    # legislation_rejections.jsonl in the working tree -- caught exactly that way. Redirect it once
+    # for the whole process; test_recall points it at its own temp file for the assertions it makes.
+    _drops_tmp = tempfile.mkdtemp(prefix="legtest-")
+    L.DROPS_PATH = os.path.join(_drops_tmp, "legislation_rejections.jsonl")
 
     # --- session resolution ---
     watched = L.sessions_to_watch(SESSIONS["sessions"], today=__import__("datetime").date(2026, 7, 17))
@@ -603,6 +731,9 @@ def main():
     clean = L._pr_body(1, 0, [{"number": "HB1", "status": "enacted", "areas": [], "title": "t",
                                "url": "u", "synopsis": "The act does not apply to rideshare."}])
     check("no warning block when nothing is flagged", "Check these against the bill" not in clean)
+
+    # --- the recall check over screen drops ---
+    test_recall(check, L, make_ai, fake_fetch, BILLS)
 
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
