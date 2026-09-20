@@ -363,6 +363,28 @@
     "first_seen": "2026-07-26"
   },
   {
+    "id": "a62dccace6c0",
+    "rule_set": "FRBP",
+    "rule": "Official Form 106C",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "Official Form 106C is listed with the December 1, 2027 group but is noted as becoming effective December 1, 2026.",
+    "impact": "",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-09-20"
+  },
+  {
+    "id": "f789d8d7efc4",
+    "rule_set": "FRBP",
+    "rule": "Official Form 101",
+    "status": "pending",
+    "effective_date": "2026-12-01",
+    "summary": "Official Form 101 is listed with the December 1, 2027 group but is noted as becoming effective December 1, 2026.",
+    "impact": "",
+    "url": "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments",
+    "first_seen": "2026-09-20"
+  },
+  {
     "id": "932aa68901f8",
     "rule_set": "FRAP",
     "rule": "Form 4",
