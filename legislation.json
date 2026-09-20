@@ -1,5 +1,42 @@
 [
   {
+    "bill_id": 2112305,
+    "state": "GA",
+    "number": "HB1247",
+    "title": "Georgia Bureaucratic Deference Elimination Act; enact",
+    "status": "enacted",
+    "status_date": "2026-05-12",
+    "effective_date": "",
+    "areas": [
+      "procedure",
+      "coverage"
+    ],
+    "synopsis": "The Georgia Bureaucratic Deference Elimination Act amends Chapter 1 of Title 15 to bar courts and administrative officers from deferring to an agency's interpretation of a statute or regulation. Previously, Georgia courts and hearing officers could give weight to an agency's construction of the laws it administers and of its own rules; that interpretive question is now for the tribunal to decide without such deference. The change reaches any proceeding in which an agency's reading of a statute or rule is at issue, including administrative hearings and judicial review of agency action.",
+    "impact": "Agency readings of statutes and rules no longer carry deference, opening regulatory interpretations to de novo challenge in administrative and civil proceedings.",
+    "url": "https://legiscan.com/GA/bill/HB1247/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/73010",
+    "change_hash": "4aabf0459f459cafd9af110964d92ee2",
+    "first_seen": "2026-09-20"
+  },
+  {
+    "bill_id": 2104399,
+    "state": "GA",
+    "number": "HB1161",
+    "title": "Motor vehicles; proper operation upon approach by an authorized emergency vehicle or by a law enforcement vehicle for purposes of a traffic stop; provide",
+    "status": "enacted",
+    "status_date": "2026-05-12",
+    "effective_date": "",
+    "areas": [
+      "auto"
+    ],
+    "synopsis": "The Act amends Title 40 to prescribe how a motorist must operate a vehicle when approached by an authorized emergency vehicle, and separately when approached by a law enforcement vehicle attempting to initiate a traffic stop. Georgia's existing rules of the road addressed yielding to emergency vehicles displaying audible and visual signals; the Act now also sets out the driver's obligations in the traffic-stop context. Because these are statutory rules of the road, violations supply a negligence per se theory in motor vehicle cases and a comparative-fault argument against a plaintiff driver.",
+    "impact": "Creates new Title 40 driver duties usable as negligence per se or comparative fault in auto cases involving emergency vehicles and traffic stops.",
+    "url": "https://legiscan.com/GA/bill/HB1161/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72733",
+    "change_hash": "61d2c0d170e239967c2f1ef05ae7bf0b",
+    "first_seen": "2026-09-20"
+  },
+  {
     "bill_id": 1958455,
     "state": "GA",
     "number": "HB295",
@@ -20,6 +57,97 @@
     "first_seen": "2026-08-09"
   },
   {
+    "bill_id": 2110029,
+    "state": "GA",
+    "number": "HB1215",
+    "title": "Middle Judicial Circuit; superior courts; provide for a third judge",
+    "status": "enacted",
+    "status_date": "2026-05-11",
+    "effective_date": "",
+    "areas": [
+      "procedure"
+    ],
+    "synopsis": "This act amends O.C.G.A. § 15-6-2, which sets the number of superior court judges by circuit, to add a third superior court judgeship in the Middle Judicial Circuit. The initial occupant of the new seat is appointed by the Governor, with the term provided for in the act. The governing authorities of the counties comprising the circuit are authorized to furnish facilities, office space, supplies, equipment, and personnel for the judges, and the act declares the court's inherent authority.",
+    "impact": "Adds a third superior court bench in the Middle Judicial Circuit, changing judge assignment and calendaring for civil cases filed there.",
+    "url": "https://legiscan.com/GA/bill/HB1215/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72899",
+    "change_hash": "f2fc336c8bfaaeb333acd0bef24e53fb",
+    "first_seen": "2026-09-20"
+  },
+  {
+    "bill_id": 2108205,
+    "state": "GA",
+    "number": "HB1187",
+    "title": "Trey's Law; enact",
+    "status": "enacted",
+    "status_date": "2026-05-11",
+    "effective_date": "",
+    "areas": [
+      "procedure",
+      "negsec"
+    ],
+    "synopsis": "Enacted as \"Trey's Law,\" this act amends Article 8 of Chapter 11 of Title 9 (provisional and final remedies and special proceedings) to declare contrary to Georgia public policy any contract or agreement having the purpose or effect of concealing the details of a claim of childhood sexual abuse. Previously, confidentiality and nondisclosure terms in settlements of such claims were generally enforceable as ordinary contract provisions; going forward, such concealment provisions run against declared public policy. The act separately provides for confidentiality of identifying information of childhood sexual abuse victims.",
+    "impact": "Defense counsel and insurers can no longer rely on nondisclosure terms to keep childhood sexual abuse claim details confidential, though victim identifying information remains protected.",
+    "url": "https://legiscan.com/GA/bill/HB1187/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72829",
+    "change_hash": "db3d47ecc64930786a0f5ea051657b67",
+    "first_seen": "2026-09-20"
+  },
+  {
+    "bill_id": 2108156,
+    "state": "GA",
+    "number": "HB1185",
+    "title": "Courts; certain shareholder claims to be brought before the Georgia State-wide Business Court; provide",
+    "status": "enacted",
+    "status_date": "2026-05-11",
+    "effective_date": "",
+    "areas": [
+      "procedure"
+    ],
+    "synopsis": "Amends Titles 14 and 15 to route certain shareholder claims to the Georgia State-wide Business Court. A corporation may now use its articles of incorporation or bylaws to require that covered claims be heard there, and the Act provides a removal mechanism for moving such claims to the Business Court; previously, placement in the Business Court generally depended on the parties' election rather than a charter or bylaw forum provision. The Act also addresses attorney's fees and costs in connection with these claims, with exemptions from payment in specified situations, and supplies governing definitions.",
+    "impact": "Shareholder and corporate-governance disputes may now be channeled by charter or bylaw into the Business Court, with removal available and fee exposure attached.",
+    "url": "https://legiscan.com/GA/bill/HB1185/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72827",
+    "change_hash": "ed7342fe62e1345440793cc7da12257c",
+    "first_seen": "2026-09-20"
+  },
+  {
+    "bill_id": 2104374,
+    "state": "GA",
+    "number": "HB1138",
+    "title": "Increasing Access to Contraceptives Act; enact",
+    "status": "enacted",
+    "status_date": "2026-05-11",
+    "effective_date": "",
+    "areas": [
+      "coverage"
+    ],
+    "synopsis": "The Increasing Access to Contraceptives Act amends the pharmacy practice article (O.C.G.A. Title 26, Ch. 4, Art. 3) to authorize pharmacists, in specified circumstances, to dispense self-administered hormonal contraceptives and to administer injectable hormonal contraceptives — conduct that previously required dispensing on another prescriber's order. It amends the general insurance provisions of O.C.G.A. Title 33, Ch. 24, Art. 1 to set minimum quantities of certain contraceptives that insurers must provide, and makes conforming changes to the Medicaid article at O.C.G.A. Title 49, Ch. 4, Art. 7. It also amends the Georgia Composite Medical Board article (O.C.G.A. Title 43, Ch. 34, Art. 1) to waive civil liability, criminal culpability, and professional discipline in defined circumstances.",
+    "impact": "Creates a new insurer contraceptive-supply mandate and a defined civil immunity that may be asserted in pharmacist and prescriber liability claims.",
+    "url": "https://legiscan.com/GA/bill/HB1138/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72697",
+    "change_hash": "1de7eefb241bcffdde8f99b1a369e09b",
+    "first_seen": "2026-09-20"
+  },
+  {
+    "bill_id": 2102323,
+    "state": "GA",
+    "number": "HB1086",
+    "title": "Preston Fant and Brant Chesney Firefighter Safety Act; enact",
+    "status": "enacted",
+    "status_date": "2026-05-11",
+    "effective_date": "",
+    "areas": [
+      "premises"
+    ],
+    "synopsis": "The Preston Fant and Brant Chesney Firefighter Safety Act amends Chapter 2 of Title 25 (regulation of fire and other hazards) to require that notice be posted on certain buildings identifying the use of light-frame truss-type construction. The Act provides definitions, authorizes rules and regulations to implement the posting requirement, and provides for enforcement. Building owners and operators within the covered class now carry an affirmative marking obligation they did not have under prior Chapter 2 provisions.",
+    "impact": "Creates a statutory posting duty that plaintiffs may invoke as a negligence per se or notice theory in premises and fire-loss litigation.",
+    "url": "https://legiscan.com/GA/bill/HB1086/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72592",
+    "change_hash": "9a72326ea9010ca0c2def023070ab276",
+    "first_seen": "2026-09-20"
+  },
+  {
     "bill_id": 2083404,
     "state": "GA",
     "number": "HB986",
@@ -36,6 +164,24 @@
     "url": "https://legiscan.com/GA/bill/HB986/2025",
     "state_link": "https://www.legis.ga.gov/legislation/72246",
     "change_hash": "d6990deae74e6474ee83c59a0f661b89",
+    "first_seen": "2026-09-17"
+  },
+  {
+    "bill_id": 2072041,
+    "state": "GA",
+    "number": "HB945",
+    "title": "Banking and finance; holds on accounts of eligible adults for suspected financial exploitation; provide",
+    "status": "enacted",
+    "status_date": "2026-05-11",
+    "effective_date": "",
+    "areas": [
+      "procedure"
+    ],
+    "synopsis": "The Act amends Title 7 (banking and finance) to authorize financial institutions to place temporary holds on accounts of eligible adults when financial exploitation is suspected, and sets procedures for placing and lifting those holds. On the litigation finance side, it adds cease and desist procedures aimed at persons providing litigation finance without registration, creates a path for judicial hearings to review Department decisions on litigation finance matters, and imposes disclosure obligations on registrants. It also drops the requirement that independent credit reports be obtained from a consumer reporting agency as defined in the federal Fair Credit Reporting Act, adds definitions, and makes conforming changes.",
+    "impact": "Counsel handling funded claims should track new disclosure duties, unregistered-funder cease and desist exposure, and the judicial review route for Department litigation finance decisions.",
+    "url": "https://legiscan.com/GA/bill/HB945/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72143",
+    "change_hash": "1ea86c7e5c71103ba59778b541e8bb45",
     "first_seen": "2026-09-17"
   },
   {
@@ -58,6 +204,24 @@
     "first_seen": "2026-08-09"
   },
   {
+    "bill_id": 2104385,
+    "state": "GA",
+    "number": "HB1128",
+    "title": "State Board of Workers' Compensation; notice of eligibility for compensation to an injured employee to his or her legal guardian; provide",
+    "status": "enacted",
+    "status_date": "2026-05-06",
+    "effective_date": "",
+    "areas": [
+      "procedure"
+    ],
+    "synopsis": "Amends O.C.G.A. § 34-9-26 and § 35-1-24 so that the required notice of eligibility for compensation for an injured employee is provided to the employee's legal guardian — by the State Board of Workers' Compensation under Title 34 and by law enforcement agencies under § 35-1-24. Previously those notice duties ran to the injured officer/employee. It also amends the Georgia State Indemnification Fund provisions (Title 45, Ch. 9, Art. 5, Pt. 1) to create an application window for eligible individuals incapacitated by organic brain damage sustained in the line of duty on or before July 1, 2024, subject to automatic repeal.",
+    "impact": "Counsel handling incapacitated first-responder claims should confirm guardian notice was given and calendar the limited indemnification-fund application window for pre-July 2024 brain injuries.",
+    "url": "https://legiscan.com/GA/bill/HB1128/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72682",
+    "change_hash": "a37af0ecd1c74a72857bb105b9d7beff",
+    "first_seen": "2026-09-20"
+  },
+  {
     "bill_id": 2072013,
     "state": "GA",
     "number": "HB944",
@@ -74,6 +238,24 @@
     "state_link": "https://www.legis.ga.gov/legislation/72142",
     "change_hash": "48c9f3f7b60f2b3031a10554780148dc",
     "first_seen": "2026-09-17"
+  },
+  {
+    "bill_id": 2110016,
+    "state": "GA",
+    "number": "HB1208",
+    "title": "Civil practice; require depositions to be taken before certified court reporters",
+    "status": "enacted",
+    "status_date": "2026-05-05",
+    "effective_date": "",
+    "areas": [
+      "procedure"
+    ],
+    "synopsis": "Amends Article 5 of Chapter 11 of Title 9 (depositions and discovery) to require that depositions taken in Georgia be taken before a certified court reporter. It also repeals the existing requirement that depositions taken in this state be recorded by stenographic means. The result shifts the statutory focus from the method of recording to the qualification of the officer before whom the deposition is taken.",
+    "impact": "Georgia depositions must now be taken before a certified court reporter, replacing the prior requirement that they be stenographically recorded.",
+    "url": "https://legiscan.com/GA/bill/HB1208/2025",
+    "state_link": "https://www.legis.ga.gov/legislation/72884",
+    "change_hash": "b098e42e932ed6b7562fc6f1e4b55e5d",
+    "first_seen": "2026-09-20"
   },
   {
     "bill_id": 1961012,
@@ -203,23 +385,5 @@
     "state_link": "https://www.legis.ga.gov/legislation/69929",
     "change_hash": "9974df9fa53631b78fa6c44327a3c7f7",
     "first_seen": "2026-08-09"
-  },
-  {
-    "bill_id": 2072041,
-    "state": "GA",
-    "number": "HB945",
-    "title": "Banking and finance; holds on accounts of eligible adults for suspected financial exploitation; provide",
-    "status": "enacted",
-    "status_date": "2026-05-11",
-    "effective_date": "",
-    "areas": [
-      "procedure"
-    ],
-    "synopsis": "The Act amends Title 7 (banking and finance) to authorize financial institutions to place temporary holds on accounts of eligible adults when financial exploitation is suspected, and sets procedures for placing and lifting those holds. On the litigation finance side, it adds cease and desist procedures aimed at persons providing litigation finance without registration, creates a path for judicial hearings to review Department decisions on litigation finance matters, and imposes disclosure obligations on registrants. It also drops the requirement that independent credit reports be obtained from a consumer reporting agency as defined in the federal Fair Credit Reporting Act, adds definitions, and makes conforming changes.",
-    "impact": "Counsel handling funded claims should track new disclosure duties, unregistered-funder cease and desist exposure, and the judicial review route for Department litigation finance decisions.",
-    "url": "https://legiscan.com/GA/bill/HB945/2025",
-    "state_link": "https://www.legis.ga.gov/legislation/72143",
-    "change_hash": "1ea86c7e5c71103ba59778b541e8bb45",
-    "first_seen": "2026-09-17"
   }
 ]
