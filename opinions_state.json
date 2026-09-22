@@ -2748,15 +2748,12 @@
     10979414,
     10979415,
     10979416,
-    10979417
+    10979417,
+    10979451,
+    10979452,
+    10979453,
+    10979461
   ],
-  "updated": "2026-09-22T19:50:30Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_01FzGQZdRwJG7LAH2M9ht5cJ",
-      "at": 1790106477.0121863,
-      "n": 1
-    }
-  }
+  "updated": "2026-09-22T23:00:49Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
