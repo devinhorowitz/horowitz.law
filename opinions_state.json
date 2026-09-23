@@ -2752,8 +2752,40 @@
     10979451,
     10979452,
     10979453,
-    10979461
+    10979461,
+    10980426,
+    10980427,
+    10980428,
+    10980429,
+    10980430,
+    10980431,
+    10980432,
+    10980433,
+    10980435,
+    10980436,
+    10980437,
+    10980438,
+    10980439,
+    10980440,
+    10980441,
+    10980442,
+    10980443,
+    10980445,
+    10980446,
+    10980447
   ],
-  "updated": "2026-09-22T23:00:49Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-09-23T13:46:49Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-triage": {
+      "id": "msgbatch_01ASmzAVHNzQerNBTjYg5nin",
+      "at": 1790170955.771467,
+      "n": 1
+    },
+    "funnel-smell": {
+      "id": "msgbatch_01CfzZr5S7JmxapQ7WDYXj1k",
+      "at": 1790171112.173283,
+      "n": 1
+    }
+  }
 }
