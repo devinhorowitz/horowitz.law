@@ -2807,8 +2807,51 @@
     10982681,
     10982684,
     10982685,
-    10982686
+    10982686,
+    10982891,
+    10982895,
+    10982896,
+    10982900,
+    10982944,
+    10982946,
+    10982947,
+    10982949,
+    10982950,
+    10982951,
+    10982952,
+    10982954,
+    10982967,
+    10982972,
+    10982974,
+    10982975,
+    10982978,
+    10982981,
+    10982988,
+    10982989,
+    10983021,
+    10983022,
+    10983024,
+    10983026,
+    10983027,
+    10983028
   ],
-  "updated": "2026-09-24T13:36:23Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-09-24T20:10:51Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-triage": {
+      "id": "msgbatch_013Ujn8vBXfuwmDbHvFKBmwd",
+      "at": 1790280149.0007083,
+      "n": 3
+    },
+    "funnel-smell": {
+      "id": "msgbatch_01KnwpnEcZhkbtqcD2ybhc2g",
+      "at": 1790280342.9198205,
+      "n": 1
+    },
+    "funnel-summarize": {
+      "id": "msgbatch_01LovLfwBnDxQtZAk1vzSKLG",
+      "at": 1790280440.9606955,
+      "n": 2
+    }
+  }
 }
