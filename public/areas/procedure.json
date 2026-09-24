@@ -1,8 +1,43 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 81,
+  "count": 83,
   "opinions": [
+    {
+      "cluster_id": 10980655,
+      "name": "City of Atlanta v. Jacobs",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-09-23",
+      "disposition": "affirmed",
+      "areas": [
+        "premises",
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10980655/the-city-of-atlanta-v-mara-jacobs/",
+      "synopsis": "Plaintiff tripped on a metal baseplate, the remnant of a fallen road sign, protruding from a sidewalk along a state route inside the city limits, and a jury returned a verdict against the municipality. Applying the any-evidence standard to the denial of the city's motions for directed verdict and JNOV, the Court of Appeals held that evidence that the Department of Transportation representative testified the city performs sidewalk maintenance on that road, that the city received a 311 report of the fallen sign about two and a half years before the fall, that its inspector found the sign needed replacement, and that the city neither notified DOT nor removed the baseplate, supported a finding that the city agreed to perform the necessary maintenance within the meaning of OCGA section 32-4-93(b). The court distinguished McPherson, which involved traffic-signal timing controlled exclusively by DOT, as not addressing a physical hazard on a sidewalk, and rejected the city's argument that liability requires an agreement to maintain the specific item at issue. The court also held that another agency's concurrent duty to repair does not relieve a municipality of its own maintenance duty. The court further noted that any error in denying summary judgment became moot because the trial evidence authorized the verdict on the same issue.",
+      "why": "The decision clarifies that OCGA section 32-4-93(b) exposes a municipality to liability for a physical sidewalk hazard along a state route when there is evidence it agreed to perform the maintenance and had actual notice, without requiring a separate agreement to maintain the particular object that created the hazard.",
+      "dockets": [
+        "A26A0949"
+      ]
+    },
+    {
+      "cluster_id": 10980565,
+      "name": "Glenwood Motel Enterprise, Inc. v. Martin",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-09-23",
+      "disposition": "affirmed",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10980565/glenwood-motel-enterprise-inc-v-lewayne-martin/",
+      "synopsis": "Plaintiff, who alleged he was attacked at a hotel, made a pre-suit-style settlement offer during litigation conditioning acceptance on payment of policy limits and delivery of an affidavit \"attesting that there is no additional liability coverage available,\" and stating that failure to strictly comply with each term would be a rejection and that any modification of material terms would be a counteroffer. The defendant motel paid timely but furnished an affidavit from its owner averring only that she was \"not aware of\" any other policies that provide or may provide coverage. The Court of Appeals affirmed the denial of the motel's motion to enforce the settlement, holding that an affidavit confirming a present lack of awareness is not identical to and varies from an offer demanding affirmative attestation that no other coverage exists, so there was no acceptance and no enforceable agreement; the court reiterated that an offeree must comply with even stringent or \"petty\" conditions an offeror imposes. A special concurrence noted that OCGA section 9-11-67.1 did not apply to this offer and that the opinion's reliance on general contract principles should not be conflated with that statute's regime.",
+      "why": "The decision clarifies that where a settlement offer demands an affidavit affirmatively stating that no additional insurance coverage exists, an affidavit phrased in terms of the affiant's lack of awareness is a variance that defeats contract formation, so responses to offer conditions must track the offer's language exactly.",
+      "dockets": [
+        "A26A1588"
+      ]
+    },
     {
       "cluster_id": 10974689,
       "name": "Woods v. Allstate Property and Casualty Insurance Co.",
