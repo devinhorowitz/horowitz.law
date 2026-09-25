@@ -3392,5 +3392,25 @@
     "why": "The decision clarifies that OCGA section 32-4-93(b) exposes a municipality to liability for a physical sidewalk hazard along a state route when there is evidence it agreed to perform the maintenance and had actual notice, without requiring a separate agreement to maintain the particular object that created the hazard.",
     "precedential": "published",
     "first_seen": "2026-09-24"
+  },
+  {
+    "cluster_id": 10983217,
+    "name": "Stewart v. Universal Property & Casualty Insurance Company",
+    "court": "dcafl",
+    "division": null,
+    "date": "2026-09-25",
+    "dockets": [
+      "2D2025-1914"
+    ],
+    "disposition": "reversed and remanded for new trial",
+    "areas": [
+      "procedure"
+    ],
+    "url": "https://www.courtlistener.com/opinion/10983217/stewart-v-universal-property-casualty-insurance-company/",
+    "synopsis": "In a homeowners breach-of-contract action over water and sewage damage, the insured suffered a serious injury the day after jury selection, broke his tibia and ankle, and underwent surgery, leaving him unable to attend the remainder of trial or testify. Both the insured and the insurer moved for a mistrial; the trial court denied both motions, instructed the jury on the absence, and allowed a 2021 deposition to be read, and the jury returned a verdict for the insurer. The Second District held that the trial court abused its discretion in denying the mistrial motions, emphasizing the party's right to be present at each stage of the trial and the due process right to be heard and to testify, that the absence resulted from an unexpected medical incident beyond the party's control, and that the opposing party had also sought a mistrial and so would not be prejudiced. The final judgment was reversed and the case remanded for a new trial. A concurring judge separately addressed the policy's neglect exclusion, but that analysis is not the opinion of the court.",
+    "why": "The decision confirms that where undisputed facts show a party's sudden medical incapacity prevents that party from attending and testifying at trial, denial of a mistrial or continuance is an abuse of discretion, and it notes that docket-management concerns do not override the right to be present and heard.",
+    "precedential": "published",
+    "first_seen": "2026-09-25",
+    "jurisdiction": "fl"
   }
 ]
