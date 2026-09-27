@@ -50,7 +50,7 @@ with *different update rules*:
 
 | Source | Written | Answers |
 |---|---|---|
-| `/status.json` → `scanned_at` | every scan, found anything or not | is the pipeline alive |
+| `/status.json` → `scanned_at` | every scan that read a feed, found anything or not | is the pipeline alive |
 | `/status.json` → `content_updated_at` | only when content changed | quiet, or busy |
 | `/api/feed.json` → `generated` | when content **changes** (carried over otherwise) | feed age |
 

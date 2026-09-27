@@ -957,6 +957,93 @@ def test_since_floor_drop_count():
     print("  ok  floor_dropped rides the run-log record and the Actions summary")
 
 
+def test_scan_status_output():
+    """opinions.yml's scan-status step stamps a fresh scanned_at unless the funnel step reports
+    scanned=false, and that stamp is what the MCP's trust_silence and the heartbeat's 48h stall
+    check read. A run that read no feed -- the status-page outage skip, or every CourtListener feed
+    failing or empty -- must report false while still exiting 0; a run that read one reports true.
+    Everything main() touches before the feed loop is pointed at a temp dir, and the feeds are stubbed."""
+    import contextlib
+    import shutil as _sh
+    import tempfile as _tf
+    tmp = _tf.mkdtemp(prefix="scan-status-test-")
+    out = os.path.join(tmp, "github_output")
+    saved, saved_env = {}, {k: os.environ.get(k) for k in ("GITHUB_OUTPUT", "GITHUB_STEP_SUMMARY")}
+
+    class _Stop(Exception):
+        """Raised by the first call after the feed loop, so the real-scan case stops there."""
+
+    def sv(obj, name, val):
+        saved[(id(obj), name)] = (obj, name, getattr(obj, name))
+        setattr(obj, name, val)
+
+    def stop():
+        raise _Stop()
+
+    def run(status, feed):
+        """Run main() against a fresh $GITHUB_OUTPUT; return (what it wrote, whether it exited)."""
+        open(out, "w").close()
+        sv(update, "anthropic_status", lambda: status)
+        sv(update, "feed_court", feed)
+        exited = False
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                update.main()
+        except SystemExit:
+            exited = True
+        except _Stop:
+            pass
+        return open(out, encoding="utf-8").read(), exited
+
+    def failing(court, deadline=None):
+        raise OSError("feed unreachable")
+
+    try:
+        os.environ["GITHUB_OUTPUT"] = out
+        os.environ.pop("GITHUB_STEP_SUMMARY", None)
+        sv(update, "KEY", "test-key-not-used")
+        sv(update, "STATUS_MODE", "on")
+        sv(update, "COURTS", ["ga", "gactapp"])
+        for name in ("JSON_PATH", "STATE_PATH", "SA_MANIFEST_PATH", "SA_STATE_PATH"):
+            sv(update, name, os.path.join(tmp, name.lower() + ".json"))
+        sv(update, "PR_PATH", os.path.join(tmp, "pr_body.md"))
+        sv(update.review_store, "load_pending", lambda path=None: set())
+        sv(update.review_store, "load_redraft_ids", lambda path=None: stop())
+
+        got, exited = run(("outage", "Major outage"), failing)
+        assert got == "scanned=false\n" and not exited, (got, exited)
+        print("  ok  the status-page outage skip reports scanned=false and exits 0")
+
+        # One court's feed raises, the other returns nothing: no feed was read.
+        feeds = {"ga": failing, "gactapp": lambda court, deadline=None: []}
+        got, exited = run(("operational", "All Systems Operational"),
+                          lambda court, deadline=None: feeds[court](court, deadline))
+        assert got == "scanned=false\n" and not exited, (got, exited)
+        print("  ok  every feed failing or empty reports scanned=false and exits 0")
+
+        # A feed that returned candidates is a real scan, even if another court's feed failed.
+        feeds["gactapp"] = lambda court, deadline=None: [{"cluster_id": 1, "dateFiled": "2026-09-01"}]
+        got, exited = run(("operational", "All Systems Operational"),
+                          lambda court, deadline=None: feeds[court](court, deadline))
+        assert got == "scanned=true\n" and not exited, (got, exited)
+        print("  ok  a run that read a feed reports scanned=true")
+
+        # Outside Actions there is no $GITHUB_OUTPUT, and the helper must be a silent no-op.
+        os.environ.pop("GITHUB_OUTPUT", None)
+        update._step_output("scanned", "false")
+        assert open(out, encoding="utf-8").read() == "scanned=true\n"
+        print("  ok  no $GITHUB_OUTPUT (a local run) writes nothing")
+    finally:
+        for obj, name, val in saved.values():
+            setattr(obj, name, val)
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        _sh.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     print("crosscheck guardrails:")
     for c in CASES:
@@ -986,7 +1073,8 @@ def main():
     test_screen_caption_rule()
     test_batch_carry_over()
     test_since_floor_drop_count()
-    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 18))
+    test_scan_status_output()
+    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 19))
     return 0
 
 

@@ -2894,6 +2894,20 @@ def _draft_pending(pending, deadline, finish_fn):
     return drafted
 
 
+def _step_output(key, value):
+    """Append key=value to $GITHUB_OUTPUT for a later workflow step to read. A no-op anywhere
+    but Actions. Best-effort, like safeio.step_summary: a failed write must not fail the run,
+    and opinions.yml fails open on a missing value (it stamps scanned_at as it always has)."""
+    path = os.environ.get("GITHUB_OUTPUT")
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write("%s=%s\n" % (key, value))
+    except OSError as e:
+        print("  . step-output write skipped: %s" % e)
+
+
 # Console log prefixes, so a raw job log reads at a glance: "+" an opinion added
 # or a routing override, "~" an adverse-treatment flag on an existing card or a duplicate skip,
 # "!" a warning or error, "." a minor or best-effort step that was skipped. The
@@ -2915,11 +2929,17 @@ def main():
     # API outage, skip cleanly without fetching, screening, or marking anything, so
     # the next scheduled run retries in a few hours instead of the day's work being
     # lost. Fail-open: an unknown/unreachable status never blocks the run.
+    #
+    # Both early returns below still exit 0, but they report scanned=false so the scan-status
+    # step does not stamp a fresh scanned_at: a run that read no feed is not evidence the funnel
+    # is alive, and stamping it would keep the MCP's trust_silence true and the heartbeat's stall
+    # check quiet through an outage of any length.
     slevel, sdesc = anthropic_status()
     print("Anthropic status: %s%s" % (sdesc, "" if slevel in ("operational", "unknown") else " [%s]" % slevel))
     if slevel == "outage" and STATUS_MODE == "on":
         print("  ! Anthropic API is in a reported outage; skipping this run. "
               "Nothing was fetched or marked seen, so the next scheduled run will retry.")
+        _step_output("scanned", "false")
         return
 
     entries = json.load(open(JSON_PATH, encoding="utf-8")) if os.path.exists(JSON_PATH) else []
@@ -2989,7 +3009,9 @@ def main():
               "(feed unreachable or empty); nothing written this run.")
         safeio.step_summary("## Georgia Appellate Watch \u00b7 funnel\n\n"
                             "**No candidates returned from the feeds this run.**")
+        _step_output("scanned", "false")
         return
+    _step_output("scanned", "true")
     # Cases a human vetoed were left un-seen and logged for redraft, on the promise that a later
     # run rediscovers and redrafts them. But a newer auto card advances last_filed past an older
     # vetoed case, so the `since` floor would silently drop it every run and the redraft never

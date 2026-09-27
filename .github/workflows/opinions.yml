@@ -98,6 +98,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Fetch, screen, triage, summarize, render
+        id: funnel
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
@@ -268,6 +269,9 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          # 'false' when update.py read no feed (the status-page outage skip, or every CourtListener
+          # feed failed or came back empty). Empty if the output is missing, which stamps as before.
+          SCANNED: ${{ steps.funnel.outputs.scanned }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -275,6 +279,18 @@ jobs:
           git checkout -f -B bot/scan-status origin/main
           pending=$(gh pr list --repo "$GITHUB_REPOSITORY" --head bot/opinions-review --state open --json number --jq 'length' 2>/dev/null || echo 0)
           scanned_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # A run that read no feed is not evidence the funnel is alive: keep the previous scanned_at,
+          # so the MCP's trust_silence and the heartbeat's stall check still see the gap. With no
+          # previous stamp to keep, leave status.json alone rather than invent one.
+          if [ "$SCANNED" = "false" ]; then
+            prev=$(python -c 'import json; print(json.load(open("public/status.json")).get("scanned_at") or "")' 2>/dev/null || true)
+            if [ -z "$prev" ]; then
+              echo "No feed was read and there is no previous scanned_at; leaving status.json alone."
+              exit 0
+            fi
+            echo "No feed was read this run; keeping scanned_at $prev."
+            scanned_at="$prev"
+          fi
           content_updated_at=$(git log -1 --format=%cI -- opinions.json 2>/dev/null || true)
           printf '{\n  "scanned_at": "%s",\n  "pending": %s,\n  "content_updated_at": "%s"\n}\n' \
             "$scanned_at" "${pending:-0}" "$content_updated_at" > public/status.json
