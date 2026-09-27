@@ -13,6 +13,8 @@ Three groups:
       The tiers are stubbed, so this pins the comparison itself -- a dropped keeper is red in
       EITHER direction, including the low-significance drop and the too-permissive control keep.
       Without this, only the fail-closed paths were covered and the red/green logic was not.
+      It also pins the exit-code split: a regression is 1, and a ConfigError (bad key, no credit,
+      retired model) is 3, since model-watch.yml reads only 1 as a regression.
 
   set integrity           the committed scripts/golden_set.json is data that four model tiers are
       judged against, and nothing validated it. A misspelled practice area in expect_areas would
@@ -264,6 +266,50 @@ def test_recall_verdicts():
               with_set([keeper, control], golden_check.recall) == 0)
 
 
+def _config_error(_name):
+    raise update.ConfigError("credit balance is too low")
+
+
+def run_main(mode, cases):
+    """golden_check.main() as the workflow invokes it, against a synthetic set."""
+    saved = sys.argv
+    sys.argv = ["golden_check.py", mode]
+    try:
+        return with_set(cases, golden_check.main)
+    finally:
+        sys.argv = saved
+
+
+def test_config_error_is_not_a_regression():
+    """A bad key, an empty credit balance, or a retired model raises update.ConfigError on every
+    call. summarize swallowed it per attempt like a transient error, so a credit outage came back
+    as every golden case dropping its areas -- exit 1, which model-watch.yml reads as a regression,
+    and its failure reporter (which skips regressions) never fired. It must propagate and exit 3,
+    a code of its own, in every mode that calls a model; a real regression stays exit 1."""
+    keeper = case("A v. B", areas=["premises"])
+    with Tiers(summarize=update.ConfigError("credit balance is too low")) as t:
+        raised = False
+        try:
+            with_set([keeper], golden_check.summarize_check)
+        except update.ConfigError:
+            raised = True
+        check("summarize lets a ConfigError propagate instead of scoring it a dropped area", raised)
+        check("and does not retry it (every attempt would fail alike)", len(t.summarize_calls) == 1,
+              str(len(t.summarize_calls)))
+        check("main() exits 3 on a ConfigError in summarize", run_main("summarize", [keeper]) == 3)
+    with Tiers(screen=_config_error):
+        check("main() exits 3 on a ConfigError in check", run_main("check", [case("A v. B")]) == 3)
+    with Tiers(pretriage=_config_error):
+        check("main() exits 3 on a ConfigError in recall", run_main("recall", [case("A v. B")]) == 3)
+
+    with Tiers(relevant=False):
+        check("a genuine regression still exits 1 through main()",
+              run_main("check", [case("A v. B")]) == 1)
+    with Tiers(summarize=RuntimeError("api down")):
+        check("a summarizer error that is not a ConfigError is still red (exit 1)",
+              run_main("summarize", [keeper]) == 1)
+
+
 # --- 3. the committed set is well-formed ---------------------------------
 def test_committed_set_integrity():
     """scripts/golden_set.json is the data four model tiers are judged against. Nothing else
@@ -327,6 +373,7 @@ def main():
     test_check_verdicts()
     test_summarize_verdicts()
     test_recall_verdicts()
+    test_config_error_is_not_a_regression()
     test_committed_set_integrity()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))

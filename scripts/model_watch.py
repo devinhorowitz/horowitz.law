@@ -219,21 +219,29 @@ def detect(models, pins=None):
     return upgrades, notes
 
 
+# What may follow an old id for it to be that whole id: not a word character, and not a '-' or '.'
+# leading into one, either of which would make it the head of a LONGER id (a newer point release,
+# a dated snapshot). A sentence-ending period is still a boundary.
+_ID_END = r"(?![\w]|[-.]\w)"
+
+
 def _bump_text(text, upgrades):
     """Replace each old id with its new id in text. Returns (new_text, occurrences).
-    Pure, so it is unit-tested directly; apply_bumps wraps it with file I/O."""
+    Pure, so it is unit-tested directly; apply_bumps wraps it with file I/O.
+
+    Whole ids only, not a substring replace. A new id usually extends the old one
+    (claude-opus-5 -> claude-opus-5-5), so a plain replace also hit the old id inside any longer
+    id already in the text and turned claude-opus-5-5 into claude-opus-5-5-5."""
     n = 0
     for up in upgrades:
-        c = text.count(up["old"])
-        if c:
-            text = text.replace(up["old"], up["new"])
-            n += c
+        text, c = re.subn(re.escape(up["old"]) + _ID_END, lambda _m, new=up["new"]: new, text)
+        n += c
     return text, n
 
 
 def apply_bumps(upgrades):
     """Rewrite each old id to its new id across PIN_FILES. Returns [(relpath, count)]
-    for the run summary. Exact-string replace scoped to the allowlist, so only the pins
+    for the run summary. Whole-id replace scoped to the allowlist, so only the pins
     move; nothing else in those files is touched."""
     changed = []
     for rel in PIN_FILES:

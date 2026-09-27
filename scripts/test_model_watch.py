@@ -3,14 +3,21 @@
 
 Covers the detection logic that decides whether to open a model-bump PR: tier parsing,
 the recency comparison (created_at, with a version-number fallback), the within-tier-only
-rule, the higher-tier and deprecation notes, and the exact-string pin rewrite. All on
+rule, the higher-tier and deprecation notes, and the whole-id pin rewrite. All on
 synthetic model lists built here, so the guard is pinned without touching the live API.
+
+Also pins model-watch.yml's side of the contract: the bump PR's add-paths is exactly
+PIN_FILES, and the eval step reads only golden_check's exit 1 as a regression. Those parse
+the workflow with pyyaml (CI installs it) and skip without it.
 
   python scripts/test_model_watch.py     # prints each case; exits nonzero on any failure
 """
 import datetime
 import os
+import re
+import subprocess
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -173,6 +180,142 @@ def test_bump_text():
     print("  ok  pin rewrite replaces only the targeted id, counts occurrences")
 
 
+def test_bump_text_whole_ids_only():
+    """The new id usually extends the old one, so the plain substring replace this used to be
+    also rewrote the old id inside any LONGER id already in the file: bumping claude-opus-5 to
+    claude-opus-5-5 turned an existing claude-opus-5-5 into claude-opus-5-5-5."""
+    src = (
+        "MODEL = os.environ.get(\"OPINIONS_MODEL\", \"claude-opus-5\")\n"
+        "# the audit already runs claude-opus-5-5; claude-opus-5-20260101 is a dated snapshot\n"
+        "# the card writer defaults to claude-opus-5.\n"
+    )
+    up = [{"old": "claude-opus-5", "new": "claude-opus-5-5"}]
+    out, n = model_watch._bump_text(src, up)
+    assert "claude-opus-5-5-5" not in out, out
+    assert n == 2, "only the two whole occurrences count, not the prefix of a longer id: %d" % n
+    assert "\"claude-opus-5-5\")" in out, "the pin itself moved"
+    assert "claude-opus-5-20260101" in out, "a dated snapshot is a different id; left alone"
+    assert "defaults to claude-opus-5-5.\n" in out, "a sentence-ending period is still a boundary"
+    again, n2 = model_watch._bump_text(out, up)
+    assert (again, n2) == (out, 0), "a second pass finds nothing to rewrite"
+    print("  ok  pin rewrite moves whole ids only (no claude-opus-5-5-5 from a prefix match)")
+
+
+WORKFLOW = os.path.join(os.path.dirname(HERE), ".github", "workflows", "model-watch.yml")
+
+
+def _workflow_steps():
+    """model-watch.yml's steps, or None when pyyaml is not installed."""
+    try:
+        import yaml
+    except ImportError:                                # pragma: no cover
+        return None
+    doc = yaml.safe_load(open(WORKFLOW, encoding="utf-8"))
+    return [st for job in (doc.get("jobs") or {}).values() for st in (job.get("steps") or [])]
+
+
+def _run_step(name, outputs, rcs=None):
+    """Run one model-watch.yml step's shell as Actions does (bash -eo pipefail), with each
+    ``${{ steps.X.outputs.Y }}`` filled from outputs["X.Y"] and a stub `python` on PATH that
+    exits rcs[mode] (default 0) for `python scripts/golden_check.py <mode>`. Everything lands in
+    a temp dir. Returns {rc, out, body, summary, calls}, or None without pyyaml."""
+    steps = _workflow_steps()
+    if steps is None:
+        return None
+    run = next(st["run"] for st in steps if st.get("name") == name)
+    run = re.sub(r"\$\{\{\s*steps\.(\w+)\.outputs\.(\w+)\s*\}\}",
+                 lambda m: outputs["%s.%s" % (m.group(1), m.group(2))], run)
+    assert "${{" not in run, "an expression in %r was left unfilled" % name
+    with tempfile.TemporaryDirectory() as d:
+        p = {k: os.path.join(d, k) for k in ("out", "body", "summary", "calls", "step.sh")}
+        for k in ("out", "body", "summary", "calls"):
+            open(p[k], "w").close()
+        with open(p["step.sh"], "w") as f:
+            f.write(run)
+        stub = os.path.join(d, "python")
+        with open(stub, "w") as f:
+            f.write('#!/bin/sh\necho "$2" >> "$CALLS"\neval "exit \\${RC_$2:-0}"\n')
+        os.chmod(stub, 0o755)
+        env = dict(os.environ, PATH=d + os.pathsep + os.environ.get("PATH", ""),
+                   GITHUB_OUTPUT=p["out"], BODY=p["body"], GITHUB_STEP_SUMMARY=p["summary"],
+                   CALLS=p["calls"])
+        env.update({"RC_" + mode: str(rc) for mode, rc in (rcs or {}).items()})
+        r = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", p["step.sh"]],
+                           cwd=d, env=env, capture_output=True, text=True)
+        got = {k: open(p[k], encoding="utf-8").read() for k in ("out", "body", "summary")}
+        got["calls"] = open(p["calls"], encoding="utf-8").read().split()
+    got["rc"] = r.returncode
+    return got
+
+
+def test_add_paths_match_pin_files():
+    """The bump PR commits only add-paths, so a PIN_FILES entry missing from it is rewritten on
+    the runner, runs in the golden eval, and is then left out of the PR: the silent half-bump
+    PIN_FILES exists to prevent, one layer down. add-paths still named the six workflow files
+    PIN_FILES dropped on 2026-08-18 and none of the four watch scripts it gained on 2026-08-19."""
+    steps = _workflow_steps()
+    if steps is None:
+        print("  ..  pyyaml not available; skipping the add-paths check")
+        return
+    pr = [st for st in steps if "create-pull-request" in str(st.get("uses", ""))]
+    assert len(pr) == 1, "expected one create-pull-request step, found %d" % len(pr)
+    paths = [ln.strip() for ln in str((pr[0].get("with") or {}).get("add-paths", "")).splitlines()
+             if ln.strip()]
+    assert len(paths) == len(set(paths)), "add-paths names a file twice: %s" % paths
+    assert set(paths) == set(model_watch.PIN_FILES), \
+        "add-paths %s != PIN_FILES %s" % (sorted(paths), sorted(model_watch.PIN_FILES))
+    print("  ok  the bump PR's add-paths is exactly PIN_FILES (%d files)" % len(paths))
+
+
+def test_eval_step_reads_only_exit_1_as_regression():
+    """golden_check exits 1 on a regression and 3 on a ConfigError (bad key, no credit, retired
+    model). The eval step read ANY nonzero exit as "regressed", so a credit outage was reported as
+    a regression on every golden case -- and since the failure reporter skips a regressed run, the
+    outage never reached the tracking issue. Only 1 may set regressed=true; any other code must
+    fail the step so the reporter runs."""
+    step = "Golden-set check against the candidate"
+    both = {"watch.run_check": "true", "watch.run_summarize": "true"}
+    r = _run_step(step, both)
+    if r is None:
+        print("  ..  pyyaml not available; skipping the eval-step check")
+        return
+    assert r["rc"] == 0 and "regressed=false" in r["out"], r
+    assert r["calls"] == ["check", "summarize"] and "REGRESSION" not in r["body"], r
+
+    for mode in ("check", "summarize"):
+        r = _run_step(step, both, {mode: 1})
+        assert r["rc"] == 0, "a regression is captured, not fatal, so the PR still opens: %r" % r
+        assert "regressed=true" in r["out"] and "REGRESSION" in r["body"], r
+        r = _run_step(step, both, {mode: 3})
+        assert r["rc"] != 0, "a ConfigError from %s must fail the step: %r" % (mode, r)
+        assert "regressed=true" not in r["out"], "a broken run is not a regression: %r" % r
+
+    r = _run_step(step, both, {"check": 3})
+    assert r["calls"] == ["check"], "a broken check stops before summarize: %r" % r["calls"]
+    r = _run_step(step, both, {"check": 1, "summarize": 3})
+    assert r["rc"] != 0 and "regressed=true" not in r["out"], \
+        "a regression followed by a broken run is still a broken run: %r" % r
+
+    report = next(st for st in _workflow_steps() if st.get("name") == "Report a failed run")
+    assert report.get("if") == "failure() && steps.eval.outputs.regressed != 'true'", report.get("if")
+    print("  ok  the eval step reads only exit 1 as a regression; any other code fails the step")
+
+
+def test_no_pat_note_follows_the_result():
+    """With no PAT the run summary is the only report, and it said the model "was validated
+    against the golden set" even when it had just regressed."""
+    step = "Note when no PAT is configured"
+    ok = _run_step(step, {"eval.regressed": "false"})
+    if ok is None:
+        print("  ..  pyyaml not available; skipping the no-PAT note check")
+        return
+    bad = _run_step(step, {"eval.regressed": "true"})
+    assert ok["rc"] == 0 and bad["rc"] == 0, (ok, bad)
+    assert "passed the golden set" in ok["summary"] and "REGRESSED" not in ok["summary"], ok
+    assert "REGRESSED" in bad["summary"] and "passed" not in bad["summary"], bad
+    print("  ok  the no-PAT summary reports the golden-set result it actually got")
+
+
 def test_parse_dt():
     assert model_watch._parse_dt("2026-06-30T12:00:00Z") is not None
     assert model_watch._parse_dt("2026-06-30T12:00:00+00:00") is not None
@@ -257,8 +400,9 @@ TESTS = [test_tier, test_vkey, test_canon, test_detect_one_upgrade, test_detect_
          test_alias_same_date_not_upgrade, test_undated_pin_dated_listing_is_current,
          test_undated_pin_real_upgrade_still_fires, test_higher_tier_reported_not_proposed,
          test_deprecation_note_and_replacement, test_version_fallback_when_no_dates,
-         test_bump_text, test_parse_dt,
-         test_pin_files_all_actually_hold_a_pin]
+         test_bump_text, test_bump_text_whole_ids_only, test_parse_dt,
+         test_pin_files_all_actually_hold_a_pin, test_add_paths_match_pin_files,
+         test_eval_step_reads_only_exit_1_as_regression, test_no_pat_note_follows_the_result]
 
 
 def main():

@@ -28,6 +28,9 @@ actual pipeline rather than a copy. It cards nothing and never writes opinions.j
   python scripts/golden_check.py check       # needs ANTHROPIC_API_KEY
   python scripts/golden_check.py summarize   # needs ANTHROPIC_API_KEY
   python scripts/golden_check.py recall      # needs ANTHROPIC_API_KEY (pretriage enabled)
+
+Exit codes: 0 clean, 1 a regression (or nothing verified), 2 bad usage, 3 a ConfigError (bad key,
+no credit, retired model). model-watch.yml reads only 1 as a regression; 3 is a broken run.
 """
 import json
 import os
@@ -159,7 +162,10 @@ def _summarize_attempts(name, docket, text, expect, tries):
     rejects a lower value), so a single run's area set is noisy; a genuine regression is a
     persistent miss, not a one-roll drop. Returns as soon as the union covers expect. A transient
     error makes that attempt contribute nothing and the loop proceeds; a persistent error leaves
-    the union short and is reported. Returns (covered, union, used, last_addl, last_error)."""
+    the union short and is reported. A ConfigError (bad key, no credit, retired model) is neither:
+    it says nothing about the model and fails every case alike, so it propagates and main() exits
+    3 instead of reporting each case as a dropped area. Returns (covered, union, used, last_addl,
+    last_error)."""
     union, last_addl, last_error, used = set(), 0, "", 0
     # 'used' is the attempt count, consumed in the return below, not in the loop body.
     for used in range(1, tries + 1):  # noqa: B007
@@ -167,6 +173,8 @@ def _summarize_attempts(name, docket, text, expect, tries):
             v = update.summarize("", name, docket, "", text, "", cl_status="")
             union |= _produced_areas(v)
             last_addl, last_error = len(v.get("additional_holdings") or []), ""
+        except update.ConfigError:
+            raise
         except Exception as e:
             last_error = str(e)[:120]
         if expect <= union:
@@ -299,15 +307,22 @@ def recall():
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "check"
-    if mode == "build":
-        build()
-        return 0
-    if mode == "check":
-        return check()
-    if mode == "summarize":
-        return summarize_check()
-    if mode == "recall":
-        return recall()
+    try:
+        if mode == "build":
+            build()
+            return 0
+        if mode == "check":
+            return check()
+        if mode == "summarize":
+            return summarize_check()
+        if mode == "recall":
+            return recall()
+    except update.ConfigError as e:
+        # Exit 1 means "regressed" to model-watch.yml. An auth, credit, or retired-model failure
+        # verified nothing about the model, so it gets its own code and fails that run as broken.
+        print("golden_check: configuration error (API key, credit balance, or model id), "
+              "not a regression: %s" % e)
+        return 3
     print("usage: golden_check.py [build|check|summarize|recall]")
     return 2
 
