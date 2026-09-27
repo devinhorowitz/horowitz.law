@@ -859,6 +859,71 @@ def test_screen_caption_rule():
           "and state-of-origin grounds")
 
 
+def test_since_floor_drop_count():
+    """The since floor (last_filed - 2 days) used to drop old-dated feed items with a bare `continue`.
+    juriscraper stamps every new gasupreme.us release 2026-06-16, so the Supreme Court of Georgia's
+    intake fell under the floor for three months and nothing said so. _select_candidates now counts
+    the NEVER-SEEN items the floor drops, per court. Logging only: selection must be unchanged, an
+    item already carded, seen or held is not "never-seen", and a redraft id is still exempt."""
+    import json as _json
+    import shutil as _sh
+    import tempfile as _tf
+
+    def item(cid, court, filed):
+        return {"cluster_id": cid, "caseName": "Case %d" % cid, "court_id": court, "dateFiled": filed}
+    results = [
+        item(1, "ga", "2026-06-16"), item(2, "ga", "2026-06-16"), item(3, "ga", "2026-06-16"),
+        item(1, "ga", "2026-06-16"),       # the same cluster twice in the feed counts once
+        item(4, "ga", "2026-06-16"),       # already in seen_clusters: skipped before the floor, not counted
+        item(10, "ala", "2026-09-01"),
+        item(11, "ala", "2026-09-01"),     # held in an open review PR: not never-seen
+        item(12, "ala", "2026-09-01"),     # already carded
+        item(20, "scotus", "2026-09-10"),
+        item(21, "scotus", "2026-09-10"),  # vetoed-and-redrafting: exempt from the floor, so selected
+        item(30, "gactapp", "2026-06-16"),  # floored here, but selected from its in-window copy below
+        item(30, "gactapp", "2026-09-25"),
+        item(31, "gactapp", "2026-10-01"),  # future-dated: dropped, but not by the floor
+        item(32, "ca11", ""),              # undated: the floor does not apply
+    ]
+    cand, fd = update._select_candidates(results, "2026-09-20", "2026-09-27", have={12}, seen={4},
+                                         pending_review={11}, redraft_pending={21})
+    assert [update.cluster_id_of(r) for r in cand] == [21, 30, 32], cand
+    assert fd == {"ga": 3, "ala": 1, "scotus": 1}, fd
+    assert list(fd) == ["ga", "ala", "scotus"], "largest first, then by court id: %r" % list(fd)
+    print("  ok  never-seen floor drops counted per court; selection unchanged")
+
+    cand, fd = update._select_candidates([item(30, "gactapp", "2026-09-25")], "2026-09-20", "2026-09-27",
+                                         set(), set(), set(), set())
+    assert len(cand) == 1 and fd == {}, (cand, fd)
+    print("  ok  nothing under the floor -> empty map")
+
+    # The map rides the run-log record and renders on the Actions summary. Paths stubbed to a
+    # tempdir so the test never touches the committed opinions_pipeline_log.jsonl.
+    tmp = _tf.mkdtemp(prefix="floor-test-")
+    real_log, real_summary = update.LOG_PATH, os.environ.get("GITHUB_STEP_SUMMARY")
+    try:
+        update.LOG_PATH = os.path.join(tmp, "log.jsonl")
+        os.environ["GITHUB_STEP_SUMMARY"] = os.path.join(tmp, "summary.md")
+        update._log_run({"ts": "2026-09-27T12:00:00Z", "floor_dropped": {"ga": 15, "ala": 3, "scotus": 1}})
+        rec = _json.loads(open(update.LOG_PATH, encoding="utf-8").read().splitlines()[-1])
+        assert rec["floor_dropped"] == {"ga": 15, "ala": 3, "scotus": 1}, rec
+        summ = open(os.environ["GITHUB_STEP_SUMMARY"], encoding="utf-8").read()
+        assert "- since floor dropped 19 never-seen item(s): ga=15, ala=3, scotus=1\n" in summ, summ
+        update._log_run({"ts": "2026-09-27T16:00:00Z", "floor_dropped": {}})
+        assert open(os.environ["GITHUB_STEP_SUMMARY"], encoding="utf-8").read().count("since floor") == 1, \
+            "an empty map adds no summary line"
+    finally:
+        update.LOG_PATH = real_log
+        if real_summary is None:
+            os.environ.pop("GITHUB_STEP_SUMMARY", None)
+        else:
+            os.environ["GITHUB_STEP_SUMMARY"] = real_summary
+        _sh.rmtree(tmp, ignore_errors=True)
+    src = open(os.path.join(HERE, "update.py"), encoding="utf-8").read()
+    assert '"floor_dropped": floor_dropped' in src, "main() must pass the map to _log_run"
+    print("  ok  floor_dropped rides the run-log record and the Actions summary")
+
+
 def main():
     print("crosscheck guardrails:")
     for c in CASES:
@@ -886,7 +951,8 @@ def main():
     test_guard_token_budget()
     test_screen_caption_rule()
     test_batch_carry_over()
-    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 16))
+    test_since_floor_drop_count()
+    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 17))
     return 0
 
 

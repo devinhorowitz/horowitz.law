@@ -2373,6 +2373,33 @@ def _same_case(a, b):
     return bool(a[1]) and a[1] == b[1] and len(a[3] & b[3]) >= 2
 
 
+def _select_candidates(results, since, today, have, seen, pending_review, redraft_pending):
+    """The run's candidate filter, moved out of main() with its selection unchanged so the since-floor
+    count below is unit-testable. Returns (cand, floor_dropped): the feed items to evaluate, in feed order, and
+    {court_id: n} of NEVER-SEEN items the since floor dropped, largest first. The count is logging
+    only; it changes nothing that is selected. It exists because the floor drops silently: juriscraper
+    stamps every new gasupreme.us release 2026-06-16, so ~15 unseen Supreme Court of Georgia items
+    fell under the floor every run for three months with no log line. An item already carded, seen
+    or held never reaches the floor check, so every count here is a case the pipeline never looked at."""
+    cand, ids, floored = [], set(), {}
+    for r in results:
+        cid = cluster_id_of(r)
+        if not cid or cid in have or cid in seen or cid in ids or cid in pending_review:
+            continue
+        if (r.get("dateFiled") or "") and r["dateFiled"] < since and cid not in redraft_pending:
+            floored.setdefault(cid, r.get("court_id") or "?")   # by cid: a repeated feed item counts once
+            continue
+        if (r.get("dateFiled") or "") and r["dateFiled"][:10] > today:
+            continue        # future-dated filing (typo'd CL metadata): never card it, never let it advance the watermark
+        ids.add(cid)
+        cand.append(r)
+    counts = {}
+    for cid, court in floored.items():
+        if cid not in ids:          # a cluster the feed also carried in-window was selected, not dropped
+            counts[court] = counts.get(court, 0) + 1
+    return cand, dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+
+
 def _drop_counts(skipped):
     """Break the run's dropped candidates down by the tier that dropped them, read
     from the reason prefix. The screen and triage counts are the recall signal: how
@@ -2423,6 +2450,10 @@ def _log_run(rec):
                        rec.get("flagged", 0), rec.get("treatment", 0), rec.get("dropped", 0),
                        d.get("screen", 0), d.get("pretriage", 0), d.get("triage", 0), d.get("summarizer", 0), d.get("other", 0),
                        rec.get("cl_calls", 0), rec.get("crosscheck_flags", 0), rec.get("completeness_flags", 0)))
+                fd = rec.get("floor_dropped") or {}
+                if fd:
+                    f.write("- since floor dropped %d never-seen item(s): %s\n"
+                            % (sum(fd.values()), ", ".join("%s=%d" % kv for kv in fd.items())))
         except Exception as e:
             print("  . run summary write skipped: %s" % e)
 
@@ -2951,22 +2982,16 @@ def main():
     # while the feed still carries them. Self-clearing: once one is re-carded it enters have/seen
     # (or is re-held into pending_review), so it falls out of this set on the next run.
     redraft_pending = review_store.load_redraft_ids() - seen - have - pending_review
-    cand, ids = [], set()
-    for r in results:
-        cid = cluster_id_of(r)
-        if not cid or cid in have or cid in seen or cid in ids or cid in pending_review:
-            continue
-        if (r.get("dateFiled") or "") and r["dateFiled"] < since and cid not in redraft_pending:
-            continue
-        if (r.get("dateFiled") or "") and r["dateFiled"][:10] > today:
-            continue        # future-dated filing (typo'd CL metadata): never card it, never let it advance the watermark
-        ids.add(cid)
-        cand.append(r)
+    cand, floor_dropped = _select_candidates(results, since, today, have, seen, pending_review, redraft_pending)
     cand.sort(key=lambda r: (r.get("dateFiled") or "", cluster_id_of(r)), reverse=True)
     cand = cand[:MAX_RUN]
     print("since %s | candidates: %d | tiers: screen=%s pretriage=%s triage=%s summarize=%s%s"
           % (since, len(cand), SCREEN_MODEL or "off", PRETRIAGE_MODEL or "off", TRIAGE_MODEL or "off", MODEL,
              rss_note()), flush=True)
+    if floor_dropped:
+        print("  ! since floor dropped %d never-seen item(s): %s"
+              % (sum(floor_dropped.values()), ", ".join("%s=%d" % kv for kv in floor_dropped.items())),
+              flush=True)
 
     added, flagged, skipped = [], [], []
     rejections = []                            # screen/triage drops this run, logged to REJECT_PATH for recall review
@@ -3566,6 +3591,7 @@ def main():
         "cl_calls": cl_rate.PACER.calls,
         "crosscheck_flags": sum(1 for c in crosschecks.values() if c["verdict"] == "flag"),
         "completeness_flags": sum(1 for c in completeness.values() if c["verdict"] == "flag"),
+        "floor_dropped": floor_dropped,
     })
 
     if sa_events:
