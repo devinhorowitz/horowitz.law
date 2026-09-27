@@ -218,7 +218,11 @@ abstract + CFR references the endpoint already returns (so a run is a single pag
 per-document call), and runs the same cheapest-first funnel. A Federal Register document is
 **immutable** once published, so `seen` is just a set of processed `document_number`s (no
 change_hash). The relevance screen is moderately strict: it keeps substantive safety, liability, and
-financial-responsibility (insurance) rules and drops fee/technical/administrative ones.
+financial-responsibility (insurance) rules and drops fee/technical/administrative ones. Every screen
+drop and writer decline is recorded in `regulations_rejections.jsonl` — append-only, one record each:
+document number, title, agency, `stage` (`screen` or `writer`), `reason`, and `brief`, the exact text
+the model read — written on `--apply` beside the seen mark it explains, so a dropped rule can be
+audited after the fact.
 
 Regulation cards render in a **"Federal regulations"** section of the same /legislation page (with
 their own `regulations.xml` feed), because statutes and regulations are the two halves of "law that

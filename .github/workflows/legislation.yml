@@ -147,12 +147,14 @@ jobs:
         if: steps.run.outputs.changed == '1'
         run: python scripts/render.py
 
-      # legislation_rejections.jsonl (the recall check's drop log) is listed in add-paths AND in
-      # the no-cards bookkeeping step, because the screen drops bills on runs that produce no card
-      # at all. It may safely ride the review PR, unlike opinions_rejections.jsonl (#336/#339):
+      # legislation_rejections.jsonl (the recall check's drop log) and regulations_rejections.jsonl
+      # (the regulatory watch's screen drops and writer declines) are listed in add-paths AND in
+      # the no-cards bookkeeping step, because the screens drop on runs that produce no card
+      # at all. They may safely ride the review PR, unlike opinions_rejections.jsonl (#336/#339):
       # log_drops APPENDS, so a branch that sits while another job writes the same file merges
       # instead of conflicting. A wholesale rewrite is what made the opinions log unfit for a
-      # review branch.
+      # review branch. Both are tracked (seeded empty) because `git add` of a missing path stages
+      # nothing at all, and the bookkeeping step's `|| true` would hide that.
       - name: Open review pull request
         if: steps.run.outputs.changed == '1'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
@@ -171,6 +173,7 @@ jobs:
             regulations.json
             regulations_state.json
             regulations_log.jsonl
+            regulations_rejections.jsonl
             courtrules.json
             courtrules_state.json
             courtrules_log.jsonl
@@ -206,7 +209,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add legislation_state.json legislation_log.jsonl legislation_rejections.jsonl regulations_state.json regulations_log.jsonl courtrules_state.json courtrules_log.jsonl 2>/dev/null || true
+          git add legislation_state.json legislation_log.jsonl legislation_rejections.jsonl regulations_state.json regulations_log.jsonl regulations_rejections.jsonl courtrules_state.json courtrules_log.jsonl 2>/dev/null || true
           git diff --cached --quiet || { git commit -m "legislation/regulation/courtrules: record run state [skip ci]"; git push; }
 
       # Surfaces a broken run instead of letting it fail silently: comments on the one open
