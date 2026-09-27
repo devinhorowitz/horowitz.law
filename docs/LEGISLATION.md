@@ -130,9 +130,13 @@ the two could be compared; nothing in the watch would have noticed, then or late
   suspect *terminate*: it gets a definitive verdict this run either way, so a bill is never both
   dropped and locked out. Escalations respect `LEGISLATION_MAX`, and anything over the cap is left
   un-seen so it returns next run rather than vanishing.
-- **Fails closed** — the opposite of the screen. An auditor error leaves the drop standing, because
-  a broken auditor must not manufacture escalations that each cost a writer call. A missed audit is
-  recoverable: the drop is on the log without a verdict, so it is findable.
+- **Treats a failed audit as no audit** — a model or parse error (or a reply with no boolean
+  verdict) is logged `recall: "error"` with the cause in `recall_error`, counted as failed, and left
+  un-seen so the bill is re-screened next run; it used to be logged `ok` and locked in `seen`. It is
+  not escalated, since a broken auditor must not manufacture writer calls, but after
+  `RECALL_MAX_FAILS` (3) failed audits of the same `bill_id` + `change_hash`, counted off this log,
+  the writer decides it. A `ConfigError` (bad key, no credit, retired model) stops the pass and
+  leaves every remaining drop un-seen.
 
 `LEGISLATION_RECALL=0` disables it and restores the prior behaviour exactly;
 `LEGISLATION_RECALL_MODEL` overrides the auditor (default: the write model).

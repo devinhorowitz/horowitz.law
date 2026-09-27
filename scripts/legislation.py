@@ -128,6 +128,10 @@ DEBUG        = os.environ.get("LEGISLATION_DEBUG", "") == "1"
 # and can still decline, which is how a suspect terminates instead of cycling.
 RECALL         = os.environ.get("LEGISLATION_RECALL", "on").strip().lower() in ("1", "true", "yes", "on")
 RECALL_MODEL   = os.environ.get("LEGISLATION_RECALL_MODEL", WRITE_MODEL)
+# A FAILED audit settles nothing: the drop stays un-seen and is re-screened next run. After this many
+# failed audits of the same drop (bill_id + change_hash, counted off the drop log) it goes to the
+# writer instead, so a drop the auditor can never read still terminates rather than cycling.
+RECALL_MAX_FAILS = 3
 
 # Batch the (Opus) card-WRITE pass through the 50%-priced Message Batches API, mirroring the opinion
 # funnel's OPINIONS_BATCH. Screening stays synchronous (Haiku, cheap, and its fail-open keep should be
@@ -424,14 +428,26 @@ def _recall_system(state):
     )
 
 
-def recall_drop(drop, ai, model=None):
-    """Audit ONE screen drop. Returns (suspect: bool, note: str).
+def _is_config_error(e):
+    """True for update.ConfigError (bad key, no credit, retired model) without importing update.py
+    here: only the default `ai` seam raises one, and it has imported update by then."""
+    upd = sys.modules.get("update")
+    return upd is not None and isinstance(e, upd.ConfigError)
 
-    Fail-CLOSED on a model or parse error, i.e. suspect=False, which leaves the drop standing. That
-    is the opposite of screen_bill's fail-open and it is deliberate: this pass exists to catch a
-    wrong drop, so an unavailable auditor must not manufacture escalations that each cost a writer
-    call. A missed audit is recoverable -- the drop is on the log with no verdict, so it is
-    findable -- while a flood of false escalations on a broken auditor is not."""
+
+def recall_drop(drop, ai, model=None):
+    """Audit ONE screen drop. Returns (suspect, note): suspect is True or False on a real verdict,
+    or None when the audit FAILED (a model or parse error, or no boolean verdict), with the error as
+    the note.
+
+    A failed audit is not a verdict. It used to come back (False, ""), which run() could not tell
+    from a clean audit, so the drop was logged "ok" and locked in `seen` on no audit at all -- the
+    dropped-and-locked-out outcome this pass exists to prevent. run() now leaves it un-seen to be
+    re-screened next run. It still does not ESCALATE a failure, and that is deliberate: a broken
+    auditor must not manufacture escalations that each cost a writer call.
+
+    update.ConfigError is re-raised rather than returned: it is not about this drop and would fail
+    identically for every one left, so the caller stops auditing."""
     model = model or RECALL_MODEL
     try:
         v = ai({"model": model, "max_tokens": 200, "system": _recall_system(drop.get("state") or DEFAULT_STATE),
@@ -439,10 +455,35 @@ def recall_drop(drop, ai, model=None):
                               "BRIEF:\n%s\n\nTHE FILTER'S REASON FOR DROPPING IT:\n%s"
                               % (drop.get("brief") or "", drop.get("reason") or "(none given)")}]},
                "leg-recall")
+        suspect = v.get("suspect")
+        if not isinstance(suspect, bool):
+            raise ValueError("no boolean verdict: %r" % (v,))
     except Exception as e:
-        _dbg("recall failed for %s, drop stands: %s" % (drop.get("number"), e))
-        return False, ""
-    return v.get("suspect") is True, str(v.get("note") or "")[:160]
+        if _is_config_error(e):
+            raise
+        _dbg("recall failed for %s, left un-seen: %s" % (drop.get("number"), e))
+        return None, ("%s: %s" % (type(e).__name__, e))[:160]
+    return suspect, str(v.get("note") or "")[:160]
+
+
+def _recall_failures():
+    """(bill_id, change_hash) -> how many earlier audits of that drop FAILED, read off the drop log,
+    which already records every drop with its verdict -- so the retry counter needs no state of its
+    own. Best-effort: an unreadable log counts nothing, which only means more retries."""
+    counts = {}
+    try:
+        with open(DROPS_PATH, encoding="utf-8") as f:
+            for ln in f:
+                try:
+                    r = json.loads(ln)
+                except ValueError:
+                    continue
+                if isinstance(r, dict) and r.get("recall") == "error":
+                    k = (str(r.get("bill_id")), r.get("change_hash") or "")
+                    counts[k] = counts.get(k, 0) + 1
+    except OSError:
+        pass
+    return counts
 
 
 def log_drops(records, cap=4000):
@@ -874,17 +915,44 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
     #
     # Escalations respect max_run, so a pathological audit cannot blow the card budget; anything
     # over the cap is left un-seen and simply comes back next run.
-    suspect_n = escalated_n = 0
+    #
+    # A FAILED audit settles nothing either way: the drop is logged recall "error" with the reason
+    # and left un-seen, so it is re-screened and re-audited next run -- until RECALL_MAX_FAILS
+    # failures, after which it goes to the writer without another audit. A ConfigError stops the
+    # pass outright (it would fail identically for every drop left) and leaves the rest un-seen too.
+    fails = _recall_failures() if RECALL and drops else {}
+    suspect_n = failed_n = escalated_n = 0
+    aborted = ""
     for d in drops:
         bid, ch = d["bill_id"], d["change_hash"]
-        suspect, note_txt = (recall_drop(d, ai) if RECALL else (False, ""))
-        d["recall"] = "suspect" if suspect else ("ok" if RECALL else "off")
+        if not RECALL:
+            d["recall"] = "off"
+            seen_updates[bid] = ch
+            continue
+        n_failed = fails.get((bid, ch), 0)
+        if aborted:
+            suspect, note_txt = None, aborted
+        elif n_failed >= RECALL_MAX_FAILS:
+            suspect, note_txt = True, "%d earlier audits failed; the writer decides" % n_failed
+        else:
+            try:
+                suspect, note_txt = recall_drop(d, ai)
+            except Exception as e:          # only update.ConfigError escapes recall_drop
+                aborted = ("recall aborted: %s: %s" % (type(e).__name__, e))[:160]
+                suspect, note_txt = None, aborted
+                note("LEGISLATION: recall ABORTED (%s); every remaining drop left un-seen." % e)
+        if suspect is None:
+            failed_n += 1
+            d["recall"], d["recall_error"] = "error", note_txt
+            continue                        # un-seen: re-screened and re-audited next run
+        d["recall"] = "suspect" if suspect else "ok"
         if note_txt:
             d["recall_note"] = note_txt
         if not suspect:
             seen_updates[bid] = ch          # the drop stands: settled, do not re-screen unless it moves
             continue
-        suspect_n += 1
+        if n_failed < RECALL_MAX_FAILS:
+            suspect_n += 1                  # a capped drop is escalated, but no auditor called it suspect
         if len(pending) >= max_run:
             d["recall"] = "suspect-deferred"   # un-seen, so it returns next run rather than vanishing
             continue
@@ -907,8 +975,8 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
         note("LEGISLATION: recall ESCALATED %s %s to the writer -- %s"
              % (d["state"], d.get("number") or bid, note_txt or "screen drop looks wrong"))
     if drops:
-        note("LEGISLATION: recall audited %d screen drop(s), %d suspect, %d escalated."
-             % (len(drops), suspect_n, escalated_n))
+        note("LEGISLATION: recall audited %d screen drop(s), %d failed, %d suspect, %d escalated."
+             % (len(drops), failed_n, suspect_n, escalated_n))
 
     # Write pass: one batch job, or the synchronous per-bill path. Same verdict space either way.
     if batch_enabled and pending:
