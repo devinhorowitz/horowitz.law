@@ -40,17 +40,36 @@
 #
 # The caller must have already committed; this only moves HEAD onto main and pushes.
 #
+# REGENERATE INSTEAD OF REBASE, FOR A CHANGE THAT IS CHEAP TO REDO.
+#
+# A rebase replays a diff, and a diff that edits one line conflicts with an append right
+# after it -- which is exactly what an audit stamp on the newest drop looks like against
+# the funnel's next append to opinions_rejections.jsonl. With PUSH_MAIN_REGENERATE set to
+# a command that redoes the change and commits it, each attempt instead hard-resets onto
+# the freshly fetched main and runs that command, so there is nothing to conflict; a
+# command that commits nothing means main already has the change, and that is success.
+# The reset discards the tree, so this mode refuses a tree with uncommitted changes: run
+# it in a throwaway worktree (queue.yml's "Record audit verdicts on main" does).
+#
 # Env (scripts/test_push_main.py sets the backoffs to 0 to exercise the exhaustion
 # paths without spending real time; nothing else should change them):
 #   PUSH_MAIN_BACKOFF         collision backoff multiplier, seconds (default 3 -> 3/6/9/12)
 #   PUSH_MAIN_TRIES           collision attempts (default 5)
 #   PUSH_MAIN_OUTAGE_BACKOFF  outage backoff base, seconds (default 15 -> 15/30/60/120/240)
 #   PUSH_MAIN_OUTAGE_TRIES    outage attempts (default 6)
+# and, set by a caller that wants the mode above:
+#   PUSH_MAIN_REGENERATE      command (run with bash -e) that redoes and commits the change
 set -u
 BACKOFF="${PUSH_MAIN_BACKOFF:-3}"
 TRIES="${PUSH_MAIN_TRIES:-5}"
 OUTAGE_BACKOFF="${PUSH_MAIN_OUTAGE_BACKOFF:-15}"
 OUTAGE_TRIES="${PUSH_MAIN_OUTAGE_TRIES:-6}"
+REGENERATE="${PUSH_MAIN_REGENERATE:-}"
+
+if [ -n "$REGENERATE" ] && [ -n "$(git status --porcelain)" ]; then
+  echo "::error::push_main: PUSH_MAIN_REGENERATE resets the tree onto main on every attempt, and this tree has uncommitted changes; run it in a throwaway worktree"
+  exit 1
+fi
 
 # A push rejected because main moved. Matched on git's own wording; anything that does
 # not match is treated as an outage, which is the safe default -- waiting longer than
@@ -89,7 +108,18 @@ while : ; do
     continue
   fi
 
-  if ! git rebase FETCH_HEAD; then
+  if [ -n "$REGENERATE" ]; then
+    base="$(git rev-parse FETCH_HEAD)"
+    git reset -q --hard "$base"
+    if ! bash -ec "$REGENERATE"; then
+      echo "::error::push_main: PUSH_MAIN_REGENERATE failed on a fresh origin/main"
+      exit 1
+    fi
+    if [ "$(git rev-parse HEAD)" = "$base" ]; then
+      echo "push_main: nothing to push; origin/main already carries this change"
+      exit 0
+    fi
+  elif ! git rebase FETCH_HEAD; then
     git rebase --abort 2>/dev/null || true
     echo "::error::push_main: rebase onto origin/main hit a conflict; manual resolution needed"
     exit 1

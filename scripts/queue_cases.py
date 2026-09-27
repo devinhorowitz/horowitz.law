@@ -52,8 +52,12 @@ Env:
   (all OPINIONS_* funnel knobs and the ANTHROPIC_STATUS preflight are inherited from update.py)
 
 Run via .github/workflows/queue.yml (push to queue.txt, or workflow_dispatch).
+
+  python scripts/queue_cases.py --apply-stamps STAMPS LOG
+re-applies a finished run's saved audit verdicts (STAMPS_PATH) to the rejection log at LOG, and
+nothing else. queue.yml runs it against a fresh checkout of main; see stamp_audits.
 """
-import io, os, re, sys, json, time, datetime
+import os, re, sys, json, time, datetime, argparse
 from urllib.parse import urlparse
 import update             # daily funnel: screen/triage/summarize, cl_get, text, constants
 import backfill           # cluster resolver (seed_result): cluster -> court/text-url, audited
@@ -61,9 +65,12 @@ import render             # single source of truth renderer
 import cl_rate            # shared CourtListener REST budget (limits, pacing, defer)
 import safeio             # crash-safe atomic writes
 import treatment_core     # adverse-treatment flagging (flag_caution, NEGATIVE_KINDS)
+import audit_log          # the rejection log's reader and canonical (compact) writer
 
 QUEUE_PATH = os.path.join(update.REPO, "queue.txt")
 PR_PATH    = os.path.join(update.REPO, "scripts", "queue_cases_pr_body.md")
+# This run's audit verdicts, for queue.yml to re-apply onto main. Gitignored, like PR_PATH.
+STAMPS_PATH = os.path.join(update.REPO, "scripts", "queue_audit_stamps.json")
 
 DRY_RUN      = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 RESOLVE_ONLY = os.environ.get("QUEUE_RESOLVE_ONLY", "") in ("1", "true", "True", "yes")
@@ -180,7 +187,7 @@ def render_report(rows, added, treat_flags, audit_notes, aborted_cfg):
     return "\n".join(L) + "\n"
 
 
-def stamp_audits(stamps):
+def stamp_audits(stamps, path=None, ts=None):
     """Record what a FORCED queue read established, onto the matching rejection record(s).
 
     A queued line with "!" sends the case to the summarizer -- the final editor -- on the full
@@ -199,36 +206,53 @@ def stamp_audits(stamps):
     `stamps` is a list of (cluster_id, verdict, note). Records are matched by cluster_id; a queued
     case that was never dropped has no record and is silently skipped. Returns the number of
     records actually changed (record_audit refuses to weaken a stronger prior claim, so a re-run
-    is a no-op rather than a downgrade)."""
+    is a no-op rather than a downgrade).
+
+    `path` is the log to stamp (default: the repo's). queue.yml does not commit this run's copy:
+    it re-applies the saved stamps (apply_saved_stamps) to a fresh checkout of main and pushes
+    that. The run's own tree also holds the drained queue.txt and any new card, and push_main.sh
+    cannot rebase a dirty tree: git refused, the step failed, the PR step behind it was skipped,
+    and the verdict, the drain and the card were all discarded -- so every retry spent again.
+    `ts` pins the stamp time, so re-applying the same run's stamps onto a log that already carries
+    them changes nothing and pushes nothing."""
     if not stamps:
         return 0
+    path = path or update.REJECT_PATH
     try:
-        lines = io.open(update.REJECT_PATH, encoding="utf-8").read().splitlines()
+        records = audit_log.load(path)     # a corrupt line is dropped on rewrite, as elsewhere
     except OSError:
         return 0
-    records, changed = [], 0
-    for ln in lines:
-        ln = ln.strip()
-        if not ln:
-            continue
-        try:
-            records.append(json.loads(ln))
-        except ValueError:
-            continue          # a corrupt line is dropped on rewrite, as elsewhere
+    changed = 0
     by = "queue-forced/%s" % update.MODEL
     for cid, verdict, note in stamps:
         for r in records:
             if r.get("cluster_id") != cid:
                 continue
             before = json.dumps(r.get("audit"), sort_keys=True)
-            update.record_audit(r, verdict, depth="full_opinion", by=by, note=note)
+            update.record_audit(r, verdict, depth="full_opinion", by=by, note=note, ts=ts)
             if json.dumps(r.get("audit"), sort_keys=True) != before:
                 changed += 1
     if changed:
-        safeio.atomic_write_text(
-            update.REJECT_PATH,
-            "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in records))
+        # Compact, as the funnel appends it: every line not stamped stays byte-identical, so the
+        # commit is a few-line diff instead of a re-serialization of the whole log, and it cannot
+        # collide with an append it did not touch.
+        audit_log.save(path, records)
     return changed
+
+
+def save_stamps(stamps, ts):
+    """Write this run's stamps where queue.yml's record step picks them up (STAMPS_PATH)."""
+    safeio.atomic_write_json(STAMPS_PATH, {"ts": ts, "stamps": stamps})
+
+
+def apply_saved_stamps(stamps_path, log_path):
+    """Re-apply stamps written by save_stamps to the log at `log_path`. Returns records changed;
+    no saved stamps is zero, not an error."""
+    try:
+        saved = json.load(open(stamps_path, encoding="utf-8"))
+    except FileNotFoundError:
+        return 0
+    return stamp_audits(saved.get("stamps") or [], path=log_path, ts=saved.get("ts"))
 
 
 def _write_pr(report):
@@ -510,12 +534,30 @@ def run():
     if queue_changed:
         safeio.atomic_write_text(QUEUE_PATH, new_text)
         print("queue.txt rewritten.")
-    stamped = stamp_audits(audit_stamps)
+    # One timestamp for this run's verdicts, so the copy queue.yml pushes to main matches this one
+    # and a re-applied stamp is a no-op rather than a fresh, timestamp-only commit.
+    stamp_ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stamped = stamp_audits(audit_stamps, ts=stamp_ts)
+    if audit_stamps:
+        save_stamps(audit_stamps, stamp_ts)
     if stamped:
         print("recorded %d audit verdict(s) from this run's full reads." % stamped)
     if not (added or treatment_changed or queue_changed or stamped):
         print("nothing to add; files unchanged.")
 
 
-if __name__ == "__main__":
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="Screen queue.txt through the funnel (no arguments).")
+    ap.add_argument("--apply-stamps", nargs=2, metavar=("STAMPS", "LOG"),
+                    help="only re-apply a finished run's saved audit verdicts to the log at LOG")
+    a = ap.parse_args(argv)
+    if a.apply_stamps:
+        n = apply_saved_stamps(*a.apply_stamps)
+        print("re-applied %d audit verdict(s) to %s." % (n, a.apply_stamps[1]))
+        return 0
     run()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
