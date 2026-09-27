@@ -18,8 +18,14 @@ Usage:
     --skills  skill-tree root (default: env QPWB_SKILLS or /mnt/skills/user)
     --out     output manifest (default: skill-authorities.json)
     --prev    manifest to inherit curated edits from (default: --out if present)
+
+Finding no qpwb-* skills under --skills exits 1 and writes nothing: that is a run
+where the tree is not mounted (the default root absent, or QPWB_SKILLS pointed
+elsewhere), and writing its empty result would replace a working manifest with a
+freshly dated one that watches nothing. heartbeat.py --skill-manifest flags an
+empty manifest too, in case one is committed anyway.
 """
-import argparse, json, os, re, time, glob
+import argparse, json, os, re, sys, time, glob
 import safeio
 
 AREA_VOCAB = ["procedure", "damages", "auto", "coverage", "premises", "expert", "negsec", "badfaith"]
@@ -122,12 +128,12 @@ def seed_areas(name, desc):
     return sorted(a)
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--skills", default=os.environ.get("QPWB_SKILLS", "/mnt/skills/user"))
     ap.add_argument("--out", default="skill-authorities.json")
     ap.add_argument("--prev", default=None)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     prev_path = args.prev or args.out
     curated = {}
@@ -164,6 +170,13 @@ def main():
             "verify_markers": len(VERIFY.findall(full)),
         }
 
+    if not skills:
+        print("skill_authorities: no qpwb-* skills found under %s; refusing to write %s. "
+              "An empty manifest would empty alert-out's watch list with nothing erroring. "
+              "Point --skills (or QPWB_SKILLS) at the real skill-tree root and rerun."
+              % (args.skills, args.out), file=sys.stderr)
+        return 1
+
     by_auth = {}
     for sk, rec in skills.items():
         for st in rec["statutes"]:
@@ -191,7 +204,8 @@ def main():
         sum(len(r["statutes"]) for r in skills.values()),
         sum(len(r["cases"]) for r in skills.values()),
         len(by_auth)))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

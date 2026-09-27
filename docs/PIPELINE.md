@@ -472,7 +472,10 @@ between those commits it is frozen against a skill tree that keeps moving -- whi
 fails open on a manifest it cannot read, so a stale one looks exactly like a working watch. The
 daily heartbeat therefore checks its `generated_at` as a separate signal
 (`python scripts/heartbeat.py --skill-manifest`, exit 5) and files its own tracking issue past
-`siteconfig.SKILL_MANIFEST_MAX_AGE_DAYS` (90). Regenerate with `python scripts/skill_authorities.py`
+`siteconfig.SKILL_MANIFEST_MAX_AGE_DAYS` (90). A freshly dated but empty manifest (zero skills, or
+nothing in `by_authority`) fails the same check, and the generator refuses to write one: finding no
+`qpwb-*` skills under `--skills` (default `QPWB_SKILLS`, else `/mnt/skills/user`) exits nonzero and
+leaves the existing manifest alone. Regenerate with `python scripts/skill_authorities.py`
 where the tree is mounted; curated edits survive. Set the threshold to `0` to retire the check if
 the skill tree is no longer maintained -- deliberately, rather than by ignoring the issue.
 
