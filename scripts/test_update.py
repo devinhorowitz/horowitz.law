@@ -304,6 +304,39 @@ def test_guard_log_distinguishes_a_standing_flag():
     print("  ok  guard log distinguishes a standing flag from a cleared one (6 cases)")
 
 
+def test_guard_log_keeps_unconfirmed_reason():
+    """A grounded flag that consensus does not stand up must still leave its reason and quote in
+    the log. The NOT CONFIRMED and no-majority lines printed only counts, so a 1-of-3 fidelity flag
+    on a card that later proved to misstate the facts was unrecoverable: the one attempt that saw
+    the defect had said what it was, and nothing kept it."""
+    why = "card says the LLC sold the scheduled car but the opinion says a member sold it"
+    why_c = "omits the independent statute-of-limitations holding in civil procedure"
+    cases = [
+        # (label, guard, tries-attr, scripted responses, tries, verdict, reason, quote, consensus line)
+        ("fidelity minority", update.crosscheck, "CROSSCHECK_TRIES",
+         [flag(REAL_QUOTE, why), match(), match()], 3, "match", why, REAL_QUOTE, "NOT CONFIRMED"),
+        ("fidelity no majority", update.crosscheck, "CROSSCHECK_TRIES",
+         [RuntimeError("x"), flag(REAL_QUOTE, why), RuntimeError("x")], 3, "unavailable", why, REAL_QUOTE,
+         "no majority"),
+        ("completeness minority", update.completeness_check, "COMPLETENESS_TRIES",
+         [cflag(COMP_REAL, why_c), complete(), complete()], 3, "complete", why_c, COMP_REAL, "NOT CONFIRMED"),
+        ("completeness no majority", update.completeness_check, "COMPLETENESS_TRIES",
+         [RuntimeError("x"), cflag(COMP_REAL, why_c), RuntimeError("x")], 3, "unavailable", why_c, COMP_REAL,
+         "no majority"),
+    ]
+    for label, fn, attr, seq, tries, want, reason, quote, line in cases:
+        verdict, out = _guard_log(fn, seq, tries, attr)
+        assert verdict == want, "%s: verdict %r != %r" % (label, verdict, want)
+        assert line in out, "%s: stdout lacks the consensus line %r\n%s" % (label, line, out)
+        assert reason in out, "%s: the unconfirmed flag's reason was not printed\n%s" % (label, out)
+        assert quote[:120] in out, "%s: the unconfirmed flag's quote was not printed\n%s" % (label, out)
+    # A confirmed flag already carries its reason in the verdict; it is not "unconfirmed".
+    verdict, out = _guard_log(update.crosscheck, [flag(REAL_QUOTE, why)] * 3, 3, "CROSSCHECK_TRIES")
+    assert verdict == "flag", verdict
+    assert "unconfirmed flag" not in out, "a standing flag printed as unconfirmed\n%s" % out
+    print("  ok  guard log keeps an unconfirmed flag's reason and quote (5 cases)")
+
+
 def test_crosscheck_why_carveout():
     """The fidelity guard must not report the EDITOR'S relevance line as a misstatement of the
     holding -- while still catching a fact about THIS case that the opinion does not support.
@@ -937,6 +970,7 @@ def main():
     print("helpers:")
     test_substantiation_helper()
     test_guard_log_distinguishes_a_standing_flag()
+    test_guard_log_keeps_unconfirmed_reason()
     test_crosscheck_why_carveout()
     test_docket_set()
     test_treatment_citer_seen()
@@ -952,7 +986,7 @@ def main():
     test_screen_caption_rule()
     test_batch_carry_over()
     test_since_floor_drop_count()
-    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 17))
+    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 18))
     return 0
 
 

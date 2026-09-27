@@ -1989,6 +1989,17 @@ def _guard_consensus(flags, clears, made, tries, clear_verdict, clear_reason, fo
                           last_error or "attempts lost, so the result is undecided, not clean"))}
 
 
+def _print_unconfirmed_flags(guard, name, flags):
+    """Print what each grounded flag that consensus did not stand up actually said. The NOT
+    CONFIRMED and no-majority lines carry only counts, so a 1-of-3 fidelity flag's reason and
+    quote were lost for good -- even when the card later proved to misstate the very facts that
+    attempt had faulted. The DISMISSED line already keeps an ungrounded flag's reason; a grounded
+    one that was merely outvoted or left undecided deserves no less."""
+    for reason, quote in flags:
+        print("  . %s unconfirmed flag for %s: reason=%r quote=%r"
+              % (guard, name[:40], reason[:160], quote[:120]))
+
+
 def crosscheck(name, text, entry):
     """Independent fidelity check on a drafted card: a model other than the Opus summarizer reads the
     opinion against the drafted holding and flags a summary that misstates it. Flag-and-surface, so it
@@ -2041,6 +2052,7 @@ def crosscheck(name, text, entry):
                            last_error)
     if out["verdict"] == "unavailable":
         print("  ! cross-check unavailable for %s: %s" % (name[:40], out["reason"]))
+        _print_unconfirmed_flags("cross-check", name, flags)
     # Report what consensus DECIDED, not merely that some attempt flagged. This branch used to be
     # a bare `elif flags`, so it also fired on the confirmed path: a flag that WON its majority
     # and was about to be reported as a finding printed "NOT CONFIRMED ... clearing as noise" on
@@ -2053,6 +2065,7 @@ def crosscheck(name, text, entry):
     elif flags:
         print("  . cross-check flag NOT CONFIRMED for %s (%d of %d attempts flagged); clearing as noise"
               % (name[:40], len(flags), made))
+        _print_unconfirmed_flags("cross-check", name, flags)
     return out
 
 
@@ -2133,6 +2146,7 @@ def completeness_check(name, text, entry):
                            last_error)
     if out["verdict"] == "unavailable":
         print("  ! completeness check unavailable for %s: %s" % (name[:40], out["reason"]))
+        _print_unconfirmed_flags("completeness", name, flags)
     # Same correction as the cross-check above, and for the same reason: a confirmed flag must not
     # print the sentence that dismisses one.
     elif out["verdict"] == "flag":
@@ -2141,6 +2155,7 @@ def completeness_check(name, text, entry):
     elif flags:
         print("  . completeness flag NOT CONFIRMED for %s (%d of %d attempts flagged); clearing as noise"
               % (name[:40], len(flags), made))
+        _print_unconfirmed_flags("completeness", name, flags)
     return out
 
 
