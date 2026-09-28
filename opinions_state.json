@@ -2875,15 +2875,12 @@
     10984013,
     10984015,
     10984022,
-    10984030
+    10984030,
+    10984969,
+    10984970,
+    10984984,
+    10984985
   ],
-  "updated": "2026-09-25T23:26:41Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-guards": {
-      "id": "msgbatch_01PnpF4BKc9tWx8FBDHetrdL",
-      "at": 1790378657.2636032,
-      "n": 2
-    }
-  }
+  "updated": "2026-09-28T16:48:50Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
