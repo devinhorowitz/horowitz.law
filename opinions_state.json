@@ -2888,8 +2888,55 @@
     10985147,
     10985148,
     10985166,
-    10985178
+    10985178,
+    10985577,
+    10985580,
+    10985581,
+    10985582,
+    10985665,
+    10985666,
+    10985674,
+    10985678,
+    10985681,
+    10985682,
+    10985685,
+    10985686,
+    10985689,
+    10985690,
+    10985693,
+    10985694,
+    10985789,
+    10985790,
+    10985800,
+    10985801,
+    10985890,
+    10985891,
+    10985931,
+    10985944,
+    10985946,
+    10985947,
+    10985950,
+    10985951,
+    10985953,
+    10985994
   ],
-  "updated": "2026-09-29T00:26:16Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
+  "updated": "2026-09-29T18:19:27Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
+  "pending_batches": {
+    "funnel-triage": {
+      "id": "msgbatch_01Mb1ATWj1jfVYWf3BfLvLN4",
+      "at": 1790705327.50888,
+      "n": 2
+    },
+    "funnel-smell": {
+      "id": "msgbatch_01YEWA9QH13qvU1LBypxf1FX",
+      "at": 1790705662.962349,
+      "n": 1
+    },
+    "funnel-summarize": {
+      "id": "msgbatch_01FXiFGXsJikhifM9JW85Rxh",
+      "at": 1790705756.8763194,
+      "n": 1
+    }
+  }
 }
