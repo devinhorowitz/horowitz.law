@@ -1,8 +1,26 @@
 {
   "area": "procedure",
   "label": "procedure",
-  "count": 84,
+  "count": 85,
   "opinions": [
+    {
+      "cluster_id": 10985956,
+      "name": "Fidler v. AIKG, LLC",
+      "court": "Court of Appeals of Georgia",
+      "date": "2026-09-29",
+      "disposition": "vacated and remanded in the main appeal; affirmed in part, vacated in part, and remanded in the cross appeal",
+      "areas": [
+        "procedure"
+      ],
+      "precedential": "published",
+      "url": "https://www.courtlistener.com/opinion/10985956/slade-fidler-v-aikg-llc/",
+      "synopsis": "Plaintiff alleged he was injured when a track attendant stopped his go-kart and another kart struck him, and after his counsel sent a preservation letter requesting surveillance footage, the facility's manager investigated, saved footage of the final two laps, and allowed the remaining video to be destroyed. The trial court found the letter gave the operator actual notice that litigation was contemplated but then held that no preservation duty arose because the letter was overbroad, vague, and lacked details about the incident, relying on Cooper Tire & Rubber Co. v. Koch. The Court of Appeals held that Koch addresses when a plaintiff's own duty to preserve arises based on anticipation of litigation, not the sufficiency of a preservation letter's contents, and that no authority supports a reasonableness standard applied to the substance of such a letter; once actual notice of contemplated litigation is found, the duty to preserve attaches. Because the trial court applied an erroneous legal theory, the denial of the spoliation motion was vacated, and the grant of summary judgment, which was influenced by the spoliation ruling, was likewise vacated for reconsideration.",
+      "why": "The decision clarifies that the duty to preserve evidence turns on whether the party in control had actual or constructive notice that litigation was reasonably foreseeable, and that the breadth or lack of detail in a preservation letter is not a separate test that defeats that duty once notice is established.",
+      "dockets": [
+        "A26A1558",
+        "A26A1559"
+      ]
+    },
     {
       "cluster_id": 10983217,
       "name": "Stewart v. Universal Property & Casualty Insurance Company",
