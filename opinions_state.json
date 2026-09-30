@@ -2952,25 +2952,26 @@
     10987878,
     10987879,
     10987880,
-    10987881
+    10987881,
+    10988009,
+    10988032,
+    10988037,
+    10988045,
+    10988049,
+    10988064,
+    10988065,
+    10988066,
+    10988155,
+    10988156,
+    10988819,
+    10988826,
+    10988849,
+    10988880,
+    10988956,
+    10988957,
+    10988958,
+    10989004
   ],
-  "updated": "2026-09-30T15:08:06Z",
-  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
-  "pending_batches": {
-    "funnel-triage": {
-      "id": "msgbatch_01C5RWZENQrknB8QTgrnZiTo",
-      "at": 1790780380.6439338,
-      "n": 5
-    },
-    "funnel-smell": {
-      "id": "msgbatch_01LMEHu5a1HQrrdoKhs81kQ3",
-      "at": 1790780547.1788063,
-      "n": 1
-    },
-    "funnel-summarize": {
-      "id": "msgbatch_015DLEYigdjbk1W9hfBN3Rzb",
-      "at": 1790780676.3336346,
-      "n": 1
-    }
-  }
+  "updated": "2026-09-30T20:52:13Z",
+  "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py."
 }
