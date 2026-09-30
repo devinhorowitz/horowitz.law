@@ -2925,15 +2925,52 @@
     10986134,
     10986188,
     10986189,
-    10986475
+    10986475,
+    10987664,
+    10987679,
+    10987680,
+    10987681,
+    10987682,
+    10987831,
+    10987835,
+    10987839,
+    10987841,
+    10987844,
+    10987846,
+    10987849,
+    10987851,
+    10987854,
+    10987859,
+    10987860,
+    10987863,
+    10987865,
+    10987869,
+    10987874,
+    10987875,
+    10987876,
+    10987877,
+    10987878,
+    10987879,
+    10987880,
+    10987881
   ],
-  "updated": "2026-09-29T23:48:47Z",
+  "updated": "2026-09-30T15:08:06Z",
   "note": "Tracks opinions already evaluated so they are not reprocessed. Managed by scripts/update.py.",
   "pending_batches": {
-    "funnel-guards": {
-      "id": "msgbatch_01UnvHzbvUV3ooLpKiT3Cmt9",
-      "at": 1790725584.3008661,
-      "n": 2
+    "funnel-triage": {
+      "id": "msgbatch_01C5RWZENQrknB8QTgrnZiTo",
+      "at": 1790780380.6439338,
+      "n": 5
+    },
+    "funnel-smell": {
+      "id": "msgbatch_01LMEHu5a1HQrrdoKhs81kQ3",
+      "at": 1790780547.1788063,
+      "n": 1
+    },
+    "funnel-summarize": {
+      "id": "msgbatch_015DLEYigdjbk1W9hfBN3Rzb",
+      "at": 1790780676.3336346,
+      "n": 1
     }
   }
 }
