@@ -299,8 +299,13 @@ nowhere. The run is now organized so that no watch can cost the others their wor
   - **Save carried batches** runs `if: always()` on every non-dry run that got through setup, so it
     runs even when the job timeout cancels the run and every `!cancelled()` step is skipped. It
     commits `watch_batches.json` alone onto the freshly fetched tip of the branch (`main` on a
-    scheduled run) with git plumbing, never any other file or local commit, and does nothing when
-    the remote file already matches.
+    scheduled run) with git plumbing, never any other file or local commit. It merges rather than
+    overwrites: it starts from the remote file and adds only the local carries whose batch id the
+    remote lacks (the batches submitted this run), and never removes a remote carry. The local
+    file has already dropped the ended carries this run consumed, and their outputs reach `main`
+    only with the bookkeeping or the review PR; if the run was cancelled or the bookkeeping failed,
+    removing them would lose paid results. When nothing is new (the normal case, after the
+    bookkeeping) it does nothing.
   - `scripts/test_watchbatch.py` checks the YAML against these numbers. It also evaluates the `if:`
     conditions against a failed watch.
 - **Batch waits fit the step's budget** (`scripts/watchbatch.py`, `Budget`). A watch waits on its
@@ -329,6 +334,13 @@ nowhere. The run is now organized so that no watch can cost the others their wor
   - A result whose item this run could not read (a bill discovery did not list, a page that did not
     fetch or failed its marker check) is neither applied nor discarded: it **stays carried** under
     its original batch id and timestamp, and the next run tries it again.
+  - Past the card or screen cap, statutes discovery goes on to the remaining jurisdictions only to
+    match carried results (a master list costs no model call). Past the step's time budget it
+    stops: the remaining jurisdictions are not fetched, and their carried results stay carried.
+  - A bill listed more than once in one run (it can appear in more than one watched session) is
+    handled once, at its newest listing (latest last-action and status date). A carried result
+    applies only if it was written at that listing's hash, so one run never yields both a fresh
+    card and a carried card for the same bill.
   - Any other result is **re-queued**, meaning the item goes through the normal pass again. This
     covers an expired, errored or unparseable result, a bill that moved after the batch was sent,
     and a page whose text changed.

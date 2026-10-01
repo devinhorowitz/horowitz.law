@@ -311,8 +311,14 @@ jobs:
       # (always()), on every non-dry run that got through setup. It commits watch_batches.json ALONE
       # onto the branch's current tip, fetched fresh, with git plumbing: it never commits any other
       # file and never pushes a local commit (an unpushed bookkeeping commit stays where it is).
-      # When the remote file already matches (the normal case, after the bookkeeping), it does
-      # nothing. On a scheduled run the branch is main, the same branch the bookkeeping pushes to.
+      # It MERGES, it does not overwrite: it starts from the remote file and adds only the local
+      # carries whose batch id the remote lacks (the batches submitted this run). It never removes a
+      # remote carry. The local file has already dropped the ended carries this run consumed, but
+      # their results reach main only with the bookkeeping or the review PR; if the run was
+      # cancelled or the bookkeeping failed, removing them here would lose paid results. Removing a
+      # consumed carry is left to the bookkeeping, which commits it with the outputs it produced.
+      # When nothing is new (the normal case, after the bookkeeping), it does nothing. On a
+      # scheduled run the branch is main, the same branch the bookkeeping pushes to.
       - name: Save carried batches
         id: carry
         if: ${{ always() && steps.setup.outputs.ok == '1' && inputs.dry_run != true }}
@@ -324,21 +330,58 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           branch="${GITHUB_REF_NAME}"
-          blob=$(git hash-object -w watch_batches.json)
+          remote="$RUNNER_TEMP/carry.remote.json"
+          merged="$RUNNER_TEMP/carry.merged.json"
           for attempt in 1 2 3; do
             git fetch --no-tags --depth=1 origin "$branch" || { sleep 5; continue; }
             base=$(git rev-parse FETCH_HEAD)
-            if [ "$(git rev-parse -q --verify "$base:watch_batches.json" || true)" = "$blob" ]; then
-              echo "watch_batches.json already current on $branch"
+            git show "$base:watch_batches.json" > "$remote" 2>/dev/null || echo '{}' > "$remote"
+            # Merge: the remote file plus each local carry whose batch id the remote lacks. Prints
+            # how many were added; writes the merged file only when that is not 0.
+            added=$(python - "$remote" watch_batches.json "$merged" <<'PY'
+          import json
+          import sys
+          def load(path):
+              try:
+                  with open(path, encoding="utf-8") as f:
+                      data = json.load(f)
+              except (OSError, ValueError):
+                  return {}
+              return data if isinstance(data, dict) else {}
+          remote, local = load(sys.argv[1]), load(sys.argv[2])
+          added = 0
+          for watch, recs in local.items():
+              if not isinstance(recs, list):
+                  continue
+              have = remote.get(watch)
+              if not isinstance(have, list):
+                  have = []
+              ids = {r.get("id") for r in have if isinstance(r, dict)}
+              for r in recs:
+                  if isinstance(r, dict) and r.get("id") and r["id"] not in ids:
+                      have.append(r)
+                      ids.add(r["id"])
+                      added += 1
+              if have:
+                  remote[watch] = have
+          if added:
+              with open(sys.argv[3], "w", encoding="utf-8") as f:
+                  f.write(json.dumps(remote, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+          print(added)
+          PY
+            )
+            if [ "$added" = "0" ]; then
+              echo "watch_batches.json already current on $branch (it holds every carry submitted this run)"
               exit 0
             fi
+            blob=$(git hash-object -w "$merged")
             tree=$(GIT_INDEX_FILE="$RUNNER_TEMP/carry.index" sh -c '
               git read-tree "$1" &&
               git update-index --add --cacheinfo "100644,$2,watch_batches.json" &&
               git write-tree' _ "$base" "$blob")
             commit=$(git commit-tree "$tree" -p "$base" -m "legislation watch: save carried batches [skip ci]")
             if git push origin "$commit:refs/heads/$branch"; then
-              echo "saved watch_batches.json to $branch"
+              echo "saved $added carried batch(es) to watch_batches.json on $branch"
               exit 0
             fi
             sleep 5

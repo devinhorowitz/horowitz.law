@@ -609,6 +609,120 @@ def test_carry(check, L, make_ai, fake_fetch):
             check("budget: with the step nearly out of time, nothing is screened or sent",
                   screened == [] and seen_deadline == [] and cards == [] and seen == {})
             check("budget: and the run says why", any("running low" in n for n in notes))
+            # ---- 8. a stop from the TIME budget ends discovery: the remaining jurisdictions are not
+            #      fetched just to match carried results, which are carried again instead. A card
+            #      or screen cap still goes on to match them (a master list costs no model call). ----
+            real_discover = L.discover
+            calls = []
+            low = {"on": False}
+
+            class LateBudget(W.Budget):
+                def low(self):
+                    return low["on"]
+
+            sb68 = dict(MASTERLIST["masterlist"]["0"])
+            hr100 = dict(US_MASTERLIST["masterlist"]["0"])
+
+            def two_states(key, state="GA", **_kw):
+                calls.append(state)
+                if state == "GA":
+                    low["on"] = True            # the GA master list used up the step's time
+                    return [(dict(sb68), {"session_id": 2065})]
+                return [(dict(hr100), {"session_id": 3000})]
+
+            us_cid = L._carry_cid("5001", "h-hr100-v1")
+
+            def us_carry():
+                return [{"id": "msgbatch_US", "label": "legislation-write", "at": W._iso(time.time()),
+                         "items": {us_cid: {"bid": "5001", "ch": "h-hr100-v1", "state": "US",
+                                            "areas": [], "prev": None,
+                                            "detail": {"bill_id": 5001, "number": "HR 100",
+                                                       "title": "FAAAA", "change_hash": "h-hr100-v1"}}}}]
+
+            B.status = lambda bid, label="batch": {"id": bid, "processing_status": "ended", "results_url": "u"}
+            B.collect = lambda obj, label="batch": {us_cid: keep("US CARRIED synopsis.")}
+            B.run = write_batch
+            L.discover = two_states
+            try:
+                fresh.clear()
+                screened.clear()
+                book = W.CarryBook("legislation", us_carry())
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    cards, notes, seen = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, states=["GA", "US"],
+                                               today=today, batch_enabled=True, carry=book,
+                                               budget=LateBudget())
+                out = buf.getvalue()
+                check("time budget: discovery stops; the next jurisdiction is not fetched",
+                      calls == ["GA"], str(calls))
+                check("time budget: nothing is screened or written, nothing applied or seen",
+                      screened == [] and fresh == [] and cards == [] and seen == {},
+                      "%r %r %r" % (screened, cards, seen))
+                check("time budget: the unmatched carried result is carried again, as it was",
+                      [(r["id"], list(r["items"])) for r in book.carries] == [("msgbatch_US", [us_cid])]
+                      and "msgbatch_US (0 results applied, 0 re-queued, 1 kept carried)" in out,
+                      "%r %s" % (book.carries, out))
+                check("time budget: the run says why", any("running low" in n for n in notes))
+
+                calls.clear()
+                low["on"] = False
+                book = W.CarryBook("legislation", us_carry())
+                with contextlib.redirect_stdout(io.StringIO()):
+                    cards, notes, seen = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, states=["GA", "US"],
+                                               today=today, batch_enabled=True, carry=book,
+                                               budget=W.Budget(), max_run=0)
+                check("card cap: discovery still goes on to match the carried result, and applies it",
+                      calls == ["GA", "US"] and {c["bill_id"]: c["synopsis"] for c in cards}
+                      == {5001: "US CARRIED synopsis."} and seen.get("5001") == "h-hr100-v1"
+                      and book.carries == [], "%r %r %r" % (calls, cards, book.carries))
+
+                # ---- 9. a bill listed twice at different hashes yields ONE outcome, for the newest
+                #      listing: never a fresh card beside a carried one ----
+                old_cid, new_cid = L._carry_cid("111", "h-OLD"), L._carry_cid("111", "h-NEW")
+                older = dict(sb68, change_hash="h-OLD", status_date="2025-03-01", last_action_date="2025-03-01")
+                newer = dict(sb68, change_hash="h-NEW", status_date="2025-04-21", last_action_date="2025-04-21")
+
+                def carry_at(ch, cid):
+                    return [{"id": "msgbatch_D", "label": "legislation-write", "at": W._iso(time.time()),
+                             "items": {cid: {"bid": "111", "ch": ch, "state": "GA", "areas": [], "prev": None,
+                                             "detail": {"bill_id": 111, "number": "SB 68", "title": "t",
+                                                        "change_hash": ch}}}}]
+
+                for order in ((newer, older), (older, newer)):
+                    L.discover = lambda key, state="GA", _o=order, **_kw: [(dict(b), {}) for b in _o]
+                    B.collect = lambda obj, label="batch": {old_cid: keep("CARRIED OLD synopsis.")}
+                    fresh.clear()
+                    screened.clear()
+                    book = W.CarryBook("legislation", carry_at("h-OLD", old_cid))
+                    buf = io.StringIO()
+                    with contextlib.redirect_stdout(buf):
+                        cards, notes, seen = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, states=["GA"],
+                                                   today=today, batch_enabled=True, carry=book)
+                    out = buf.getvalue()
+                    tag = "newest first" if order[0] is newer else "oldest first"
+                    syn = [c["synopsis"] for c in cards if c["bill_id"] == 111]
+                    check("listed twice (%s): one card, the fresh one for the newest hash" % tag,
+                          syn == ["Fresh synopsis."] and fresh == [new_cid]
+                          and sum("SB 68" in t for t in screened) == 1, "%r %r %r" % (syn, fresh, screened))
+                    check("listed twice (%s): the carried result for the older hash is discarded" % tag,
+                          "discarding carried result for bill 111 from batch msgbatch_D" in out
+                          and seen.get("111") == "h-NEW", out + str(seen))
+
+                L.discover = lambda key, state="GA", **_kw: [(dict(older), {}), (dict(newer), {})]
+                B.collect = lambda obj, label="batch": {new_cid: keep("CARRIED NEW synopsis.")}
+                fresh.clear()
+                screened.clear()
+                book = W.CarryBook("legislation", carry_at("h-NEW", new_cid))
+                with contextlib.redirect_stdout(io.StringIO()):
+                    cards, notes, seen = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, states=["GA"],
+                                               today=today, batch_enabled=True, carry=book)
+                syn = [c["synopsis"] for c in cards if c["bill_id"] == 111]
+                check("listed twice, carried at the newest hash: only the carried card, nothing re-done",
+                      syn == ["CARRIED NEW synopsis."] and fresh == []
+                      and not any("SB 68" in t for t in screened) and seen.get("111") == "h-NEW",
+                      "%r %r %r" % (syn, fresh, screened))
+            finally:
+                L.discover = real_discover
     finally:
         B.run, B.status, B.collect, L._load_seen = real
 

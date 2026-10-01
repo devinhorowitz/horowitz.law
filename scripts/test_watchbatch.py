@@ -370,9 +370,11 @@ def _simulate(steps, fail_ids=(), changed="0", dry_run=None, cancel_at=None):
 
 
 def _carry_save_behaves(script):
-    """Run the carry-save step's script for real against a local bare "origin": the remote file is
-    replaced by the runner's, nothing else in the runner's tree or its local commits is pushed, and
-    a second run with the file unchanged pushes nothing."""
+    """Run the carry-save step's script for real against a local bare "origin". It MERGES: a carry
+    on the remote that the runner's file dropped (an ended carry this run consumed, whose outputs
+    never reached main) survives, a carry submitted this run is added, nothing else in the runner's
+    tree or its local commits is pushed, and a run with nothing new pushes nothing -- including the
+    normal case, after the bookkeeping pushed the runner's file itself."""
     import shutil
     import subprocess
     if not shutil.which("git") or not shutil.which("bash"):     # pragma: no cover
@@ -385,39 +387,77 @@ def _carry_save_behaves(script):
         return subprocess.run(cmd, cwd=cwd, env=env, shell=True, check=True, capture_output=True,
                               text=True).stdout
 
+    def carry(cid):
+        return {"id": cid, "label": "legislation-write", "at": "2026-10-01T00:00:00Z", "n": 1,
+                "items": {"1-h": {"bid": "1", "ch": "h"}}}
+
+    def write(path, obj):
+        with open(path, "w") as f:
+            f.write(obj if isinstance(obj, str) else json.dumps(obj, indent=2, sort_keys=True) + "\n")
+
     with tempfile.TemporaryDirectory() as td:
+        # The step runs `python`; point it at this interpreter so the check needs no `python` on PATH.
+        bindir = os.path.join(td, "bin")
+        os.mkdir(bindir)
+        os.symlink(sys.executable, os.path.join(bindir, "python"))
         origin, work = os.path.join(td, "origin.git"), os.path.join(td, "work")
         sh("git init -q --bare -b main %s" % origin, td)
         sh("git clone -q %s %s" % (origin, work), td)
-        with open(os.path.join(work, "watch_batches.json"), "w") as f:
-            f.write("{}\n")
-        with open(os.path.join(work, "legislation_state.json"), "w") as f:
-            f.write("{\"seen\": {}}\n")
+        # main holds an ended carry R (from an earlier run) and a regulations carry G.
+        write(os.path.join(work, "watch_batches.json"),
+              {"legislation": [carry("msgbatch_R")], "regulations": [carry("msgbatch_G")]})
+        write(os.path.join(work, "legislation_state.json"), "{\"seen\": {}}\n")
         sh("git add -A && git commit -qm seed && git push -q origin main", work)
-        # The runner: a carry written, a state file changed, and an unpushed local commit.
-        with open(os.path.join(work, "notes.txt"), "w") as f:
-            f.write("local only\n")
+        # The runner: R consumed (dropped from its file, outputs never committed), a new carry N
+        # submitted, a state file changed, and an unpushed local commit.
+        write(os.path.join(work, "notes.txt"), "local only\n")
         sh("git add notes.txt && git commit -qm 'local only'", work)
-        with open(os.path.join(work, "watch_batches.json"), "w") as f:
-            f.write('{"legislation": [{"id": "msgbatch_X", "items": {}}]}\n')
-        with open(os.path.join(work, "legislation_state.json"), "w") as f:
-            f.write("{\"seen\": {\"1\": \"h\"}}\n")
-        renv = dict(env, GITHUB_REF_NAME="main", RUNNER_TEMP=td)
-        r = subprocess.run(["bash", "-e", "-c", script], cwd=work, env=renv, capture_output=True, text=True)
+        local = {"legislation": [carry("msgbatch_N")], "regulations": [carry("msgbatch_G")]}
+        write(os.path.join(work, "watch_batches.json"), local)
+        write(os.path.join(work, "legislation_state.json"), "{\"seen\": {\"1\": \"h\"}}\n")
+        renv = dict(env, GITHUB_REF_NAME="main", RUNNER_TEMP=td,
+                    PATH=bindir + os.pathsep + env.get("PATH", ""))
+
+        def step():
+            return subprocess.run(["bash", "-e", "-c", script], cwd=work, env=renv,
+                                  capture_output=True, text=True)
+
+        def remote_ids():
+            data = json.loads(sh("git show main:watch_batches.json", origin))
+            return {w: [r["id"] for r in recs] for w, recs in data.items()}
+
+        r = step()
         check("carry-save (executed): the step succeeds", r.returncode == 0, r.stdout + r.stderr)
+        ids = remote_ids()
+        check("carry-save (executed): a carry submitted this run is added to main",
+              "msgbatch_N" in ids.get("legislation", []), str(ids))
+        check("carry-save (executed): a remote carry the runner's file dropped survives (its "
+              "consumed results never reached main)", "msgbatch_R" in ids.get("legislation", []), str(ids))
+        check("carry-save (executed): another watch's carry is untouched, not duplicated",
+              ids.get("regulations") == ["msgbatch_G"], str(ids))
         files = sh("git ls-tree -r --name-only main", origin).split()
-        remote_carry = sh("git show main:watch_batches.json", origin)
-        check("carry-save (executed): main now holds the runner's watch_batches.json",
-              "msgbatch_X" in remote_carry, remote_carry)
         check("carry-save (executed): nothing else reached main (no local commit, no state file)",
               sorted(files) == ["legislation_state.json", "watch_batches.json"]
               and sh("git show main:legislation_state.json", origin) == "{\"seen\": {}}\n"
               and sh("git log --format=%s main", origin).split("\n")[1] == "seed", str(files))
         head = sh("git rev-parse main", origin)
-        r2 = subprocess.run(["bash", "-e", "-c", script], cwd=work, env=renv, capture_output=True, text=True)
+        r2 = step()
         check("carry-save (executed): a second run with nothing new pushes nothing",
               r2.returncode == 0 and sh("git rev-parse main", origin) == head
               and "already current" in r2.stdout, r2.stdout + r2.stderr)
+        # The normal case: the bookkeeping pushed the runner's own file (R removed with the outputs
+        # it produced). The step must then change nothing -- in particular not put R back.
+        other = os.path.join(td, "other")
+        sh("git clone -q %s %s" % (origin, other), td)
+        write(os.path.join(other, "watch_batches.json"), local)
+        sh("git commit -qam bookkeeping && git push -q origin main", other)
+        head = sh("git rev-parse main", origin)
+        r3 = step()
+        ids = remote_ids()
+        check("carry-save (executed): after a successful bookkeeping push it is a no-op",
+              r3.returncode == 0 and sh("git rev-parse main", origin) == head
+              and "already current" in r3.stdout and "msgbatch_R" not in ids.get("legislation", []),
+              r3.stdout + r3.stderr + str(ids))
 
 
 def test_workflow():
@@ -539,8 +579,9 @@ def test_workflow():
     check("the carry-save step never pushes local HEAD (only the commit it built)",
           re.search(r'git push origin "\$commit:refs/heads/\$branch"', crun) is not None
           and not re.search(r"git push\s*($|\|\||;|&&)", crun, re.M), crun)
-    check("the carry-save step is a no-op when the remote file already matches",
-          '= "$blob" ]' in crun and "exit 0" in crun)
+    check("the carry-save step merges into the remote file and is a no-op when nothing is new",
+          'show "$base:watch_batches.json"' in crun and '"$added" = "0"' in crun
+          and "exit 0" in crun)
     _carry_save_behaves(crun)
 
     # ---- a failed bookkeeping push must not leak its local commit into the review PR ----

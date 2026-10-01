@@ -903,6 +903,37 @@ def _match_carried(entries, bid, ch, tally):
     return hit
 
 
+def _newest_listings(cands, listed):
+    """One listing per bill. discover() can list the same bill more than once (it can appear in
+    more than one watched session), possibly at different change_hashes; processing each listing
+    would screen and write the bill twice, or apply a carried result for one version beside a fresh
+    card for another. Keeps the newest listing of each bill: the latest (last_action_date,
+    status_date), and on a tie the first listed (discover() lists the newest sessions first). The
+    order of first appearance is kept. A bill already in `listed` (a set of bill ids, from an
+    earlier jurisdiction this run; updated in place) is dropped too: it has been handled once."""
+    best, order = {}, []
+    for b, sess in cands:
+        bid = str(b.get("bill_id"))
+        if bid in listed:
+            continue
+        if bid not in best:
+            best[bid] = (b, sess)
+            order.append(bid)
+            continue
+        cur = best[bid][0]
+        newer = ((b.get("last_action_date") or "", b.get("status_date") or "")
+                 > (cur.get("last_action_date") or "", cur.get("status_date") or ""))
+        if (b.get("change_hash") or "") != (cur.get("change_hash") or ""):
+            keep_b, drop_b = (b, cur) if newer else (cur, b)
+            print("  . LEGISLATION: bill %s listed twice; using change_hash %s, ignoring the older "
+                  "listing at %s" % (bid, keep_b.get("change_hash") or "?",
+                                     drop_b.get("change_hash") or "?"), flush=True)
+        if newer:
+            best[bid] = (b, sess)
+    listed.update(order)
+    return [best[bid] for bid in order]
+
+
 def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, screen_max=None,
         pollstate=None, now=None, batch_enabled=False, carry=None, budget=None):
     """Full funnel over every configured jurisdiction: discover moved enacted/vetoed bills, screen
@@ -956,6 +987,13 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
     held = 0
     screened = 0
     stop = False
+    # Why discovery stopped matters. Past the card or screen cap, discovery goes on to the remaining
+    # jurisdictions only to match carried results (a master list costs no model call, and a paid
+    # result is not stranded by a cap). Past the TIME budget it does not: another jurisdiction's
+    # LegiScan calls would spend the time that is running out, so the carried results not yet
+    # matched are simply carried again (below) and matched next run.
+    out_of_time = False
+    listed = set()           # bill ids handled this run (one listing per bill; see _newest_listings)
     # Screened-relevant bills awaiting a card write, in discovery order. The write pass runs after
     # this loop -- as one batch (batch_enabled) or a synchronous loop -- so both share the exact
     # downstream seen/card logic. `areas` carries the screen's areas as the writer's fallback.
@@ -964,25 +1002,32 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
     # recall pass is one pass over the run's drops rather than a call interleaved per bill.
     drops = []
     drop_bills = {}          # bill_id -> the master-list bill, for an escalation that cannot re-fetch
+
+    def time_low():
+        nonlocal stop, out_of_time
+        if not out_of_time and budget.low():
+            note("LEGISLATION: step time is running low; remaining bills retry next run.")
+            stop = out_of_time = True
+        return out_of_time
+
     for state in states:
-        if stop and not carried:
-            break                       # past a cap, discovery goes on only to match carried results
+        if not stop:
+            time_low()
+        if out_of_time or (stop and not carried):
+            break                       # past a card/screen cap, discovery goes on only to match carried results
         cands = discover(key, state=state, fetch=fetch, today=today, seen=seen,
                          pollstate=pollstate, now=now)
         note("LEGISLATION[%s]: %d enacted/vetoed bill(s) moved since last run." % (state, len(cands)))
-        for b, _sess in cands:
+        # One listing per bill, the newest: a bill listed twice at different hashes must yield one
+        # outcome, and a carried result is applied only if it matches that newest hash.
+        for b, _sess in _newest_listings(cands, listed):
             # Carried bills are settled before the caps: they cost no screen and no new write.
             bid, ch = str(b.get("bill_id")), (b.get("change_hash") or "")
             # Carried results are matched FIRST, against the hash discovery just read. A result
             # written at any other hash is discarded here (the bill moved after its batch was
             # submitted, so that card describes an old version), before the in-flight check below
             # can skip the bill and leave a stale result standing to be applied after the loop.
-            entries = carried.pop(bid, None)
-            if bid in confirmed:
-                # The same bill listed again (it can appear in more than one watched session):
-                # matched already. Under a different hash, the match is no longer known current.
-                entries = [confirmed.pop(bid)] + (entries or [])
-            hit = _match_carried(entries, bid, ch, tally)
+            hit = _match_carried(carried.pop(bid, None), bid, ch, tally)
             if hit is not None:
                 confirmed[bid] = hit        # applied below, from the carried result
                 continue
@@ -999,9 +1044,7 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
                 note("LEGISLATION: hit LEGISLATION_SCREEN_MAX=%d; remaining bills retry next run." % screen_max)
                 stop = True
                 continue
-            if budget.low():
-                note("LEGISLATION: step time is running low; remaining bills retry next run.")
-                stop = True
+            if time_low():
                 continue
             screened += 1
             keep, areas, reason = screen_bill(b, ai, state=state)
