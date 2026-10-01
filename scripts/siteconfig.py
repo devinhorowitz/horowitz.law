@@ -270,3 +270,32 @@ AREA_GLOSSES = {
                 "fault under O.C.G.A. 51-12-33, wrongful-death full value, attorney fees, remittitur"),
 }
 
+# ---- Legislative & Regulatory Watch: run budget and batch carry ------------
+# legislation.yml runs four watches (statutes, regulations, court rules, ethics opinions), and each
+# can wait on an Anthropic Message Batch, whose latency ranges from minutes to over an hour. On
+# 2026-09-27 (run 36318024609) the statutes batch waited its full 30 minutes, the court-rules batch
+# waited 25 more, and the 60-minute job timeout killed the run: render, the review PR and the
+# bookkeeping never ran, nothing was saved, and the paid batch ids were never recorded.
+#
+# So each watch runs in its OWN workflow step, with `timeout-minutes` from WATCH_STEP_MIN, and the
+# steps plus the setup allowance plus WATCH_RESERVE_MIN fit inside WATCH_JOB_TIMEOUT_MIN. A watch
+# that overruns fails only its own step; the steps that save state still have time to run.
+# test_watchbatch.py holds legislation.yml's numbers to these.
+#
+# Inside a step the script ends every batch wait, and every synchronous model loop,
+# WATCH_STEP_MARGIN_SEC before the step limit (watchbatch.Budget), so in practice a slow batch is
+# CARRIED -- its id and the items it covers go to watch_batches.json and the next run collects the
+# results -- rather than ever reaching the step limit.
+WATCH_JOB_TIMEOUT_MIN = 90
+WATCH_STEP_MIN = {"legislation": 40, "regulations": 10, "courtrules": 15, "ethics": 12}
+WATCH_SETUP_MIN = 3          # harden-runner, checkout, setup-python, pip install
+WATCH_RESERVE_MIN = 10       # results, bookkeeping, render, review PR, carry save, failure report
+WATCH_STEP_MARGIN_SEC = 150  # left inside a step after the last wait, for saving cards and state
+# A synchronous model loop (a screen, a recall audit) starts no new call once less than this much of
+# the step is left: one call can take minutes on a retrying API, and the batch submit and the state
+# save still have to run after it.
+WATCH_SYNC_FLOOR_SEC = 300
+# Anthropic keeps a batch's results for 29 days after creation. An older carry cannot be collected,
+# so it is dropped (with a log line) and its items are processed again as usual.
+WATCH_CARRY_MAX_AGE_DAYS = 25
+

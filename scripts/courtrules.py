@@ -43,7 +43,6 @@ import os
 import sys
 import re
 import json
-import time
 import html as _html
 import hashlib
 import datetime
@@ -52,6 +51,7 @@ import urllib.error
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
+import watchbatch  # run budget + carried batches  # noqa: E402
 
 JSON_PATH  = os.path.join(REPO, "courtrules.json")
 STATE_PATH = os.path.join(REPO, "courtrules_state.json")
@@ -93,7 +93,8 @@ DEBUG = os.environ.get("COURTRULES_DEBUG", "") == "1"
 # watches (COURTRULES_BATCH, default on). Volume is tiny -- most runs make zero calls (the page is
 # content-hashed) and the amendment cycle is a handful of pages a year -- but the 50% discount is
 # unconditional and latency does not matter here, so there is no reason to pay full price. Set
-# COURTRULES_BATCH=0 for the synchronous path. BATCH_SEC bounds the in-run wait before deferring.
+# COURTRULES_BATCH=0 for the synchronous path. BATCH_SEC bounds the in-run wait (the workflow step's
+# budget caps it further); a batch still running then is carried to the next run (watchbatch.py).
 COURTRULES_BATCH = os.environ.get("COURTRULES_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
 BATCH_SEC = int(os.environ.get("COURTRULES_BATCH_SEC", "1800"))
 
@@ -231,36 +232,75 @@ def extract(text, ai, model=None, label="courtrules"):
     return _extract_parse(v)
 
 
-def _draft_extractions(pending, deadline=None):
-    """Extract the amendments for the CHANGED pages in `pending` (each {url, text, ...}) as ONE
+# ---- page extraction batches, shared with ethics.py ----
+# A page's batch custom_id is derived from the page's URL AND the hash of the text that was sent, so
+# a carried result can only ever be applied to that page at that exact content. It used to be the
+# page's INDEX in this run's pending list ("cr-0"), which says nothing about which page -- a carried
+# "cr-0" would have landed on whatever page happened to be first next week.
+def page_cid(prefix, url, h):
+    return "%s-%s" % (prefix, hashlib.sha1(("%s|%s" % (url, h)).encode("utf-8")).hexdigest()[:24])
+
+
+def _page_result(res, parse):
+    """One batch result line -> the extract() space: a list, or None (errored/expired/unparseable)."""
+    if not res or not res.get("ok"):
+        return None
+    import update
+    try:
+        return parse(update.parse_json(res["text"]))
+    except Exception:
+        return None
+
+
+def draft_page_batch(pending, deadline, book, label, prefix, body, parse):
+    """Extract the CHANGED pages in `pending` (each {label, url, text, h}) as ONE 50%-priced batch.
+    Returns {url: list | None}. A batch still running at the deadline returns every page None (left
+    un-hashed) and is CARRIED in `book` with each custom_id's url and hash, for the next run."""
+    import batch
+    reqs, items = [], {}
+    for p in pending:
+        cid = page_cid(prefix, p["url"], p["h"])
+        items[cid] = {"url": p["url"], "h": p["h"], "label": p["label"]}
+        reqs.append(batch.from_body(cid, body(p["text"])))
+    results = book.run(reqs, items, deadline, label)
+    if results is None:
+        print("  ! %s batch deferred; %d page(s) roll to next run" % (label, len(pending)), flush=True)
+        return {p["url"]: None for p in pending}
+    return {p["url"]: _page_result(results.get(page_cid(prefix, p["url"], p["h"])), parse)
+            for p in pending}
+
+
+def carried_pages(book, label, prefix, parse):
+    """Collect the extraction batches earlier runs carried. Returns (carried, inflight, tally, ready):
+    `carried` maps url -> [{"h", "items", "rec", "cid"}, ...] for each usable result (a page can have
+    more than one, from runs that each saw different text), `inflight` maps url -> h for pages in a
+    batch still running, and `tally` is {batch id: [applied, re-queued, kept]}. The caller applies a
+    carried result only when the page's text this run hashes to the carried `h`."""
+    ready, inflight_items = book.collect(label)
+    inflight = {it.get("url"): it.get("h") for it in inflight_items.values()}
+    carried, tally = {}, {}
+    for rec in ready:
+        tally[rec["id"]] = [0, 0, 0]
+        for cid, it in rec["items"].items():
+            url, h = it.get("url"), it.get("h")
+            got = _page_result(rec["results"].get(cid), parse)
+            if got is None or not url or cid != page_cid(prefix, url, h):
+                tally[rec["id"]][1] += 1
+                continue
+            carried.setdefault(url, []).append({"h": h, "items": got, "rec": rec["id"], "cid": cid})
+    return carried, inflight, tally, ready
+
+
+def _draft_extractions(pending, deadline=None, book=None):
+    """Extract the amendments for the CHANGED pages in `pending` (each {label, url, text, h}) as ONE
     50%-priced Message Batches job (COURTRULES_BATCH). Returns {url: [amendments] | None}, the SAME
     per-page space extract() produces, so run()'s downstream (hash + card) logic does not branch.
-    A whole-batch timeout/transport failure -> every page None (retry next run, un-hashed); a
-    per-line error or unparseable body -> that one page None."""
-    import batch
-    import update
-    reqs, meta = [], {}    # custom_id -> url
-    for i, p in enumerate(pending):
-        cid = "cr-%d" % i   # url is not a valid custom_id (^[A-Za-z0-9_-]{1,64}$); index and map back
-        reqs.append(batch.from_body(cid, _extract_body(p["text"])))
-        meta[cid] = p["url"]
-    try:
-        results = batch.run(reqs, deadline=deadline, label="courtrules-extract")
-    except (batch.BatchTimeout, batch.BatchError) as e:
-        print("  ! courtrules extract batch deferred (%s); %d page(s) retry next run"
-              % (e, len(pending)), flush=True)
-        return {p["url"]: None for p in pending}
-    out = {}
-    for cid, url in meta.items():
-        res = results.get(cid)
-        if not res or not res.get("ok"):
-            out[url] = None
-            continue
-        try:
-            out[url] = _extract_parse(update.parse_json(res["text"]))
-        except Exception:
-            out[url] = None
-    return out
+    A batch still running at the deadline -> every page None (un-hashed) and the batch carried; a
+    transport failure before submit -> every page None (retry); a per-line error or unparseable body
+    -> that one page None."""
+    book = book if book is not None else watchbatch.CarryBook("courtrules")
+    return draft_page_batch(pending, deadline, book, "courtrules-extract", "cr",
+                            _extract_body, _extract_parse)
 
 
 # The extractor writes the same amendment's designation differently from run to run -- "Rule 707",
@@ -338,13 +378,69 @@ def _default_ai(body, label="call"):
     return update.anthropic_json(body, label)
 
 
-def run(fetch=None, ai=None, today=None, sources=None, batch_enabled=False):
+def settle_carried(url, h, carried, tally, tag, why="the page now hashes to %s"):
+    """Take the carried results for `url` out of `carried`, given the page's CURRENT hash `h`.
+    Returns the one written for exactly that text (or None); every other one describes text the page
+    no longer has and is discarded with a log line (counted re-queued). Called first for every page
+    that was read, before any in-flight check, so a stale result is never left standing."""
+    hit = None
+    for c in carried.pop(url, None) or ():
+        if hit is None and c["h"] == h:
+            hit = c
+            continue
+        tally[c["rec"]][1] += 1
+        print("  . %s: discarding carried extraction of %s from batch %s: it was made from text "
+              "hashing %s, %s" % (tag, url, c["rec"], c["h"], why % h), flush=True)
+    return hit
+
+
+def resolve_carried(url, h, label, carried, inflight, tally, notes, tag):
+    """Decide what a CHANGED, content-valid page does with the carries. Returns a list (the carried
+    extraction of exactly this text: use it, no new call), "held" (its extraction is still running
+    in a carried batch: leave it un-hashed this run), or None (extract it now). The carried results
+    are matched first: one for different text is discarded -- the page moved after the batch was
+    sent -- whether or not another batch for the page is still running."""
+    c = settle_carried(url, h, carried, tally, tag)
+    if c is not None:
+        tally[c["rec"]][0] += 1
+        return c["items"]
+    if url in inflight and inflight[url] == h:
+        notes.append("%s: %s extraction still in a carried batch; collected next run." % (tag, label))
+        return "held"
+    return None
+
+
+def finish_carried(book, carried, tally, ready, unread=()):
+    """Settle every carried result no page claimed this run, and print one line per collected batch.
+    A result for a page in `unread` -- a source this run could not read (unreachable, or fetched
+    without its content markers) -- stays carried: its page's current text is unknown, so it can be
+    neither applied nor called stale, and the next run tries it against the page again. The carry's
+    age limit bounds it. Any other (a page no longer among the sources) is re-queued."""
+    recs = {rec["id"]: rec for rec in ready}
+    for url, entries in carried.items():
+        for c in entries:
+            if url in unread:
+                tally[c["rec"]][2] += book.recarry(recs[c["rec"]], [c["cid"]])
+            else:
+                tally[c["rec"]][1] += 1
+    carried.clear()
+    for rec in ready:
+        book.report(rec, *tally[rec["id"]])
+
+
+def run(fetch=None, ai=None, today=None, sources=None, batch_enabled=False, carry=None, budget=None):
     """Read each source page; on a CHANGED page, extract amendments and card the new ones. Returns
     (cards, notes, seen_updates) where seen_updates = {"pages": {url: hash}, "cards": {id: date}}.
     A page is hashed as seen only after a SUCCESSFUL extraction, so a transient fetch/model error
     retries next run. `batch_enabled` runs the Opus extraction over all changed pages as ONE batch
     job (COURTRULES_BATCH); it defaults False so a direct/test caller with an injected `ai` gets the
-    synchronous path unchanged, and main() passes the flag. Writes nothing itself. Fail-open."""
+    synchronous path unchanged, and main() passes the flag. Writes nothing itself. Fail-open.
+
+    `carry` (watchbatch.CarryBook) holds extraction batches earlier runs left running: a carried
+    result is used only for the page whose text still hashes the same, and a page still in a running
+    batch is left un-hashed. `budget` (watchbatch.Budget) bounds the batch wait to the step."""
+    book = carry if carry is not None else watchbatch.CarryBook("courtrules")
+    budget = budget if budget is not None else watchbatch.Budget()
     ai = ai or _default_ai
     sources = sources or SOURCES
     notes = []
@@ -354,17 +450,26 @@ def run(fetch=None, ai=None, today=None, sources=None, batch_enabled=False):
     new_pages, new_cards, cards = {}, {}, []
     today_iso = (today or datetime.date.today()).isoformat()
 
+    # Carried extraction batches first, so a page already extracted is not paid for again.
+    carried, inflight, tally, ready = carried_pages(book, "courtrules-extract", "cr", _extract_parse)
+
     # Phase 1: fetch + hash + marker-check each source; collect the CHANGED, content-valid pages.
-    pending = []   # {label, url, text, h}
+    pending = []   # {label, url, text, h, carried}
+    unread = set()  # sources not read this run: their carried extractions stay carried
     for label, url in sources:
         text = fetch_text(url, fetch)
         if not text:
             notes.append("COURTRULES: %s unreachable; will retry." % label)
+            unread.add(url)
             continue
         h = page_hash(text)
         if seen_pages.get(url) == h:
             notes.append("COURTRULES: %s unchanged." % label)
             new_pages[url] = h
+            # Already settled at this text: a carried extraction of it is not needed, and one of
+            # other text is stale.
+            settle_carried(url, h, carried, tally, "courtrules-extract",
+                           "the page is unchanged since it was settled at %s")
             continue
         if not has_rules_markers(text):
             # Fetched, but it does not look like the amendments content (a JS-only shell, a redesign,
@@ -373,16 +478,25 @@ def run(fetch=None, ai=None, today=None, sources=None, batch_enabled=False):
             # it, and surface it so a silent stall becomes a visible, recurring note.
             notes.append("COURTRULES: %s fetched but shows no Federal Rules markers "
                          "(shell/redesign/moved?); not recording, will retry." % label)
+            unread.add(url)
             continue
-        pending.append({"label": label, "url": url, "text": text, "h": h})
+        got = resolve_carried(url, h, label, carried, inflight, tally, notes, "COURTRULES")
+        if isinstance(got, str):
+            continue                       # "held": still in a carried batch, stays un-hashed
+        pending.append({"label": label, "url": url, "text": text, "h": h, "carried": got})
+    finish_carried(book, carried, tally, ready, unread)
 
     # Phase 2: extract the changed pages -- one batch job, or synchronously per page. Same {url: ams}
-    # space either way (ams is a list, or None on a transient error that must retry un-hashed).
-    if batch_enabled and pending:
-        notes.append("COURTRULES: batching %d page extraction(s) (COURTRULES_BATCH)." % len(pending))
-        extractions = _draft_extractions(pending, deadline=time.time() + BATCH_SEC)
+    # space either way (ams is a list, or None on a transient error that must retry un-hashed). A
+    # page with a carried extraction of this exact text uses it and makes no call.
+    extractions = {p["url"]: p["carried"] for p in pending if p["carried"] is not None}
+    to_extract = [p for p in pending if p["carried"] is None]
+    if batch_enabled and to_extract:
+        notes.append("COURTRULES: batching %d page extraction(s) (COURTRULES_BATCH)." % len(to_extract))
+        extractions.update(_draft_extractions(to_extract, deadline=budget.deadline(BATCH_SEC), book=book))
     else:
-        extractions = {p["url"]: extract(p["text"], ai) for p in pending}
+        for p in to_extract:
+            extractions[p["url"]] = None if budget.low() else extract(p["text"], ai)
 
     # Phase 3: card the amendments from each successfully-extracted page.
     for p in pending:
@@ -405,6 +519,7 @@ def run(fetch=None, ai=None, today=None, sources=None, batch_enabled=False):
             added_here += 1
         notes.append("COURTRULES: %s changed; %d amendment(s), %d new." % (label, len(ams), added_here))
     notes.append("COURTRULES: drafted %d card(s)." % len(cards))
+    book.announce()
     return cards, notes, {"pages": new_pages, "cards": new_cards}
 
 
@@ -513,7 +628,9 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     as_json = "--json" in argv
     apply = "--apply" in argv
-    cards, notes, seen_updates = run(batch_enabled=COURTRULES_BATCH)   # COURTRULES_BATCH default on
+    book = watchbatch.CarryBook.load("courtrules", persist=apply)
+    cards, notes, seen_updates = run(batch_enabled=COURTRULES_BATCH,   # COURTRULES_BATCH default on
+                                     carry=book, budget=watchbatch.Budget.for_step("courtrules"))
     for n in notes:
         print(n)
 
@@ -525,6 +642,7 @@ def main(argv=None):
         if content_changed:
             save_cards(merged)
         save_seen(seen)
+        book.save()
         append_log({"cards": len(cards), "added": added, "updated": updated,
                     "pages": len(seen.get("pages") or {}), "notes": notes})
         if content_changed:

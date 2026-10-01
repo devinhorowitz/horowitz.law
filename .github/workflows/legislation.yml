@@ -37,7 +37,16 @@ concurrency:
 jobs:
   legislation:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The hard backstop. It must cover every watch step's own timeout-minutes, plus the setup steps
+    # and the steps that save the run (results, bookkeeping, render, review PR, failure report).
+    # The numbers live in scripts/siteconfig.py (WATCH_JOB_TIMEOUT_MIN / WATCH_STEP_MIN /
+    # WATCH_SETUP_MIN / WATCH_RESERVE_MIN), and scripts/test_watchbatch.py holds this file to them.
+    # At 60 minutes, with all four watches in one step, two slow batches killed the 2026-09-27 run
+    # before anything was saved.
+    timeout-minutes: 90
+    env:
+      # --json previews (a manual dispatch defaults to dry_run); --apply writes cards and state.
+      WATCH_MODE: ${{ inputs.dry_run == true && '--json' || '--apply' }}
     steps:
       # Supply-chain hardening (block mode). Egress this job needs:
       #   api.legiscan.com          the enacted-bill data (getSessionList / getMasterList / getBill).
@@ -48,6 +57,7 @@ jobs:
       #   github.com / api.github.com  checkout + PR push, the PR-open and failure-alert gh steps.
       # Cache/infra endpoints are auto-allowed.
       - name: Harden the runner
+        id: harden
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
@@ -64,16 +74,43 @@ jobs:
             release-assets.githubusercontent.com:443
             raw.githubusercontent.com:443
             api.github.com:443
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - id: python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: .python-version
       - name: Install dependencies
+        id: deps
         run: pip install -r requirements.txt
 
-      - name: Run the legislative and regulatory watches
-        id: run
+      # The setup gate. This step runs only if every setup step above succeeded, so ok=1 means the
+      # repo is checked out and Python and the requirements are installed. Every step after it that
+      # needs the repo or Python checks steps.setup.outputs.ok. The watch steps keep `!cancelled()`
+      # so a failed WATCH does not stop the later ones, but a failed SETUP stops them all: without a
+      # checkout or the requirements they could only fail again, or commit an incomplete tree.
+      - name: Setup complete
+        id: setup
+        run: echo "ok=1" >> "$GITHUB_OUTPUT"
+
+      # Each watch runs in its OWN step, with its own time limit. They used to share one bash step,
+      # so if any watch failed or was killed, the job lost every file the earlier watches had already
+      # written. On 2026-09-27 the statutes and regulations watches had both finished cleanly, and
+      # their state was still discarded when the court-rules batch ran the job out of time.
+      #
+      # Now each step's timeout-minutes is siteconfig.WATCH_STEP_MIN[watch]. Each script ends its
+      # batch wait, and its synchronous model loops, a margin before that limit. A batch still running
+      # at that point is carried in watch_batches.json, and the next run collects it.
+      #
+      # Every step after the first runs `if: !cancelled()`. A watch that fails or times out therefore
+      # fails only its own step: the later watches still run, and the results, bookkeeping, render
+      # and review-PR steps still save whatever the run produced. The job still ends red, so the
+      # failure report fires. Each also requires the setup gate (steps.setup.outputs.ok).
+      - name: Statutes watch (legislation.py)
+        id: leg
+        if: ${{ steps.setup.outputs.ok == '1' }}
+        timeout-minutes: 40
         env:
           LEGISCAN_API_KEY: ${{ secrets.LEGISCAN_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -82,44 +119,75 @@ jobs:
           # LEGISLATION_STATES repo Variable to narrow (e.g. 'GA') or widen without editing this file.
           LEGISLATION_STATES: ${{ vars.LEGISLATION_STATES || 'GA,US' }}
           LEGISLATION_MAX: ${{ vars.LEGISLATION_MAX || '40' }}
-          # FMCSA rulemaking; add agencies (comma list of Federal Register slugs) via the repo Variable.
-          REGULATION_AGENCIES: ${{ vars.REGULATION_AGENCIES || 'federal-motor-carrier-safety-administration' }}
-          # Federal Rules amendments; override the source page list via the repo Variable if it moves.
-          COURTRULES_URLS: ${{ vars.COURTRULES_URLS }}
           # Flip these repo Variables to '1' to trace a run (per-session bill/status/resolution counts).
           LEGISLATION_DEBUG: ${{ vars.LEGISLATION_DEBUG }}
-          REGULATION_DEBUG: ${{ vars.REGULATION_DEBUG }}
-          COURTRULES_DEBUG: ${{ vars.COURTRULES_DEBUG }}
-          ETHICS_DEBUG: ${{ vars.ETHICS_DEBUG }}
-          ETHICS_URLS: ${{ vars.ETHICS_URLS }}
         run: |
           set -o pipefail
+          echo "== statutes ==" | tee "$RUNNER_TEMP/run.log"
+          python scripts/legislation.py "$WATCH_MODE" 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+
+      - name: Regulations watch (regulations.py)
+        id: reg
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' }}
+        timeout-minutes: 10
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # FMCSA rulemaking; add agencies (comma list of Federal Register slugs) via the repo Variable.
+          REGULATION_AGENCIES: ${{ vars.REGULATION_AGENCIES || 'federal-motor-carrier-safety-administration' }}
+          REGULATION_DEBUG: ${{ vars.REGULATION_DEBUG }}
+        run: |
+          set -o pipefail
+          echo "== regulations ==" | tee -a "$RUNNER_TEMP/run.log"
+          python scripts/regulations.py "$WATCH_MODE" 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+
+      - name: Court rules watch (courtrules.py)
+        id: crc
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' }}
+        timeout-minutes: 15
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Federal Rules amendments; override the source page list via the repo Variable if it moves.
+          COURTRULES_URLS: ${{ vars.COURTRULES_URLS }}
+          COURTRULES_DEBUG: ${{ vars.COURTRULES_DEBUG }}
+        run: |
+          set -o pipefail
+          echo "== court rules ==" | tee -a "$RUNNER_TEMP/run.log"
+          python scripts/courtrules.py "$WATCH_MODE" 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+
+      - name: Ethics opinions watch (ethics.py)
+        id: eth
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' }}
+        timeout-minutes: 12
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ETHICS_URLS: ${{ vars.ETHICS_URLS }}
+          ETHICS_DEBUG: ${{ vars.ETHICS_DEBUG }}
+        run: |
+          set -o pipefail
+          echo "== ethics opinions ==" | tee -a "$RUNNER_TEMP/run.log"
+          python scripts/ethics.py "$WATCH_MODE" 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+
+      # Decide whether the run produced cards, from whichever watches got far enough to say so, and
+      # build the combined review-PR body. Runs even when a watch step failed.
+      - name: Collect the watches' results
+        id: run
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' }}
+        run: |
+          touch "$RUNNER_TEMP/run.log"
           if [ "${{ inputs.dry_run }}" = "true" ]; then
-            echo "== statutes ==" | tee    "$RUNNER_TEMP/run.log"
-            python scripts/legislation.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            echo "== regulations ==" | tee -a "$RUNNER_TEMP/run.log"
-            python scripts/regulations.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            echo "== court rules ==" | tee -a "$RUNNER_TEMP/run.log"
-            python scripts/courtrules.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            echo "== ethics opinions ==" | tee -a "$RUNNER_TEMP/run.log"
-            python scripts/ethics.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
             echo "changed=0" >> "$GITHUB_OUTPUT"
           else
-            echo "== statutes ==" | tee    "$RUNNER_TEMP/run.log"
-            python scripts/legislation.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            echo "== regulations ==" | tee -a "$RUNNER_TEMP/run.log"
-            python scripts/regulations.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            echo "== court rules ==" | tee -a "$RUNNER_TEMP/run.log"
-            python scripts/courtrules.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            echo "== ethics opinions ==" | tee -a "$RUNNER_TEMP/run.log"
-            python scripts/ethics.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            leg=$(grep -oE 'LEGISLATION_CONTENT_CHANGED=[01]' "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
-            reg=$(grep -oE 'REGULATION_CONTENT_CHANGED=[01]'  "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
-            crc=$(grep -oE 'COURTRULES_CONTENT_CHANGED=[01]'  "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
-            eth=$(grep -oE 'ETHICS_CONTENT_CHANGED=[01]'      "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
             changed=0
-            { [ "${leg:-0}" = "1" ] || [ "${reg:-0}" = "1" ] || [ "${crc:-0}" = "1" ] \
-              || [ "${eth:-0}" = "1" ]; } && changed=1
+            for w in LEGISLATION REGULATION COURTRULES ETHICS; do
+              if grep -qE "^${w}_CONTENT_CHANGED=1" "$RUNNER_TEMP/run.log"; then
+                changed=1
+              fi
+            done
+            # A watch that wrote its cards and then failed before printing its marker still changed
+            # content. Its card file says so, and those cards must reach the review PR.
+            if ! git diff --quiet -- legislation.json regulations.json courtrules.json ethics.json; then
+              changed=1
+            fi
             echo "changed=${changed}" >> "$GITHUB_OUTPUT"
             # One combined review-PR body from whichever watches produced cards.
             # `if`, not `[ -f ] && { }`. A for loop's exit status is its last iteration's,
@@ -140,11 +208,42 @@ jobs:
             done
           fi
 
-      # New/updated cards in either watch: re-render the shared page + both feeds and open (or
-      # update) the one review PR. A person confirms every card before it publishes -- merge to
-      # accept, edit legislation.json / regulations.json on the branch to correct.
+      # Straight to main, on every non-dry run that got this far, even if a watch step failed:
+      #   * watch_batches.json (the batches carried to the next run) ALWAYS goes to main. A carry
+      #     records Anthropic work that is already paid for, and the next run starts from main. If
+      #     the carry rode the review branch, it would be lost until that branch merged, and the
+      #     next run would pay for the same work again. Its results are never published here: the
+      #     next run applies them to the matching items, and any cards they produce go to review.
+      #   * On a quiet run (no cards), the advanced seen-state and run logs go too: a settled
+      #     non-match must not be re-screened. On a run with cards, those files ride the review PR
+      #     with the cards they explain (below).
+      # This runs BEFORE the review PR is opened, so the PR is opened on top of this commit. If its
+      # push fails (twice), its commit exists only on this runner, and create-pull-request would
+      # carry that unpushed commit into the review branch. So render and the review PR run only
+      # when this step SUCCEEDED (or was skipped on a dry run, where no PR opens anyway). The carry
+      # still reaches main through the "Save carried batches" step below, and the job ends red.
+      - name: Commit bookkeeping and carried batches
+        id: book
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' && inputs.dry_run != true && steps.run.outputs.changed != '' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ "${{ steps.run.outputs.changed }}" = "1" ]; then
+            git add watch_batches.json
+          else
+            git add watch_batches.json legislation_state.json legislation_log.jsonl legislation_rejections.jsonl regulations_state.json regulations_log.jsonl regulations_rejections.jsonl courtrules_state.json courtrules_log.jsonl ethics_state.json ethics_log.jsonl
+          fi
+          if ! git diff --cached --quiet; then
+            git commit -m "legislation/regulation/courtrules/ethics: record run state [skip ci]"
+            git push || { git pull --rebase --autostash origin main && git push; }
+          fi
+
+      # New/updated cards in any watch: re-render the shared page + feeds and open (or update) the one
+      # review PR. A person confirms every card before it publishes -- merge to accept, edit the
+      # watch's JSON on the branch to correct.
       - name: Render the page and feeds
-        if: steps.run.outputs.changed == '1'
+        id: render
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' && steps.run.outputs.changed == '1' && steps.book.outcome == 'success' }}
         run: python scripts/render.py
 
       # legislation_rejections.jsonl (the recall check's drop log) and regulations_rejections.jsonl
@@ -155,10 +254,11 @@ jobs:
       # gains lines while the review branch sits, both sides have appended at end of file and the
       # merge reports a content conflict. Resolving it is mechanical (keep both sides' lines),
       # unlike the wholesale rewrite that made the opinions log unfit for a review branch. Both are
-      # tracked (seeded empty) because `git add` of a missing path stages nothing at all, and the
-      # bookkeeping step's `|| true` would hide that.
+      # tracked (seeded empty, like watch_batches.json) because `git add` of a missing path fails
+      # and stages nothing at all.
       - name: Open review pull request
-        if: steps.run.outputs.changed == '1'
+        id: pr
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' && steps.run.outputs.changed == '1' && steps.book.outcome == 'success' }}
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           branch: bot/legislation-review
@@ -204,15 +304,90 @@ jobs:
             public/stats.html
             public/subscribe.html
             public/follow.html
-      # Nothing new: the seen-state and run logs still advanced (a settled non-match must not be
-      # re-screened), so commit only that bookkeeping straight to main, like the opinion no-op run.
-      - name: Commit bookkeeping (nothing new)
-        if: steps.run.outputs.changed == '0' && inputs.dry_run != true
+
+      # The carry's last line of defence. If the job timeout (or a manual cancel) stops the run, every
+      # `!cancelled()` step above is skipped, the bookkeeping included, and a batch id a watch wrote
+      # to watch_batches.json at submit time would be lost with the runner. This step runs even then
+      # (always()), on every non-dry run that got through setup. It commits watch_batches.json ALONE
+      # onto the branch's current tip, fetched fresh, with git plumbing: it never commits any other
+      # file and never pushes a local commit (an unpushed bookkeeping commit stays where it is).
+      # It MERGES, it does not overwrite: it starts from the remote file and adds only the local
+      # carries whose batch id the remote lacks (the batches submitted this run). It never removes a
+      # remote carry. The local file has already dropped the ended carries this run consumed, but
+      # their results reach main only with the bookkeeping or the review PR; if the run was
+      # cancelled or the bookkeeping failed, removing them here would lose paid results. Removing a
+      # consumed carry is left to the bookkeeping, which commits it with the outputs it produced.
+      # When nothing is new (the normal case, after the bookkeeping), it does nothing. On a
+      # scheduled run the branch is main, the same branch the bookkeeping pushes to.
+      - name: Save carried batches
+        id: carry
+        if: ${{ always() && steps.setup.outputs.ok == '1' && inputs.dry_run != true }}
+        timeout-minutes: 3
         run: |
+          [ -f watch_batches.json ] || { echo "no watch_batches.json; nothing to save"; exit 0; }
+          python -c 'import json, sys; json.load(open(sys.argv[1]))' watch_batches.json \
+            || { echo "watch_batches.json is not valid JSON; not saving it"; exit 1; }
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add legislation_state.json legislation_log.jsonl legislation_rejections.jsonl regulations_state.json regulations_log.jsonl regulations_rejections.jsonl courtrules_state.json courtrules_log.jsonl 2>/dev/null || true
-          git diff --cached --quiet || { git commit -m "legislation/regulation/courtrules: record run state [skip ci]"; git push; }
+          branch="${GITHUB_REF_NAME}"
+          remote="$RUNNER_TEMP/carry.remote.json"
+          merged="$RUNNER_TEMP/carry.merged.json"
+          for attempt in 1 2 3; do
+            git fetch --no-tags --depth=1 origin "$branch" || { sleep 5; continue; }
+            base=$(git rev-parse FETCH_HEAD)
+            git show "$base:watch_batches.json" > "$remote" 2>/dev/null || echo '{}' > "$remote"
+            # Merge: the remote file plus each local carry whose batch id the remote lacks. Prints
+            # how many were added; writes the merged file only when that is not 0.
+            added=$(python - "$remote" watch_batches.json "$merged" <<'PY'
+          import json
+          import sys
+          def load(path):
+              try:
+                  with open(path, encoding="utf-8") as f:
+                      data = json.load(f)
+              except (OSError, ValueError):
+                  return {}
+              return data if isinstance(data, dict) else {}
+          remote, local = load(sys.argv[1]), load(sys.argv[2])
+          added = 0
+          for watch, recs in local.items():
+              if not isinstance(recs, list):
+                  continue
+              have = remote.get(watch)
+              if not isinstance(have, list):
+                  have = []
+              ids = {r.get("id") for r in have if isinstance(r, dict)}
+              for r in recs:
+                  if isinstance(r, dict) and r.get("id") and r["id"] not in ids:
+                      have.append(r)
+                      ids.add(r["id"])
+                      added += 1
+              if have:
+                  remote[watch] = have
+          if added:
+              with open(sys.argv[3], "w", encoding="utf-8") as f:
+                  f.write(json.dumps(remote, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+          print(added)
+          PY
+            )
+            if [ "$added" = "0" ]; then
+              echo "watch_batches.json already current on $branch (it holds every carry submitted this run)"
+              exit 0
+            fi
+            blob=$(git hash-object -w "$merged")
+            tree=$(GIT_INDEX_FILE="$RUNNER_TEMP/carry.index" sh -c '
+              git read-tree "$1" &&
+              git update-index --add --cacheinfo "100644,$2,watch_batches.json" &&
+              git write-tree' _ "$base" "$blob")
+            commit=$(git commit-tree "$tree" -p "$base" -m "legislation watch: save carried batches [skip ci]")
+            if git push origin "$commit:refs/heads/$branch"; then
+              echo "saved $added carried batch(es) to watch_batches.json on $branch"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "could not save watch_batches.json to $branch"
+          exit 1
 
       # Surfaces a broken run instead of letting it fail silently: comments on the one open
       # tracking issue, or opens it the first time, so repeated failures collect on one issue.

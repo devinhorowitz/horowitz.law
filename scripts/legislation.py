@@ -55,7 +55,10 @@ Environment:
                           pacing per LegiScan's "play nice" guidance; applies only to live calls.
   LEGISLATION_BATCH       batch the Opus card-write pass via the 50%-priced Message Batches API
                           (default on; screening stays synchronous). Set 0 for the synchronous
-                          rollback. LEGISLATION_BATCH_SEC bounds the in-run wait (default 1800).
+                          rollback. LEGISLATION_BATCH_SEC bounds the in-run wait (default 1800),
+                          further capped by the workflow step's budget (siteconfig.WATCH_STEP_MIN).
+                          A batch still running at its deadline is CARRIED in watch_batches.json
+                          and collected by the next run (scripts/watchbatch.py).
   LEGISLATION_DEBUG       if 1, log each step
 """
 import os
@@ -71,6 +74,7 @@ import urllib.error
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
 import siteconfig  # shared practice-area taxonomy  # noqa: E402
+import watchbatch  # run budget + carried batches  # noqa: E402
 
 JSON_PATH  = os.path.join(REPO, "legislation.json")
 STATE_PATH = os.path.join(REPO, "legislation_state.json")
@@ -783,43 +787,155 @@ def _default_ai(body, label="call"):
     return update.anthropic_json(body, label)
 
 
-def _draft_cards(pending, deadline=None):
+# The detail fields build_card reads, kept on a carried item so the next run can card a carried
+# result without re-fetching the bill (the full getBill payload is far larger and not needed).
+_CARRY_DETAIL_KEYS = ("bill_id", "number", "bill_number", "title", "status", "status_date", "url",
+                      "state_link", "change_hash")
+
+
+def _carry_cid(bid, ch):
+    """The batch custom_id for one card write: the bill AND the version written, so a carried result
+    can only ever be matched back to that exact bill at that exact change_hash. (It used to be the
+    bare bill_id, which says nothing about which version a result describes.) Restricted to the
+    Batch API's ^[a-zA-Z0-9_-]{1,64}$."""
+    b = re.sub(r"[^A-Za-z0-9]", "", str(bid))[:20] or "x"
+    h = re.sub(r"[^A-Za-z0-9]", "", str(ch or ""))[:40] or "nohash"
+    return "%s-%s" % (b, h)
+
+
+def _batch_verdict(res):
+    """One batch result line -> the write_card verdict space: the dict on a keep, None on a definitive
+    decline, WRITER_ERROR for an errored/expired/canceled line or an unparseable body (retry)."""
+    if not res or not res.get("ok"):
+        return WRITER_ERROR
+    import update
+    try:
+        v = update.parse_json(res["text"])
+    except Exception:
+        return WRITER_ERROR
+    if not isinstance(v, dict):
+        return WRITER_ERROR
+    return _write_verdict(v)
+
+
+def _draft_cards(pending, deadline=None, book=None, seen=None):
     """Write the cards for the screened-relevant bills in `pending` as ONE 50%-priced Message Batches
     job (LEGISLATION_BATCH), mirroring the funnel's _draft_pending. `pending` is a list of dicts each
-    with `bid` (str) and `detail` (the bill object) and `state`. Returns {bid: verdict|None|
-    WRITER_ERROR}, the SAME verdict space the synchronous write_card produces, so run()'s downstream
-    (seen / card) logic is identical either way. Recovery mirrors the sync per-bill error:
+    with `bid` (str), `ch`, `detail` (the bill object), `state` and `areas`. Returns {bid: verdict|
+    None|WRITER_ERROR}, the SAME verdict space the synchronous write_card produces, so run()'s
+    downstream (seen / card) logic is identical either way. Recovery mirrors the sync per-bill error:
 
-      * a whole-batch timeout or transport failure -> every bill WRITER_ERROR (defer, retry next run);
+      * a batch still running at the deadline -> every bill WRITER_ERROR (un-seen), and the batch is
+        CARRIED in `book` with each custom_id's bill, version, card fields and prior seen hash, so
+        the next run collects the paid results instead of screening and paying for them again;
+      * a transport failure before submit -> every bill WRITER_ERROR (retry next run);
       * a per-request batch error or an unparseable body -> that one bill WRITER_ERROR (retries);
       * a success parses through _write_verdict to a keep-verdict or a definitive decline (None).
     """
     import batch
-    import update
-    reqs = [batch.from_body(str(p["bid"]), _write_body(p["detail"], p["state"])) for p in pending]
-    try:
-        results = batch.run(reqs, deadline=deadline, label="legislation-write")
-    except (batch.BatchTimeout, batch.BatchError) as e:
-        print("  ! legislation write batch deferred (%s); %d draft(s) roll to next run"
-              % (e, len(pending)), flush=True)
-        return {p["bid"]: WRITER_ERROR for p in pending}
-    out = {}
+    book = book if book is not None else watchbatch.CarryBook("legislation")
+    seen = seen or {}
+    reqs, items, cids = [], {}, {}
     for p in pending:
-        res = results.get(str(p["bid"]))
-        if not res or not res.get("ok"):
-            out[p["bid"]] = WRITER_ERROR       # unavailable / errored line -> retry next run
+        cid = _carry_cid(p["bid"], p.get("ch"))
+        cids[p["bid"]] = cid
+        detail = p.get("detail") or {}
+        items[cid] = {"bid": p["bid"], "ch": p.get("ch") or "", "state": p["state"],
+                      "areas": p.get("areas") or [], "prev": seen.get(p["bid"]),
+                      "detail": {k: detail[k] for k in _CARRY_DETAIL_KEYS if k in detail}}
+        reqs.append(batch.from_body(cid, _write_body(detail, p["state"])))
+    results = book.run(reqs, items, deadline, "legislation-write")
+    if results is None:
+        print("  ! legislation write batch deferred; %d draft(s) roll to next run" % len(pending),
+              flush=True)
+        return {p["bid"]: WRITER_ERROR for p in pending}
+    return {p["bid"]: _batch_verdict(results.get(cids[p["bid"]])) for p in pending}
+
+
+def _carried_writes(book, seen):
+    """Collect the write batches earlier runs carried. Returns (carried, inflight, tally, ready):
+
+      * carried  -- {bid: [{"item", "verdict", "rec", "cid"}, ...]} for each result that could be
+                    applied: a parsed verdict (a card or a definitive decline) for a bill whose seen
+                    hash is still the one recorded when the batch was submitted. A bill can have
+                    more than one (two runs each carried a different version); run() applies at
+                    most the one whose change_hash is the bill's CURRENT hash and discards the rest;
+      * inflight -- {bid: ch} for the bills in a batch that is still running, left alone this run;
+      * tally    -- {batch id: [applied, re-queued, kept]}; re-queued already counts the results
+                    that cannot be used (errored, expired, unparseable, or settled since);
+      * ready    -- the collected batches, reported once the run knows what was applied.
+
+    A carried result is only ever applied to the bill AND version its custom_id names, and only once
+    discovery has shown that version is the bill's current one; anything else goes back through the
+    normal pass, so a carry never stands in for different work."""
+    ready, inflight_items = book.collect("legislation-write")
+    inflight = {str(it.get("bid")): it.get("ch") or "" for it in inflight_items.values()}
+    carried, tally = {}, {}
+    for rec in ready:
+        tally[rec["id"]] = [0, 0, 0]
+        for cid, item in rec["items"].items():
+            bid, ch = str(item.get("bid")), item.get("ch") or ""
+            verdict = _batch_verdict(rec["results"].get(cid))
+            if (verdict is WRITER_ERROR or cid != _carry_cid(bid, ch)
+                    or seen.get(bid) != item.get("prev") or not item.get("detail")):
+                tally[rec["id"]][1] += 1
+                continue
+            carried.setdefault(bid, []).append({"item": dict(item, bid=bid, ch=ch), "verdict": verdict,
+                                                "rec": rec["id"], "cid": cid})
+    return carried, inflight, tally, ready
+
+
+def _match_carried(entries, bid, ch, tally):
+    """The one carried result for bill `bid` written at its CURRENT change_hash `ch`, or None. Every
+    other carried result for the bill describes a version that is no longer current: it is discarded
+    with a log line (counted re-queued), whatever else is true of the bill -- including a newer write
+    for it still running in another carried batch. Applying it would card a stale synopsis and record
+    the stale hash as seen."""
+    hit = None
+    for e in entries or ():
+        if hit is None and e["item"]["ch"] == ch:
+            hit = e
             continue
-        try:
-            v = update.parse_json(res["text"])
-        except Exception:
-            out[p["bid"]] = WRITER_ERROR       # unparseable body -> retry next run
+        tally[e["rec"]][1] += 1
+        print("  . legislation-write: discarding carried result for bill %s from batch %s: it was "
+              "written at change_hash %s, the bill is now at %s"
+              % (bid, e["rec"], e["item"]["ch"] or "?", ch or "?"), flush=True)
+    return hit
+
+
+def _newest_listings(cands, listed):
+    """One listing per bill. discover() can list the same bill more than once (it can appear in
+    more than one watched session), possibly at different change_hashes; processing each listing
+    would screen and write the bill twice, or apply a carried result for one version beside a fresh
+    card for another. Keeps the newest listing of each bill: the latest (last_action_date,
+    status_date), and on a tie the first listed (discover() lists the newest sessions first). The
+    order of first appearance is kept. A bill already in `listed` (a set of bill ids, from an
+    earlier jurisdiction this run; updated in place) is dropped too: it has been handled once."""
+    best, order = {}, []
+    for b, sess in cands:
+        bid = str(b.get("bill_id"))
+        if bid in listed:
             continue
-        out[p["bid"]] = _write_verdict(v)
-    return out
+        if bid not in best:
+            best[bid] = (b, sess)
+            order.append(bid)
+            continue
+        cur = best[bid][0]
+        newer = ((b.get("last_action_date") or "", b.get("status_date") or "")
+                 > (cur.get("last_action_date") or "", cur.get("status_date") or ""))
+        if (b.get("change_hash") or "") != (cur.get("change_hash") or ""):
+            keep_b, drop_b = (b, cur) if newer else (cur, b)
+            print("  . LEGISLATION: bill %s listed twice; using change_hash %s, ignoring the older "
+                  "listing at %s" % (bid, keep_b.get("change_hash") or "?",
+                                     drop_b.get("change_hash") or "?"), flush=True)
+        if newer:
+            best[bid] = (b, sess)
+    listed.update(order)
+    return [best[bid] for bid in order]
 
 
 def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, screen_max=None,
-        pollstate=None, now=None, batch_enabled=False):
+        pollstate=None, now=None, batch_enabled=False, carry=None, budget=None):
     """Full funnel over every configured jurisdiction: discover moved enacted/vetoed bills, screen
     (permissive for Georgia, strict for the federal overlay), fetch detail, write. Returns
     (cards, notes, seen_updates). `seen_updates` maps str(bill_id) -> change_hash for every bill
@@ -832,7 +948,16 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
     (screening stays synchronous); it defaults False so a direct/test caller with an injected `ai`
     gets the synchronous path unchanged, and main() passes LEGISLATION_BATCH. The verdict space is
     identical either way, so the seen/card bookkeeping below does not branch on it. Streams progress
-    to stdout (flushed) so a long run is never silent. Writes nothing itself. Fail-open."""
+    to stdout (flushed) so a long run is never silent. Writes nothing itself. Fail-open.
+
+    `carry` (a watchbatch.CarryBook) holds the write batches earlier runs left running. They are
+    collected first: a usable result is applied to exactly the bill and version it was written for,
+    without a second screen or write, and a bill still in a running batch is skipped. This run's
+    own batch is added to the book if it does not finish. `budget` (a watchbatch.Budget) bounds the
+    batch wait and stops the synchronous screen, recall and write loops before the workflow step's
+    limit. Both default to inert (no carries, no limit), which is the behavior before they existed."""
+    book = carry if carry is not None else watchbatch.CarryBook("legislation")
+    budget = budget if budget is not None else watchbatch.Budget()
     key = KEY_LEGISCAN if key is None else key
     ai = ai or _default_ai
     max_run = MAX_RUN if max_run is None else max_run
@@ -855,8 +980,20 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
     if pollstate is None:
         pollstate = _load_pollstate()
     now = now or datetime.datetime.now()
+    # Carried write batches first: what an earlier run paid for is collected before anything is
+    # screened, so a bill whose card is already written is neither re-screened nor re-written.
+    carried, inflight, tally, ready = _carried_writes(book, seen)
+    confirmed = {}           # bid -> the carried result discovery matched to the bill's current hash
+    held = 0
     screened = 0
     stop = False
+    # Why discovery stopped matters. Past the card or screen cap, discovery goes on to the remaining
+    # jurisdictions only to match carried results (a master list costs no model call, and a paid
+    # result is not stranded by a cap). Past the TIME budget it does not: another jurisdiction's
+    # LegiScan calls would spend the time that is running out, so the carried results not yet
+    # matched are simply carried again (below) and matched next run.
+    out_of_time = False
+    listed = set()           # bill ids handled this run (one listing per bill; see _newest_listings)
     # Screened-relevant bills awaiting a card write, in discovery order. The write pass runs after
     # this loop -- as one batch (batch_enabled) or a synchronous loop -- so both share the exact
     # downstream seen/card logic. `areas` carries the screen's areas as the writer's fallback.
@@ -865,23 +1002,50 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
     # recall pass is one pass over the run's drops rather than a call interleaved per bill.
     drops = []
     drop_bills = {}          # bill_id -> the master-list bill, for an escalation that cannot re-fetch
+
+    def time_low():
+        nonlocal stop, out_of_time
+        if not out_of_time and budget.low():
+            note("LEGISLATION: step time is running low; remaining bills retry next run.")
+            stop = out_of_time = True
+        return out_of_time
+
     for state in states:
-        if stop:
-            break
+        time_low()                      # checked every state, even past a cap: a cap-then-time stop must also end discovery
+        if out_of_time or (stop and not carried):
+            break                       # past a card/screen cap, discovery goes on only to match carried results
         cands = discover(key, state=state, fetch=fetch, today=today, seen=seen,
                          pollstate=pollstate, now=now)
         note("LEGISLATION[%s]: %d enacted/vetoed bill(s) moved since last run." % (state, len(cands)))
-        for b, _sess in cands:
+        # One listing per bill, the newest: a bill listed twice at different hashes must yield one
+        # outcome, and a carried result is applied only if it matches that newest hash.
+        for b, _sess in _newest_listings(cands, listed):
+            # Carried bills are settled before the caps: they cost no screen and no new write.
+            bid, ch = str(b.get("bill_id")), (b.get("change_hash") or "")
+            # Carried results are matched FIRST, against the hash discovery just read. A result
+            # written at any other hash is discarded here (the bill moved after its batch was
+            # submitted, so that card describes an old version), before the in-flight check below
+            # can skip the bill and leave a stale result standing to be applied after the loop.
+            hit = _match_carried(carried.pop(bid, None), bid, ch, tally)
+            if hit is not None:
+                confirmed[bid] = hit        # applied below, from the carried result
+                continue
+            if bid in inflight and inflight[bid] == ch:
+                held += 1                   # its write is still running in a carried batch
+                continue
+            if stop:
+                continue                    # past a cap: only carried results are still matched
             if len(pending) >= max_run:
                 note("LEGISLATION: hit LEGISLATION_MAX=%d cards; remaining bills retry next run." % max_run)
                 stop = True
-                break
+                continue
             if screened >= screen_max:
                 note("LEGISLATION: hit LEGISLATION_SCREEN_MAX=%d; remaining bills retry next run." % screen_max)
                 stop = True
-                break
+                continue
+            if time_low():
+                continue
             screened += 1
-            bid, ch = str(b.get("bill_id")), (b.get("change_hash") or "")
             keep, areas, reason = screen_bill(b, ai, state=state)
             if not keep:
                 _dbg("screen dropped %s %s: %s" % (state, b.get("number"), reason))
@@ -921,7 +1085,7 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
     # failures, after which it goes to the writer without another audit. A ConfigError stops the
     # pass outright (it would fail identically for every drop left) and leaves the rest un-seen too.
     fails = _recall_failures() if RECALL and drops else {}
-    suspect_n = failed_n = escalated_n = 0
+    suspect_n = failed_n = escalated_n = late_n = 0
     aborted = ""
     for d in drops:
         bid, ch = d["bill_id"], d["change_hash"]
@@ -930,6 +1094,14 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
             seen_updates[bid] = ch
             continue
         n_failed = fails.get((bid, ch), 0)
+        if not aborted and n_failed < RECALL_MAX_FAILS and budget.low():
+            # Out of step time. Not an audit failure (it does not count toward RECALL_MAX_FAILS):
+            # the drop is simply left un-seen, so it is re-screened and audited next run.
+            if not late_n:
+                note("LEGISLATION: step time is running low; remaining drops are audited next run.")
+            late_n += 1
+            d["recall"] = "deferred"
+            continue
         if aborted:
             suspect, note_txt = None, aborted
         elif n_failed >= RECALL_MAX_FAILS:
@@ -978,16 +1150,41 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
         note("LEGISLATION: recall audited %d screen drop(s), %d failed, %d suspect, %d escalated."
              % (len(drops), failed_n, suspect_n, escalated_n))
 
+    # Carried results discovery confirmed: each is applied to exactly the bill and version it was
+    # written for, that version is the bill's current one, and nothing has settled the bill since.
+    resumed = []
+    # A carried result for a bill discovery did not return this run (its session's master list
+    # failed or was skipped, or the bill left the enacted/vetoed list) cannot be checked against the
+    # bill's current hash, so it is not applied. It stays carried: the next run collects it again and
+    # applies it only if discovery then shows the same version. The carry's age limit bounds it.
+    recs = {rec["id"]: rec for rec in ready}
+    for entries in carried.values():
+        for e in entries:
+            tally[e["rec"]][2] += book.recarry(recs[e["rec"]], [e["cid"]])
+    for bid, c in confirmed.items():
+        it = c["item"]
+        tally[c["rec"]][0] += 1
+        resumed.append(({"bid": bid, "ch": it["ch"], "detail": dict(it["detail"]), "state": it.get("state")
+                         or DEFAULT_STATE, "areas": it.get("areas") or []}, c["verdict"]))
+    for rec in ready:
+        book.report(rec, *tally[rec["id"]])
+    if held:
+        note("LEGISLATION: %d bill(s) still in a carried write batch; collected next run." % held)
+
     # Write pass: one batch job, or the synchronous per-bill path. Same verdict space either way.
     if batch_enabled and pending:
         note("LEGISLATION: batching %d card write(s) (LEGISLATION_BATCH)." % len(pending))
-        verdicts = _draft_cards(pending, deadline=time.time() + BATCH_SEC)
+        verdicts = _draft_cards(pending, deadline=budget.deadline(BATCH_SEC), book=book, seen=seen)
     else:
-        verdicts = {p["bid"]: write_card(p["detail"], ai, state=p["state"]) for p in pending}
+        verdicts = {}
+        for p in pending:
+            if budget.low():
+                verdicts[p["bid"]] = WRITER_ERROR     # out of step time: un-seen, retry next run
+                continue
+            verdicts[p["bid"]] = write_card(p["detail"], ai, state=p["state"])
 
-    for p in pending:
+    for p, verdict in resumed + [(p, verdicts.get(p["bid"], WRITER_ERROR)) for p in pending]:
         bid, ch, detail, state, areas = p["bid"], p["ch"], p["detail"], p["state"], p["areas"]
-        verdict = verdicts.get(bid, WRITER_ERROR)
         if verdict is WRITER_ERROR:
             continue                        # transient: no seen record, retry next run
         if verdict is None:
@@ -1003,6 +1200,7 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
     if log_drops(drops):
         _dbg("recorded %d screen drop(s) to %s" % (len(drops), os.path.basename(DROPS_PATH)))
     note("LEGISLATION: screened %d, drafted %d card(s)." % (screened, len(cards)))
+    book.announce()
     return cards, notes, seen_updates
 
 
@@ -1158,7 +1356,12 @@ def main(argv=None):
     pollstate = _load_pollstate()
     # run() streams its notes live; do not reprint them here. Production batches the write pass
     # (LEGISLATION_BATCH, default on); LEGISLATION_BATCH=0 is the synchronous rollback.
-    cards, notes, seen_updates = run(pollstate=pollstate, batch_enabled=LEGISLATION_BATCH)
+    # The carried write batches (read on every run; written only by --apply) and this workflow
+    # step's time budget, so a slow batch is carried instead of running the job out of time.
+    book = watchbatch.CarryBook.load("legislation", persist=apply)
+    budget = watchbatch.Budget.for_step("legislation")
+    cards, notes, seen_updates = run(pollstate=pollstate, batch_enabled=LEGISLATION_BATCH,
+                                     carry=book, budget=budget)
 
     if apply and not KEY_LEGISCAN:
         # Nothing ran (fail-open no-op); do not touch any file.
@@ -1177,8 +1380,10 @@ def main(argv=None):
         if content_changed:
             save_cards(merged)
         save_seen(seen, pollstate=pollstate)
+        book.save()
         append_log({"cards": len(cards), "added": added, "updated": updated,
-                    "seen_total": len(seen), "notes": notes})
+                    "seen_total": len(seen), "carried": [r["id"] for r in book.carries],
+                    "notes": notes})
         pr_path = os.path.join(REPO, "scripts", "pr_body_legislation.md")
         if content_changed:
             import safeio

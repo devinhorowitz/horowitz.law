@@ -57,6 +57,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
 
 import courtrules   # noqa: E402  -- shared fetch/strip/hash primitives; see _http_get below
+import watchbatch   # noqa: E402  -- run budget + carried batches
 
 JSON_PATH  = os.path.join(REPO, "ethics.json")
 STATE_PATH = os.path.join(REPO, "ethics_state.json")
@@ -194,33 +195,13 @@ def extract(text, ai, model=None, label="ethics"):
     return _extract_parse(v)
 
 
-def _draft_extractions(pending, deadline=None):
+def _draft_extractions(pending, deadline=None, book=None):
     """Extract the CHANGED pages as ONE 50%-priced batch job. Returns {url: [opinions] | None},
-    the same per-page space extract() produces, so run() does not branch."""
-    import batch
-    import update
-    reqs, meta = [], {}
-    for i, p in enumerate(pending):
-        cid = "eth-%d" % i
-        reqs.append(batch.from_body(cid, _extract_body(p["text"])))
-        meta[cid] = p["url"]
-    try:
-        results = batch.run(reqs, deadline=deadline, label="ethics-extract")
-    except (batch.BatchTimeout, batch.BatchError) as e:
-        print("  ! ethics extract batch deferred (%s); %d page(s) retry next run"
-              % (e, len(pending)), flush=True)
-        return {p["url"]: None for p in pending}
-    out = {}
-    for cid, url in meta.items():
-        res = results.get(cid)
-        if not res or not res.get("ok"):
-            out[url] = None
-            continue
-        try:
-            out[url] = _extract_parse(update.parse_json(res["text"]))
-        except Exception:
-            out[url] = None
-    return out
+    the same per-page space extract() produces, so run() does not branch. A batch still running at
+    the deadline is carried to the next run (courtrules.draft_page_batch; ids are url + page hash)."""
+    book = book if book is not None else watchbatch.CarryBook("ethics")
+    return courtrules.draft_page_batch(pending, deadline, book, "ethics-extract", "eth",
+                                       _extract_body, _extract_parse)
 
 
 def build_card(op, url, today=None):
@@ -255,13 +236,18 @@ def _default_ai(body, label="call"):
     return update.anthropic_json(body, label)
 
 
-def run(fetch=None, ai=None, today=None, sources=None, batch_enabled=False):
+def run(fetch=None, ai=None, today=None, sources=None, batch_enabled=False, carry=None, budget=None):
     """Read each source page; on a CHANGED page, extract the opinions it names and card them.
     Returns (cards, notes, seen_updates). A page is hashed as seen only after a SUCCESSFUL
     extraction, so a transient error retries. Writes nothing itself. Fail-open.
 
     Unlike the court-rules watch, a card for an ALREADY-SEEN opinion is still produced: an FAO's
-    status is the news, so the merge decides whether anything changed, not this loop."""
+    status is the news, so the merge decides whether anything changed, not this loop.
+
+    `carry` and `budget` work as in courtrules.run: a carried extraction is used only for the page
+    whose text still hashes the same, and the batch wait ends before the workflow step's limit."""
+    book = carry if carry is not None else watchbatch.CarryBook("ethics")
+    budget = budget if budget is not None else watchbatch.Budget()
     ai = ai or _default_ai
     sources = sources or SOURCES
     notes = []
@@ -271,28 +257,42 @@ def run(fetch=None, ai=None, today=None, sources=None, batch_enabled=False):
     new_pages, new_cards, cards = {}, {}, []
     today_iso = (today or datetime.date.today()).isoformat()
 
+    carried, inflight, tally, ready = courtrules.carried_pages(book, "ethics-extract", "eth",
+                                                               _extract_parse)
     pending = []
+    unread = set()  # sources not read this run: their carried extractions stay carried
     for label, url in sources:
         text = courtrules.fetch_text(url, fetch)
         if not text:
             notes.append("ETHICS: %s unreachable; will retry." % label)
+            unread.add(url)
             continue
         h = courtrules.page_hash(text)
         if seen_pages.get(url) == h:
             notes.append("ETHICS: %s unchanged." % label)
             new_pages[url] = h
+            courtrules.settle_carried(url, h, carried, tally, "ethics-extract",
+                                      "the page is unchanged since it was settled at %s")
             continue
         if not has_ethics_markers(text):
             notes.append("ETHICS: %s fetched but shows no advisory-opinion markers "
                          "(shell/redesign/moved?); not recording, will retry." % label)
+            unread.add(url)
             continue
-        pending.append({"label": label, "url": url, "text": text, "h": h})
+        got = courtrules.resolve_carried(url, h, label, carried, inflight, tally, notes, "ETHICS")
+        if isinstance(got, str):
+            continue                       # "held": still in a carried batch, stays un-hashed
+        pending.append({"label": label, "url": url, "text": text, "h": h, "carried": got})
+    courtrules.finish_carried(book, carried, tally, ready, unread)
 
-    if batch_enabled and pending:
-        notes.append("ETHICS: batching %d page extraction(s) (ETHICS_BATCH)." % len(pending))
-        extractions = _draft_extractions(pending, deadline=__import__("time").time() + BATCH_SEC)
+    extractions = {p["url"]: p["carried"] for p in pending if p["carried"] is not None}
+    to_extract = [p for p in pending if p["carried"] is None]
+    if batch_enabled and to_extract:
+        notes.append("ETHICS: batching %d page extraction(s) (ETHICS_BATCH)." % len(to_extract))
+        extractions.update(_draft_extractions(to_extract, deadline=budget.deadline(BATCH_SEC), book=book))
     else:
-        extractions = {p["url"]: extract(p["text"], ai) for p in pending}
+        for p in to_extract:
+            extractions[p["url"]] = None if budget.low() else extract(p["text"], ai)
 
     for p in pending:
         label, url, h = p["label"], p["url"], p["h"]
@@ -316,6 +316,7 @@ def run(fetch=None, ai=None, today=None, sources=None, batch_enabled=False):
             here += 1
         notes.append("ETHICS: %s changed; %d opinion(s) named." % (label, here))
     notes.append("ETHICS: drafted %d card(s)." % len(cards))
+    book.announce()
     return cards, notes, {"pages": new_pages, "cards": new_cards}
 
 
@@ -450,7 +451,9 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     as_json = "--json" in argv
     apply = "--apply" in argv
-    cards, notes, seen_updates = run(batch_enabled=ETHICS_BATCH)
+    book = watchbatch.CarryBook.load("ethics", persist=apply)
+    cards, notes, seen_updates = run(batch_enabled=ETHICS_BATCH, carry=book,
+                                     budget=watchbatch.Budget.for_step("ethics"))
     for n in notes:
         print(n)
 
@@ -461,6 +464,7 @@ def main(argv=None):
         if content_changed:
             save_cards(merged)
         save_seen(seen)
+        book.save()
         append_log({"cards": len(cards), "added": added, "updated": updated,
                     "pages": len(seen.get("pages") or {}), "notes": notes})
         if content_changed:

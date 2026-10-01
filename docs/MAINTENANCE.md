@@ -100,8 +100,9 @@ folder drag, so upload `.gitignore`, `.well-known/`, and `.github/` files indivi
 
 `opinions_state.json`, `opinions_rejections.jsonl`, `opinions_pipeline_log.jsonl`,
 `treatment_state.json`, `status.json`, `scripts/golden_set.json`, `skill-authorities.json`,
-`skill_alert_state.json`, and `.github/keepalive.txt`. These are written by the pipeline and
-its tools.
+`skill_alert_state.json`, `watch_batches.json` (the Legislative & Regulatory Watch's carried
+batches; see docs/LEGISLATION.md), and `.github/keepalive.txt`. These are written by the pipeline
+and its tools.
 
 ### Not in the repo (gitignored, written at runtime)
 
