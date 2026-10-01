@@ -100,7 +100,10 @@ Every court is read from its CourtListener court feed, filtered by the since flo
 reads the first `<p>`, so CourtListener stamps every new release `date_filed` 2026-06-16. The
 floor dropped those opinions, and the 20 tied-date slots in `/feed/court/ga/` hid most of
 them, so the intake was dead from 06-30 until this fix. For `ga`, `update.py` now does four
-more things. None of them costs a CourtListener REST call.
+more things. Discovery and dating cost no CourtListener REST call: they read the free feeds,
+storage PDFs, and gasupreme.us, which is why `opinions.yml` allows `www.gasupreme.us:443`
+through harden-runner. Text is fetched as for any other court, so a candidate with no PDF
+from the feed or the release page falls back to the REST text path.
 
 - **Discovery by cluster id.** Each run lists every GA cluster above a high-water mark
   (`ga_high_water` in `opinions_state.json`) with the free search feed

@@ -2436,7 +2436,9 @@ def _select_candidates(results, since, today, have, seen, pending_review, redraf
 #      falling back to the opinion's "Decided:" line, with CourtListener's date kept for audit;
 #   C. never-seen clusters the since floor would drop are admitted GA_BACKLOG_PER_RUN at a time,
 #      oldest first, and the mark never passes one that is still waiting or unresolved;
-#   D. all of it costs no CourtListener REST call: feeds, storage PDFs, and gasupreme.us only.
+#   D. discovery and dating cost no CourtListener REST call: feeds, storage PDFs, and gasupreme.us
+#      only (opinions.yml must allow www.gasupreme.us). Text is fetched as for any court: a candidate
+#      with no PDF from the feed or the release page falls back to the REST text path.
 # A re-scrape (a second cluster for a docket already seen or carded) is skipped and marked seen.
 GA_CL = "ga"                                             # CourtListener's id for the Supreme Court of Georgia
 FEED_SEARCH = "https://www.courtlistener.com/feed/search/"
