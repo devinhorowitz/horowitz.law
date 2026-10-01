@@ -1,0 +1,46 @@
+{
+  "_doc": "Golden-set verdicts model-watch has already paid for, keyed by a fingerprint of the models, prompts, effort and golden set (scripts/golden_check.py, THE MEMO). Written by the model-watch workflow; safe to delete (the next run re-evaluates).",
+  "verdicts": {
+    "3eba30e7715d72c692645698": {
+      "effort": {
+        "summarize": "high"
+      },
+      "evaluated": "2026-10-01",
+      "failures": [
+        "Cannon v. Safeco Insurance Co. of Illinois: missing auto after 4 tries (produced badfaith,coverage,procedure)",
+        "John Doe v. Jones: missing auto after 4 tries (produced damages)",
+        "Stephens v. Castano-Castano: missing auto after 4 tries (produced badfaith,damages,expert,procedure)",
+        "Giles v. Greenhouse Apartments, LLC: missing negsec after 4 tries (produced (none))"
+      ],
+      "mode": "summarize",
+      "models": {
+        "summarize": "claude-opus-5-5"
+      },
+      "ok": 12,
+      "reported": "#356",
+      "run": "https://github.com/devinhorowitz/horowitz.law/actions/runs/36869218899",
+      "uncached": [],
+      "verdict": "regression"
+    },
+    "5c633b97adb9b691dccd2351": {
+      "effort": {
+        "pretriage": "",
+        "screen": "",
+        "triage": "high"
+      },
+      "evaluated": "2026-10-01",
+      "failures": [],
+      "mode": "check",
+      "models": {
+        "pretriage": "claude-haiku-4-5",
+        "screen": "claude-haiku-4-5",
+        "triage": "claude-sonnet-5-5"
+      },
+      "ok": 28,
+      "reported": "#356",
+      "run": "https://github.com/devinhorowitz/horowitz.law/actions/runs/36869218899",
+      "uncached": [],
+      "verdict": "pass"
+    }
+  }
+}
