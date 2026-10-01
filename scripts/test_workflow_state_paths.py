@@ -159,9 +159,13 @@ def main():
             wanted |= state_files_written_by(s)
         for state in sorted(wanted):
             checked += 1
+            # Either route persists it: the PR's add-paths, or the workflow's own commit pushed
+            # straight to main (model-watch.yml's memo, model_watch_state.json, goes that way
+            # because its add-paths must be exactly the pin files and the memo is bookkeeping).
             check("%s commits %s (written by a script it runs)" % (wf, state),
-                  state in paths,
-                  "add-paths has %s" % [p for p in paths if p.endswith(".json")])
+                  state in paths or commits_outside_add_paths(wf, state),
+                  "add-paths has %s and no git add/push_main.sh step names it"
+                  % [p for p in paths if p.endswith(".json")])
 
         # The 2026-09-17 instance, one file-type over. queue_cases.stamp_audits rewrites
         # opinions_rejections.jsonl wholesale; on 2026-09-12 that file was added to this

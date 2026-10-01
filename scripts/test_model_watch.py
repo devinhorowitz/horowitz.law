@@ -22,6 +22,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import model_watch  # after sys.path, mirroring the other scripts' import-by-sibling-name pattern
+import update  # noqa: E402 -- the effort rule model_watch cross-checks
 
 
 def _m(model_id, y=2026, mo=1, d=1, display=""):
@@ -214,11 +215,13 @@ def _workflow_steps():
     return [st for job in (doc.get("jobs") or {}).values() for st in (job.get("steps") or [])]
 
 
-def _run_step(name, outputs, rcs=None):
+def _run_step(name, outputs, rcs=None, memos=None):
     """Run one model-watch.yml step's shell as Actions does (bash -eo pipefail), with each
     ``${{ steps.X.outputs.Y }}`` filled from outputs["X.Y"] and a stub `python` on PATH that
-    exits rcs[mode] (default 0) for `python scripts/golden_check.py <mode>`. Everything lands in
-    a temp dir. Returns {rc, out, body, summary, calls}, or None without pyyaml."""
+    exits rcs[mode] (default 0) for `python scripts/golden_check.py <mode>` and, as the real one
+    does for a verdict (exit 0 or 1), writes memo_<mode>=memos[mode] (default "miss") to the step
+    output. Everything lands in a temp dir. Returns {rc, out, body, summary, calls}, or None
+    without pyyaml."""
     steps = _workflow_steps()
     if steps is None:
         return None
@@ -227,24 +230,32 @@ def _run_step(name, outputs, rcs=None):
                  lambda m: outputs["%s.%s" % (m.group(1), m.group(2))], run)
     assert "${{" not in run, "an expression in %r was left unfilled" % name
     with tempfile.TemporaryDirectory() as d:
-        p = {k: os.path.join(d, k) for k in ("out", "body", "summary", "calls", "step.sh")}
-        for k in ("out", "body", "summary", "calls"):
+        p = {k: os.path.join(d, k) for k in ("out", "body", "summary", "calls", "args", "step.sh")}
+        for k in ("out", "body", "summary", "calls", "args"):
             open(p[k], "w").close()
         with open(p["step.sh"], "w") as f:
             f.write(run)
         stub = os.path.join(d, "python")
         with open(stub, "w") as f:
-            f.write('#!/bin/sh\necho "$2" >> "$CALLS"\neval "exit \\${RC_$2:-0}"\n')
+            f.write('#!/bin/sh\necho "$2" >> "$CALLS"\necho "$*" >> "$ARGS"\n'
+                    'case "$2" in check|summarize) ;; *) exit 0 ;; esac\n'
+                    'eval "rc=\\${RC_$2:-0}"\n'
+                    'eval "memo=\\${MEMO_$2:-miss}"\n'
+                    'if [ "$rc" -le 1 ]; then echo "memo_$2=$memo" >> "$GITHUB_OUTPUT"; fi\n'
+                    'exit "$rc"\n')
         os.chmod(stub, 0o755)
         env = dict(os.environ, PATH=d + os.pathsep + os.environ.get("PATH", ""),
                    GITHUB_OUTPUT=p["out"], BODY=p["body"], GITHUB_STEP_SUMMARY=p["summary"],
-                   CALLS=p["calls"])
+                   CALLS=p["calls"], ARGS=p["args"])
         env.update({"RC_" + mode: str(rc) for mode, rc in (rcs or {}).items()})
+        env.update({"MEMO_" + mode: m for mode, m in (memos or {}).items()})
         r = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", p["step.sh"]],
                            cwd=d, env=env, capture_output=True, text=True)
         got = {k: open(p[k], encoding="utf-8").read() for k in ("out", "body", "summary")}
         got["calls"] = open(p["calls"], encoding="utf-8").read().split()
+        got["args"] = open(p["args"], encoding="utf-8").read().splitlines()
     got["rc"] = r.returncode
+    got["log"] = r.stdout + r.stderr
     return got
 
 
@@ -296,9 +307,64 @@ def test_eval_step_reads_only_exit_1_as_regression():
     assert r["rc"] != 0 and "regressed=true" not in r["out"], \
         "a regression followed by a broken run is still a broken run: %r" % r
 
-    report = next(st for st in _workflow_steps() if st.get("name") == "Report a failed run")
-    assert report.get("if") == "failure() && steps.eval.outputs.regressed != 'true'", report.get("if")
+    for mode in ("check", "summarize"):
+        r = _run_step(step, both, {mode: 4})
+        assert r["rc"] == 4 and "regressed=true" not in r["out"], \
+            "an inconclusive %s (exit 4) is an infrastructure failure, not a regression: %r" % (mode, r)
+        assert "inconclusive" in r["log"] and "not a regression" in r["log"], r["log"]
+        assert "inconclusive" in r["body"] and "REGRESSION" not in r["body"], r["body"]
     print("  ok  the eval step reads only exit 1 as a regression; any other code fails the step")
+
+
+def test_only_a_new_regression_fails_the_run():
+    """The run failed red every day from 2026-09-23 on the same remembered candidate. A regression
+    the memo already holds was reported the first time; only a NEW one (memo miss) may fail."""
+    step = "Golden-set check against the candidate"
+    both = {"watch.run_check": "true", "watch.run_summarize": "true"}
+    r = _run_step(step, both, {"summarize": 1}, {"check": "hit", "summarize": "miss"})
+    if r is None:
+        print("  ..  pyyaml not available; skipping the fresh-regression check")
+        return
+    assert "regressed=true" in r["out"] and "fresh_regression=true" in r["out"], r
+    assert "(new verdict)" in r["body"] and "(remembered verdict)" in r["body"], r["body"]
+    r = _run_step(step, both, {"summarize": 1}, {"check": "hit", "summarize": "hit"})
+    assert "regressed=true" in r["out"] and "fresh_regression=false" in r["out"], r
+    r = _run_step(step, both, {"check": 1}, {"check": "hit", "summarize": "miss"})
+    assert "fresh_regression=false" in r["out"], "a fresh PASS beside a remembered regression: %r" % r
+    for st in _workflow_steps():
+        if "golden_check.py" in (st.get("run") or ""):
+            for line in st["run"].splitlines():
+                if "golden_check.py" in line:
+                    assert "--memo" in line, "the eval must run memoized: %r" % line
+    print("  ok  only a new (unremembered) regression fails the run; the eval always runs memoized")
+
+
+def test_step_order_reports_after_the_failure():
+    """The tracking-issue step must run after the fail step (so run_watchdog sees a report
+    follow the failure) and before the memo commit (so `reported` is persisted); the failure
+    reporter must stand down only when a new regression was actually reported and recorded."""
+    steps = _workflow_steps()
+    if steps is None:
+        print("  ..  pyyaml not available; skipping the step-order check")
+        return
+    names = [st.get("name") for st in steps]
+    i_fail = names.index("Fail on a new regression")
+    i_issue = names.index("Report the candidate verdict on the tracking issue")
+    i_rec = names.index("Record the golden verdicts on main")
+    i_rep = names.index("Report a failed run")
+    assert i_fail < i_issue < i_rec < i_rep, names
+    by = {st.get("name"): st for st in steps}
+    assert str(by[names[i_issue]].get("if", "")).startswith("always()"), "the report must run after the failure"
+    assert str(by[names[i_rec]].get("if", "")).startswith("always()"), "the memo must persist after the failure"
+    assert by[names[i_fail]].get("if") == "steps.eval.outputs.fresh_regression == 'true'"
+    assert by["Report a failed run"].get("if") == (
+        "failure() && (steps.regression.outcome != 'failure' || steps.issue.outcome != 'success' "
+        "|| steps.record.outcome == 'failure')"), by["Report a failed run"].get("if")
+    rec = by[names[i_rec]]["run"]
+    assert "git worktree add" in rec and "PUSH_MAIN_REGENERATE" in rec and "model_watch_state.json" in rec
+    import golden_check
+    assert os.path.basename(golden_check.MEMO_STATE_PATH) == "model_watch_state.json"
+    print("  ok  verdict report follows the failure, precedes the memo commit; reporter excludes only a reported regression")
 
 
 def test_no_pat_note_follows_the_result():
@@ -396,13 +462,215 @@ def test_pin_files_all_actually_hold_a_pin():
           "no workflow holds a pin)" % len(model_watch.PIN_FILES))
 
 
+def _caps(supported, **levels):
+    """A Models-API capabilities object with the given effort support."""
+    eff = {"supported": supported}
+    eff.update({k: {"supported": v} for k, v in levels.items()})
+    return {"effort": eff}
+
+
+def test_effort_conflicts():
+    """The effort rule in update.py is checked against the Models API's own capabilities before
+    anything is judged: either disagreement makes the comparison unfair or the request a 400."""
+    pins = {"opus": "claude-opus-5", "sonnet": "claude-sonnet-5", "haiku": "claude-haiku-4-5"}
+    base = [dict(_m("claude-opus-5", 2026, 5, 1), caps=_caps(True, high=True)),
+            dict(_m("claude-sonnet-5", 2026, 6, 1), caps=_caps(True, high=True)),
+            dict(_m("claude-haiku-4-5", 2025, 10, 1), caps=_caps(False))]
+    assert model_watch.effort_conflicts(base, [], pins) == [], "the current pins agree with the rule"
+    cand = dict(_m("claude-opus-5-5", 2026, 9, 1), caps=_caps(True, high=True))
+    up = [{"tier": "opus", "old": "claude-opus-5", "new": "claude-opus-5-5"}]
+    assert model_watch.effort_conflicts(base + [cand], up, pins) == [], "a documented candidate agrees"
+    # A model the documented rule does not cover (Sonnet 5.5 here) is never extrapolated to: the
+    # API decides, and when the API is silent too, NO effort is sent and the run warns.
+    saved_caps = dict(update._MODEL_CAPS)
+    try:
+        no_caps = dict(_m("claude-sonnet-5-5", 2026, 9, 29), caps=None)
+        up2 = [{"tier": "sonnet", "old": "claude-sonnet-5", "new": "claude-sonnet-5-5"}]
+        assert model_watch.effort_conflicts(base + [no_caps], up2, pins) == [], \
+            "undocumented + no capabilities is not a conflict (nothing to disagree with)"
+        w = model_watch.effort_unconfirmed(base + [no_caps], up2, pins)
+        assert len(w) == 1 and "claude-sonnet-5-5" in w[0] and "unmatched" in w[0], w
+        assert update.effort_params("triage", "claude-sonnet-5-5") == {}, \
+            "undocumented and unconfirmed by the API: no effort is sent"
+        says_no = dict(_m("claude-sonnet-5-5", 2026, 9, 29), caps=_caps(True, high=False))
+        assert model_watch.effort_conflicts(base + [says_no], up2, pins) == [], "the API decides"
+        assert update.effort_params("triage", "claude-sonnet-5-5") == {}, "the API said no: none sent"
+        says_yes55 = dict(_m("claude-sonnet-5-5", 2026, 9, 29), caps=_caps(True, high=True))
+        assert model_watch.effort_conflicts(base + [says_yes55], up2, pins) == []
+        assert model_watch.effort_unconfirmed(base + [says_yes55], up2, pins) == []
+        assert update.effort_params("triage", "claude-sonnet-5-5") == {"output_config": {"effort": "high"}}, \
+            "the API confirmed it: the candidate runs at the incumbent's effort"
+        # A documented "no" that the API contradicts is a conflict (the rule is out of date) ...
+        old_sonnet = dict(_m("claude-sonnet-4-5", 2025, 9, 29), caps=_caps(True, high=True))
+        up3 = [{"tier": "sonnet", "old": "claude-sonnet-5", "new": "claude-sonnet-4-5"}]
+        c = model_watch.effort_conflicts(base + [old_sonnet], up3, pins)
+        assert len(c) == 1 and "says no" in c[0] and "API says yes" in c[0], c
+        # ... and so is a documented "yes" the API denies.
+        denied = [dict(base[0], caps=_caps(True, high=False))] + base[1:]
+        c = model_watch.effort_conflicts(denied, [], pins)
+        assert len(c) == 1 and "claude-opus-5" in c[0] and "summarize" in c[0] and "says yes" in c[0], c
+    finally:
+        update._MODEL_CAPS.clear()
+        update._MODEL_CAPS.update(saved_caps)
+    haiku_eff = dict(_m("claude-haiku-5", 2026, 9, 29), caps=_caps(True, high=True))
+    up4 = [{"tier": "haiku", "old": "claude-haiku-4-5", "new": "claude-haiku-5"}]
+    assert model_watch.effort_conflicts(base + [haiku_eff], up4, pins) == [], \
+        "the Haiku tiers configure no effort, so there is nothing to disagree about"
+    assert model_watch._api_effort(None, "high") is None
+    assert model_watch._api_effort({"effort": {"supported": True}}, "high") is True
+    print("  ok  the effort rule is cross-checked against the Models API in both directions")
+
+
+class _GH:
+    """A stub `gh`: records each call and answers `issue list` / `issue create`."""
+    def __init__(self, open_issues=()):
+        self.calls, self.open = [], list(open_issues)
+
+    def __call__(self, args):
+        self.calls.append(list(args))
+        if args[:2] == ["issue", "list"]:
+            import json as _json
+            return _json.dumps(self.open)
+        if args[:2] == ["issue", "create"]:
+            self.open.append({"number": 77, "title": args[args.index("--title") + 1]})
+            return "https://github.com/o/r/issues/77\n"
+        return ""
+
+    def posts(self):
+        return [c for c in self.calls if c[:2] in (["issue", "create"], ["issue", "comment"])]
+
+
+def _memo_with(path, entries):
+    import golden_check
+    golden_check.save_memo({"verdicts": dict(entries)}, path)
+
+
+def _fake_keys(monkey):
+    """Make golden_check.memo_key return a fixed key per mode, restoring afterwards."""
+    import golden_check
+    saved = golden_check.memo_key
+    golden_check.memo_key = lambda mode: (monkey[mode], {"mode": mode})
+    return lambda: setattr(golden_check, "memo_key", saved)
+
+
+def _entry(mode, verdict, failures=()):
+    return {"mode": mode, "models": {"summarize": "claude-opus-5-5"} if mode == "summarize"
+            else {"screen": "claude-haiku-4-5", "triage": "claude-sonnet-5-5"},
+            "effort": {"summarize": "high"} if mode == "summarize" else {"screen": "", "triage": "high"},
+            "verdict": verdict, "ok": 13, "failures": list(failures), "uncached": [],
+            "evaluated": "2026-10-02", "run": "", "reported": ""}
+
+
+def test_report_issue_posts_once():
+    """One tracking issue, one post per verdict: a remembered verdict that was already reported
+    is not posted again (the daily loop this replaces), a new verdict comments on the open issue,
+    and with none open it opens one."""
+    import golden_check
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "memo.json")
+        _memo_with(path, {"k1": _entry("summarize", "regression", ["Cannon: missing auto after 4 tries"])})
+        restore = _fake_keys({"summarize": "k1", "check": "k2"})
+        try:
+            gh = _GH()
+            assert model_watch.report_issue(["summarize"], gh, path) == 0
+            assert len(gh.posts()) == 1 and gh.posts()[0][:2] == ["issue", "create"], gh.calls
+            create = gh.posts()[0]
+            assert create[create.index("--title") + 1] == model_watch.ISSUE_TITLE
+            body = create[create.index("--body") + 1]
+            assert "REGRESSED" in body and "Cannon" in body and "claude-opus-5-5" in body, body
+            assert "effort `high`" in body, body
+            assert golden_check.load_memo(path)["verdicts"]["k1"]["reported"] == "#77"
+
+            again = _GH(open_issues=[{"number": 77, "title": model_watch.ISSUE_TITLE}])
+            assert model_watch.report_issue(["summarize"], again, path) == 0
+            assert again.calls == [], "a reported verdict makes no gh call at all: %r" % again.calls
+
+            # A new verdict (new key: a prompt, effort or golden edit) comments on the open issue,
+            # matched on the EXACT title, not on a search hit with a similar one.
+            data = golden_check.load_memo(path)
+            data["verdicts"]["k2"] = _entry("check", "pass")
+            golden_check.save_memo(data, path)
+            gh3 = _GH(open_issues=[{"number": 5, "title": "Model watch: candidate model evaluation (old)"},
+                                   {"number": 77, "title": model_watch.ISSUE_TITLE}])
+            assert model_watch.report_issue(["check", "summarize"], gh3, path) == 0
+            posts = gh3.posts()
+            assert len(posts) == 1 and posts[0][:3] == ["issue", "comment", "77"], gh3.calls
+            v = golden_check.load_memo(path)["verdicts"]
+            assert v["k1"]["reported"] == "#77" and v["k2"]["reported"] == "#77", v
+
+            gh4 = _GH()
+            assert model_watch.report_issue(["", "recall"], gh4, path) == 0 and gh4.calls == [], \
+                "a mode with no memo (or none at all) reports nothing"
+        finally:
+            restore()
+
+        # No verdict in the memo for the current keys (the eval broke before judging): no post.
+        restore = _fake_keys({"summarize": "missing", "check": "missing2"})
+        try:
+            gh5 = _GH()
+            assert model_watch.report_issue(["summarize"], gh5, path) == 0 and gh5.calls == []
+        finally:
+            restore()
+    print("  ok  the tracking issue gets one post per verdict (create, then comment; never repeat)")
+
+
+def test_report_issue_text():
+    ok = model_watch.issue_text([("check", "k2", _entry("check", "pass"))])
+    assert "passed the golden set" in ok and "REGRESS" not in ok and "MODEL_WATCH_TOKEN" in ok, ok
+    assert "screen `claude-haiku-4-5` (no effort parameter)" in ok, ok
+    assert "<!-- model-watch keys: k2 -->" in ok
+    bad = model_watch.issue_text([("summarize", "k1", _entry("summarize", "regression",
+                                                             ["Giles v. Greenhouse: missing negsec"]))],
+                                 pr_url="https://github.com/o/r/pull/9")
+    assert "REGRESSED" in bad and "FAIL Giles v. Greenhouse: missing negsec" in bad, bad
+    assert "https://github.com/o/r/pull/9" in bad
+    print("  ok  the issue text names the models, the effort, the verdict and every failing case")
+
+
+def test_issue_step_passes_the_eval_keys():
+    """The issue step names the verdicts by the keys golden_check reported, not by recomputing
+    them from a working tree the PR step may have touched; and report_issue honours them."""
+    step = "Report the candidate verdict on the tracking issue"
+    r = _run_step(step, {"eval.key_check": "", "eval.key_summarize": "abc123"})
+    if r is None:
+        print("  ..  pyyaml not available; skipping the issue-step check")
+        return
+    assert r["rc"] == 0 and r["args"] == ["scripts/model_watch.py --report-issue summarize=abc123"], r
+    r = _run_step(step, {"eval.key_check": "k2", "eval.key_summarize": "k1"})
+    assert r["args"] == ["scripts/model_watch.py --report-issue check=k2,summarize=k1"], r
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "memo.json")
+        _memo_with(path, {"k1": _entry("summarize", "regression", ["Cannon: missing auto"])})
+        restore = _fake_keys({"summarize": "not-the-key", "check": "nope"})
+        try:
+            gh = _GH()
+            model_watch.report_issue(["summarize=k1"], gh, path)
+            assert len(gh.posts()) == 1, "an explicit key is used as given: %r" % gh.calls
+        finally:
+            restore()
+    print("  ok  the issue step reports the verdicts by the keys the eval step produced")
+
+
+def test_close_issue():
+    gh = _GH(open_issues=[{"number": 77, "title": model_watch.ISSUE_TITLE}])
+    assert model_watch.close_issue(gh) == 0
+    assert ["issue", "close", "77"] in gh.calls, gh.calls
+    none = _GH()
+    assert model_watch.close_issue(none) == 0 and none.posts() == [] and \
+        not any(c[:2] == ["issue", "close"] for c in none.calls)
+    print("  ok  all pins current closes the tracking issue, and is a no-op when none is open")
+
+
 TESTS = [test_tier, test_vkey, test_canon, test_detect_one_upgrade, test_detect_no_upgrade_when_current,
          test_alias_same_date_not_upgrade, test_undated_pin_dated_listing_is_current,
          test_undated_pin_real_upgrade_still_fires, test_higher_tier_reported_not_proposed,
          test_deprecation_note_and_replacement, test_version_fallback_when_no_dates,
          test_bump_text, test_bump_text_whole_ids_only, test_parse_dt,
          test_pin_files_all_actually_hold_a_pin, test_add_paths_match_pin_files,
-         test_eval_step_reads_only_exit_1_as_regression, test_no_pat_note_follows_the_result]
+         test_eval_step_reads_only_exit_1_as_regression, test_no_pat_note_follows_the_result,
+         test_only_a_new_regression_fails_the_run, test_step_order_reports_after_the_failure,
+         test_effort_conflicts, test_report_issue_posts_once, test_report_issue_text,
+         test_issue_step_passes_the_eval_keys, test_close_issue]
 
 
 def main():

@@ -375,8 +375,31 @@ def test_reporting_hints_cover_every_real_alert_step():
     check("a step with no name at all is not a reporter", not rw.is_reporting_step({}))
 
 
+def test_post_steps_are_not_handlers():
+    """Model-watch's regression runs from 2026-09-23: `Fail on regression` failed, the one
+    reporter was skipped by its own condition, and nothing was filed -- but the runner's post
+    steps (`Post Harden the runner`, `Post Run actions/checkout@...`) succeeded after the failure,
+    so the job read as handled and the watchdog stayed quiet too."""
+    print("post-steps are teardown, not handlers")
+    shape = [("Set up job", "success"), ("Harden the runner", "success"),
+             ("Run actions/checkout@3d3c42e5", "success"),
+             ("Golden-set check against the candidate", "success"),
+             ("Fail on regression", "failure"), ("Report a failed run", "skipped"),
+             ("Post Run actions/checkout@3d3c42e5", "success"),
+             ("Post Harden the runner", "success"), ("Complete job", "success")]
+    check("a failure followed only by successful post-steps is silent",
+          rw.job_is_silent({"conclusion": "failure", "steps": _steps(shape)}) is True)
+    handled = shape[:5] + [("Report the candidate verdict on the tracking issue", "success")] + shape[5:]
+    check("the same run with its verdict reported after the failure is not silent",
+          rw.job_is_silent({"conclusion": "failure", "steps": _steps(handled)}) is False)
+    check("an ordinary step that merely starts with 'Post' still counts as work",
+          rw.job_is_silent({"conclusion": "failure", "steps": _steps([
+              ("work", "failure"), ("Post the diagnosis", "success")])}) is False)
+
+
 def main():
-    for t in (test_the_two_real_runs, test_the_rule, test_selection, test_body,
+    for t in (test_the_two_real_runs, test_the_rule, test_post_steps_are_not_handlers,
+              test_selection, test_body,
               test_cli, test_path_confinement, test_matches_the_workflow,
               test_reporting_hints_cover_every_real_alert_step):
         t()
