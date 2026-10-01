@@ -21,8 +21,9 @@ Four groups:
       make summarize mode permanently red for a reason no output explains.
 
   the memo                model-watch's --memo: an unchanged (models, prompts, effort, golden
-      set) key is answered with zero model calls; any change re-judges once; a ConfigError or a
-      crash is never remembered. And the golden check reaches the model through update.py's own
+      set) key is answered with zero model calls; any change re-judges once; a ConfigError, a
+      crash, or any attempt that ended in an error rather than a model answer (API/transport,
+      refusal, truncation, unparseable) is never remembered and exits 4 (inconclusive). And the golden check reaches the model through update.py's own
       request builders, so it runs at the production effort.
 
 Run directly: `python scripts/test_golden_check.py`.
@@ -249,10 +250,11 @@ def test_summarize_verdicts():
             check("a persistent miss is red after the retry budget", r == 1)
             check("retries are bounded by OPINIONS_GOLDEN_RETRIES", len(t.summarize_calls) == 2,
                   str(len(t.summarize_calls)))
-        # A summarizer that raises every time must be reported, never counted as covered.
+        # A summarizer that raises every time must be reported, never counted as covered -- and
+        # never as a regression either: it judged nothing, so the run is inconclusive (4).
         with Tiers(summarize=RuntimeError("api down")):
-            check("a summarizer that always errors is red, not silently ok",
-                  with_set([case("A v. B", areas=["premises"])], golden_check.summarize_check) == 1)
+            check("a summarizer that always errors is red (inconclusive, 4), not silently ok",
+                  with_set([case("A v. B", areas=["premises"])], golden_check.summarize_check) == 4)
     finally:
         os.environ.pop("OPINIONS_GOLDEN_RETRIES", None)
 
@@ -311,8 +313,8 @@ def test_config_error_is_not_a_regression():
         check("a genuine regression still exits 1 through main()",
               run_main("check", [case("A v. B")]) == 1)
     with Tiers(summarize=RuntimeError("api down")):
-        check("a summarizer error that is not a ConfigError is still red (exit 1)",
-              run_main("summarize", [keeper]) == 1)
+        check("a summarizer error that is not a ConfigError is inconclusive (exit 4), not a regression",
+              run_main("summarize", [keeper]) == 4)
 
 
 # --- 3. the committed set is well-formed ---------------------------------
@@ -485,6 +487,78 @@ def _crash(_name):
     raise RuntimeError("triage blew up")
 
 
+def test_memo_inconclusive():
+    """Only clean model answers judged against the labels may become a remembered verdict. An
+    attempt that ended in an API/transport error, a refusal, a max_tokens truncation or unparseable
+    output (update.anthropic_json raises each) judged nothing about the model: the run exits 4
+    (inconclusive, a broken run to the workflow), reports memo_<mode>=inconclusive, and stores
+    nothing, so tomorrow's run tries again instead of replaying an outage as the model's verdict."""
+    keeper = case("A v. B", areas=["premises"])
+    os.environ["OPINIONS_GOLDEN_RETRIES"] = "1"        # tries = 2
+    try:
+        for label, err in (("an API/transport error", RuntimeError("summarize claude-opus-5 -> HTTP 529: overloaded")),
+                           ("a max_tokens truncation", RuntimeError("summarize claude-opus-5 hit max_tokens (4096); "
+                                                                    "response truncated")),
+                           ("a refusal (empty text, unparseable)", RuntimeError("summarize claude-opus-5 returned "
+                                                                                "unparseable JSON: refusal")),
+                           ("a network error", RuntimeError("summarize claude-opus-5 -> network error: timed out"))):
+            with Memo() as m, Tiers(summarize=err):
+                rc = run_memo("summarize", [keeper])
+                check("summarize: %s exits 4 (inconclusive), not 1" % label, rc == 4, str(rc))
+                check("...and stores no verdict", m.verdicts() == {}, str(m.verdicts()))
+                check("...and reports memo_summarize=inconclusive", "memo_summarize=inconclusive" in m.outputs(),
+                      str(m.outputs()))
+
+        # One errored attempt is enough, even when a retry then covered the case.
+        seq = {"n": 0}
+
+        def flaky(_name):
+            seq["n"] += 1
+            if seq["n"] == 1:
+                raise RuntimeError("summarize claude-opus-5 -> HTTP 500: internal error")
+            return {"areas": ["premises"], "additional_holdings": []}
+        with Memo() as m, Tiers(summarize=flaky):
+            check("an errored attempt then a pass is still inconclusive",
+                  run_memo("summarize", [keeper]) == 4)
+            check("...and stores no pass", m.verdicts() == {}, str(m.verdicts()))
+
+        # An error in one case does not let a clean regression in another be remembered.
+        def mixed(name):
+            if name == "Err v. Case":
+                raise RuntimeError("summarize claude-opus-5 hit max_tokens (4096); response truncated")
+            return {"areas": [], "additional_holdings": []}
+        with Memo() as m, Tiers(summarize=mixed):
+            rc = run_memo("summarize", [case("Reg v. Case", areas=["premises"]), case("Err v. Case", areas=["auto"])])
+            check("a regression alongside an errored case is inconclusive, not a regression", rc == 4, str(rc))
+            check("...and nothing is remembered", m.verdicts() == {}, str(m.verdicts()))
+    finally:
+        os.environ.pop("OPINIONS_GOLDEN_RETRIES", None)
+
+    # check mode: a tier error escapes check(); main() turns it into 4 and the memo stores nothing.
+    for label, err in (("truncation", "triage claude-sonnet-5 hit max_tokens (8000); response truncated"),
+                       ("unparseable output", "screen claude-haiku-4-5 returned unparseable JSON: x"),
+                       ("an API error", "triage claude-sonnet-5 -> HTTP 529: overloaded")):
+        def boom(_name, _msg=err):
+            raise RuntimeError(_msg)
+        with Memo() as m, Tiers(relevant=boom):
+            rc = run_memo("check", [case("A v. B"), case("C v. D")])
+            check("check: %s exits 4 (inconclusive)" % label, rc == 4, str(rc))
+            check("...and stores no verdict", m.verdicts() == {}, str(m.verdicts()))
+
+    # A stale outcome from an earlier run in the same process must not be filed under a new key.
+    golden_check.LAST.clear()
+    golden_check.LAST.update(ok=3, failures=[], uncached=[], errors=[])
+    with Memo() as m, Tiers(relevant=_crash):
+        check("a crash after an earlier clean run is still 4", run_memo("check", [case("A v. B")]) == 4)
+        check("...and does not file the earlier outcome", m.verdicts() == {}, str(m.verdicts()))
+
+    # A clean regression is still remembered: the guard is errors, not red.
+    with Memo() as m, Tiers(summarize={"areas": [], "additional_holdings": []}):
+        check("a clean regression is still exit 1", run_memo("summarize", [keeper]) == 1)
+        check("...and is remembered", [v["verdict"] for v in m.verdicts().values()] == ["regression"],
+              str(m.verdicts()))
+
+
 def siteconfig_effort():
     import siteconfig
     return siteconfig.MODEL_EFFORT["summarize"]
@@ -548,6 +622,7 @@ def main():
     test_config_error_is_not_a_regression()
     test_committed_set_integrity()
     test_memo()
+    test_memo_inconclusive()
     test_uses_the_production_builder()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))

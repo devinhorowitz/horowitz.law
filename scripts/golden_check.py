@@ -31,8 +31,10 @@ actual pipeline rather than a copy. It cards nothing and never writes opinions.j
   python scripts/golden_check.py check --memo      # model-watch: remember the verdict (see below)
 
 Exit codes: 0 clean, 1 a regression (or nothing verified), 2 bad usage, 3 a ConfigError (bad key,
-no credit, retired model), 4 any other crash (a broken run, not a verdict). model-watch.yml reads
-only 1 as a regression; every other nonzero code is a broken run.
+no credit, retired model), 4 INCONCLUSIVE: some model call ended in an API or transport error, a
+refusal, a max_tokens truncation or unparseable output instead of an answer, or the run crashed. A
+4 is a broken run, not a verdict. model-watch.yml reads only 1 as a regression; every other
+nonzero code is an infrastructure failure.
 
 THE MEMO (--memo, check and summarize only). Model-watch used to re-run the whole golden set on
 the same candidate every day: same models, same prompts, same cases, so the same ~30 Opus calls
@@ -42,7 +44,13 @@ mode, every request body the mode sends (model id, system prompt, user template,
 the effort, built by update.py's own request builders) and the golden set's contents. If that
 key already has a verdict, it is reported and returned with ZERO model calls. Change any input --
 a new candidate, a prompt edit, a golden-set edit, an effort level -- and the key changes, so the
-set runs again exactly once. A ConfigError or a crash judged nothing and is never remembered.
+set runs again exactly once. Only a run whose every model call returned a clean answer, judged
+against the labels, is remembered (pass or regression). A ConfigError, a crash, or any attempt that
+ended in an API/transport error, refusal, truncation or unparseable output judged nothing: exit 3
+or 4, and nothing is stored, so the next run tries again.
+
+The memo is committed to main by the workflow with the default GITHUB_TOKEN. A push made with that
+token starts no workflow (GitHub's anti-recursion rule), so the memo commit triggers no CI run.
 """
 import datetime
 import hashlib
@@ -61,9 +69,13 @@ SNIPPET_CHARS = 1500  # screen reads an opening excerpt; mirror its own [:1500] 
 MEMO_STATE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "model_watch_state.json")
 MEMO_CAP = 40         # verdicts kept; one per (candidate, prompts, set) combination ever judged
 MEMO_MODES = ("check", "summarize")
+# Exit code of a run that reached no verdict: an attempt ended in an API or transport error, a
+# refusal, a max_tokens truncation or unparseable output (all raised by update.anthropic_json),
+# or the run crashed. Not a regression, never remembered; model-watch files it as a broken run.
+INCONCLUSIVE = 4
 
 # The outcome of the last check()/summarize_check() in this process, for the memo:
-# {"ok": n, "failures": ["name: detail", ...], "uncached": [...]}.
+# {"ok": n, "failures": ["name: detail", ...], "uncached": [...], "errors": ["name: detail", ...]}.
 LAST = {}
 
 
@@ -131,6 +143,7 @@ def check():
     CourtListener calls. Exits nonzero if any case regresses, so a run shows red."""
     cases = _load()
     regressions, uncached, ok = [], [], 0
+    LAST.clear()   # a crash below must not leave an earlier run's outcome behind for the memo
     for c in cases:
         if not c.get("text"):
             uncached.append(c.get("name", "?"))
@@ -146,8 +159,7 @@ def check():
                   % (c.get("name", "")[:55], "keep" if expect else "drop",
                      "keep" if kept else "drop", detail))
     print("\ngolden check: %d ok, %d regression(s), %d uncached" % (ok, len(regressions), len(uncached)))
-    LAST.clear()
-    LAST.update(ok=ok, uncached=list(uncached),
+    LAST.update(ok=ok, errors=[], uncached=list(uncached),
                 failures=["%s: expected %s, got %s (%s)" % (nm, "keep" if exp else "drop",
                                                            "keep" if got else "drop", det)
                           for nm, exp, got, det in regressions])
@@ -193,8 +205,10 @@ def _summarize_attempts(name, docket, text, expect, tries):
     the union short and is reported. A ConfigError (bad key, no credit, retired model) is neither:
     it says nothing about the model and fails every case alike, so it propagates and main() exits
     3 instead of reporting each case as a dropped area. Returns (covered, union, used, last_addl,
-    last_error)."""
-    union, last_addl, last_error, used = set(), 0, "", 0
+    last_error, errored), errored the number of attempts that ended in an error (an API or transport
+    failure, a refusal, a max_tokens truncation, unparseable output) rather than a model answer:
+    any such attempt makes the whole run INCONCLUSIVE (summarize_check returns 4), never a verdict."""
+    union, last_addl, last_error, used, errored = set(), 0, "", 0, 0
     # 'used' is the attempt count, consumed in the return below, not in the loop body.
     for used in range(1, tries + 1):  # noqa: B007
         try:
@@ -205,9 +219,10 @@ def _summarize_attempts(name, docket, text, expect, tries):
             raise
         except Exception as e:
             last_error = str(e)[:120]
+            errored += 1
         if expect <= union:
             break
-    return (expect <= union), union, used, last_addl, last_error
+    return (expect <= union), union, used, last_addl, last_error, errored
 
 
 def _tries():
@@ -227,7 +242,8 @@ def summarize_check():
     and controls (expect_relevant false), are skipped, since a non-keeper is not summarized."""
     cases = _load()
     tries = _tries()
-    regressions, uncached, skipped, ok = [], [], 0, 0
+    regressions, uncached, errors, skipped, ok = [], [], [], 0, 0
+    LAST.clear()
     for c in cases:
         expect = set(c.get("expect_areas") or [])
         if not bool(c.get("expect_relevant", True)) or not expect:
@@ -238,8 +254,12 @@ def summarize_check():
             continue
         name = c.get("name", "")
         docket = c.get("docket", "") or ""
-        passed, union, used, addl, err = _summarize_attempts(name, docket, c["text"], expect, tries)
+        passed, union, used, addl, err, n_err = _summarize_attempts(name, docket, c["text"], expect, tries)
         tag = "%d tr%s" % (used, "y" if used == 1 else "ies")
+        if n_err:
+            errors.append("%s: %d of %d attempt(s) errored; last: %s" % (name, n_err, used, err))
+            print("  ERR  %-55s %d of %d attempt(s) errored, not a model answer: %s"
+                  % (name[:55], n_err, used, err))
         if passed:
             ok += 1
             print("  ok   %-55s areas %s (holdings %d, %s)"
@@ -251,10 +271,10 @@ def summarize_check():
                 detail += "; last error: %s" % err
             regressions.append((name, detail))
             print("  FAIL %-55s %s" % (name[:55], detail))
-    print("\ngolden summarize: %d ok, %d regression(s), %d uncached, %d skipped"
-          % (ok, len(regressions), len(uncached), skipped))
-    LAST.clear()
-    LAST.update(ok=ok, uncached=list(uncached), failures=["%s: %s" % (nm, det) for nm, det in regressions])
+    print("\ngolden summarize: %d ok, %d regression(s), %d uncached, %d skipped, %d errored"
+          % (ok, len(regressions), len(uncached), skipped, len(errors)))
+    LAST.update(ok=ok, uncached=list(uncached), errors=list(errors),
+                failures=["%s: %s" % (nm, det) for nm, det in regressions])
     if uncached:
         print("uncached (run `build` first): %s" % ", ".join(uncached))
 
@@ -266,8 +286,17 @@ def summarize_check():
                         % (ok, len(regressions), len(uncached), skipped))
                 for nm, det in regressions:
                     f.write("- FAIL %s: %s\n" % (nm, det))
+                for e in errors:
+                    f.write("- ERROR (inconclusive) %s\n" % e)
         except Exception as e:
             print("  . summary write skipped: %s" % e)
+    # An attempt that errored judged nothing about the model, so the run as a whole is not a
+    # verdict either way: INCONCLUSIVE (4), which model-watch treats as a broken run and never
+    # remembers -- not a regression (1), which it would remember and report as the model's fault.
+    if errors:
+        print("golden summarize: INCONCLUSIVE -- %d case(s) had an attempt end in an error, not a "
+              "model answer; no verdict" % len(errors))
+        return INCONCLUSIVE
     # Fail closed: a run that verified nothing (every case uncached, or ok == 0) must not
     # exit 0 -- exit 0 is the "safe to bump the model" signal in model-watch.yml, and
     # greenlighting a change having screened zero cases is worse than a false red.
@@ -435,7 +464,15 @@ def run_memoized(mode, run):
             except OSError as e:
                 print("  . summary write skipped: %s" % e)
         return 1 if hit.get("verdict") == "regression" else 0
-    rc = run()
+    LAST.clear()
+    rc = run()   # a non-ConfigError exception in check mode escapes here: main() returns 4, nothing stored
+    if LAST.get("errors") or "ok" not in LAST:
+        # Only a clean set of model answers, judged against the labels, is a verdict. An errored
+        # attempt (API/transport error, refusal, truncation, unparseable output) is not one, even
+        # if other cases regressed, so nothing is stored and the run is INCONCLUSIVE.
+        print("golden %s: inconclusive run; no verdict is remembered (key %s)" % (mode, key))
+        _emit("memo_" + mode, "inconclusive")
+        return INCONCLUSIVE
     if rc in (0, 1):
         data["verdicts"].pop(key, None)
         data["verdicts"][key] = dict(meta, verdict="pass" if rc == 0 else "regression",
@@ -474,9 +511,12 @@ def main():
         return 3
     except Exception as e:  # noqa: BLE001 -- any crash is a broken run, never a verdict
         # An uncaught exception used to exit 1 through the interpreter, which model-watch reads as
-        # a regression (and would now remember as one). A crash judged nothing.
-        print("golden_check: the run crashed, which is not a verdict: %s: %s" % (type(e).__name__, e))
-        return 4
+        # a regression (and would now remember as one). A crash judged nothing. In check mode this
+        # is also how an API/transport error, refusal, truncation or unparseable answer from a tier
+        # arrives (update.anthropic_json raises it), so it is the same INCONCLUSIVE code.
+        print("golden_check: the run was inconclusive (an error, not a model answer), which is not "
+              "a verdict: %s: %s" % (type(e).__name__, e))
+        return INCONCLUSIVE
     print("usage: golden_check.py [build|check|summarize|recall] [--memo]")
     return 2
 

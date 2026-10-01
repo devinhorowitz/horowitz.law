@@ -210,7 +210,8 @@ SKILL_MANIFEST_MAX_AGE_DAYS = 90
 # "high" reproduces exactly what summarize and triage ran at before this existed (it is the
 # documented default of their pinned models). The two Haiku tiers stay "": Haiku does not
 # accept an effort parameter, so they send none, as they always have. update.effort_params
-# also refuses to send an effort to any model not documented to support it, whatever this says.
+# also refuses to send an effort to any model whose support is not confirmed (by the documented
+# rule, update.EFFORT_DOCUMENTED, or else by the Models API's capabilities), whatever this says.
 # Allowed values: "", "low", "medium", "high", "xhigh", "max".
 MODEL_EFFORT = {
     "summarize": "high",   # tier 3, the Opus card writer

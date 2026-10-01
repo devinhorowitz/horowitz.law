@@ -46,7 +46,7 @@ Environment:
   OPINIONS_MAX             max opinions evaluated per run (code default 25; the daily workflow raises it to 80 for heavy filing days)
   OPINIONS_SEEN_CAP        max cluster ids kept in opinions_state.json seen list (default 5000; bounds state-file growth)
   OPINIONS_MAXCHARS        opinion characters sent to triage and summarizer (default 60000)
-  OPINIONS_MAX_TOKENS      summarizer output token cap (default 16000; caps thinking plus the card)
+  OPINIONS_MAX_TOKENS      summarizer output token cap (default 4096)
   OPINIONS_FEED_MAX_BYTES  hard cap on a court-feed read; bounds memory vs a hostile/huge response (default 25 MiB)
   OPINIONS_PDF_MAX_BYTES   hard cap on an opinion-PDF read (default 75 MiB)
   DRY_RUN                  if set to 1, evaluate and print but write nothing
@@ -150,13 +150,7 @@ PDF_MIN_CHARS= int(os.environ.get("OPINIONS_PDF_MIN_CHARS", "500"))  # below thi
 # the XML parse / PDF extract and is handled like any bad fetch. Override via env if a real feed grows.
 FEED_MAX_BYTES = int(os.environ.get("OPINIONS_FEED_MAX_BYTES", str(25 * 1024 * 1024)))
 PDF_MAX_BYTES  = int(os.environ.get("OPINIONS_PDF_MAX_BYTES", str(75 * 1024 * 1024)))
-# Summarizer output budget. RAISED 2026-10, 4096 -> 16000, alongside the explicit effort below. On
-# the Opus 5 generation thinking is on by default and max_tokens caps thinking PLUS the card, so
-# 4096 left little room, and a successor that thinks more per turn at the same effort (the next
-# Opus does, per its migration notes) truncates mid-card -- which anthropic_json correctly raises
-# on, and which the golden summarize check then scored as a dropped area. A cap that is never
-# reached costs nothing; output bills on what is written.
-OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "16000"))
+OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
 # Tier-2 triage output budget. Was a hardcoded 1024, which a verbose model (Sonnet 5) can overflow
 # on an opinion with a substantive `note` plus several `treats` entries -- the anthropic_json guard
 # then (correctly) raises on the truncated JSON rather than card a partial verdict, which crashed the
@@ -179,36 +173,128 @@ TRIAGE_TOKENS = int(os.environ.get("OPINIONS_TRIAGE_MAX_TOKENS", "8000"))
 # ---- Reasoning effort per tier (output_config.effort) ----
 # The level each tier asks for lives in siteconfig.MODEL_EFFORT (see the note there for why it is
 # explicit). This is the other half: WHICH models accept the parameter at all. Sending it to one
-# that does not is a 400, so the rule is a documented allowlist, not "any model": effort is GA on
-# Opus from 4.5 and Sonnet from 4.6 (low/medium/high/max; xhigh arrived with Opus 4.7 and Sonnet
-# 5), and Haiku 4.5 rejects it. Any other model id -- a family this rule has never heard of -- gets
-# no effort, i.e. the pre-2026-10 behaviour. model_watch cross-checks this rule against the Models
-# API's own capabilities.effort for every pin and candidate before the golden check spends
-# anything, so a model this rule misjudges is caught there, not as a 400 in production.
+# that does not is a 400, and sending it to one side of a comparison but not the other makes the
+# comparison unmatched, so effort is sent only where support is CONFIRMED, by one of two sources:
+#
+#   1. The documented rule, EFFORT_DOCUMENTED: the models the API docs this was written against
+#      cover, each with the levels it accepts (effort is GA on Opus from 4.5 and Sonnet from 4.6;
+#      xhigh arrived with Opus 4.7 and Sonnet 5; Opus 4.5 has no xhigh or max; Haiku 4.5 rejects
+#      it). A version OLDER than a family's first documented one is documented as "no".
+#   2. For any model the table does not cover (a newer generation such as a Sonnet 5.5 candidate,
+#      or a family it has never heard of): the Models API's own capabilities.effort for that id,
+#      fetched once per process. Extrapolating "Sonnet 4.6+ takes effort" to a version nobody
+#      documented is a guess, and a wrong guess is a 400 or an unfair comparison.
+#
+# If the docs do not cover the model AND the API reports no capabilities.effort, NO effort is sent
+# (the model's own default) and that is logged, because a golden comparison against an incumbent
+# at a set effort may then be unmatched. model_watch cross-checks the documented rule against the
+# API for every pin and candidate before the golden check spends anything.
 EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
-_EFFORT_MIN = {"opus": (4, 5), "sonnet": (4, 6)}          # first version accepting effort at all
-_XHIGH_MIN = {"opus": (4, 7), "sonnet": (5, 0)}           # first version accepting "xhigh"
+_EFFORT_NO_XHIGH = ("low", "medium", "high", "max")
+EFFORT_DOCUMENTED = {
+    "opus": {(4, 5): ("low", "medium", "high"), (4, 6): _EFFORT_NO_XHIGH, (4, 7): EFFORT_LEVELS,
+             (4, 8): EFFORT_LEVELS, (5, 0): EFFORT_LEVELS, (5, 5): EFFORT_LEVELS},
+    "sonnet": {(4, 6): _EFFORT_NO_XHIGH, (5, 0): EFFORT_LEVELS},
+    "haiku": {(4, 5): ()},
+}
 _MODEL_VERSION = re.compile(r"^claude-(opus|sonnet|haiku)-(\d{1,2})(?:-(\d{1,2}))?(?:-\d{8})?$")
+MODELS_API = "https://api.anthropic.com/v1/models/"
 
 for _role, _lvl in siteconfig.MODEL_EFFORT.items():
     if _lvl and _lvl not in EFFORT_LEVELS:
         raise ValueError("siteconfig.MODEL_EFFORT[%r] = %r is not one of %s" % (_role, _lvl, EFFORT_LEVELS))
 
 
-def effort_supported(model, level="high"):
-    """True when `model` is documented to accept output_config.effort at `level`. Pure, by id."""
+def effort_documented(model, level="high"):
+    """What the documented rule says about `model` at `level`: True or False when the docs cover the
+    model, None when they do not (a version newer than, or between, the documented ones, or an id
+    this rule cannot parse). Pure, by id."""
+    if level not in EFFORT_LEVELS:
+        return False
     m = _MODEL_VERSION.match(model or "")
-    if not m or level not in EFFORT_LEVELS:
-        return False
+    if not m:
+        return None
     fam, ver = m.group(1), (int(m.group(2)), int(m.group(3) or 0))
-    if fam not in _EFFORT_MIN or ver < _EFFORT_MIN[fam]:
+    table = EFFORT_DOCUMENTED.get(fam) or {}
+    if ver in table:
+        return level in table[ver]
+    if table and ver < min(table):
+        return False          # older than the first documented version: documented as no effort
+    return None
+
+
+def api_effort(caps, level):
+    """What the Models API says about `level` effort, from a model's `capabilities` object:
+    True/False, or None when the API did not say (no capabilities object, or no effort entry)."""
+    eff = caps.get("effort") if isinstance(caps, dict) else None
+    if not isinstance(eff, dict) or "supported" not in eff:
+        return None
+    if not eff.get("supported"):
         return False
-    return level != "xhigh" or ver >= _XHIGH_MIN[fam]
+    lvl = eff.get(level)
+    return bool(lvl.get("supported")) if isinstance(lvl, dict) and "supported" in lvl else True
+
+
+_MODEL_CAPS = {}       # model id -> the Models API's capabilities object, or None; one lookup each
+_EFFORT_WARNED = set()
+
+
+def remember_capabilities(model, caps):
+    """Record a model's capabilities already read from the Models API (model_watch lists them all),
+    so effort_supported does not fetch them again in this process."""
+    _MODEL_CAPS[model] = caps if isinstance(caps, dict) else None
+
+
+def fetch_capabilities(model):
+    """GET /v1/models/{id} and return its `capabilities` object, or None on any failure or when the
+    API omits it. Never raises: an unconfirmed model simply gets no effort."""
+    if not KEY or not re.match(r"^[A-Za-z0-9._-]+$", model or ""):
+        return None
+    try:
+        req = urllib.request.Request(MODELS_API + model,
+                                     headers={"x-api-key": KEY, "anthropic-version": VERSION})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read().decode("utf-8"))
+    except Exception as e:  # noqa: BLE001 -- best effort; the caller treats None as unconfirmed
+        print("  ! Models API capabilities lookup for %s failed: %s" % (model, e))
+        return None
+    caps = data.get("capabilities") if isinstance(data, dict) else None
+    return caps if isinstance(caps, dict) else None
+
+
+def model_capabilities(model):
+    """The Models API capabilities for `model`, fetched at most once per process."""
+    if model not in _MODEL_CAPS:
+        _MODEL_CAPS[model] = fetch_capabilities(model)
+    return _MODEL_CAPS[model]
+
+
+def effort_supported(model, level="high"):
+    """True only when support for output_config.effort at `level` on `model` is CONFIRMED: by the
+    documented rule when it covers the model, else by the Models API's capabilities.effort. A model
+    neither source confirms gets no effort, and that is logged once (the comparison may be
+    unmatched)."""
+    if not model:
+        return False          # a disabled tier ("" pin): nothing is sent, nothing to warn about
+    doc = effort_documented(model, level)
+    if doc is not None:
+        return doc
+    api = api_effort(model_capabilities(model), level)
+    if api is None:
+        if (model, level) not in _EFFORT_WARNED:
+            _EFFORT_WARNED.add((model, level))
+            print("  ! effort: %r is not covered by the documented rule (update.EFFORT_DOCUMENTED) and "
+                  "the Models API reports no capabilities.effort for it, so no effort is sent (it runs at "
+                  "its own default); a comparison against a model at effort %r may be unmatched"
+                  % (model, level))
+        return False
+    return api
 
 
 def effort_level(role, model):
     """The effort `role` sends on `model`: siteconfig's level for the role when the model accepts it,
-    else "" (send nothing and run at the model's default -- the Haiku tiers, and any unknown model)."""
+    else "" (send nothing and run at the model's default -- the Haiku tiers, and any model whose
+    support neither the documented rule nor the Models API confirms)."""
     level = siteconfig.MODEL_EFFORT.get(role, "")
     return level if level and effort_supported(model, level) else ""
 

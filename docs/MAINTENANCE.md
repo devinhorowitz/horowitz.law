@@ -231,15 +231,22 @@ Run by hand, from the Actions tab:
   upgrades, but a pin only changes when a PR merges.
 - The effort each funnel tier asks for is `siteconfig.MODEL_EFFORT` (summarize and triage
   `high`, the Haiku tiers none), keyed by tier, sent as `output_config.effort`, and only to a
-  model `update.effort_supported` knows accepts it. It is explicit so a model bump changes the
-  model and nothing else: a new generation can default to a different effort.
+  model whose support is confirmed: by the documented rule (`update.EFFORT_DOCUMENTED`) when it
+  covers the model, else by the Models API's `capabilities.effort`. A model neither confirms (a
+  newer generation the docs predate, with no capabilities reported) is sent none, and the run
+  logs that its comparison may be unmatched. It is explicit so a model bump changes the model and
+  nothing else: a new generation can default to a different effort.
 - `model-watch` evaluates a candidate once. Its golden verdict is remembered in
-  `model_watch_state.json` (committed straight to main by the workflow) under a key over the
+  `model_watch_state.json` (committed straight to main by the workflow; that push uses the
+  default token, so it starts no workflow and triggers no CI run) under a key over the
   models, prompts, effort and golden set; an unchanged candidate costs no model calls on later
   days. Each verdict, pass or regression with the failing cases, is posted once to the
   **Model watch: candidate model evaluation** issue, which closes itself when all pins are
-  current. Delete the state file to force a re-evaluation. A broken run (bad key, no credit,
-  an effort rule that disagrees with the Models API) goes to **Model-watch run failures**.
+  current. Delete the state file to force a re-evaluation. Only clean model answers become a
+  verdict: a golden run in which any call ended in an API or transport error, a refusal, a
+  max_tokens truncation or unparseable output is inconclusive (`golden_check` exit 4), stores
+  nothing, and is retried the next day. A broken run (bad key, no credit, an inconclusive golden
+  run, an effort rule that disagrees with the Models API) goes to **Model-watch run failures**.
 - `model-watch` needs a `MODEL_WATCH_TOKEN` secret only to open its PR: a fine-grained PAT
   scoped to this repo with Contents and Pull requests set to write. Workflows scope is no longer
   needed (a bump no longer edits `.github/workflows/`) and should be revoked. Without the token

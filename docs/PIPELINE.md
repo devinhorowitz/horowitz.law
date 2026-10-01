@@ -595,17 +595,25 @@ since Haiku 4.5 rejects the parameter). `high` is what those tiers ran at before
 existed, because it is their pinned models' API default. It is explicit because a default belongs
 to the model: the next Opus generation defaults to `medium`, and model-watch spent September 2026
 judging it at `medium` against an incumbent at `high` and calling the gap a regression.
-`update.effort_supported` is the allowlist of models documented to take the parameter (Opus 4.5+,
-Sonnet 4.6+, `xhigh` from Opus 4.7 and Sonnet 5); any other model is sent none.
+`update.effort_supported` sends it only where support is confirmed. `update.EFFORT_DOCUMENTED` lists
+the models the bundled docs cover, with the levels each accepts (Opus 4.5 through 5.5, Sonnet 4.6 and
+5, `xhigh` from Opus 4.7 and Sonnet 5, none on Haiku 4.5). A model it does not cover, such as a newer
+Sonnet candidate, is never extrapolated to: it gets an effort only if the Models API's
+`capabilities.effort` for that id confirms the level (looked up once per process). If the API reports
+no capabilities either, no effort is sent and the run logs that the comparison may be unmatched.
 
 `model-watch` (daily) bumps the pins on the runner and runs `golden_check.py check|summarize --memo`
 through the same request builders, so the candidate runs at the same effort as the incumbent.
-Before that it checks `update.effort_supported` against the Models API's `capabilities.effort` for
-every pin and candidate, and stops as a broken run if they disagree. The verdict is remembered in
+Before that it checks the documented rule against the Models API's `capabilities.effort` for every
+pin and candidate it covers, and stops as a broken run if they disagree. The verdict is remembered in
 `model_watch_state.json` under a hash of the request bodies (models, prompts, max_tokens, effort)
 and the golden set, so an unchanged candidate is judged once, not daily; any change to those
 inputs buys one fresh evaluation. Each verdict is posted once to the **Model watch: candidate model
 evaluation** issue. Only a new regression turns the run red; a remembered one stays green and quiet.
+Only clean model answers judged against the labels are remembered: if any call ended in an API or
+transport error, a refusal, a max_tokens truncation or unparseable output, `golden_check` exits 4
+(inconclusive), stores nothing, and the workflow files it as an infrastructure failure, not a
+regression. The memo commit is pushed with the default token, so it triggers no CI run.
 
 ## Test it before trusting the schedule
 
@@ -722,8 +730,7 @@ a handful of Variable edits and the derived checks move with them unless you set
 - `OPINIONS_MAX` (code default `25`; the workflow raises it to `80` for heavy filing days): cap on
   opinions evaluated per run.
 - `OPINIONS_MAXCHARS` (default `60000`): characters of opinion text sent to triage and the summarizer.
-- `OPINIONS_MAX_TOKENS` (default `16000`): summarizer output token cap. It caps thinking plus the
-  card, so it has headroom for a model that thinks more at the same effort.
+- `OPINIONS_MAX_TOKENS` (default `4096`): summarizer output token cap.
 - `OPINIONS_DEBUG=1`: log every model call and full API error bodies.
 - Schedule: edit the `cron` line in the workflow (`17 */4 * * *`, every four hours). It is in UTC.
 

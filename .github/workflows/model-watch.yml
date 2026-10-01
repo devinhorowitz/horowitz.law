@@ -101,12 +101,16 @@ jobs:
       #
       # --memo: a verdict already reached for this exact candidate, prompt set, effort and golden
       # set is reported from model_watch_state.json with no model calls. golden_check writes
-      # memo_<mode>=hit|miss to the step output; a regression is a NEW one only on a miss.
+      # memo_<mode>=hit|miss|inconclusive to the step output; a regression is a NEW one only on
+      # a miss.
       #
       # A regression (exit 1) is captured, not fatal here, so the PR and the tracking issue still
       # get the result; the fail step below fails the run once, on a new regression only. Any
-      # other nonzero exit (3: bad key, no credit or a retired model; 4: a crash) judged nothing,
-      # so it fails this step outright and the failure reporter below files it.
+      # other nonzero exit judged nothing, so it fails this step outright and the failure reporter
+      # below files it as an infrastructure failure, not a regression: 3 is a bad key, no credit or
+      # a retired model; 4 is INCONCLUSIVE, some model call ended in an API/transport error, a
+      # refusal, a max_tokens truncation or unparseable output (or the run crashed), and golden_check
+      # stored no verdict for it, so the next run judges the candidate again.
       - name: Golden-set check against the candidate
         id: eval
         if: steps.watch.outputs.upgrade == 'true'
@@ -124,6 +128,8 @@ jobs:
               0) echo "- \`check\` (screen/triage): no regression ($seen verdict)" >> "$BODY" ;;
               1) rc=1; if [ "$seen" = new ]; then fresh=true; fi
                  echo "- \`check\` (screen/triage): **REGRESSION** ($seen verdict), do not merge as-is" >> "$BODY" ;;
+              4) echo "- \`check\`: **inconclusive** (an API error, refusal, truncation or unparseable answer; nothing remembered)" >> "$BODY"
+                 echo "::error::golden_check check was inconclusive (exit 4): an infrastructure failure, not a regression; no verdict was stored"; exit 4 ;;
               *) echo "::error::golden_check check exited $code: a broken run, not a regression"; exit "$code" ;;
             esac
           fi
@@ -134,6 +140,8 @@ jobs:
               0) echo "- \`summarize\` (Opus): no dropped area ($seen verdict)" >> "$BODY" ;;
               1) rc=1; if [ "$seen" = new ]; then fresh=true; fi
                  echo "- \`summarize\` (Opus): **REGRESSION** ($seen verdict), a covered area was dropped" >> "$BODY" ;;
+              4) echo "- \`summarize\`: **inconclusive** (an API error, refusal, truncation or unparseable answer; nothing remembered)" >> "$BODY"
+                 echo "::error::golden_check summarize was inconclusive (exit 4): an infrastructure failure, not a regression; no verdict was stored"; exit 4 ;;
               *) echo "::error::golden_check summarize exited $code: a broken run, not a regression"; exit "$code" ;;
             esac
           fi
@@ -228,7 +236,9 @@ jobs:
       # records its audit verdicts: from a throwaway worktree of HEAD, because this checkout
       # holds the uncommitted pin bump, which must never reach main. PUSH_MAIN_REGENERATE redoes
       # the copy on each freshly fetched main instead of rebasing. Runs whenever the eval ran, so
-      # a verdict reached before a later mode broke is kept.
+      # a verdict reached before a later mode broke is kept (an inconclusive mode stored nothing).
+      # The push uses the default GITHUB_TOKEN, and a push made with that token starts no workflow
+      # (GitHub's anti-recursion rule): this commit triggers no CI run and needs no skip token.
       - name: Record the golden verdicts on main
         id: record
         if: always() && steps.eval.outcome != 'skipped'
@@ -252,8 +262,9 @@ jobs:
 
       # Surface a genuinely broken run on the "Model-watch run failures" issue. A new regression
       # that reached the tracking issue is expected signal, not a broken run, so it is excluded;
-      # anything else that failed is filed: a bad key or no credit (exit 3), a crash, an effort
-      # rule out of date, a regression whose report or memo commit failed.
+      # anything else that failed is filed: a bad key or no credit (exit 3), an inconclusive
+      # golden run or a crash (exit 4), an effort rule out of date, a regression whose report or
+      # memo commit failed.
       - name: Report a failed run
         if: failure() && (steps.regression.outcome != 'failure' || steps.issue.outcome != 'success' || steps.record.outcome == 'failure')
         env:

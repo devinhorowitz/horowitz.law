@@ -41,8 +41,11 @@ MATCHED EFFORT. A candidate is judged through update.py's own request builders, 
 effort siteconfig.MODEL_EFFORT names for each tier, so the candidate and the incumbent run at the
 same level rather than at their own API defaults (which differ across generations). Before
 anything is bumped, every pin and candidate is checked against the Models API's own
-capabilities.effort: if update.effort_supported disagrees with what the API says a model accepts,
-the run stops as a broken run (exit 3) instead of evaluating an unfair or 400-bound comparison.
+capabilities.effort: if the documented rule (update.EFFORT_DOCUMENTED) covers a model and disagrees
+with what the API says it accepts, the run stops as a broken run (exit 3) instead of evaluating an
+unfair or 400-bound comparison. A model the docs do not cover (a newer generation) is sent effort
+only when the API's capabilities.effort confirms it; when the API reports nothing either, it is
+sent none and the run logs a warning that its comparison may be unmatched.
 
 REMEMBERED VERDICTS AND THE TRACKING ISSUE. The golden check runs with --memo, so an unchanged
 candidate is judged once, not daily (golden_check.py, THE MEMO). The verdict -- pass or
@@ -280,41 +283,60 @@ TIER_ROLES = {"opus": ("summarize",), "sonnet": ("triage",), "haiku": ("screen",
 
 
 def _api_effort(caps, level):
-    """What the Models API says about `level` effort, from a model's capabilities: True/False, or
-    None when the API did not say (no capabilities object, or no effort entry in it)."""
-    eff = (caps or {}).get("effort")
-    if not isinstance(eff, dict) or "supported" not in eff:
-        return None
-    if not eff.get("supported"):
-        return False
-    lvl = eff.get(level)
-    return bool(lvl.get("supported")) if isinstance(lvl, dict) and "supported" in lvl else True
+    """What the Models API says about `level` effort (update.api_effort, kept here by name)."""
+    return update.api_effort(caps, level)
 
 
-def effort_conflicts(models, upgrades, pins=None):
-    """Lines naming every pin or candidate where update.effort_supported disagrees with the Models
-    API's capabilities.effort for the level siteconfig.MODEL_EFFORT asks of that tier. Either
-    direction is a conflict: the rule says yes and the API says no (production would 400), or the
-    rule says no and the API says yes (the candidate would run at its own default against an
-    incumbent at a set level -- the unfair comparison this whole mechanism exists to remove).
-    Silent where the API reports no capabilities: then the documented rule stands."""
+def _effort_review(models, upgrades, pins=None):
+    """(conflicts, unconfirmed) for every pin and candidate, at the level siteconfig.MODEL_EFFORT
+    asks of its tier. Also hands each model's listed capabilities to update, so this process's
+    effort decisions use what the API just reported rather than fetching it again.
+
+    conflicts: the documented rule (update.effort_documented) covers the model and the Models API
+      disagrees with it. Either direction: the rule says yes and the API no (production would 400),
+      or the rule says no and the API yes (the model would run at its own default against one at a
+      set level -- the unfair comparison this mechanism exists to remove).
+    unconfirmed: the docs do not cover the model and the API reports no capabilities.effort, so no
+      effort is sent to it and its comparison may be unmatched. Logged, not fatal: nothing confirms
+      the parameter, and sending it unconfirmed risks a 400.
+    Where the docs do not cover a model but the API does report, the API decides; nothing to flag."""
     pins = pins or TIER_PINS
     by_id = {m["id"]: m for m in models}
     ids = {(t, i) for t, i in pins.items()} | {(u["tier"], u["new"]) for u in upgrades}
-    out = []
+    conflicts, unconfirmed = [], []
     for tier, mid in sorted(ids):
         entry = by_id.get(mid) or next((m for m in models if _canon(m["id"]) == _canon(mid)), None)
+        if entry is not None:
+            update.remember_capabilities(mid, entry.get("caps"))
         for role in TIER_ROLES.get(tier, ()):
             level = siteconfig.MODEL_EFFORT.get(role, "")
             if not level or entry is None:
                 continue
             api = _api_effort(entry.get("caps"), level)
-            rule = update.effort_supported(mid, level)
-            if api is not None and api != rule:
-                out.append("%s on %s: update.effort_supported says %s for effort %r but the Models API "
-                           "says %s. Fix the rule in scripts/update.py before this model is judged."
-                           % (role, mid, "yes" if rule else "no", level, "yes" if api else "no"))
-    return out
+            doc = update.effort_documented(mid, level)
+            if doc is None:
+                if api is None:
+                    unconfirmed.append("%s on %s: the documented rule does not cover this model and the "
+                                       "Models API reports no capabilities.effort, so no effort is sent; "
+                                       "it runs at its own default and the comparison at effort %r may be "
+                                       "unmatched." % (role, mid, level))
+                continue
+            if api is not None and api != doc:
+                conflicts.append("%s on %s: the documented rule (update.EFFORT_DOCUMENTED) says %s for "
+                                 "effort %r but the Models API says %s. Fix the rule in scripts/update.py "
+                                 "before this model is judged."
+                                 % (role, mid, "yes" if doc else "no", level, "yes" if api else "no"))
+    return conflicts, unconfirmed
+
+
+def effort_conflicts(models, upgrades, pins=None):
+    """The conflict lines of _effort_review: documented rule and Models API disagree."""
+    return _effort_review(models, upgrades, pins)[0]
+
+
+def effort_unconfirmed(models, upgrades, pins=None):
+    """The unconfirmed lines of _effort_review: neither the docs nor the API confirm effort."""
+    return _effort_review(models, upgrades, pins)[1]
 
 
 def _fmt_dt(dt):
@@ -502,7 +524,12 @@ def main(argv):
     if not upgrades:
         print("  all tiers current")
 
-    conflicts = effort_conflicts(models, upgrades)
+    conflicts, unconfirmed = _effort_review(models, upgrades)
+    for u in unconfirmed:
+        print("::warning::effort unconfirmed: " + u)
+    if unconfirmed:
+        safeio.step_summary("### Model watch: effort unconfirmed\n\n"
+                            + "\n".join("- " + u for u in unconfirmed))
     if conflicts:
         for c in conflicts:
             print("::error::effort rule out of date: " + c)

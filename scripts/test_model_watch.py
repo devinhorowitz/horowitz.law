@@ -22,6 +22,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import model_watch  # after sys.path, mirroring the other scripts' import-by-sibling-name pattern
+import update  # noqa: E402 -- the effort rule model_watch cross-checks
 
 
 def _m(model_id, y=2026, mo=1, d=1, display=""):
@@ -254,6 +255,7 @@ def _run_step(name, outputs, rcs=None, memos=None):
         got["calls"] = open(p["calls"], encoding="utf-8").read().split()
         got["args"] = open(p["args"], encoding="utf-8").read().splitlines()
     got["rc"] = r.returncode
+    got["log"] = r.stdout + r.stderr
     return got
 
 
@@ -305,8 +307,12 @@ def test_eval_step_reads_only_exit_1_as_regression():
     assert r["rc"] != 0 and "regressed=true" not in r["out"], \
         "a regression followed by a broken run is still a broken run: %r" % r
 
-    r = _run_step(step, both, {"check": 4})
-    assert r["rc"] != 0 and "regressed=true" not in r["out"], "a crash (exit 4) is a broken run: %r" % r
+    for mode in ("check", "summarize"):
+        r = _run_step(step, both, {mode: 4})
+        assert r["rc"] == 4 and "regressed=true" not in r["out"], \
+            "an inconclusive %s (exit 4) is an infrastructure failure, not a regression: %r" % (mode, r)
+        assert "inconclusive" in r["log"] and "not a regression" in r["log"], r["log"]
+        assert "inconclusive" in r["body"] and "REGRESSION" not in r["body"], r["body"]
     print("  ok  the eval step reads only exit 1 as a regression; any other code fails the step")
 
 
@@ -474,17 +480,38 @@ def test_effort_conflicts():
     cand = dict(_m("claude-opus-5-5", 2026, 9, 1), caps=_caps(True, high=True))
     up = [{"tier": "opus", "old": "claude-opus-5", "new": "claude-opus-5-5"}]
     assert model_watch.effort_conflicts(base + [cand], up, pins) == [], "a documented candidate agrees"
-    no_caps = dict(_m("claude-sonnet-5-5", 2026, 9, 29), caps=None)
-    up2 = [{"tier": "sonnet", "old": "claude-sonnet-5", "new": "claude-sonnet-5-5"}]
-    assert model_watch.effort_conflicts(base + [no_caps], up2, pins) == [], "no capabilities: the rule stands"
-    says_no = dict(_m("claude-sonnet-5-5", 2026, 9, 29), caps=_caps(True, high=False))
-    c = model_watch.effort_conflicts(base + [says_no], up2, pins)
-    assert len(c) == 1 and "claude-sonnet-5-5" in c[0] and "triage" in c[0], c
-    says_yes = dict(_m("claude-opus-9", 2026, 9, 29), caps=_caps(True, high=True))
-    up3 = [{"tier": "opus", "old": "claude-opus-5", "new": "claude-opus-9-preview"}]
-    weird = dict(_m("claude-opus-9-preview", 2026, 9, 29), caps=_caps(True, high=True))
-    c = model_watch.effort_conflicts(base + [says_yes, weird], up3, pins)
-    assert len(c) == 1 and "says no" in c[0] and "API says yes" in c[0], c
+    # A model the documented rule does not cover (Sonnet 5.5 here) is never extrapolated to: the
+    # API decides, and when the API is silent too, NO effort is sent and the run warns.
+    saved_caps = dict(update._MODEL_CAPS)
+    try:
+        no_caps = dict(_m("claude-sonnet-5-5", 2026, 9, 29), caps=None)
+        up2 = [{"tier": "sonnet", "old": "claude-sonnet-5", "new": "claude-sonnet-5-5"}]
+        assert model_watch.effort_conflicts(base + [no_caps], up2, pins) == [], \
+            "undocumented + no capabilities is not a conflict (nothing to disagree with)"
+        w = model_watch.effort_unconfirmed(base + [no_caps], up2, pins)
+        assert len(w) == 1 and "claude-sonnet-5-5" in w[0] and "unmatched" in w[0], w
+        assert update.effort_params("triage", "claude-sonnet-5-5") == {}, \
+            "undocumented and unconfirmed by the API: no effort is sent"
+        says_no = dict(_m("claude-sonnet-5-5", 2026, 9, 29), caps=_caps(True, high=False))
+        assert model_watch.effort_conflicts(base + [says_no], up2, pins) == [], "the API decides"
+        assert update.effort_params("triage", "claude-sonnet-5-5") == {}, "the API said no: none sent"
+        says_yes55 = dict(_m("claude-sonnet-5-5", 2026, 9, 29), caps=_caps(True, high=True))
+        assert model_watch.effort_conflicts(base + [says_yes55], up2, pins) == []
+        assert model_watch.effort_unconfirmed(base + [says_yes55], up2, pins) == []
+        assert update.effort_params("triage", "claude-sonnet-5-5") == {"output_config": {"effort": "high"}}, \
+            "the API confirmed it: the candidate runs at the incumbent's effort"
+        # A documented "no" that the API contradicts is a conflict (the rule is out of date) ...
+        old_sonnet = dict(_m("claude-sonnet-4-5", 2025, 9, 29), caps=_caps(True, high=True))
+        up3 = [{"tier": "sonnet", "old": "claude-sonnet-5", "new": "claude-sonnet-4-5"}]
+        c = model_watch.effort_conflicts(base + [old_sonnet], up3, pins)
+        assert len(c) == 1 and "says no" in c[0] and "API says yes" in c[0], c
+        # ... and so is a documented "yes" the API denies.
+        denied = [dict(base[0], caps=_caps(True, high=False))] + base[1:]
+        c = model_watch.effort_conflicts(denied, [], pins)
+        assert len(c) == 1 and "claude-opus-5" in c[0] and "summarize" in c[0] and "says yes" in c[0], c
+    finally:
+        update._MODEL_CAPS.clear()
+        update._MODEL_CAPS.update(saved_caps)
     haiku_eff = dict(_m("claude-haiku-5", 2026, 9, 29), caps=_caps(True, high=True))
     up4 = [{"tier": "haiku", "old": "claude-haiku-4-5", "new": "claude-haiku-5"}]
     assert model_watch.effort_conflicts(base + [haiku_eff], up4, pins) == [], \
