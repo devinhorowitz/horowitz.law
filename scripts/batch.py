@@ -65,7 +65,25 @@ CUSTOM_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")   # the Batch API's custom_i
 
 
 class BatchError(RuntimeError):
-    """A batch API call failed (non-retryable HTTP, or retries exhausted)."""
+    """A batch API call failed (non-retryable HTTP, or retries exhausted). `status` is the HTTP
+    status of a non-retryable error response, or None for a transport failure (connection, timeout,
+    retries exhausted) or a malformed batch object. See gone()."""
+
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.status = status
+
+
+# HTTP statuses that say a batch id is definitively gone: unknown to the API, or its results have
+# been deleted. Anything else -- a transport failure, a 5xx after retries, an auth error -- says
+# nothing about the batch itself, so a caller carrying the id should keep it and try again later.
+GONE_STATUS = {404, 410}
+
+
+def gone(exc):
+    """Whether `exc` is a definitive "this batch no longer exists" answer (HTTP 404/410), as
+    opposed to a transient failure that leaves the batch running and billable."""
+    return isinstance(exc, BatchError) and exc.status in GONE_STATUS
 
 
 class BatchTimeout(RuntimeError):
@@ -102,7 +120,7 @@ def _send(method, url, body=None, label="batch"):
             last = "%s %s -> HTTP %s: %s" % (label, method, e.code, (detail[:400] or e.reason))
             if e.code in RETRY_STATUS and attempt < 4:
                 time.sleep(min(2 ** attempt * 2, 30)); continue
-            raise BatchError(last)
+            raise BatchError(last, status=e.code)
         except (urllib.error.URLError, TimeoutError) as e:
             # TimeoutError (bare socket.timeout) is a SIBLING of URLError under OSError, not a
             # subclass, and a read timeout on r.read() above raises it unwrapped -- so it must be
@@ -247,7 +265,10 @@ def fetch(batch_id, deadline=None, interval=20.0, label="batch"):
     """Poll and collect a batch an earlier run submitted (a carry). Returns {custom_id: result}
     for THAT batch only; mapping each line back to current work by custom_id is the caller's job.
     Raises BatchTimeout if it is still running at the deadline (it is not cancelled: the caller
-    is carrying it), and BatchError if the id is unknown or expired."""
+    is carrying it), and BatchError on a failure. gone(e) tells a definitive answer (the id is
+    unknown, or its results were deleted: drop the carry) from a transient one (keep it and retry
+    on a later run). Requests that expired or were canceled come back as per-line results with
+    ok False, not as an exception."""
     return collect(poll(batch_id, deadline=deadline, interval=interval, label=label), label)
 
 

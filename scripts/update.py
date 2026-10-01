@@ -1222,6 +1222,26 @@ def pdf_text(pdf_url, deadline=None):
     return re.sub(r"[ \t]+", " ", text).strip()
 
 
+def refetch_opinion_text(r, deadline=None):
+    """An opinion's text by the candidate loop's rule (the PDF enclosure first, then the REST
+    sub-opinions while the CourtListener budget has room), for a case the loop is not reading this
+    run: a carried smell escalation whose draft is being finished. "" when nothing usable came back,
+    including a budget deferral; a ConfigError still propagates."""
+    text = pdf_text(r.get("pdf_url"), deadline=deadline)
+    if _pdf_ok(text):
+        return text
+    if cl_rate.remaining() <= 0:
+        return ""
+    try:
+        rest = opinion_text_full(r, deadline=deadline)
+    except ConfigError:
+        raise
+    except Exception as e:
+        _dbg("refetch of cluster %s text failed (%s)" % (cluster_id_of(r), e))
+        return ""
+    return rest if _pdf_ok(rest) else ""
+
+
 def _first_json_object(s):
     """The first brace-balanced {...} object in s, ignoring braces inside string literals. Replaces a
     greedy `\\{.*\\}` (which over-grabs to the last } in trailing prose -- e.g. a chatty '...also cited
@@ -1312,6 +1332,34 @@ def _norm_cids(raw):
     return sorted(out)
 
 
+# What a carried smell escalation needs to be finished on a later run. Its cluster was marked seen
+# when triage dropped it, so it never comes back through the candidate loop: the carry has to hold
+# the candidate's identity, the CourtListener fields that refetch its text and official link, and
+# the timestamp of the drop record whose smell_outcome the read settles.
+CARRY_SMELL_FIELDS = ("name", "court_id", "docket", "date_filed", "url", "note", "cl_status",
+                      "pdf_url", "absolute_url", "rej_ts")
+
+
+def _carry_smell_meta(p):
+    """The carry's record of one smell-escalation pending item (see CARRY_SMELL_FIELDS)."""
+    r = p.get("r") or {}
+    meta = {k: p.get(k) for k in ("name", "court_id", "docket", "date_filed", "url", "note", "cl_status")}
+    meta["pdf_url"] = r.get("pdf_url") or ""
+    meta["absolute_url"] = r.get("absolute_url") or ""
+    meta["rej_ts"] = (p.get("rej") or {}).get("ts") or ""
+    return {k: ("" if v is None else v) for k, v in meta.items()}
+
+
+def _norm_smell(raw):
+    """A carry's smell-escalation records as {"<cid>": meta}, dropping junk; {} when there are none."""
+    out = {}
+    if isinstance(raw, dict):
+        for k, v in raw.items():
+            if str(k).isdigit() and isinstance(v, dict):
+                out[str(int(k))] = {f: v.get(f) or "" for f in CARRY_SMELL_FIELDS}
+    return out
+
+
 def load_pending_batches(state, now=None):
     """Read carried batches out of state. Returns (carries, expired_cids):
 
@@ -1344,6 +1392,9 @@ def load_pending_batches(state, now=None):
             expired.update(cids or [])
             continue
         carries[bid] = {"label": label, "id": bid, "at": at, "n": rec.get("n"), "cids": cids}
+        smell = _norm_smell(rec.get("smell"))
+        if smell:
+            carries[bid]["smell"] = smell
     return carries, expired
 
 
@@ -2574,6 +2625,37 @@ def _log_run(rec):
             print("  . run summary write skipped: %s" % e)
 
 
+def _settle_logged_smell(outcomes):
+    """Stamp smell_outcome on triage-drop records an EARLIER run logged, for smell escalations whose
+    carried draft this run finished. `outcomes` is [(cluster_id, drop ts, outcome)]; a record is
+    matched on its stage, cluster id and ts, so only the drop that was escalated is touched. Returns
+    how many records were updated. Best-effort like _log_rejections: a record that has aged out of the
+    capped log is skipped, and a write failure never fails the run."""
+    want = {(int(c), str(ts)): o for c, ts, o in outcomes if ts}
+    if not want or not os.path.exists(REJECT_PATH):
+        return 0
+    try:
+        with open(REJECT_PATH, "r", encoding="utf-8") as f:
+            lines = [ln for ln in f.read().splitlines() if ln.strip()]
+        n = 0
+        for i, ln in enumerate(lines):
+            try:
+                r = json.loads(ln)
+                key = (int(r.get("cluster_id")), str(r.get("ts")))
+            except (ValueError, TypeError):
+                continue
+            if r.get("stage") == "triage" and key in want:
+                r["smell_outcome"] = want[key]
+                lines[i] = json.dumps(r, separators=(",", ":"), ensure_ascii=False)
+                n += 1
+        if n:
+            safeio.atomic_write_text(REJECT_PATH, "\n".join(lines) + "\n")
+        return n
+    except Exception as e:
+        print("  . rejection-log smell settle skipped: %s" % e)
+        return 0
+
+
 def _log_rejections(records):
     """Append this run's screen and triage rejections to REJECT_PATH, one JSON line each, so the
     cases the funnel threw out can be reviewed for false negatives. Kept to the most recent
@@ -2949,7 +3031,36 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
             "wrote_auto": bool(auto_cards), "noop": False}
 
 
-def _draft_pending(pending, deadline, finish_fn):
+def revive_smell_escalation(cid, meta, dedup_index, deadline=None):
+    """_draft_pending's `revive` for main(): a carried smell-escalation draft whose cluster was marked
+    seen at its triage drop, so it is never pending again. Rebuilds the candidate from the carry's
+    record (see CARRY_SMELL_FIELDS) and refetches its text, so the caller finishes it exactly as an
+    in-run escalation draft is finished (finish_card: the guards, then the publish/hold routing).
+
+    Returns the pending-shaped item (with "rej_ts", the drop record to settle), False to drop the
+    draft (the same in-run twin recheck an in-run escalation passes), or None to keep the carry for a
+    later run (no usable text this run). Appends the case to dedup_index when it returns an item."""
+    csig = _dup_sig(COURT_MAP.get(meta["court_id"]) or meta["court_id"], meta["date_filed"],
+                    meta["docket"], meta["name"])
+    dup = next((nm for sig, nm in dedup_index if _same_case(csig, sig)), None)
+    if dup:
+        print("  ~ smell: carried escalation draft for %s dropped (twin of %s)" % (meta["name"][:40], dup[:40]))
+        return False
+    r = {"cluster_id": cid, "court_id": meta["court_id"], "caseName": meta["name"],
+         "docketNumber": meta["docket"], "dateFiled": meta["date_filed"],
+         "absolute_url": meta["absolute_url"], "pdf_url": meta["pdf_url"]}
+    text = refetch_opinion_text(r, deadline=deadline)
+    if not text:
+        print("  . smell: no opinion text for carried escalation %s %s this run; its draft is kept"
+              % (cid, meta["name"][:40]))
+        return None
+    dedup_index.append((csig, meta["name"]))
+    return {"r": r, "cid": cid, "name": meta["name"], "court_id": meta["court_id"],
+            "docket": meta["docket"], "date_filed": meta["date_filed"], "url": meta["url"],
+            "text": text, "note": meta["note"], "cl_status": meta["cl_status"], "rej_ts": meta["rej_ts"]}
+
+
+def _draft_pending(pending, deadline, finish_fn, carded=frozenset(), closed=frozenset(), revive=None):
     """Draft the tier-3 summaries for the collected `pending` candidates through the 50%-priced Batch
     API (OPINIONS_BATCH), then call finish_fn(v, p) for each that succeeds. Returns the set of cluster
     ids that were drafted, to fold into the run's `evaluated` set.
@@ -2958,14 +3069,28 @@ def _draft_pending(pending, deadline, finish_fn):
     fallback), so this first settles any carried summarize batch, strictly by custom_id:
 
       1. Each carry is checked once without waiting. An ended carry is collected and each draft is
-         applied only to its OWN cluster, and only if that cluster is still pending this run; a
-         draft for a cluster no longer eligible is logged and dropped. A carry still running stays
-         carried, and the clusters it covers wait for it. An unknown or expired carry is dropped and
-         its clusters are drafted fresh.
-      2. Every pending candidate without a usable carried draft and not waiting on a running carry
-         gets a FRESH request in this run. On the deadline that batch is carried (its id and the
-         exact cluster ids it covers go to pending_batches), never cancelled.
+         applied only to its OWN cluster. A carry still running stays carried, and the clusters it
+         covers wait for it. A carry the API says is gone (404/410) is dropped and its clusters are
+         drafted fresh; one that could not be reached (a transport failure) stays carried and its
+         clusters wait for it, so the batch is never paid for twice.
+      2. Every pending candidate without a usable carried draft and not waiting on a carry gets a
+         FRESH request in this run. On the deadline that batch is carried (its id, the exact cluster
+         ids it covers, and the smell-escalation records among them go to pending_batches), never
+         cancelled.
       3. A carry that was still running is polled again with what is left of the deadline.
+
+    A carried draft whose cluster is not pending this run is a finished, paid read, so it is not
+    thrown away lightly:
+
+      * a smell escalation (recorded in the carry's "smell" map) is handed to revive(cid, meta),
+        unless the cluster is in `carded`. Its cluster was marked seen at the triage drop, so it can
+        never be pending again. revive returns a pending-shaped item to finish now, None to keep the
+        draft for a later run (its text could not be fetched), or False to drop it;
+      * any other draft is dropped if its cluster is in `carded` (carded or staged for review) or
+        `closed` (seen or evaluated: permanently rejected) and otherwise KEPT: the carry stays in
+        pending_batches narrowed to those clusters, and a later run that has them pending applies
+        them. That is a cluster this run never reached (the CourtListener budget, the breaker, a
+        feed cut). It expires with the carry like any other.
 
     Every candidate that ends the call undrafted is logged ("! undrafted: <cid> <name> (reason)")
     and is not marked evaluated, so it stays un-seen and is retried. A per-result error or an
@@ -2977,21 +3102,58 @@ def _draft_pending(pending, deadline, finish_fn):
     to finish is not re-summarized next run."""
     by_cid = {int(p["cid"]): p for p in pending}
     drafts = {}       # cid -> parsed summarize verdict
+    revived = {}      # cid -> pending-shaped item revive() built for a carried smell escalation
     why = {}          # cid -> why it has no draft (yet)
-    waiting = {}      # carried batch id -> record, for carries still running
+    waiting = {}      # carried batch id -> record, for carries still running (or unreachable)
+    unreachable = set()   # carried batch ids a transport failure kept from being read this run
 
-    def _take(results, source):
-        """Apply one batch's lines by custom_id. Returns how many drafts it supplied."""
-        n = 0
+    def _take(results, source, rec=None):
+        """Apply one batch's lines by custom_id. Returns (drafts supplied, cluster ids kept for a
+        later run). Only a carried batch (`rec`) can keep a draft."""
+        n, kept = 0, []
+        smell = (rec or {}).get("smell") or {}
+        # A carry kept for some of its clusters is narrowed to them; the batch still returns every
+        # line, and the others were settled by the run that narrowed it.
+        live = set(rec["cids"]) if rec and rec.get("cids") is not None else None
         for key, res in results.items():
             cid = batch_key_cid(key, "summarize")
             if cid is None:
                 print("  . %s: ignoring a result line under an unexpected custom_id %r" % (source, key))
                 continue
+            if live is not None and cid not in live:
+                continue
             p = by_cid.get(cid)
             if p is None:
-                print("  . %s: draft for cluster %s dropped; it is not eligible for drafting this run"
-                      % (source, cid))
+                if cid in revived or cid in drafts:
+                    continue
+                meta = smell.get(str(cid))
+                if rec is None:
+                    print("  . %s: draft for cluster %s dropped; it was not requested this run" % (source, cid))
+                elif not res.get("ok"):
+                    print("  . %s: no draft for cluster %s to keep (result %s)"
+                          % (source, cid, res.get("type") or "errored"))
+                elif cid in carded:
+                    print("  . %s: draft for cluster %s dropped; that case is already carded or staged"
+                          % (source, cid))
+                elif meta is not None and revive is not None:
+                    try:
+                        v = parse_json(res["text"])
+                    except Exception as pe:
+                        print("  . %s: smell-escalation draft for cluster %s unparseable (%s); dropped"
+                              % (source, cid, str(pe)[:80]))
+                        continue
+                    item = revive(cid, meta)
+                    if item:
+                        drafts[cid] = v
+                        revived[cid] = item
+                        n += 1
+                    elif item is None:
+                        kept.append(cid)
+                elif meta is None and cid in closed:
+                    print("  . %s: draft for cluster %s dropped; it is not eligible for drafting (seen)"
+                          % (source, cid))
+                else:
+                    kept.append(cid)
                 continue
             if cid in drafts:
                 continue
@@ -3004,7 +3166,7 @@ def _draft_pending(pending, deadline, finish_fn):
                 n += 1
             except Exception as pe:
                 why[cid] = "%s: unparseable draft (%s)" % (source, str(pe)[:80])
-        return n
+        return n, kept
 
     def _collect_carry(bid, rec, wait_deadline):
         try:
@@ -3016,24 +3178,49 @@ def _draft_pending(pending, deadline, finish_fn):
                     why[c] = "carried batch %s still running; kept for the next run" % bid
             return
         except batch.BatchError as e:
-            print("  ! summarize carry %s could not be collected (%s); dropped" % (bid, e))
+            if not batch.gone(e):
+                # A transport failure says nothing about the batch: it is still running (and billed),
+                # so keep the carry and its clusters' claim on it, and try again next run.
+                print("  ! summarize carry %s unreachable (%s); kept for the next run" % (bid, e))
+                waiting[bid] = rec
+                unreachable.add(bid)
+                for c in rec.get("cids") or []:
+                    if c in by_cid and c not in drafts:
+                        why[c] = "carried batch %s unreachable; kept for the next run" % bid
+                return
+            print("  ! summarize carry %s is gone (%s); dropped, its clusters are drafted fresh" % (bid, e))
             waiting.pop(bid, None)
             _PENDING_BATCHES.pop(bid, None)
             for c in rec.get("cids") or []:
                 if c in by_cid and c not in drafts:
-                    why[c] = "carried batch %s uncollectable" % bid
+                    why[c] = "carried batch %s gone" % bid
             return
         waiting.pop(bid, None)
-        _PENDING_BATCHES.pop(bid, None)
-        n = _take(got, "carried batch %s" % bid)
-        print("  . %s: collected carried batch %s (%d line(s), %d applied to this run's candidates)"
+        # The batch has ended: a covered cluster with no line in it is not "still running" any more.
+        for c in rec.get("cids") or []:
+            if c in by_cid and c not in drafts:
+                why[c] = "carried batch %s finished without a result line for it" % bid
+        n, kept = _take(got, "carried batch %s" % bid, rec)
+        if kept:
+            keep = dict(rec, cids=sorted(kept), n=len(kept))
+            smell = {k: v for k, v in (rec.get("smell") or {}).items() if int(k) in kept}
+            if smell:
+                keep["smell"] = smell
+            else:
+                keep.pop("smell", None)
+            _PENDING_BATCHES[bid] = keep
+            print("  . %s: carried batch %s kept for a later run, for the finished draft(s) of cluster(s) "
+                  "not pending this run: %s" % (SUMMARIZE_LABEL, bid, ", ".join(str(c) for c in sorted(kept))))
+        else:
+            _PENDING_BATCHES.pop(bid, None)
+        print("  . %s: collected carried batch %s (%d line(s), %d applied this run)"
               % (SUMMARIZE_LABEL, bid, len(got), n), flush=True)
 
     # 1. Carried batches: one status read each, no waiting yet.
     for bid in [b for b, r in _RESUME_BATCHES.items() if r.get("label") == SUMMARIZE_LABEL]:
         _collect_carry(bid, _RESUME_BATCHES.pop(bid), time.time())
 
-    # 2. Fresh requests for everything not drafted and not waiting on a running carry.
+    # 2. Fresh requests for everything not drafted and not waiting on a carry.
     covered = {c for rec in waiting.values() for c in (rec.get("cids") or [])}
     fresh = [p for p in pending if int(p["cid"]) not in drafts and int(p["cid"]) not in covered]
     if fresh:
@@ -3043,12 +3230,17 @@ def _draft_pending(pending, deadline, finish_fn):
                                                   cl_status=p["cl_status"]))
                 for p in fresh]
         fresh_cids = sorted(int(p["cid"]) for p in fresh)
+        # Smell escalations among them: their clusters are already seen, so if this batch is carried
+        # the later run that collects it needs these records to finish them (see revive above).
+        fresh_smell = {str(int(p["cid"])): _carry_smell_meta(p) for p in fresh if p.get("rej")}
         submitted = []
 
         def _record(bid):
             submitted.append(bid)
             _PENDING_BATCHES[bid] = {"label": SUMMARIZE_LABEL, "id": bid, "at": time.time(),
                                      "n": len(reqs), "cids": fresh_cids}
+            if fresh_smell:
+                _PENDING_BATCHES[bid]["smell"] = fresh_smell
         try:
             got = batch.run(reqs, deadline=deadline, label=SUMMARIZE_LABEL, on_submit=_record,
                             cancel_unfinished=False)
@@ -3065,12 +3257,14 @@ def _draft_pending(pending, deadline, finish_fn):
             for bid in submitted:
                 _PENDING_BATCHES.pop(bid, None)
             for c in fresh_cids:
-                why.setdefault(c, "no result line returned")
+                why[c] = "summarize batch returned no result line for it"
             _take(got, "summarize batch")
 
-    # 3. A carry that was still running gets whatever is left of the deadline.
+    # 3. A carry that was still running gets whatever is left of the deadline. One that was
+    #    unreachable is not retried in this run: _send already spent its retries on it.
     for bid, rec in list(waiting.items()):
-        _collect_carry(bid, rec, deadline)
+        if bid not in unreachable:
+            _collect_carry(bid, rec, deadline)
 
     drafted = set()
     for p in pending:
@@ -3081,6 +3275,10 @@ def _draft_pending(pending, deadline, finish_fn):
             continue
         drafted.add(p["cid"])
         finish_fn(v, p)
+    for cid, item in revived.items():
+        print("  ~ smell: finishing the carried escalation draft for %s %s" % (cid, item["name"][:50]))
+        drafted.add(item["cid"])
+        finish_fn(drafts[cid], item)
     return drafted
 
 
@@ -3718,9 +3916,17 @@ def main():
     # and stays unevaluated, so it retries next run -- the same recovery a synchronous summarize
     # error already gets. finish_card runs
     # with a FRESH CourtListener deadline, since the loop's run_start+BUDGET_SEC is spent by now and
-    # its official-link fetches must not start pre-expired.
-    if FUNNEL_BATCH and pending and not cfg_error:
+    # its official-link fetches must not start pre-expired. A run with nothing pending still settles
+    # a carried batch: its drafts may be smell escalations or clusters a later run will want.
+    smell_revived = []   # carried smell-escalation drafts finished this run (drop logged by an earlier run)
+    if FUNNEL_BATCH and (pending or _RESUME_BATCHES) and not cfg_error:
         cl_deadline = time.time() + BUDGET_SEC   # fresh CL window for the official-link enrichment
+
+        def _revive(cid, meta):
+            item = revive_smell_escalation(cid, meta, dedup_index, cl_deadline)
+            if item:
+                smell_revived.append(item)
+            return item
 
         def _finish(v, p):
             try:
@@ -3732,7 +3938,9 @@ def main():
                 print("  ! finishing card failed for %s: %s" % (p["name"][:50], fe))
 
         try:
-            drafted_cids = _draft_pending(pending, time.time() + SUMMARIZE_BATCH_SEC, _finish)
+            drafted_cids = _draft_pending(pending, time.time() + SUMMARIZE_BATCH_SEC, _finish,
+                                          carded=have | pending_review, closed=seen | evaluated,
+                                          revive=_revive)
             evaluated |= drafted_cids
         except ConfigError as ce:
             print("  ! configuration error finishing a batched draft (nothing committed): %s" % ce)
@@ -3772,6 +3980,16 @@ def main():
             else:
                 it["rej"]["smell_outcome"] = "deferred"
         skipped = [s for s in skipped if s is not None]
+    # A carried escalation draft finished this run settles the drop an earlier run logged (and marked
+    # "deferred" when its batch was carried). The summarizer read it, so it is carded or the drop stands.
+    smell_settled = []
+    if smell_revived:
+        carded_cids = {int(e.get("cluster_id") or 0) for e in added}
+        for it in smell_revived:
+            outcome = "carded" if it["cid"] in carded_cids else "drop-stands"
+            smell_recovered += outcome == "carded"
+            smell_settled.append((it["cid"], it["rej_ts"], outcome))
+            print("  ~ smell: carried escalation %s %s -> %s" % (it["cid"], it["name"][:40], outcome))
     if n_smell or smell_pending:
         print("  . smell: %d of %d drop reason(s) audited, %d suspect, %d escalated, %d recovered"
               % (n_smell, len(smell_pending), n_smell_suspect, len(smell_escalated), smell_recovered))
@@ -3810,6 +4028,7 @@ def main():
 
     # Per-run health record (every non-dry run, no-op or not), so the funnel's activity
     # and how much each tier discards are visible without reading raw logs.
+    _settle_logged_smell(smell_settled)
     _log_rejections(rejections)
     _log_run({
         "ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
