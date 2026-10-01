@@ -132,11 +132,18 @@ def stress_transport(iters, rng):
 # ---- B/C. orchestrator fuzz ---------------------------------------------------------------------
 
 def _run_map(result_map, raise_exc=None):
-    def _run(reqs, deadline=None, interval=20.0, label="batch"):
+    """A batch.run stand-in with the real signature (on_submit, cancel_unfinished), so a caller's
+    keyword arguments never TypeError here."""
+    def _run(reqs, deadline=None, interval=20.0, label="batch", on_submit=None, cancel_unfinished=True):
         if raise_exc is not None:
             raise raise_exc
         return result_map
     return _run
+
+
+def _skey(c):
+    """The funnel's summarize custom_id for cluster c (update.batch_key)."""
+    return update.batch_key("summarize", c)
 
 
 def stress_draft_pending(iters, rng):
@@ -153,15 +160,15 @@ def stress_draft_pending(iters, rng):
             for c in cids:
                 roll = rng.random()
                 if roll < 0.6:
-                    rmap[str(c)] = {"ok": True, "text": '{"v": %d}' % c, "stop_reason": "end_turn"}
+                    rmap[_skey(c)] = {"ok": True, "text": '{"v": %d}' % c, "stop_reason": "end_turn"}
                     want_ok.add(c)
                 elif roll < 0.8:
-                    rmap[str(c)] = {"ok": False, "type": "errored"}
+                    rmap[_skey(c)] = {"ok": False, "type": "errored"}
                 elif roll < 0.92:
-                    rmap[str(c)] = {"ok": True, "text": "not json", "stop_reason": "end_turn"}
+                    rmap[_skey(c)] = {"ok": True, "text": "not json", "stop_reason": "end_turn"}
                 # else: omit (missing)
             if rng.random() < 0.3:
-                rmap["88888888"] = {"ok": True, "text": '{"v": 0}', "stop_reason": "end_turn"}  # unknown
+                rmap[_skey(88888888)] = {"ok": True, "text": '{"v": 0}', "stop_reason": "end_turn"}  # unknown
 
             mode = rng.random()
             finished = []
@@ -198,7 +205,7 @@ def stress_draft_pending(iters, rng):
         # abort (main() turns it into cfg_error -> nothing committed). Pin it explicitly.
         one = [{"cid": 1, "r": {}, "name": "C1", "court_id": "ga", "docket": "D1",
                 "date_filed": "2026-07-01", "text": "t", "note": "", "cl_status": "published"}]
-        batch.run = _run_map({"1": {"ok": True, "text": '{"v": 1}', "stop_reason": "end_turn"}})
+        batch.run = _run_map({_skey(1): {"ok": True, "text": '{"v": 1}', "stop_reason": "end_turn"}})
 
         def _raise_cfg(v, p):
             raise update.ConfigError("credit exhausted")
@@ -256,7 +263,7 @@ def stress_parity(rng):
         pending = [{"cid": c, "r": {}, "name": "C%d" % c, "court_id": "ga", "docket": "D%d" % c,
                     "date_filed": "2026-07-01", "text": "t", "note": "", "cl_status": "published"}
                    for c in cids]
-        rmap = {str(c): {"ok": True, "text": '{"v": %d}' % c, "stop_reason": "end_turn"} for c in cids}
+        rmap = {_skey(c): {"ok": True, "text": '{"v": %d}' % c, "stop_reason": "end_turn"} for c in cids}
         batch.run = _run_map(rmap)
         seen = []
         update._draft_pending(pending, 1.0, lambda v, p: seen.append((p["cid"], v["v"])))

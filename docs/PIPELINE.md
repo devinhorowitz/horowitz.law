@@ -172,6 +172,54 @@ audits the logged backlog plus anything un-stamped or deferred, persisting progr
 every chunk, and surfaces suspects on a tracking issue with ready-to-paste `queue.txt` force
 lines for editor review.
 
+### Message Batches: what happens when a batch misses its deadline
+
+Triage, smell, summarize and the finish guards each run as one 50%-priced Message Batches job
+(`scripts/batch.py`) under a wall-clock budget (`OPINIONS_*_BATCH_SEC`). Every request's
+`custom_id` names its phase and its case (`triage-<cid>`, `summarize-<cid>`,
+`guards-<cid>-<kind>`; a smell chunk audits many drops, so its id is `smell-<k>-<digest>` over the
+chunk's exact cluster ids and reasons), and results are applied strictly by `custom_id`. A result
+can never land on a different case.
+
+- **Triage, smell, guards** have a synchronous fallback, so they never carry a batch to a later
+  run. On the deadline the batch is cancelled (best effort, logged, so it is not paid for on top of
+  the fallback) and the same work runs synchronously. A guard verdict the batch did not return
+  (an errored, missing or unparseable line) is also run synchronously; a card is never reported
+  guarded while a verdict is unavailable.
+- **Summarize** has no fallback, so a late batch is carried: `opinions_state.json`
+  `pending_batches` records its id, submit time and the exact cluster ids it covers. The next run
+  that reaches the summarize phase (even with nothing new pending) checks the carry first and
+  applies each draft only to its own cluster. Every pending candidate the carry does not cover gets
+  a fresh request in the same run. Every candidate that ends the run undrafted is logged as
+  `! undrafted: <cid> <name> (reason)` and stays un-seen, so it is retried.
+- A carried draft is a finished, paid read, so one whose cluster is not pending in the collecting
+  run is not thrown away lightly:
+  - a **smell escalation** (its cluster was marked seen at the triage drop, so it is never pending
+    again) is recorded in the carry's `smell` map with what it takes to finish it. The collecting
+    run refetches the opinion text and finishes it the way an in-run escalation draft is finished:
+    the guards, then publish or hold. It then stamps `smell_outcome` (`carded` or `drop-stands`) on
+    the drop record the earlier run logged. If the text cannot be fetched, the draft is kept for a
+    later run. An escalation whose case is already carded or staged is dropped;
+  - any **other** draft is dropped only when its cluster is already carded or staged, or seen
+    (permanently rejected). Otherwise (a cluster the run never reached because of the CourtListener
+    budget, the breaker or a feed cut) the carry is kept, narrowed to those clusters, for a later
+    run that has them pending.
+- A carry stays in `pending_batches` until it is collected, including through runs that never
+  reach the summarize phase. A transport failure while collecting it (after `_send`'s retries)
+  keeps it and its clusters wait for it, so the batch is never paid for twice. Only a definitive
+  answer drops it: HTTP 404/410 (the id is unknown or its results are gone), after which its
+  clusters are drafted fresh. Requests that expired or were canceled come back as per-line results
+  and are re-requested. A carry expires after `OPINIONS_BATCH_CARRY_MAX_AGE_SEC` (default 25
+  days; Anthropic keeps batch results for 29). On expiry a log line names the clusters it covered,
+  and those clusters are made eligible again.
+- Older code also carried triage, smell and guard batches. A run that finds one of those in state
+  logs it as cleared and does not resume it.
+
+This applies only to deferrals. A run reclaimed mid-batch (exit 143) never writes state, so its
+batch is lost. Before 2026-10 a carried batch's results were returned in place of the current
+requests: smell verdicts landed on the wrong drops, and current summarize candidates went undrafted
+with no log line. `scripts/test_batch_resume.py` pins the fixed behaviour against a fake Batch API.
+
 ### Standing decision: the recall audit runs to 2026-11-30
 
 **Decided 2026-08-29 by the owner of the feed. Revisit on or after 2026-11-30.**
