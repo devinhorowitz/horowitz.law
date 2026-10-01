@@ -69,11 +69,13 @@ Env:
   TREATMENT_PDF_MIN_CHARS  min extracted PDF chars to use before REST fallback (default 500)
   TREATMENT_BREAKER        stop after this many consecutive model-call failures (default 4)
   TREATMENT_PENDING_TRIES  give up on an individually-failing citer after this many runs (default 4)
+  TREATMENT_TEXT_WAIT_WEEKS  give up on a citer whose text never becomes available after this many
+                           weeks of retrying (default 8); separate from PENDING_TRIES
   CL_PER_MINUTE / CL_PER_HOUR / CL_PER_DAY / CL_RATE_MARGIN  REST budget (see cl_rate.py)
   DRY_RUN=1                evaluate and print; write nothing, open no PR
   OPINIONS_DEBUG=1         verbose (inherited from update.py)
 
-Run via .github/workflows/treatment.yml (6-hourly cron + manual dispatch).
+Run via .github/workflows/treatment.yml (manual dispatch; its 6-hourly cron is paused).
 """
 import os, re, sys, json, time, html, datetime
 import urllib.parse
@@ -139,6 +141,11 @@ _CAPTION_STOP = frozenset((
 PDF_MIN_CHARS = int(os.environ.get("TREATMENT_PDF_MIN_CHARS", "500"))
 BREAKER       = int(os.environ.get("TREATMENT_BREAKER", "4"))   # stop after this many consecutive API failures
 PENDING_TRIES = int(os.environ.get("TREATMENT_PENDING_TRIES", "4"))  # give up on a citer after this many failed classify runs
+# A citer whose text is not available yet (CourtListener's text ingestion lags cluster creation) is
+# kept in `pending` and retried every run, but on a CLOCK rather than PENDING_TRIES: missing text is
+# not the citer's fault and can take weeks to land, so a run-count limit would give up within a day.
+# Past this many weeks since it was first skipped, it is given up into the CHECK MANUALLY list.
+TEXT_WAIT_WEEKS = int(os.environ.get("TREATMENT_TEXT_WAIT_WEEKS", "8"))
 # Route each card's citer classifications through the 50%-priced Batch API. ON by default: the weekly
 # sweep is latency-tolerant (a held card is not urgent), so half price is a clear win. A card's
 # qualifying citers are collected (text fetched, gates + caps applied) and classified as ONE job, then
@@ -213,21 +220,29 @@ def log_this_page(pages, every=None):
     return pages == 1 or (n > 0 and pages % n == 0)
 
 
+def citing_url(opinion_id, since):
+    """First-page search URL for opinions citing opinion_id, filed on/after `since`, in every scope
+    court. The courts go in ONE space-separated court= value: CourtListener's search form binds court
+    as a single field and keeps only the LAST of repeated court= params, which is how this sweep once
+    searched a single court (scotus, then fla, then alacivapp) and never Georgia or the 11th Cir."""
+    params = [("type", "o"), ("q", "cites:(%d)" % int(opinion_id)),
+              ("filed_after", since), ("order_by", "dateFiled desc"), ("page_size", "20"),
+              ("court", " ".join(SCOPE_COURTS))]
+    return "https://www.courtlistener.com/api/rest/v4/search/?" + urllib.parse.urlencode(params)
+
+
 def citing_results(opinion_id, since, deadline, max_pages=None):
     """In-scope opinions citing opinion_id, filed on/after `since`, newest first.
 
-    Uses the search `cites:(id)` query with repeated court params (the REST API accepts repeated court=
-    filters). Returns (results, exhausted): `exhausted` is True only when the search reached the end
+    Uses the search `cites:(id)` query with every scope court in a single space-separated court=
+    value (see citing_url; repeated court= params keep only the last). Returns (results, exhausted): `exhausted` is True only when the search reached the end
     (no further page) within the effective cap. `max_pages=None` means "full history" -- a first
     sweep must see every citer, not just the newest page, or a card with more citers than one page is
     marked fully-swept while its older citers (possibly an overruling) are never examined -- but it
     resolves to FIRST_PAGES, not to no limit. Incremental runs pass max_pages=PAGES to stay cheap in
     the recent window. Either way, a walk stopped by a cap reports exhausted=False.
     """
-    params = [("type", "o"), ("q", "cites:(%d)" % int(opinion_id)),
-              ("filed_after", since), ("order_by", "dateFiled desc"), ("page_size", "20")]
-    params += [("court", c) for c in SCOPE_COURTS]
-    url = "https://www.courtlistener.com/api/rest/v4/search/?" + urllib.parse.urlencode(params)
+    url = citing_url(opinion_id, since)
     # No caller may ask for genuinely unbounded paging. `max_pages=None` still means "full
     # history", but it resolves to FIRST_PAGES rather than to no limit at all: `out` grows by
     # a page of results every iteration and the only other stops were CourtListener choosing
@@ -272,15 +287,23 @@ def _rest_opinion_text(oid, deadline):
     return ""
 
 
-def citer_text(r, deadline):
-    """Text of a citing opinion. PDF first (a free static fetch, no REST quota),
-    falling back to a REST call only when the PDF will not extract and the shared
-    budget has room. The REST fallback reads every sub-opinion (lead plus any
-    concurrences and dissents), so a citation discussed in a writing other than the
-    first is not missed. A RateBudgetExceeded propagates so the run can defer."""
+def citer_pdf_url(r):
+    """The free storage.courtlistener.com PDF for a citing result (STORAGE + the lead opinion's
+    local_path, as update.search_window builds it), or "" when it has none. Never the court's own
+    download_url: the job's egress allowlist blocks court hosts, so that fetch only ever failed."""
     ops = r.get("opinions") or []
     op0 = ops[0] if ops and isinstance(ops[0], dict) else {}
-    pdf_url = op0.get("download_url") or ""
+    local_path = (op0.get("local_path") or "").strip()
+    return (update.STORAGE + local_path) if local_path else ""
+
+
+def citer_text(r, deadline):
+    """Text of a citing opinion. PDF first (a free static fetch from storage.courtlistener.com,
+    no REST quota), falling back to a REST call only when there is no stored PDF or it will not
+    extract and the shared budget has room. The REST fallback reads every sub-opinion (lead plus
+    any concurrences and dissents), so a citation discussed in a writing other than the first is
+    not missed. A RateBudgetExceeded propagates so the run can defer."""
+    pdf_url = citer_pdf_url(r)
     text = update.pdf_text(pdf_url, deadline=deadline) if pdf_url else ""
     if len(text) >= PDF_MIN_CHARS and sum(c.isalpha() for c in text) >= 100:
         return text
@@ -380,10 +403,11 @@ def swept_full(full_done, stopped, truncated=False):
 
 def _pending_rec(r, tries):
     """Trim a citing search result to the minimum needed to re-fetch its text and re-classify it on a
-    later run: cluster id, name, date, court, and the sub-opinion ids + PDF urls citer_text relies on
-    (PDF-first, REST fallback). `_tries` counts genuine per-citer classification failures toward
-    PENDING_TRIES. Kept tiny because it is persisted in treatment_state.json (committed to git)."""
-    ops = [{"id": o.get("id"), "download_url": o.get("download_url")}
+    later run: cluster id, name, date, court, and the sub-opinion ids + storage local_paths citer_text
+    relies on (stored PDF first, REST fallback). `_tries` counts genuine per-citer classification
+    failures toward PENDING_TRIES. Kept tiny because it is persisted in treatment_state.json
+    (committed to git)."""
+    ops = [{"id": o.get("id"), "local_path": o.get("local_path")}
            for o in (r.get("opinions") or []) if isinstance(o, dict)]
     return {"cluster_id": update.cluster_id_of(r),
             "caseName": r.get("caseName") or r.get("caseNameFull") or "(unnamed)",
@@ -391,14 +415,89 @@ def _pending_rec(r, tries):
             "opinions": ops, "_tries": int(tries)}
 
 
+def _iso_date(s):
+    """`s` as a date, or None when it is missing or malformed."""
+    try:
+        return datetime.date.fromisoformat(str(s)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def text_wait_expired(text_since, today, weeks=None):
+    """Whether a citer first skipped for missing text on `text_since` (ISO date) has waited
+    TEXT_WAIT_WEEKS or more by `today`. A missing or malformed date reads as not expired."""
+    start = _iso_date(text_since)
+    w = TEXT_WAIT_WEEKS if weeks is None else weeks
+    return start is not None and (today - start).days >= 7 * w
+
+
+def recompute_pending(pending_in, collect, succeeded, text_skipped, stopped, today):
+    """A card's next per-citer pending list after this run, and the citers given up on.
+
+    `pending_in` is the stored list; `collect` the citers attempted for classification (dicts with
+    ccid and r); `succeeded` the ccids that got a verdict; `text_skipped` maps ccid -> r for citers
+    skipped because their text is not ingested yet; `stopped` the global stop reason, if any.
+
+    Two independent retry limits:
+      * a classification failure (attempted, no verdict) counts toward PENDING_TRIES runs. A global
+        stop (rate/time/breaker/config/whole-batch defer) is not the citer's fault and never burns
+        a try.
+      * missing text is retried on a clock: `_text_since` records the day it was first skipped, and
+        once TEXT_WAIT_WEEKS have passed the citer is given up. Before this, a text-skipped citer
+        on a full-history crawl was neither seen nor pending while the card was still marked full,
+        so it fell behind the incremental window and was never examined again.
+    Returns (pending, given_up): given_up lists (ccid, caseName, why) for the caller to mark seen
+    and surface under CHECK MANUALLY -- bounded cost, never a silent drop."""
+    attempted = {c["ccid"] for c in collect}
+    prev_pending = {}
+    for rec in pending_in or []:
+        pid = update.cluster_id_of(rec)
+        if pid:
+            prev_pending[pid] = rec
+    new_pending, given_up = {}, []
+    for pid, rec in prev_pending.items():
+        if pid in succeeded:
+            continue                                       # classified now -> resolved (already seen)
+        if pid in text_skipped:
+            since = rec.get("_text_since")
+            if _iso_date(since) is None:
+                since = today.isoformat()                  # first text skip (or a bad clock): start it now
+            elif text_wait_expired(since, today):
+                given_up.append((pid, rec.get("caseName") or "(unnamed)",
+                                 "no opinion text after %d weeks of retrying" % TEXT_WAIT_WEEKS))
+                continue
+            new_pending[pid] = dict(rec, _text_since=since)
+            continue
+        if pid in attempted:
+            rec = {k: v for k, v in rec.items() if k != "_text_since"}   # its text arrived; the clock is done
+            if not stopped:
+                tries = int(rec.get("_tries", 0)) + 1
+                if tries >= PENDING_TRIES:
+                    given_up.append((pid, rec.get("caseName") or "(unnamed)",
+                                     "%d failed classify attempts" % tries))
+                    continue
+                rec = dict(rec, _tries=tries)
+        new_pending[pid] = rec                             # bumped, or preserved (not attempted / stopped)
+    for c in collect:
+        ccid = c["ccid"]
+        if ccid in succeeded or ccid in prev_pending:
+            continue                                       # succeeded, or already handled above
+        new_pending[ccid] = _pending_rec(c["r"], 0 if stopped else 1)   # a fresh individual failure
+    for ccid, r in text_skipped.items():
+        if ccid in prev_pending:
+            continue                                       # already handled above
+        new_pending[ccid] = dict(_pending_rec(r, 0), _text_since=today.isoformat())
+    return list(new_pending.values()), given_up
+
+
 def _pending_key(recs):
-    """Order-independent identity of a pending list -- (ccid, tries) pairs -- so a run can tell whether
-    the pending set actually changed and skip a no-op state write."""
+    """Order-independent identity of a pending list -- (ccid, tries, text clock) triples -- so a run
+    can tell whether the pending set actually changed and skip a no-op state write."""
     out = []
     for r in recs or []:
         cid = update.cluster_id_of(r)
         if cid:
-            out.append((cid, int(r.get("_tries", 0))))
+            out.append((cid, int(r.get("_tries", 0)), str(r.get("_text_since") or "")))
     return sorted(out)
 
 
@@ -459,7 +558,7 @@ def main():
     deadline = run_start + BUDGET_SEC
     classified = 0
     report = []        # (card_name, citing_name, citing_date, verdict_str)
-    stuck = []         # (card_name, citing_name, ccid, tries) citers given up after PENDING_TRIES failed runs
+    stuck = []         # (card_name, citing_name, ccid, why) citers given up (PENDING_TRIES or TEXT_WAIT_WEEKS)
     new_flags = []     # card dicts newly raised to caution this run
     changed = False    # any tracked-file change (state grew, or a flag changed)
     stopped = ""       # why the run ended early, if it did
@@ -558,6 +657,7 @@ def main():
         # card go through the batch API in one job; the gates and the seen/full state below are
         # unchanged. collect: list of {ccid, cname, cdate, ccourt, ctext, r} dicts.
         collect = []
+        text_skipped = {}                              # ccid -> r: no text yet; kept pending on a clock
         cap_truncated = False
         for r in work:                                 # pending, then newest-first fresh citers
             if classified + len(collect) >= PER_RUN or len(collect) >= PER_CARD:
@@ -581,9 +681,12 @@ def main():
             # citer's text is not available yet, skip it WITHOUT marking it seen, so it is
             # re-examined on a later run once its text -- possibly the very passage that
             # overrules the card -- lands, rather than classifying an empty body as "neutral"
-            # and never revisiting it. (Mirrors citer_text's own PDF min-alpha gate.)
+            # and never revisiting it. (Mirrors citer_text's own PDF min-alpha gate.) It is kept
+            # in `pending` so a full-history crawl that marks the card full does not strand it
+            # behind the incremental window; recompute_pending retries it for TEXT_WAIT_WEEKS.
             if sum(c.isalpha() for c in ctext) < 100:
                 print("  . citing=%s text not ingested yet; will retry next run" % ccid)
+                text_skipped[ccid] = r
                 continue
             collect.append({"ccid": ccid, "cname": cname, "cdate": cdate, "ccourt": ccourt, "ctext": ctext, "r": r})
 
@@ -658,36 +761,16 @@ def main():
         # --- option (b): recompute this card's per-citer pending list ---------------------------------
         # A citer that was ATTEMPTED (fetched, gated, put in `collect`) but yielded no verdict failed
         # its individual classification -- a bad model read, an unparseable body, or a per-result batch
-        # error. Track it by id so it is re-swept next run even after the card is marked full; the
-        # narrow incremental window would otherwise strand a citer filed before it. A global stop
-        # (rate/time/breaker/config/whole-batch defer) is NOT the citer's fault, so it never burns a
-        # try. After PENDING_TRIES genuine failures a citer is given up: marked seen so it stops
-        # recurring, and surfaced in the PR for manual review -- bounded cost, never a silent drop.
-        attempted = {c["ccid"] for c in collect}
-        succeeded = set(verdicts)
-        prev_pending = {}
-        for rec in pending_in:
-            pid = update.cluster_id_of(rec)
-            if pid:
-                prev_pending[pid] = rec
-        new_pending = {}
-        for pid, rec in prev_pending.items():
-            if pid in succeeded:
-                continue                                       # classified now -> resolved (already seen)
-            if not stopped and pid in attempted:
-                tries = int(rec.get("_tries", 0)) + 1
-                if tries >= PENDING_TRIES:
-                    seen.add(pid)                              # give up: stop recurring, surface for a human
-                    stuck.append((card.get("name", ""), rec.get("caseName") or "(unnamed)", pid, tries))
-                    continue
-                rec = dict(rec, _tries=tries)
-            new_pending[pid] = rec                             # bumped, or preserved (not attempted / stopped)
-        for c in collect:
-            ccid = c["ccid"]
-            if ccid in succeeded or ccid in prev_pending:
-                continue                                       # succeeded, or already handled above
-            new_pending[ccid] = _pending_rec(c["r"], 0 if stopped else 1)   # a fresh individual failure
-        pending = list(new_pending.values())
+        # error -- and a citer whose text is not ingested yet was skipped. Both are tracked by id so
+        # they are re-swept next run even after the card is marked full; the narrow incremental window
+        # would otherwise strand a citer filed before it. Each has its own limit (PENDING_TRIES runs,
+        # TEXT_WAIT_WEEKS of waiting for text); past it the citer is marked seen so it stops recurring
+        # and surfaced in the PR for manual review. See recompute_pending.
+        pending, given_up = recompute_pending(pending_in, collect, set(verdicts), text_skipped,
+                                              stopped, datetime.date.today())
+        for pid, pname, why in given_up:
+            seen.add(pid)                                      # give up: stop recurring, surface for a human
+            stuck.append((card.get("name", ""), pname, pid, why))
 
         if first_time or seen != before or _pending_key(pending) != _pending_key(pending_in):
             # Mark the card fully swept only when this run actually completed a full-history pass: no
@@ -722,11 +805,11 @@ def main():
         for cardnm, cname, cdate, verdict in report:
             lines.append("- %s <- %s (%s): %s" % (cardnm, cname, cdate, verdict))
     if stuck:
-        lines += ["", "**Could not auto-classify after %d attempts -- CHECK MANUALLY on CourtListener:**" % PENDING_TRIES]
-        for cardnm, cname, ccid, tries in stuck:
+        lines += ["", "**Could not auto-classify -- CHECK MANUALLY on CourtListener:**"]
+        for cardnm, cname, ccid, why in stuck:
             lines.append("- %s <- %s -- https://www.courtlistener.com/opinion/%d/x/ "
-                         "(%d failed classify attempts; marked reviewed to stop retrying)"
-                         % (cardnm, cname, ccid, tries))
+                         "(%s; marked reviewed to stop retrying)"
+                         % (cardnm, cname, ccid, why))
     if deferred_first:
         lines += ["", "_%d never-swept card(s) deferred: only %d full-history crawl(s) run per "
                   "sweep (TREATMENT_FIRST_PER_RUN). They are untouched and come first next run._"
