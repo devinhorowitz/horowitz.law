@@ -179,7 +179,7 @@ def _senior_review(card, reason, text):
         v = fable_review.review_published(
             card, [reason], text, update.anthropic_json,
             grounded=update._quote_substantiated,  # the house grounding check, injected: fable_review
-            model=update.FABLE_MODEL)              # must not import update (update imports it)
+            model=update.FABLE_MODEL)              # passed in: fable_review imports update only lazily, at call time (update imports it)
     except Exception as e:
         # review_published does not raise, so this is about everything around it -- a renamed
         # update attribute, a missing model constant. The sync caller runs this inside a
