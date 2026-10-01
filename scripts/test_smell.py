@@ -96,8 +96,9 @@ def test_batch_path_and_fallback():
         def fake_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):
             calls["batch"] += 1
             check("batch gets exactly one request", len(reqs) == 1)
-            check("batch request is keyed 'smell-0'", reqs[0]["custom_id"] == "smell-0")
-            return {"smell-0": {"ok": True, "text": payload}}
+            check("batch request is keyed 'smell-0-<digest of its cases>'",
+                  reqs[0]["custom_id"].startswith("smell-0-") and len(reqs[0]["custom_id"]) > 10)
+            return {reqs[0]["custom_id"]: {"ok": True, "text": payload}}
         batch.run = fake_run
         update.anthropic_json = lambda body, label=None: calls.__setitem__("sync", calls["sync"] + 1) or {}
         out = update.smell_reasons(ITEMS)
@@ -112,7 +113,7 @@ def test_batch_path_and_fallback():
         check("batch error falls back to the synchronous call", out.get(0, {}).get("verdict") == "suspect")
 
         def failed_line_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):
-            return {"smell-0": {"ok": False, "type": "errored", "error": "x"}}
+            return {reqs[0]["custom_id"]: {"ok": False, "type": "errored", "error": "x"}}
         batch.run = failed_line_run
         out = update.smell_reasons(ITEMS)
         check("a failed batch line falls back to the synchronous call",
@@ -151,13 +152,15 @@ def test_chunking():
 
         def fake_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):
             check("chunked batch: one request per SMELL_CHUNK slice", len(reqs) == 3)
-            check("chunk custom_ids are smell-<k>",
-                  [r["custom_id"] for r in reqs] == ["smell-0", "smell-1", "smell-2"])
+            ids = [r["custom_id"] for r in reqs]
+            check("chunk custom_ids are smell-<k>-<digest>",
+                  [i.rsplit("-", 1)[0] for i in ids] == ["smell-0", "smell-1", "smell-2"]
+                  and len(set(ids)) == 3, str(ids))
             # chunk 1 judges its second item (global index SMELL_CHUNK+1); chunk 2's line fails
-            return {"smell-0": {"ok": True, "text": json.dumps({"verdicts": []})},
-                    "smell-1": {"ok": True, "text": json.dumps(
+            return {ids[0]: {"ok": True, "text": json.dumps({"verdicts": []})},
+                    ids[1]: {"ok": True, "text": json.dumps(
                         {"verdicts": [{"i": 2, "verdict": "suspect", "note": "x"}]})},
-                    "smell-2": {"ok": False, "type": "errored", "error": "boom"}}
+                    ids[2]: {"ok": False, "type": "errored", "error": "boom"}}
         sync_calls = []
 
         def fake_sync(body, label=None):
@@ -187,6 +190,47 @@ def test_chunking():
             check("ConfigError propagates out of smell_reasons", False)
         except update.ConfigError:
             check("ConfigError propagates out of smell_reasons", True)
+    finally:
+        update.anthropic_json, batch.run, update.SMELL_BATCH = real_json, real_batch_run, real_smell_batch
+
+
+def test_no_cross_run_contamination():
+    """Regression for the 2026-09 contamination: smell custom_ids were positional ("smell-0"), and a
+    carried batch's results were returned in place of the current requests, so one run's verdicts
+    were stamped onto another run's drops (Gary Jones 10982990 escalated on Earnshaw's note; eleven
+    drop records carrying another case's "ok"). Now the id encodes the exact cases and reasons, and a
+    line under any other id -- including a previous run's chunk 0 -- is never applied."""
+    real_json, real_batch_run, real_smell_batch = update.anthropic_json, batch.run, update.SMELL_BATCH
+    try:
+        update.SMELL_BATCH = True
+        run1 = [{"cid": 1001, "name": "Earnshaw", "court": "gactapp", "date": "d", "reason": "r1"},
+                {"cid": 1002, "name": "PrevCase B", "court": "gactapp", "date": "d", "reason": "r2"}]
+        run2 = [{"cid": 2001, "name": "Gary Jones", "court": "gactapp", "date": "d", "reason": "r3"},
+                {"cid": 2002, "name": "Other Drop", "court": "gactapp", "date": "d", "reason": "r4"}]
+        k1, k2 = update.smell_chunk_key(0, run1), update.smell_chunk_key(0, run2)
+        check("different chunks get different custom_ids", k1 != k2 and k1.startswith("smell-0-"))
+        check("the same chunk gets the same custom_id (deterministic)", k1 == update.smell_chunk_key(0, list(run1)))
+        check("the key is a valid Batch API custom_id", bool(batch.CUSTOM_ID_RE.match(k1)))
+        stale = json.dumps({"verdicts": [{"i": 1, "verdict": "suspect", "note": "judged Earnshaw"},
+                                         {"i": 2, "verdict": "ok", "note": "judged PrevCase B"}]})
+        seen = {}
+
+        def stale_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):
+            seen["ids"] = [r["custom_id"] for r in reqs]
+            return {k1: {"ok": True, "text": stale}, "smell-0": {"ok": True, "text": stale}}
+        sync = []
+
+        def fake_sync(body, label=None):
+            sync.append(body)
+            return {"verdicts": [{"i": 1, "verdict": "ok", "note": "judged Gary Jones"},
+                                 {"i": 2, "verdict": "ok", "note": "judged Other Drop"}]}
+        batch.run, update.anthropic_json = stale_run, fake_sync
+        out = update.smell_reasons(run2)
+        check("this run's request carries this run's key", seen.get("ids") == [k2], str(seen))
+        check("a previous run's verdicts are never applied", "Earnshaw" not in json.dumps(out)
+              and "PrevCase" not in json.dumps(out), repr(out))
+        check("the chunk with no matching line falls back to a synchronous call", len(sync) == 1)
+        check("and gets its own verdicts", out.get(0, {}).get("note") == "judged Gary Jones", repr(out))
     finally:
         update.anthropic_json, batch.run, update.SMELL_BATCH = real_json, real_batch_run, real_smell_batch
 
@@ -862,6 +906,8 @@ def main():
     test_select()
     print("chunking:")
     test_chunking()
+    print("no cross-run contamination:")
+    test_no_cross_run_contamination()
     print("retro record selection:")
     test_retro_selection()
     print("retro persistence:")

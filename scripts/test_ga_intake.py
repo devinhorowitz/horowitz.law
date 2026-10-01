@@ -945,7 +945,8 @@ def test_infra_error_classification():
              http.client.IncompleteRead(b"x"), RuntimeError("triage m -> HTTP 500: internal"),
              RuntimeError("pretriage m -> network error: timed out"), OSError(113, "No route to host")]
     genuine = [RuntimeError("summarize m returned unparseable JSON: x"), RuntimeError("triage m hit max_tokens (900)"),
-               ValueError("verdict must be one of"), KeyError("areas"), TypeError("NoneType")]
+               ValueError("verdict must be one of"), KeyError("areas"), TypeError("NoneType"),
+               urllib.error.HTTPError("u", 404, "not found", {}, None), urllib.error.HTTPError("u", 410, "gone", {}, None)]
     check("infrastructure failures are recognized", all(update._ga_infra_error(e) for e in infra),
           [repr(e) for e in infra if not update._ga_infra_error(e)])
     check("genuine evaluation failures are not", not any(update._ga_infra_error(e) for e in genuine),

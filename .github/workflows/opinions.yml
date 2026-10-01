@@ -131,10 +131,12 @@ jobs:
           # kill). We cannot fix the cause, so shrink the window.
           #
           # Safe to shorten because every phase already degrades on BatchTimeout: triage and
-          # smell fall back to synchronous calls, guards fall back to the synchronous guards,
-          # and summarize rolls its drafts to the next run. Those branches are unit-tested.
-          # And since batch ids now carry over in opinions_state.json, a deferral no longer
-          # throws away the batch Anthropic already billed us for -- the next run collects it.
+          # smell fall back to synchronous calls and guards fall back to the synchronous guards,
+          # and those three CANCEL their unfinished batch first, so it is not billed on top of
+          # the fallback. Only summarize carries: it has no synchronous fallback, so its batch id
+          # and the clusters it covers go to opinions_state.json and a later run collects it and
+          # applies each draft to its own cluster. Those branches are unit-tested
+          # (scripts/test_batch_resume.py).
           #
           # The cost is that a deferred phase pays synchronous (non-batch) token pricing that
           # run. Tune against measured wall clock; these are starting points, not findings.
