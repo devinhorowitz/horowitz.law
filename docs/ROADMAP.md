@@ -14,10 +14,12 @@ below say so.
 
 ## The budget picture, plainly
 
-**CourtListener.** The free tier is 5/min, 50/hr, 125/day, `cl_rate` paces all of it, and
-opinion *text* already rides the storage PDFs, which cost no REST quota. Georgia is two state
-courts. A full Florida is a supreme court plus **six** District Courts of Appeal, a volume
-multiple, not an increment. Levers when the time comes: a Free Law Project membership (raises
+**CourtListener.** The account allows 10/min, 100/hr, 250/day, shared with interactive use
+(the MCP connector and hand research). `cl_rate`'s defaults are lower and per process: each run
+paces itself to 4/min, 40/hr, 100/day, and nothing budgets across workflows. Opinion *text*
+already rides the storage PDFs, which cost no REST quota. Georgia is two state courts. A full
+Florida is a supreme court plus **six** District Courts of Appeal, a volume multiple, not an
+increment. Levers when the time comes: a Free Law Project membership (raises
 the limits *and* funds the data source, the one donation that literally buys capacity),
 `OPINIONS_MAX`, a court-subset ramp, and schedule offsets so two states never contend for the
 same windows. The Florida and Alabama supplementary overlays already live within this budget
@@ -59,7 +61,7 @@ The bulk of the original Phases 0 through 4, plus everything since:
   refinement for the federal overlay.
 - **The phone app.** Installable PWA: `manifest.webmanifest`, `sw.js`, and the app meta on
   every page, with offline reading, network-first pages, and cache-first hashed assets.
-- **Treatment subsystem.** Forward escalation in the funnel plus the weekend reverse sweep,
+- **Treatment subsystem.** Forward escalation in the funnel plus the reverse sweep (every 6 hours),
   both recording through `treatment_core.py`; the machine only ever raises a card to caution.
 - **Florida and Alabama, supplementary.** The registry's second and third jurisdictions ride
   the feed as "also pulled," same areas, lighter touch, the site still named for Georgia.

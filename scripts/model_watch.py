@@ -20,9 +20,9 @@ In one run:
      A tier above Opus (Fable/Mythos) is a deliberate human choice: reported, never
      auto-proposed.
   4. With --apply, rewrite the old id to the new id everywhere it is pinned in the
-     repo (the update.py / treatment.py defaults and the ``|| 'id'`` fallbacks in the
-     funnel workflows) so the eval below tests the candidate and a merged PR actually
-     takes effect, and write a PR body.
+     repo (the script defaults listed in PIN_FILES; the workflows no longer restate a
+     pin as a ``|| 'id'`` fallback) so the eval below tests the candidate and a merged
+     PR actually takes effect, and write a PR body.
   5. Flag any pinned id the API no longer lists (a retired model the funnel would fail
      on), so a deprecation is caught before a run breaks rather than after.
 

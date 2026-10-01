@@ -147,8 +147,10 @@ jobs:
       # opinions.json and re-rendered by update.py; they publish straight to main with the
       # run's bookkeeping (seen-state, the pending-review ledger, logs). Held cases are NOT
       # here -- they live under review/, handled by the next step. If auto content changed,
-      # the commit is left to trigger CI (render/site invariants); a bookkeeping-only run
-      # uses [skip ci].
+      # the commit omits [skip ci]; a bookkeeping-only run uses it (which also skips the
+      # Cloudflare build). Omitting it does NOT get the publish CI-validated: this push is made
+      # with the default GITHUB_TOKEN, and a GITHUB_TOKEN push starts no workflow, so ci.yml
+      # never runs on an auto-publish. CI next runs on the following human push to its paths.
       - name: Publish auto cards and bookkeeping to main
         id: automain
         run: |
@@ -258,7 +260,10 @@ jobs:
       # canary calling itself dead while scanning normally every four hours.
       #
       # [skip actions] is a GitHub-only token (verified: an empty commit carrying it produced zero
-      # ci.yml and ruff.yml runs, while the pushes on either side of it produced runs). Cloudflare's
+      # ci.yml and ruff.yml runs, while the pushes on either side of it produced runs). Note that
+      # this step pushes with the default GITHUB_TOKEN, and a GITHUB_TOKEN push starts no workflow
+      # in any case, so the token changes nothing on GitHub's side today; it only matters if the
+      # push is ever switched to a PAT. Cloudflare's
       # documented skip list is CI- and CF-Pages-based and does not include it, so the build should
       # proceed. That half is verified against PRODUCTION rather than asserted here: see
       # docs/MCP.md. If Cloudflare turns out to honour it too, this line is a no-op and the live

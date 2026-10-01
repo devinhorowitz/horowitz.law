@@ -18,8 +18,8 @@ expensive model only ever touches confirmed keepers:
                             catching holdings that are not visible from the opening.
   Tier 3  SUMMARIZE(Opus)   reads the FULL opinion plus the triage note and writes the
                             public-facing card in the house style. Final backstop: it can
-                            still decline. Opus 4.8 takes no extended-thinking budget and
-                            no "effort" parameter; the summarizer runs at the model default.
+                            still decline. The summarizer sends no extended-thinking budget
+                            and no "effort" parameter; it runs at the pinned model's default.
 
 Auto-lane keepers are appended to opinions.json, opinions_state.json is updated, and
 opinions.html/opinions.xml are re-rendered for a straight-to-main publish; guard-flagged
@@ -107,8 +107,8 @@ CL_TOKEN     = os.environ.get("COURTLISTENER_TOKEN", "")
 MODEL        = os.environ.get("OPINIONS_MODEL", "claude-opus-5")
 AUDIT_MODEL  = os.environ.get("OPINIONS_AUDIT_MODEL", MODEL)  # escalated treatment audit; Opus by default
 TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-5")
-# Defaults are the undated canonical ids (claude-haiku-4-5), like every other tier (opus-4-8,
-# sonnet-5, fable-5), not a dated snapshot. A dated snapshot such as claude-haiku-4-5-20251001
+# Defaults are the undated canonical ids (claude-haiku-4-5), like every other tier (the Opus,
+# Sonnet and Fable pins), not a dated snapshot. A dated snapshot such as claude-haiku-4-5-20251001
 # carries Anthropic's snapshot-retirement lifecycle -- it is eventually deprecated and stops
 # serving -- so it was the one model dependency here with a built-in expiry. The undated id has no
 # such expiry, which is what an unattended deployment wants. Pin a dated snapshot via the repo

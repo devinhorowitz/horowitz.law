@@ -150,11 +150,13 @@ jobs:
       # legislation_rejections.jsonl (the recall check's drop log) and regulations_rejections.jsonl
       # (the regulatory watch's screen drops and writer declines) are listed in add-paths AND in
       # the no-cards bookkeeping step, because the screens drop on runs that produce no card
-      # at all. They may safely ride the review PR, unlike opinions_rejections.jsonl (#336/#339):
-      # log_drops APPENDS, so a branch that sits while another job writes the same file merges
-      # instead of conflicting. A wholesale rewrite is what made the opinions log unfit for a
-      # review branch. Both are tracked (seeded empty) because `git add` of a missing path stages
-      # nothing at all, and the bookkeeping step's `|| true` would hide that.
+      # at all. They ride the review PR, unlike opinions_rejections.jsonl (#336/#339), because
+      # log_drops only APPENDS, never rewrites. That does NOT make them merge cleanly: if main also
+      # gains lines while the review branch sits, both sides have appended at end of file and the
+      # merge reports a content conflict. Resolving it is mechanical (keep both sides' lines),
+      # unlike the wholesale rewrite that made the opinions log unfit for a review branch. Both are
+      # tracked (seeded empty) because `git add` of a missing path stages nothing at all, and the
+      # bookkeeping step's `|| true` would hide that.
       - name: Open review pull request
         if: steps.run.outputs.changed == '1'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8

@@ -447,7 +447,7 @@ citator and applied by editing `opinions.json`.
   the cases already carded and asked to flag any the new opinion treats adversely. Each flag is
   confirmed by an Opus audit before the cited card is raised to caution, whether or not the new
   opinion itself earns a place in the feed.
-- The reverse sweep (`scripts/treatment.py`, on weekends): walks every card's citation graph on
+- The reverse sweep (`scripts/treatment.py`, short runs every 6 hours): walks every card's citation graph on
   CourtListener, reads each new citing passage, and judges adverse treatment. It is the thorough
   backstop to the forward pass and reaches citers, including criminal and out-of-scope ones, that
   the daily screen drops before triage ever sees them.
@@ -523,7 +523,7 @@ Thirteen workflows under `.github/workflows/`:
 
 - `opinions.yml` runs the funnel every four hours and opens the PR. If a content PR is already
   open, a scheduled run skips, so review is never raced.
-- `treatment.yml` runs the weekend reverse sweep.
+- `treatment.yml` runs the reverse sweep every 6 hours, in short resumable runs.
 - `golden-check.yml` runs the golden set; `backfill.yml` and `queue.yml` are the historical and
   on-demand fetchers.
 - `digest.yml` and `alert.yml` send the email.

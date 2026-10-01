@@ -33,7 +33,9 @@ import render  # noqa: E402  -- for OUTPUT_PATHS, the authoritative render-owned
 
 # What a run may write to main, in two classes:
 #   CONTENT -- the data (opinions.json) plus every file render() owns. A change here is a real
-#              publish: it goes to main WITHOUT [skip ci] so CI re-validates the deployed pages.
+#              publish: it goes to main WITHOUT [skip ci], so Cloudflare builds it. CI does NOT
+#              run on it: the workflow pushes with the default GITHUB_TOKEN, and a push made with
+#              that token starts no workflow, so ci.yml first sees it on the next human push.
 #   BOOK    -- run-state ledgers. Several are written CONDITIONALLY (no held cases -> no
 #              pending_review/redraft; Fable review off -> no fable log), so they may not exist;
 #              `present()` filters to what actually does. A bookkeeping-only change is committed

@@ -2,21 +2,31 @@
 """Single, durable source of truth for the CourtListener REST budget.
 
 CourtListener throttles its REST API on three concurrent limits, and the most
-restrictive one given recent traffic is what controls. The free-tier defaults are
-5 requests per minute, 50 per hour, and 125 per day; Free Law Project memberships
-raise them, and the numbers have moved before (every authenticated user once got
-5,000 per hour). So no script hardcodes a number. The limits live here, every
-CourtListener call routes through one shared pacer, and the pacer is a true
-rolling-window limiter:
+restrictive one given recent traffic is what controls. The limits are per ACCOUNT,
+and the numbers have moved before (every authenticated user once got 5,000 per
+hour; the free tier later read 5 per minute, 50 per hour, 125 per day). This
+project's account currently allows 10 requests per minute, 100 per hour, and 250
+per day, and that allowance is SHARED with interactive use (the CourtListener MCP
+connector and hand research), not reserved for the workflows.
+
+The pacer's defaults below are older and lower: 5/50/125 times the 0.8 margin, so
+each process paces itself to 4 per minute, 40 per hour, and 100 per day. Those
+budgets are PER PROCESS. Nothing coordinates across workflows or with interactive
+use, so concurrent runs and same-day runs each spend from the one shared account
+allowance.
+
+Because the numbers move, no script hardcodes one. The limits live here, every
+CourtListener call in a process routes through one shared pacer, and the pacer is
+a true rolling-window limiter:
 
   * it spaces calls under the per-minute burst limit,
   * it tracks calls in rolling minute, hour, and day windows and, when a window is
     full, WAITS for the oldest call to age out before allowing the next one,
-  * it never waits past the caller's deadline. A short deadline (the daily run)
+  * it never waits past the caller's deadline. A short deadline (a scheduled run)
     means a full window makes the call defer, so the run stays fast and the work
-    rolls to the next run; a long deadline (the weekend sweep) means the run waits
-    across windows and DRAINS a backlog in a single run, with no second trigger and
-    no new credential, and
+    rolls to the next run; a long deadline (say, a raised TREATMENT_BUDGET_SEC for
+    a one-off drain) means the run waits across windows and DRAINS a backlog in a
+    single run, with no second trigger and no new credential, and
   * it tightens itself automatically when a 429 reports a lower limit than
     configured, and honors a 429's stated wait without sleeping past the deadline.
 
@@ -25,7 +35,7 @@ the backlog mechanism depends on the rate numbers, on branch protection, or on a
 personal access token.
 
 Configure with repo variables, all optional; an unset value falls back to the
-free-tier default:
+default below (the old free-tier numbers, not the account's current allowance):
 
   CL_PER_MINUTE   requests per minute            (default 5)
   CL_PER_HOUR     requests per hour              (default 50)
