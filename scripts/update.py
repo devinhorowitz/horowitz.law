@@ -57,7 +57,7 @@ Environment:
   ANTHROPIC_STATUS_URL     status summary endpoint (default https://status.claude.com/api/v2/summary.json)
   CL_PER_MINUTE / CL_PER_HOUR / CL_PER_DAY / CL_RATE_MARGIN  CourtListener REST budget (see cl_rate.py)
 """
-import os, re, sys, json, time, html, datetime, io, copy
+import os, re, sys, json, time, html, datetime, io, copy, hashlib
 import cl_rate           # shared CourtListener REST budget (limits, pacing, defer)
 import urllib.request, urllib.parse, urllib.error
 import xml.etree.ElementTree as ET
@@ -1268,82 +1268,144 @@ def parse_json(s):
 
 
 # --- carried-over batches ---------------------------------------------------
-# A Message Batch is billed when Anthropic accepts it, not when we read the results. Every
-# phase here runs one under a wall-clock budget, and when that budget expires the phase
-# catches BatchTimeout and degrades gracefully -- but the batch itself keeps running to
-# completion on Anthropic's side and nobody ever collects it. That is paid work thrown away
-# on every deferral, at opus-5 rates for the summarize phase.
+# A Message Batch is billed when Anthropic accepts it, not when we read the results. Each funnel
+# phase runs one under a wall-clock budget. What happens when that budget expires depends on
+# whether the phase has a synchronous fallback:
 #
-# So the id is recorded when the batch is submitted and carried in opinions_state.json; the
-# next run collects it before submitting anything new.
+#   * triage, smell, guards fall back to synchronous calls for the same work in the same run. A
+#     carried batch could only ever duplicate work already done, so these phases NEVER carry: on
+#     the deadline the batch is cancelled (best effort, logged) and the fallback runs.
+#   * summarize has no fallback (an Opus draft is the expensive call), so its batch is CARRIED: the
+#     id is recorded in opinions_state.json `pending_batches` together with the exact cluster ids it
+#     covers, and a later run fetches it and applies each draft to its own cluster only.
 #
-# HONEST LIMIT: this recovers DEFERRALS, not reclamations. When the runner is reclaimed
-# (exit 143) the commit step never runs, so nothing reaches the state file. Shrinking the
-# batch budgets makes deferrals the common case and reclamations rarer, which is exactly the
-# trade this is meant to support -- but a reclaimed run still loses its batch.
-_PENDING_BATCHES = {}    # label -> {"id", "at", "n"}  : submitted this run, not yet collected
-_RESUME_BATCHES = {}     # label -> id                 : carried in from the last run
-# A carried id older than this is dropped rather than polled: Anthropic expires batch results,
-# and a stale id would spend the phase's whole budget discovering that.
-BATCH_CARRY_MAX_AGE_SEC = int(os.environ.get("OPINIONS_BATCH_CARRY_MAX_AGE_SEC", str(3 * 24 * 3600)))
+# Until 2026-10 every phase carried and a resumed batch was returned IN PLACE of the current
+# requests. Smell's positional custom_ids then stamped a previous run's verdicts onto this run's
+# drops, summarize silently skipped current candidates the carry did not cover, a stale guard carry
+# left a new card's guards "unavailable", and a run that never reached a phase deleted that phase's
+# carry. So now: custom_ids encode the phase and the case, results are mapped back strictly by
+# custom_id, and a carry persists until it is collected or expires.
+#
+# HONEST LIMIT: this recovers DEFERRALS, not reclamations. When the runner is reclaimed (exit 143)
+# the commit step never runs, so nothing reaches the state file and the batch is lost.
+SUMMARIZE_LABEL = "funnel-summarize"
+CARRY_LABELS = (SUMMARIZE_LABEL,)                                   # phases whose batches carry
+_PENDING_BATCHES = {}    # batch id -> {"label", "id", "at", "n", "cids"}: outstanding, written to state
+_RESUME_BATCHES = {}     # batch id -> the same record: carried in, not yet tried this run
+# A carry older than this is expired rather than polled: Anthropic keeps batch results for 29 days,
+# so a carry this old is about to be (or already is) uncollectable. Its clusters are made eligible
+# again so they are redrafted.
+BATCH_CARRY_MAX_AGE_SEC = int(os.environ.get("OPINIONS_BATCH_CARRY_MAX_AGE_SEC", str(25 * 24 * 3600)))
+
+
+def _norm_cids(raw):
+    """A carry's covered cluster ids as a sorted list of ints, or None when unknown (a carry
+    written before the ids were recorded)."""
+    if not isinstance(raw, (list, tuple)):
+        return None
+    out = set()
+    for c in raw:
+        try:
+            out.add(int(c))
+        except (TypeError, ValueError):
+            continue
+    return sorted(out)
 
 
 def load_pending_batches(state, now=None):
-    """Read carried batch ids out of state, dropping anything too old to still be collectable."""
+    """Read carried batches out of state. Returns (carries, expired_cids):
+
+      carries      -- {batch id: record} for every collectable summarize carry; and
+      expired_cids -- the clusters covered by carries dropped for age, to be made eligible again.
+
+    A carry for a phase that falls back synchronously (triage, smell, guards; written by older
+    code) is cleared with a log line, never resumed. Junk never crashes the run that reads it."""
     now = time.time() if now is None else now
-    out = {}
-    for label, rec in (state.get("pending_batches") or {}).items():
+    carries, expired = {}, set()
+    for key, rec in (state.get("pending_batches") or {}).items():
         if not isinstance(rec, dict) or not rec.get("id"):
+            print("  . clearing a malformed pending_batches entry %r" % (key,))
             continue
+        bid = str(rec["id"])
+        label = rec.get("label") or key
+        if label not in CARRY_LABELS:
+            print("  . clearing legacy %s carry %s: that phase falls back synchronously and never "
+                  "resumes a batch" % (label, bid))
+            continue
+        cids = _norm_cids(rec.get("cids"))
         try:
-            age = now - float(rec.get("at") or 0)
+            at = float(rec.get("at"))
         except (TypeError, ValueError):
+            at = None
+        if at is None or now - at > BATCH_CARRY_MAX_AGE_SEC:
+            print("  ! %s carry %s expired (%s); clusters eligible again: %s"
+                  % (label, bid, "no timestamp" if at is None else "%.1f days old" % ((now - at) / 86400.0),
+                     ", ".join(str(c) for c in cids) if cids else "(not recorded)"))
+            expired.update(cids or [])
             continue
-        if age <= BATCH_CARRY_MAX_AGE_SEC:
-            out[label] = rec["id"]
-    return out
+        carries[bid] = {"label": label, "id": bid, "at": at, "n": rec.get("n"), "cids": cids}
+    return carries, expired
+
+
+def adopt_pending_batches(state, now=None):
+    """main()'s load step: carried batches become both outstanding (so they are written back
+    unless collected) and resumable. Returns the expired clusters' ids."""
+    carries, expired = load_pending_batches(state, now)
+    _PENDING_BATCHES.clear(); _RESUME_BATCHES.clear()
+    _PENDING_BATCHES.update({k: dict(v) for k, v in carries.items()})
+    _RESUME_BATCHES.update({k: dict(v) for k, v in carries.items()})
+    return expired
+
+
+def _stamped_pending():
+    return {k: dict(v) for k, v in _PENDING_BATCHES.items()} or None
+
+
+def pending_batches_changed(state):
+    """Whether stamp_pending_batches would change what state holds, so a no-op run still writes
+    a collected, expired, cleared or newly deferred carry."""
+    return _stamped_pending() != (state.get("pending_batches") or None)
 
 
 def stamp_pending_batches(state):
-    """Fold this run's uncollected batch ids into state, just before it is written.
+    """Fold the outstanding batches into state, just before it is written. A carry this run never
+    reached is still in _PENDING_BATCHES (adopt_pending_batches put it there), so it survives.
 
     Removes the key entirely when nothing is outstanding, so a healthy run leaves no trace
     in the committed file and the diff stays quiet.
     """
-    if _PENDING_BATCHES:
-        state["pending_batches"] = dict(_PENDING_BATCHES)
+    pend = _stamped_pending()
+    if pend:
+        state["pending_batches"] = pend
     else:
         state.pop("pending_batches", None)
     return state
 
 
-def batch_run(reqs, deadline, label, now=None):
-    """batch.run with carry-over: collect a batch left behind by the last run if there is one,
-    and record this run's id the moment it is submitted.
+def batch_key(phase, cid, *rest):
+    """A batch custom_id naming the phase and the case it belongs to (and, for guards, the guard
+    kind): "triage-10983223", "summarize-10983223", "guards-10983223-fidelity". Never positional,
+    so a result line can only ever be applied to the case it was written for."""
+    return "-".join([phase, str(int(cid))] + [str(x) for x in rest])
 
-    Callers keep their existing `except (BatchTimeout, BatchError)` handling -- the exception
-    still propagates and still means "degrade this phase". The only change is that the paid
-    work survives to the next run.
-    """
-    now = time.time() if now is None else now
-    resume_id = _RESUME_BATCHES.pop(label, None)
 
-    def _record(bid):
-        _PENDING_BATCHES[label] = {"id": bid, "at": now, "n": len(reqs)}
+def batch_key_cid(key, phase):
+    """The cluster id a custom_id belongs to, or None when it is not this phase's key. Also accepts
+    a bare numeric id, the summarize scheme of carries written before batch_key existed."""
+    key = str(key or "")
+    if key.isdigit() and phase == "summarize":
+        return int(key)
+    parts = key.split("-")
+    if len(parts) >= 2 and parts[0] == phase and parts[1].isdigit():
+        return int(parts[1])
+    return None
 
-    if resume_id:
-        _record(resume_id)          # keep it recorded until it is actually collected
-    try:
-        out = batch.run(reqs, deadline=deadline, label=label,
-                        resume_id=resume_id, on_submit=_record)
-    except batch.BatchTimeout as e:
-        # Prefer the id the exception carries: on a fresh submit it is the new batch, and on a
-        # resume it is the same one we were already holding.
-        if getattr(e, "batch_id", None):
-            _record(e.batch_id)
-        raise
-    _PENDING_BATCHES.pop(label, None)   # collected; nothing left to carry
-    return out
+
+def batch_run(reqs, deadline, label):
+    """batch.run for a phase with a synchronous fallback (triage, smell, guards). Never carries
+    and never resumes: on the deadline the batch is cancelled (best effort, logged) and the
+    exception propagates, so the caller runs its synchronous fallback in this run."""
+    return batch.run(reqs, deadline=deadline, label=label, cancel_unfinished=True)
 
 
 def rss_mb():
@@ -1619,18 +1681,19 @@ def _triage_batch(items, feed_index, deadline=None):
     unparseable body -- FALLS BACK to a synchronous triage() call, so the gate is never silently
     changed. Raises only ConfigError (auth/model), which must abort the run like any tier."""
     verdicts, missing = {}, list(items)
-    reqs = [batch.from_body(str(p["cid"]), triage_request(p["name"], p["docket"], p["text"], feed_index))
+    reqs = [batch.from_body(batch_key("triage", p["cid"]),
+                            triage_request(p["name"], p["docket"], p["text"], feed_index))
             for p in items]
     try:
         results = batch_run(reqs, deadline, "funnel-triage")
     except (batch.BatchTimeout, batch.BatchError) as e:
-        print("  ! triage batch deferred (%s); triaging %d candidate(s) synchronously this run"
+        print("  ! triage batch unavailable (%s); triaging %d candidate(s) synchronously this run"
               % (e, len(items)), flush=True)
         results = {}
     if results:
         still = []
         for p in missing:
-            res = results.get(str(p["cid"]))
+            res = results.get(batch_key("triage", p["cid"]))
             if not res or not res.get("ok"):
                 still.append(p); continue
             try:
@@ -1707,6 +1770,17 @@ def smell_request(items):
 SMELL_CHUNK = 40   # reasons per request; keeps each verdict list well inside the 2000-token budget
 
 
+def smell_chunk_key(k, chunk):
+    """The custom_id for one smell chunk: "smell-<k>-<digest>", the digest covering every item's
+    cluster id (or name, when an item carries none) and reason, in order. One request audits up to
+    SMELL_CHUNK cases, so the id cannot name a single case; it names the exact set instead, and a
+    verdict list can only be applied to the chunk it judged. (The old positional "smell-<k>" let a
+    carried batch stamp one run's verdicts onto another run's drops.)"""
+    ident = json.dumps([[it.get("cid") or it.get("name") or "", (it.get("reason") or "").strip()]
+                        for it in chunk], sort_keys=True)
+    return "smell-%d-%s" % (k, hashlib.sha1(ident.encode("utf-8")).hexdigest()[:16])
+
+
 def smell_reasons(items, deadline=None):
     """Audit drop reasons with the smell model; returns {0-based index: {"verdict": "ok"|"suspect",
     "note": str}} covering ONLY the items the model actually judged. Items go out in SMELL_CHUNK
@@ -1720,10 +1794,13 @@ def smell_reasons(items, deadline=None):
     datas = {}    # chunk index -> parsed verdicts object
     if SMELL_BATCH:
         try:
-            reqs = [batch.from_body("smell-%d" % k, smell_request(c)) for k, c in enumerate(chunks)]
+            keys = [smell_chunk_key(k, c) for k, c in enumerate(chunks)]
+            reqs = [batch.from_body(keys[k], smell_request(c)) for k, c in enumerate(chunks)]
             res = batch_run(reqs, deadline, "funnel-smell")
             for k in range(len(chunks)):
-                line = res.get("smell-%d" % k)
+                # Strictly by custom_id: a line is used only for the chunk whose exact cases and
+                # reasons it was written for. A line under any other id is never applied.
+                line = res.get(keys[k])
                 if line and line.get("ok"):
                     try:
                         datas[k] = parse_json(line["text"])
@@ -2220,38 +2297,62 @@ def guard_cards_batch(items, crosschecks, completeness, deadline=None):
     cards as ONE 50%-priced Message Batches job, populating crosschecks[cid] / completeness[cid] in
     place with the SAME verdict shape the synchronous guards produce (via guard_request/guard_verdict,
     a single grounded attempt each -- the maintenance-batch precedent). `items` is a list of
-    {cid, name, text, entry}. Returns True on success; on a whole-batch timeout or transport failure
-    returns False WITHOUT populating, so the caller can fall back to the synchronous guards -- a card
-    is never shipped un-guarded. A per-line error or unparseable body yields an 'unavailable' verdict
-    for that one guard (the card still surfaces, exactly like a synchronous guard failure)."""
-    reqs, meta = [], {}    # custom_id -> (kind, cid, ground)
+    {cid, name, text, entry}.
+
+    Returns the (item, kind) pairs the batch did NOT guard, which the caller must run through the
+    synchronous guards (guard_sync): every pair on a whole-batch timeout or transport failure, and
+    each pair whose line errored, was missing, or was unparseable. Those pairs are left unpopulated
+    here. A card is never reported guarded while a verdict is 'unavailable' -- that is how a stale
+    batch once left a new card's guards unavailable with the synchronous fallback skipped.
+
+    Results are mapped strictly by custom_id ("guards-<cid>-<kind>"), and this phase never carries
+    or resumes a batch: one that misses the deadline is cancelled and the fallback runs now."""
+    reqs, meta = [], {}    # custom_id -> (item, kind, ground)
     for it in items:
         for kind, enabled in (("fidelity", CROSSCHECK_MODEL), ("completeness", COMPLETENESS_MODEL)):
             if not enabled:
                 continue
             body, ground = guard_request(kind, it["name"], it["text"], it["entry"])
-            # custom_id must match ^[a-zA-Z0-9_-]{1,64}$ (no colon), so hyphen-join the id and kind.
-            ckey = "%s-%s" % (it["cid"], kind)
+            ckey = batch_key("guards", it["cid"], kind)
             reqs.append(batch.from_body(ckey, body))
-            meta[ckey] = (kind, it["cid"], ground)
+            meta[ckey] = (it, kind, ground)
     if not reqs:
-        return True
+        return []
     try:
         results = batch_run(reqs, deadline, "funnel-guards")
     except (batch.BatchTimeout, batch.BatchError) as e:
-        print("  ! finish-guard batch deferred (%s); falling back to the synchronous guards" % e)
-        return False
-    for ckey, (kind, cid, ground) in meta.items():
+        print("  ! finish-guard batch unavailable (%s); falling back to the synchronous guards" % e)
+        return [(it, kind) for it, kind, _ in meta.values()]
+    fallback = []
+    for ckey, (it, kind, ground) in meta.items():
         res = results.get(ckey)
-        if not res or not res.get("ok"):
-            v = {"verdict": "unavailable", "reason": "guard batch result unavailable"}
-        else:
+        v = None
+        if res and res.get("ok"):
             try:
                 v = guard_verdict(kind, parse_json(res["text"]), ground)
             except Exception:
-                v = {"verdict": "unavailable", "reason": "unparseable guard result"}
-        (crosschecks if kind == "fidelity" else completeness)[cid] = v
-    return True
+                v = None
+        if v is None or v.get("verdict") == "unavailable":
+            fallback.append((it, kind))
+            continue
+        (crosschecks if kind == "fidelity" else completeness)[it["cid"]] = v
+    if fallback:
+        print("  ! finish-guard batch left %d guard(s) without a verdict; running them synchronously: %s"
+              % (len(fallback), ", ".join("%s %s" % (it["cid"], kind) for it, kind in fallback)))
+    return fallback
+
+
+def guard_sync(pairs, crosschecks, completeness):
+    """The synchronous guards for the (item, kind) pairs guard_cards_batch could not guard."""
+    for it, kind in pairs:
+        if kind == "fidelity":
+            cc = crosscheck(it["name"], it["text"], it["entry"])
+            if cc:
+                crosschecks[it["cid"]] = cc
+        else:
+            cp = completeness_check(it["name"], it["text"], it["entry"])
+            if cp:
+                completeness[it["cid"]] = cp
 
 
 # Party-name matching for the screen override in the candidate loop. A case can
@@ -2771,7 +2872,9 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
 
     if not added and not treat_events:
         seen_all = seen | evaluated | have
-        if seen_all != seen:
+        # Write when seen moved OR the carried batches did (collected, expired, cleared, newly
+        # deferred). Gating on seen alone lost this run's deferrals and kept collected carries.
+        if seen_all != seen or pending_batches_changed(state):
             state["seen_clusters"] = sorted(seen_all)[-SEEN_CAP:]
             state["updated"] = now_iso
             safeio.atomic_write_json(STATE_PATH, stamp_pending_batches(state))
@@ -2847,47 +2950,134 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
 
 
 def _draft_pending(pending, deadline, finish_fn):
-    """Draft the tier-3 summaries for the collected `pending` candidates as ONE 50%-priced Batch API
-    job (OPINIONS_BATCH), then call finish_fn(v, p) for each that succeeds. Returns the set of cluster
-    ids that were drafted, to fold into the run's `evaluated` set. Recovery mirrors the synchronous
-    path's per-candidate summarize error:
+    """Draft the tier-3 summaries for the collected `pending` candidates through the 50%-priced Batch
+    API (OPINIONS_BATCH), then call finish_fn(v, p) for each that succeeds. Returns the set of cluster
+    ids that were drafted, to fold into the run's `evaluated` set.
 
-      * a batch timeout or transport failure returns an empty set -- the whole draft set defers and
-        every candidate retries next run (none marked evaluated);
-      * a per-result batch error or an unparseable body skips just that candidate (it retries next
-        run), the others still finish;
-      * finish_fn owns its own exceptions, except ConfigError, which propagates so the run can abort.
+    Summarize is the one funnel phase whose batch CARRIES across runs (it has no synchronous
+    fallback), so this first settles any carried summarize batch, strictly by custom_id:
+
+      1. Each carry is checked once without waiting. An ended carry is collected and each draft is
+         applied only to its OWN cluster, and only if that cluster is still pending this run; a
+         draft for a cluster no longer eligible is logged and dropped. A carry still running stays
+         carried, and the clusters it covers wait for it. An unknown or expired carry is dropped and
+         its clusters are drafted fresh.
+      2. Every pending candidate without a usable carried draft and not waiting on a running carry
+         gets a FRESH request in this run. On the deadline that batch is carried (its id and the
+         exact cluster ids it covers go to pending_batches), never cancelled.
+      3. A carry that was still running is polled again with what is left of the deadline.
+
+    Every candidate that ends the call undrafted is logged ("! undrafted: <cid> <name> (reason)")
+    and is not marked evaluated, so it stays un-seen and is retried. A per-result error or an
+    unparseable body is one of those reasons. finish_fn owns its own exceptions, except ConfigError,
+    which propagates so the run can abort.
 
     A candidate is counted drafted (evaluated) the moment its summary is produced, before finish_fn --
     exactly where the synchronous path calls evaluated.add(cid), so a card that summarizes but fails
-    to finish is not re-summarized next run. Extracted from main() so this orchestration is unit-
-    testable (test_update) without standing up the whole funnel."""
-    reqs = [batch.from_body(str(p["cid"]),
-                            summarize_request(p["court_id"], p["name"], p["docket"],
-                                              p["date_filed"], p["text"], p["note"],
-                                              cl_status=p["cl_status"]))
-            for p in pending]
-    try:
-        results = batch_run(reqs, deadline, "funnel-summarize")
-    except (batch.BatchTimeout, batch.BatchError) as e:
-        print("  ! tier-3 summarize batch deferred (%s); %d draft(s) roll to the next run"
-              % (e, len(pending)))
-        return set()
-    by_cid = {str(p["cid"]): p for p in pending}
-    drafted = set()
-    for cidk, res in results.items():
-        p = by_cid.get(cidk)
-        if not p:
-            continue
-        if not res.get("ok"):
-            print("  . tier-3 summary unavailable for %s (batch: %s); rolls to next run"
-                  % (p["name"][:50], res.get("type")))
-            continue
+    to finish is not re-summarized next run."""
+    by_cid = {int(p["cid"]): p for p in pending}
+    drafts = {}       # cid -> parsed summarize verdict
+    why = {}          # cid -> why it has no draft (yet)
+    waiting = {}      # carried batch id -> record, for carries still running
+
+    def _take(results, source):
+        """Apply one batch's lines by custom_id. Returns how many drafts it supplied."""
+        n = 0
+        for key, res in results.items():
+            cid = batch_key_cid(key, "summarize")
+            if cid is None:
+                print("  . %s: ignoring a result line under an unexpected custom_id %r" % (source, key))
+                continue
+            p = by_cid.get(cid)
+            if p is None:
+                print("  . %s: draft for cluster %s dropped; it is not eligible for drafting this run"
+                      % (source, cid))
+                continue
+            if cid in drafts:
+                continue
+            if not res.get("ok"):
+                why[cid] = "%s: result %s" % (source, res.get("type") or "errored")
+                continue
+            try:
+                drafts[cid] = parse_json(res["text"])
+                why.pop(cid, None)
+                n += 1
+            except Exception as pe:
+                why[cid] = "%s: unparseable draft (%s)" % (source, str(pe)[:80])
+        return n
+
+    def _collect_carry(bid, rec, wait_deadline):
         try:
-            v = parse_json(res["text"])
-        except Exception as pe:
-            print("  . tier-3 summary unparseable for %s (%s); rolls to next run"
-                  % (p["name"][:50], pe))
+            got = batch.fetch(bid, deadline=wait_deadline, label=SUMMARIZE_LABEL)
+        except batch.BatchTimeout:
+            waiting[bid] = rec
+            for c in rec.get("cids") or []:
+                if c in by_cid and c not in drafts:
+                    why[c] = "carried batch %s still running; kept for the next run" % bid
+            return
+        except batch.BatchError as e:
+            print("  ! summarize carry %s could not be collected (%s); dropped" % (bid, e))
+            waiting.pop(bid, None)
+            _PENDING_BATCHES.pop(bid, None)
+            for c in rec.get("cids") or []:
+                if c in by_cid and c not in drafts:
+                    why[c] = "carried batch %s uncollectable" % bid
+            return
+        waiting.pop(bid, None)
+        _PENDING_BATCHES.pop(bid, None)
+        n = _take(got, "carried batch %s" % bid)
+        print("  . %s: collected carried batch %s (%d line(s), %d applied to this run's candidates)"
+              % (SUMMARIZE_LABEL, bid, len(got), n), flush=True)
+
+    # 1. Carried batches: one status read each, no waiting yet.
+    for bid in [b for b, r in _RESUME_BATCHES.items() if r.get("label") == SUMMARIZE_LABEL]:
+        _collect_carry(bid, _RESUME_BATCHES.pop(bid), time.time())
+
+    # 2. Fresh requests for everything not drafted and not waiting on a running carry.
+    covered = {c for rec in waiting.values() for c in (rec.get("cids") or [])}
+    fresh = [p for p in pending if int(p["cid"]) not in drafts and int(p["cid"]) not in covered]
+    if fresh:
+        reqs = [batch.from_body(batch_key("summarize", p["cid"]),
+                                summarize_request(p["court_id"], p["name"], p["docket"],
+                                                  p["date_filed"], p["text"], p["note"],
+                                                  cl_status=p["cl_status"]))
+                for p in fresh]
+        fresh_cids = sorted(int(p["cid"]) for p in fresh)
+        submitted = []
+
+        def _record(bid):
+            submitted.append(bid)
+            _PENDING_BATCHES[bid] = {"label": SUMMARIZE_LABEL, "id": bid, "at": time.time(),
+                                     "n": len(reqs), "cids": fresh_cids}
+        try:
+            got = batch.run(reqs, deadline=deadline, label=SUMMARIZE_LABEL, on_submit=_record,
+                            cancel_unfinished=False)
+        except (batch.BatchTimeout, batch.BatchError) as e:
+            bid = getattr(e, "batch_id", None) or (submitted[-1] if submitted else None)
+            carried = bool(bid and bid in _PENDING_BATCHES)
+            print("  ! tier-3 summarize batch deferred (%s); %d draft(s) %s"
+                  % (e, len(fresh), "carried to the next run as %s" % bid if carried
+                     else "roll to the next run"))
+            for c in fresh_cids:
+                why[c] = ("summarize batch %s carried to the next run" % bid) if carried \
+                    else ("summarize batch failed: %s" % str(e)[:80])
+        else:
+            for bid in submitted:
+                _PENDING_BATCHES.pop(bid, None)
+            for c in fresh_cids:
+                why.setdefault(c, "no result line returned")
+            _take(got, "summarize batch")
+
+    # 3. A carry that was still running gets whatever is left of the deadline.
+    for bid, rec in list(waiting.items()):
+        _collect_carry(bid, rec, deadline)
+
+    drafted = set()
+    for p in pending:
+        cid = int(p["cid"])
+        v = drafts.get(cid)
+        if v is None:
+            print("  ! undrafted: %s %s (%s)" % (cid, p["name"][:60], why.get(cid, "no result line returned")))
             continue
         drafted.add(p["cid"])
         finish_fn(v, p)
@@ -2972,13 +3162,18 @@ def main():
     if os.path.exists(STATE_PATH):
         state = json.load(open(STATE_PATH, encoding="utf-8"))
     seen = set(int(x) for x in state.get("seen_clusters", []))
-    # Batches the last run paid for but never collected. Loaded before any phase runs so each
-    # one collects its carry-over instead of submitting duplicate work.
-    _RESUME_BATCHES.clear()
-    _RESUME_BATCHES.update(load_pending_batches(state))
+    # Summarize batches an earlier run paid for but never collected. Loaded before any phase runs:
+    # each stays outstanding (written back to state) until the summarize phase collects it, so a
+    # run that never reaches that phase keeps it. An expired carry's clusters are made eligible
+    # again (un-seen), so the draft it held is redone rather than lost.
+    expired_carry_cids = adopt_pending_batches(state)
+    if expired_carry_cids & seen:
+        seen -= expired_carry_cids
     if _RESUME_BATCHES:
-        print("  . carrying over %d uncollected batch(es) from the last run: %s"
-              % (len(_RESUME_BATCHES), ", ".join(sorted(_RESUME_BATCHES))), flush=True)
+        print("  . carrying over %d uncollected summarize batch(es): %s"
+              % (len(_RESUME_BATCHES), "; ".join(
+                  "%s (%s)" % (bid, ", ".join(str(c) for c in (rec.get("cids") or [])) or "clusters not recorded")
+                  for bid, rec in sorted(_RESUME_BATCHES.items()))), flush=True)
     # Cases already staged in an open review PR: skip them so the funnel does not re-summarize
     # (and re-stage) a case every four hours while it is awaiting a human decision. A veto
     # clears the case from this ledger, so it is rediscovered and redrafted on a later run.
@@ -3454,7 +3649,7 @@ def main():
             print("  . smelling %d triage-drop reason(s)%s"
                   % (len(smell_pending), rss_note()), flush=True)
             try:
-                items = [{"name": d["rej"]["name"], "court": d["rej"]["court"],
+                items = [{"cid": d["rej"]["cluster_id"], "name": d["rej"]["name"], "court": d["rej"]["court"],
                           "date": d["rej"]["date"], "reason": d["rej"]["reason"]}
                          for d in smell_pending]
                 verdicts = smell_reasons(items, deadline=time.time() + SMELL_BATCH_SEC)
@@ -3517,9 +3712,11 @@ def main():
             smell_escalated.append(item)
 
     # Tier 3, batched: draft every candidate that passed triage as ONE 50%-priced job, then finish
-    # each exactly as the synchronous path would (finish_card). A batch that does not end within the
-    # budget, or a transport failure, defers the whole draft set: those clusters stay unevaluated and
-    # retry next run -- the same recovery a synchronous summarize error already gets. finish_card runs
+    # each exactly as the synchronous path would (finish_card). A carried summarize batch from an
+    # earlier run is settled first and applied by custom_id (see _draft_pending). A batch that does
+    # not end within the budget is carried to the next run; every candidate left undrafted is logged
+    # and stays unevaluated, so it retries next run -- the same recovery a synchronous summarize
+    # error already gets. finish_card runs
     # with a FRESH CourtListener deadline, since the loop's run_start+BUDGET_SEC is spent by now and
     # its official-link fetches must not start pre-expired.
     if FUNNEL_BATCH and pending and not cfg_error:
@@ -3550,14 +3747,9 @@ def main():
         # the way in, and batch.poll adds one per wait, so the next death is measurable.
         print("  . guarding %d drafted card(s) as one batch (fidelity + completeness)%s"
               % (len(guard_pending), rss_note()), flush=True)
-        if not guard_cards_batch(guard_pending, crosschecks, completeness, deadline=time.time() + GUARD_BATCH_SEC):
-            for it in guard_pending:
-                cc = crosscheck(it["name"], it["text"], it["entry"])
-                if cc:
-                    crosschecks[it["cid"]] = cc
-                cp = completeness_check(it["name"], it["text"], it["entry"])
-                if cp:
-                    completeness[it["cid"]] = cp
+        guard_sync(guard_cards_batch(guard_pending, crosschecks, completeness,
+                                     deadline=time.time() + GUARD_BATCH_SEC),
+                   crosschecks, completeness)
 
     # Resolve each smell escalation's outcome now that drafting is done, on the rejection record:
     #   carded      -- the summarizer read it and carded it (recall recovered); the case's stale

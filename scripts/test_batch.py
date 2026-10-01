@@ -108,7 +108,7 @@ def test_poll_actually_prints(capture):
 
 
 def test_resume_and_on_submit():
-    """Drive the REAL batch.run through the _send seam. The update-side test stubs batch.run
+    """Drive the REAL batch.run and batch.fetch through the _send seam. The update-side test stubs batch.run
     entirely, so nothing there can catch a mutation inside this function -- and mutation
     testing proved it: dropping on_submit, or disabling the resume path, survived that suite
     untouched. These are the assertions that actually pin the money-saving behaviour."""
@@ -132,47 +132,89 @@ def test_resume_and_on_submit():
     check("and is called right after submit, before polling",
           order and order[0][1] == 1, str(order))
 
-    # 2. resume_id collects the carried batch and NEVER submits -- that is the whole saving.
+    # 2. fetch() collects a carried batch and NEVER submits -- that is the whole saving. It returns
+    #    that batch's own lines; mapping them to current work is the caller's job.
     fake2 = Scripted([
         json.dumps({"id": "batch_old", "processing_status": "ended", "results_url": "u"}),   # status
         json.dumps(_succeeded("a", '{"carried": 1}')),                                        # collect
     ])
-    out = with_send(fake2, lambda: batch.run(["ignored"], interval=0.01, label="t",
-                                             resume_id="batch_old"))
-    check("a resumed batch returns the carried results",
+    out = with_send(fake2, lambda: batch.fetch("batch_old", interval=0.01, label="t"))
+    check("fetch returns the carried batch's results",
           out.get("a", {}).get("text") == '{"carried": 1}', repr(out))
     check("and no POST was made -- the work is not paid for twice",
           all(c[0] != "POST" for c in fake2.calls), str([c[0] for c in fake2.calls]))
 
-    # 3. A carried batch that is STILL running re-raises BatchTimeout carrying the same id, so
-    #    the caller keeps holding it rather than losing it a second time.
+    # 3. A carried batch that is STILL running raises BatchTimeout carrying the same id, and is NOT
+    #    cancelled: the caller is carrying it.
     fake3 = Scripted([json.dumps({"id": "batch_old", "processing_status": "in_progress"})])
     err = {}
     try:
-        with_send(fake3, lambda: batch.run(["ignored"], deadline=0, interval=0.01, label="t",
-                                           resume_id="batch_old"))
+        with_send(fake3, lambda: batch.fetch("batch_old", deadline=0, interval=0.01, label="t"))
     except batch.BatchTimeout as e:
         err["id"] = e.batch_id
-    check("a still-running carried batch re-raises BatchTimeout", "id" in err)
+    check("a still-running carried batch raises BatchTimeout", "id" in err)
     check("carrying the same id, so it is held for the next run",
           err.get("id") == "batch_old", str(err))
+    check("and fetch never cancels it", all(c[0] != "POST" for c in fake3.calls), str(fake3.calls))
 
-    # 4. A stale/expired id must not strand the phase: fall through to a fresh submit.
-    calls4 = {"n": 0}
+    # 4. run() has no resume path any more: a carried batch can never be returned in place of the
+    #    current requests (how one run's smell verdicts were stamped onto another run's drops).
+    import inspect
+    check("run() takes no resume_id", "resume_id" not in inspect.signature(batch.run).parameters)
 
-    def flaky(method, url, body=None, label="batch"):
-        calls4["n"] += 1
-        if calls4["n"] == 1:
-            raise batch.BatchError("404 not_found_error: no such batch")
+
+def test_cancel_on_timeout():
+    """A batch that misses its deadline is cancelled before the timeout propagates, so a caller that
+    falls back to synchronous calls does not also pay for the batch. A carrying caller opts out."""
+    req = [batch.request("a", "m", "s", [{"role": "user", "content": "x"}], 8)]
+
+    # 1. Default: submit, one status read past the deadline, then a cancel POST, then BatchTimeout.
+    fake = Scripted([
+        json.dumps({"id": "batch_slow", "processing_status": "in_progress"}),   # submit
+        json.dumps({"id": "batch_slow", "processing_status": "in_progress"}),   # poll (past deadline)
+        json.dumps({"id": "batch_slow", "processing_status": "canceling"}),     # cancel
+    ])
+    err = {}
+    try:
+        with_send(fake, lambda: batch.run(req, deadline=0, interval=0.01, label="t"))
+    except batch.BatchTimeout as e:
+        err["e"] = e
+    check("a timed-out run still raises BatchTimeout", "e" in err)
+    check("after POSTing a cancel for that batch",
+          fake.calls[-1][0] == "POST" and fake.calls[-1][1] == batch.API + "/batch_slow/cancel",
+          str(fake.calls[-1][:2]))
+    check("and the exception records that it was cancelled", getattr(err.get("e"), "cancelled", None) is True)
+
+    # 2. A carrying caller (cancel_unfinished=False) keeps the batch running.
+    fake2 = Scripted([
+        json.dumps({"id": "batch_keep", "processing_status": "in_progress"}),
+        json.dumps({"id": "batch_keep", "processing_status": "in_progress"}),
+    ])
+    try:
+        with_send(fake2, lambda: batch.run(req, deadline=0, interval=0.01, label="t",
+                                           cancel_unfinished=False))
+    except batch.BatchTimeout as e:
+        err["keep"] = e
+    check("cancel_unfinished=False makes no cancel call",
+          len(fake2.calls) == 2 and not any(c[1].endswith("/cancel") for c in fake2.calls), str(fake2.calls))
+    check("and the batch id still rides the exception", getattr(err.get("keep"), "batch_id", None) == "batch_keep")
+
+    # 3. A failing cancel is best effort: logged, and the original BatchTimeout still propagates.
+    def cancel_fails(method, url, body=None, label="batch"):
+        if url.endswith("/cancel"):
+            raise batch.BatchError("500 overloaded")
         if method == "POST":
-            return json.dumps({"id": "batch_fresh", "processing_status": "in_progress"})
-        if url == "u":
-            return json.dumps(_succeeded("a", '{"fresh": 1}'))
-        return json.dumps({"id": "batch_fresh", "processing_status": "ended", "results_url": "u"})
-    out4 = with_send(flaky, lambda: batch.run(["r"], interval=0.01, label="t",
-                                              resume_id="batch_gone"))
-    check("an unknown carried id falls through to a fresh submit",
-          out4.get("a", {}).get("text") == '{"fresh": 1}', repr(out4))
+            return json.dumps({"id": "batch_x", "processing_status": "in_progress"})
+        return json.dumps({"id": "batch_x", "processing_status": "in_progress"})
+    buf = io.StringIO()
+    got = {}
+    with contextlib.redirect_stdout(buf):
+        try:
+            with_send(cancel_fails, lambda: batch.run(req, deadline=0, interval=0.01, label="t"))
+        except batch.BatchTimeout as e:
+            got["e"] = e
+    check("a failed cancel does not mask the BatchTimeout", "e" in got and got["e"].cancelled is False)
+    check("and it is logged", "could not cancel batch batch_x" in buf.getvalue(), buf.getvalue())
 
 
 def main():
@@ -180,8 +222,10 @@ def main():
     _orig_sleep = batch.time.sleep
     batch.time.sleep = lambda *_a, **_k: None
 
-    print("resume + on_submit (real batch.run):")
+    print("on_submit + fetch (real batch.run / batch.fetch):")
     test_resume_and_on_submit()
+    print("cancel on timeout:")
+    test_cancel_on_timeout()
     print("poll progress:")
     test_poll_progress()
     buf = io.StringIO()

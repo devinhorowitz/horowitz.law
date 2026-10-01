@@ -172,6 +172,39 @@ audits the logged backlog plus anything un-stamped or deferred, persisting progr
 every chunk, and surfaces suspects on a tracking issue with ready-to-paste `queue.txt` force
 lines for editor review.
 
+### Message Batches: what happens when a batch misses its deadline
+
+Triage, smell, summarize and the finish guards each run as one 50%-priced Message Batches job
+(`scripts/batch.py`) under a wall-clock budget (`OPINIONS_*_BATCH_SEC`). Every request's
+`custom_id` names its phase and its case (`triage-<cid>`, `summarize-<cid>`,
+`guards-<cid>-<kind>`; a smell chunk audits many drops, so its id is `smell-<k>-<digest>` over the
+chunk's exact cluster ids and reasons), and results are applied strictly by `custom_id`. A result
+can never land on a different case.
+
+- **Triage, smell, guards** have a synchronous fallback, so they never carry a batch to a later
+  run. On the deadline the batch is cancelled (best effort, logged, so it is not paid for on top of
+  the fallback) and the same work runs synchronously. A guard verdict the batch did not return
+  (an errored, missing or unparseable line) is also run synchronously; a card is never reported
+  guarded while a verdict is unavailable.
+- **Summarize** has no fallback, so a late batch is carried: `opinions_state.json`
+  `pending_batches` records its id, submit time and the exact cluster ids it covers. The next run
+  that reaches the summarize phase checks the carry first and applies each draft only to its own
+  cluster, and only if that cluster is still pending in that run. A draft for a cluster that is no
+  longer eligible is logged and dropped. Every pending candidate the carry does not cover gets a
+  fresh request in the same run. Every candidate that ends the run undrafted is logged as
+  `! undrafted: <cid> <name> (reason)` and stays un-seen, so it is retried.
+- A carry stays in `pending_batches` until it is collected, including through runs that never
+  reach the summarize phase. It expires after `OPINIONS_BATCH_CARRY_MAX_AGE_SEC` (default 25
+  days; Anthropic keeps batch results for 29). On expiry a log line names the clusters it covered,
+  and those clusters are made eligible again.
+- Older code also carried triage, smell and guard batches. A run that finds one of those in state
+  logs it as cleared and does not resume it.
+
+This applies only to deferrals. A run reclaimed mid-batch (exit 143) never writes state, so its
+batch is lost. Before 2026-10 a carried batch's results were returned in place of the current
+requests: smell verdicts landed on the wrong drops, and current summarize candidates went undrafted
+with no log line. `scripts/test_batch_resume.py` pins the fixed behaviour against a fake Batch API.
+
 ### Standing decision: the recall audit runs to 2026-11-30
 
 **Decided 2026-08-29 by the owner of the feed. Revisit on or after 2026-11-30.**
