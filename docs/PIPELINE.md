@@ -447,7 +447,7 @@ citator and applied by editing `opinions.json`.
   the cases already carded and asked to flag any the new opinion treats adversely. Each flag is
   confirmed by an Opus audit before the cited card is raised to caution, whether or not the new
   opinion itself earns a place in the feed.
-- The reverse sweep (`scripts/treatment.py`, on weekends): walks every card's citation graph on
+- The reverse sweep (`scripts/treatment.py`, short runs every 6 hours): walks every card's citation graph on
   CourtListener, reads each new citing passage, and judges adverse treatment. It is the thorough
   backstop to the forward pass and reaches citers, including criminal and out-of-scope ones, that
   the daily screen drops before triage ever sees them.
@@ -472,7 +472,10 @@ between those commits it is frozen against a skill tree that keeps moving -- whi
 fails open on a manifest it cannot read, so a stale one looks exactly like a working watch. The
 daily heartbeat therefore checks its `generated_at` as a separate signal
 (`python scripts/heartbeat.py --skill-manifest`, exit 5) and files its own tracking issue past
-`siteconfig.SKILL_MANIFEST_MAX_AGE_DAYS` (90). Regenerate with `python scripts/skill_authorities.py`
+`siteconfig.SKILL_MANIFEST_MAX_AGE_DAYS` (90). A freshly dated but empty manifest (zero skills, or
+nothing in `by_authority`) fails the same check, and the generator refuses to write one: finding no
+`qpwb-*` skills under `--skills` (default `QPWB_SKILLS`, else `/mnt/skills/user`) exits nonzero and
+leaves the existing manifest alone. Regenerate with `python scripts/skill_authorities.py`
 where the tree is mounted; curated edits survive. Set the threshold to `0` to retire the check if
 the skill tree is no longer maintained -- deliberately, rather than by ignoring the issue.
 
@@ -520,7 +523,7 @@ Thirteen workflows under `.github/workflows/`:
 
 - `opinions.yml` runs the funnel every four hours and opens the PR. If a content PR is already
   open, a scheduled run skips, so review is never raced.
-- `treatment.yml` runs the weekend reverse sweep.
+- `treatment.yml` runs the reverse sweep every 6 hours, in short resumable runs.
 - `golden-check.yml` runs the golden set; `backfill.yml` and `queue.yml` are the historical and
   on-demand fetchers.
 - `digest.yml` and `alert.yml` send the email.

@@ -186,17 +186,31 @@ def test_recall(check, L, make_ai, fake_fetch, BILLS):
     check("recall prompt applies the STRICTER federal bar for US", "DIRECTLY changes" in us)
     check("the federal bar is not the Georgia one", "CLEARLY unrelated" not in us)
 
-    # --- recall_drop: verdicts and the fail-CLOSED default ---
+    # --- recall_drop: verdicts, and a failed audit that is NOT one ---
     drop = {"state": "GA", "number": "HB 945", "reason": "banking regulation, not civil litigation",
             "brief": "Title: Banking and finance; litigation finance registration"}
     sus, note = L.recall_drop(drop, make_ai({"leg-recall": {"suspect": True, "note": "brief names litigation finance"}}))
     check("recall_drop reports a suspect verdict", sus and "litigation finance" in note)
     ok, _ = L.recall_drop(drop, make_ai({"leg-recall": {"suspect": False, "note": "stands"}}))
-    check("recall_drop reports a clean verdict", not ok)
+    check("recall_drop reports a clean verdict", ok is False)
+    # An auditor error used to come back (False, "") -- the same as a clean audit -- so run() logged
+    # the drop "ok" and locked it in seen on no audit at all.
     def boom(_body):
         raise RuntimeError("auditor down")
-    failed, _ = L.recall_drop(drop, make_ai({"leg-recall": boom}))
-    check("recall_drop FAILS CLOSED: an auditor error leaves the drop standing", not failed)
+    failed, why = L.recall_drop(drop, make_ai({"leg-recall": boom}))
+    check("recall_drop reports a failed audit as None, not as a clean verdict", failed is None)
+    check("recall_drop carries the failure's reason", "auditor down" in why, why)
+    check("recall_drop treats a response with no boolean verdict as a failed audit",
+          L.recall_drop(drop, make_ai({"leg-recall": {"note": "stands"}}))[0] is None
+          and L.recall_drop(drop, make_ai({"leg-recall": {"suspect": "false"}}))[0] is None)
+    import update
+    def dead_key(_body):
+        raise update.ConfigError("invalid x-api-key")
+    try:
+        L.recall_drop(drop, make_ai({"leg-recall": dead_key}))
+        check("recall_drop re-raises a ConfigError (it is not about this drop)", False)
+    except update.ConfigError:
+        check("recall_drop re-raises a ConfigError (it is not about this drop)", True)
 
     # --- end to end: the HB945 miss, and its control, in one run ---
     # The screen drops BOTH. The auditor clears the appropriations bill and flags the litigation
@@ -269,9 +283,79 @@ def test_recall(check, L, make_ai, fake_fetch, BILLS):
                       and seen_off.get("444") == BILLS[444]["change_hash"])
             finally:
                 L.RECALL = True
+
+            def logged():
+                return [json.loads(ln) for ln in open(L.DROPS_PATH, encoding="utf-8") if ln.strip()]
+
+            # --- a FAILED audit: logged "error" with its reason, counted, and left UN-SEEN ---
+            # The auditor errors on the appropriations bill only; the other drops audit normally.
+            def flaky(body):
+                if "appropriations" in body["messages"][0]["content"].lower():
+                    raise RuntimeError("auditor timed out")
+                return recall(body)
+            L.DROPS_PATH = os.path.join(d, "failed.jsonl")
+            _, fnotes, fseen = L.run(key="GOODKEY", fetch=fake_fetch,
+                                     ai=make_ai({"leg-screen": screen, "leg-recall": flaky, "leg-write": write}),
+                                     states=["GA"], today=datetime.date(2026, 7, 17))
+            f444 = [r for r in logged() if r["number"] == "HB 900"]
+            check("a failed audit is logged recall 'error', never 'ok'",
+                  f444 and all(r["recall"] == "error" for r in f444), str([r.get("recall") for r in f444]))
+            check("the failed audit's reason is on the log record",
+                  all("auditor timed out" in r.get("recall_error", "") for r in f444))
+            check("a failed audit is NOT recorded seen, so the bill is re-screened next run", "444" not in fseen)
+            check("the drops that did audit still settle or escalate",
+                  fseen.get("111") == "h-sb68-v1" and fseen.get("222") == BILLS[222]["change_hash"])
+            check("the run reports the failures",
+                  any("recall audited" in n and " %d failed" % len(f444) in n for n in fnotes), str(fnotes))
+
+            # --- a ConfigError stops the pass: no further audit calls, every drop left un-seen ---
+            calls = []
+            def dead_auditor(_body):
+                calls.append(1)
+                raise update.ConfigError("invalid x-api-key")
+            L.DROPS_PATH = os.path.join(d, "config.jsonl")
+            ccards, cnotes, cseen = L.run(key="GOODKEY", fetch=fake_fetch,
+                                          ai=make_ai({"leg-screen": screen, "leg-recall": dead_auditor,
+                                                      "leg-write": write}),
+                                          states=["GA"], today=datetime.date(2026, 7, 17))
+            crecs = logged()
+            check("a ConfigError aborts the recall pass after one call", len(calls) == 1, str(len(calls)))
+            check("a ConfigError leaves every drop un-seen and escalates none", not cseen and not ccards, str(cseen))
+            check("a ConfigError logs every drop recall 'error' with the reason",
+                  crecs and all(r["recall"] == "error" and "ConfigError" in r.get("recall_error", "")
+                                for r in crecs))
+            check("the abort is announced and every drop counted failed",
+                  any("recall ABORTED" in n for n in cnotes)
+                  and any("recall audited %d screen drop(s), %d failed" % (len(crecs), len(crecs)) in n
+                          for n in cnotes), str(cnotes))
+
+            # --- the retry cap: after RECALL_MAX_FAILS failed audits of the SAME drop, the writer
+            #     decides it without another audit. A failure on an older change_hash does not count. ---
+            L.DROPS_PATH = os.path.join(d, "capped.jsonl")
+            L.log_drops([{"bill_id": "444", "number": "HB 900", "change_hash": BILLS[444]["change_hash"],
+                          "recall": "error"}] * L.RECALL_MAX_FAILS
+                        + [{"bill_id": "111", "number": "SB 68", "change_hash": "h-sb68-OLD",
+                            "recall": "error"}] * L.RECALL_MAX_FAILS)
+            audited = []
+            def watched(body):
+                audited.append(body["messages"][0]["content"].lower())
+                return recall(body)
+            kcards, _, kseen = L.run(key="GOODKEY", fetch=fake_fetch,
+                                     ai=make_ai({"leg-screen": screen, "leg-recall": watched, "leg-write": write}),
+                                     states=["GA"], today=datetime.date(2026, 7, 17))
+            k444 = [r for r in logged() if r["number"] == "HB 900" and r.get("recall") != "error"]
+            check("a drop at the failure cap is not audited again", not any("appropriations" in t for t in audited))
+            check("a drop at the failure cap goes to the writer and is settled on its verdict",
+                  444 in {c["bill_id"] for c in kcards} and kseen.get("444") == BILLS[444]["change_hash"])
+            check("the capped escalation says why on the log",
+                  k444 and all(r["recall"] == "escalated" and "earlier audits failed" in r.get("recall_note", "")
+                               for r in k444), str(k444))
+            check("failures on an older change_hash do not count toward the cap",
+                  any("tort reform" in t for t in audited) and kseen.get("111") == "h-sb68-v1")
         finally:
             L.DROPS_PATH = real
-    print("  ok   recall check over screen drops (HB945 miss + control, log, invariant, kill switch)")
+    print("  ok   recall check over screen drops (HB945 miss + control, log, invariant, kill switch, "
+          "failed audits, ConfigError, retry cap)")
 
 
 def main():
@@ -438,7 +522,11 @@ def main():
         return {"keep": True, "areas": ["damages"], "synopsis": "Synopsis for " + txt.split("\n")[0],
                 "impact": "It matters.", "effective_date": ""}
 
-    ai = make_ai({"leg-screen": screen_router, "leg-write": write_router})
+    # The recall pass audits every screen drop, so a run with drops needs an auditor. This one clears
+    # them all, settling each drop seen; without it the audit fails and the drop is left un-seen.
+    clean_recall = {"suspect": False, "note": "drop stands"}
+
+    ai = make_ai({"leg-screen": screen_router, "leg-recall": clean_recall, "leg-write": write_router})
     cards, notes, seen = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai,
                                today=__import__("datetime").date(2026, 7, 17))
     got = {c["bill_id"] for c in cards}
@@ -475,7 +563,7 @@ def main():
         rel = ("faaaa" in txt or "motor carrier" in txt or "14501" in txt) and "appropriations" not in txt
         return {"relevant": rel, "areas": ["auto"], "reason": "x"}
 
-    us_ai = make_ai({"leg-screen": us_screen, "leg-write": write_router})
+    us_ai = make_ai({"leg-screen": us_screen, "leg-recall": clean_recall, "leg-write": write_router})
     fed_cards, fed_notes, _ = L.run(key="GOODKEY", fetch=fake_fetch, ai=us_ai, states=["US"],
                                     today=__import__("datetime").date(2026, 7, 17))
     fed_ids = {c["bill_id"] for c in fed_cards}
@@ -486,7 +574,7 @@ def main():
     # Both jurisdictions in one run, into one card set keyed on the globally-unique bill_id.
     both_ai = make_ai({"leg-screen": lambda b: (us_screen(b) if "u.s. congress" in b["messages"][0]["content"].lower()
                                                 else screen_router(b)),
-                       "leg-write": write_router})
+                       "leg-recall": clean_recall, "leg-write": write_router})
     both, bnotes, _ = L.run(key="GOODKEY", fetch=fake_fetch, ai=both_ai, states=["GA", "US"],
                             today=__import__("datetime").date(2026, 7, 17))
     both_ids = {c["bill_id"] for c in both}
@@ -616,7 +704,8 @@ def main():
     #     path (keep -> card+seen, decline -> seen, per-request error / whole-batch defer -> un-seen). ---
     import batch as _B
     _real_run = _B.run
-    screen_keep = make_ai({"leg-screen": screen_router})   # drops the appropriations bill (444), keeps 111/222
+    # drops the appropriations bill (444), keeps 111/222; the audit clears the drop
+    screen_keep = make_ai({"leg-screen": screen_router, "leg-recall": clean_recall})
 
     def _fake_batch(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         # custom_id is the bill_id: 111 kept, 222 declined, anything else an errored line.

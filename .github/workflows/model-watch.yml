@@ -87,8 +87,10 @@ jobs:
 
       # Golden-set gate, only when a bump was staged. update.py reads the model from its
       # now-edited default, so this runs the new model. `check` covers the screen/triage
-      # tiers; `summarize` covers the Opus summarizer. Captured, not fatal here, so the PR
-      # still opens with the result; the final step fails the run if it regressed.
+      # tiers; `summarize` covers the Opus summarizer. A regression (exit 1) is captured, not
+      # fatal here, so the PR still opens with the result; the final step fails the run if it
+      # regressed. Any other nonzero exit (3 is a bad key, no credit, or a retired model) judged
+      # nothing, so it fails this step outright: no PR, and the failure reporter below files it.
       - name: Golden-set check against the candidate
         id: eval
         if: steps.watch.outputs.upgrade == 'true'
@@ -99,18 +101,20 @@ jobs:
           rc=0
           { echo ""; echo "### Golden-set result (candidate model)"; echo ""; } >> "$BODY"
           if [ "${{ steps.watch.outputs.run_check }}" = "true" ]; then
-            if python scripts/golden_check.py check; then
-              echo "- \`check\` (screen/triage): no regression" >> "$BODY"
-            else
-              rc=1; echo "- \`check\` (screen/triage): **REGRESSION**, do not merge as-is" >> "$BODY"
-            fi
+            code=0; python scripts/golden_check.py check || code=$?
+            case "$code" in
+              0) echo "- \`check\` (screen/triage): no regression" >> "$BODY" ;;
+              1) rc=1; echo "- \`check\` (screen/triage): **REGRESSION**, do not merge as-is" >> "$BODY" ;;
+              *) echo "::error::golden_check check exited $code: a broken run, not a regression"; exit "$code" ;;
+            esac
           fi
           if [ "${{ steps.watch.outputs.run_summarize }}" = "true" ]; then
-            if python scripts/golden_check.py summarize; then
-              echo "- \`summarize\` (Opus): no dropped area" >> "$BODY"
-            else
-              rc=1; echo "- \`summarize\` (Opus): **REGRESSION**, a covered area was dropped" >> "$BODY"
-            fi
+            code=0; python scripts/golden_check.py summarize || code=$?
+            case "$code" in
+              0) echo "- \`summarize\` (Opus): no dropped area" >> "$BODY" ;;
+              1) rc=1; echo "- \`summarize\` (Opus): **REGRESSION**, a covered area was dropped" >> "$BODY" ;;
+              *) echo "::error::golden_check summarize exited $code: a broken run, not a regression"; exit "$code" ;;
+            esac
           fi
           if [ "$rc" -eq 0 ]; then echo "regressed=false" >> "$GITHUB_OUTPUT"; else echo "regressed=true" >> "$GITHUB_OUTPUT"; fi
 
@@ -129,29 +133,33 @@ jobs:
           body-path: ${{ steps.watch.outputs.body_path }}
           labels: models, automated
           delete-branch: true
-          # Only the files where a model id is pinned. opinions.json and the generated
-          # pages are never touched here.
+          # Exactly model_watch.PIN_FILES, the files a bump rewrites (test_model_watch holds the
+          # two equal: a file left off here is bumped on the runner but never reaches the PR).
+          # opinions.json and the generated pages are never touched here.
           add-paths: |
             scripts/update.py
             scripts/treatment.py
-            .github/workflows/opinions.yml
-            .github/workflows/backfill.yml
-            .github/workflows/queue.yml
-            .github/workflows/golden-check.yml
-            .github/workflows/treatment.yml
-            .github/workflows/maintain.yml
+            scripts/courtrules.py
+            scripts/ethics.py
+            scripts/legislation.py
+            scripts/regulations.py
 
       # If an upgrade exists but no PAT is configured, say so on the run summary rather
       # than failing or going silent: the bump and eval ran, but no PR could be opened.
       - name: Note when no PAT is configured
         if: steps.watch.outputs.upgrade == 'true' && steps.pat.outputs.has != 'true'
         run: |
+          if [ "${{ steps.eval.outputs.regressed }}" = "true" ]; then
+            result="but it REGRESSED on the golden set (see the eval step), so do not apply it as-is"
+          else
+            result="and it passed the golden set"
+          fi
           {
             echo "## Model watch"
             echo ""
-            echo "A newer model is available and was validated against the golden set, but"
-            echo "MODEL_WATCH_TOKEN is not set, so no PR was opened. Add a PAT with Contents"
-            echo "and Pull requests write in that secret, or apply the bump by hand from the log."
+            echo "A newer model is available, $result. MODEL_WATCH_TOKEN is not set, so no PR"
+            echo "was opened. Add a PAT with Contents and Pull requests write in that secret, or"
+            echo "apply the bump by hand from the log."
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Fail the run if the golden set regressed on the candidate, so the PR is clearly
@@ -164,7 +172,9 @@ jobs:
 
       # Surface a genuinely broken run on the one tracking issue. A clean golden-set
       # regression is expected signal, not a broken run, so it is excluded here (the
-      # Fail step above already makes it visibly red and the PR carries the detail).
+      # Fail step above already makes it visibly red and the PR carries the detail). A golden
+      # check that could not judge the model (bad key, no credit) fails the eval step instead,
+      # so it lands here.
       - name: Report a failed run
         if: failure() && steps.eval.outputs.regressed != 'true'
         env:

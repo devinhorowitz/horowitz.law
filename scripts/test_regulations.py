@@ -14,6 +14,7 @@ Run directly: `python scripts/test_regulations.py`.
 import json
 import os
 import sys
+import tempfile
 import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -93,6 +94,9 @@ def main():
     # the card-producing assertions. Stub it to {} so the tests never read on-disk state. (Dedup itself
     # is covered directly via new_documents(seen=...), which takes the seen set as a parameter.)
     R._load_seen = lambda: {}
+    # Same hygiene for the drop log: log_drops WRITES, so point it at a temp file for the whole
+    # process and a test can never leave a regulations_rejections.jsonl change in the working tree.
+    R.REG_DROPS_PATH = os.path.join(tempfile.mkdtemp(prefix="regtest-"), "regulations_rejections.jsonl")
 
     # --- query URL ---
     u = R._query_url(["federal-motor-carrier-safety-administration"], ["RULE", "PRORULE"], "2026-06-01", page=2)
@@ -232,6 +236,65 @@ def main():
     check("batch timeout drafts no cards", tcards == [])
     check("batch timeout leaves the writes un-seen (retry); only the screen drop is seen",
           "2025-11111" not in tseen and "2025-33333" not in tseen and "2025-22222" in tseen)
+
+    # --- the drop log: every rule marked seen without a card leaves its reason and the brief read ---
+    day = __import__("datetime").date(2026, 7, 17)
+    drops = []
+    _, _, dseen = R.run(fetch=fake_fetch, ai=ai, today=day, drops=drops)
+    by = {r["document_number"]: r for r in drops}
+    check("run records the screen-dropped fee rule, and only it", set(by) == {"2025-22222"}, str(set(by)))
+    fee = by.get("2025-22222") or {}
+    check("a drop record names its stage, reason, agency and title",
+          fee.get("stage") == "screen" and fee.get("reason") == "x" and fee.get("agency") == "FMCSA"
+          and fee.get("title") == FEE["title"] and fee.get("ts"))
+    check("a drop record keeps the BRIEF the screen actually read", fee.get("brief") == R._doc_brief(FEE))
+    check("every recorded drop is also marked seen", set(by) <= set(dseen))
+
+    wdrops = []
+    wcards, _, wseen = R.run(fetch=fake_fetch, today=day, drops=wdrops, ai=make_ai(
+        {"reg-screen": {"relevant": True, "areas": [], "reason": "insurance minimums"},
+         "reg-write": {"keep": False}}))
+    check("a writer decline is recorded as a writer-stage drop",
+          not wcards and len(wdrops) == 3 and all(r["stage"] == "writer" for r in wdrops))
+    check("a writer decline carries the screen's reason for keeping it",
+          all("insurance minimums" in r["reason"] for r in wdrops))
+    edrops = []
+    R.run(fetch=fake_fetch, ai=err_ai, today=day, drops=edrops)
+    check("a transient writer error is not a drop (it retries, so nothing is recorded)", edrops == [])
+    check("run() itself writes no drop log", not os.path.exists(R.REG_DROPS_PATH))
+
+    check("log_drops writes nothing for a run with no drops", R.log_drops([]) == 0
+          and not os.path.exists(R.REG_DROPS_PATH))
+    R.log_drops(drops)
+    R.log_drops(wdrops)
+    lines = open(R.REG_DROPS_PATH, encoding="utf-8").read().splitlines()
+    check("the drop log is APPEND-ONLY (earlier lines untouched)",
+          len(lines) == 4 and json.loads(lines[0])["document_number"] == "2025-22222")
+    R.log_drops([{"document_number": "n%d" % i} for i in range(3)], cap=5)
+    capped_lines = [json.loads(ln) for ln in open(R.REG_DROPS_PATH, encoding="utf-8")]
+    check("the drop log is bounded, keeping the newest lines",
+          len(capped_lines) == 5 and capped_lines[-1]["document_number"] == "n2")
+
+    # main(): drops land on --apply, beside the seen marks they explain, and never on a dry run.
+    saved = (R.run, R.STATE_PATH, R.LOG_PATH, R.JSON_PATH, R.REG_DROPS_PATH)
+
+    def one_drop_run(drops=None, **_kw):
+        drops.append(R.drop_record(FEE, "screen", "fees", "2026-07-17T00:00:00Z"))
+        return [], [], {"2025-22222": "2025-06-11"}
+
+    with tempfile.TemporaryDirectory() as td:
+        R.run = one_drop_run
+        R.STATE_PATH, R.LOG_PATH, R.JSON_PATH, R.REG_DROPS_PATH = (
+            os.path.join(td, n) for n in ("state.json", "log.jsonl", "cards.json", "drops.jsonl"))
+        try:
+            R.main(["--json"])
+            check("a dry run writes no drop record", not os.path.exists(R.REG_DROPS_PATH))
+            R.main(["--apply"])
+            recs = [json.loads(ln) for ln in open(R.REG_DROPS_PATH, encoding="utf-8") if ln.strip()]
+            check("--apply appends the run's drops to REG_DROPS_PATH",
+                  [r["document_number"] for r in recs] == ["2025-22222"])
+        finally:
+            R.run, R.STATE_PATH, R.LOG_PATH, R.JSON_PATH, R.REG_DROPS_PATH = saved
 
     # --- agency-slug catalog validation (a silent-zero guard: a renamed slug matches nothing) ---
     CATALOG = json.dumps([

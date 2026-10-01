@@ -18,8 +18,8 @@ expensive model only ever touches confirmed keepers:
                             catching holdings that are not visible from the opening.
   Tier 3  SUMMARIZE(Opus)   reads the FULL opinion plus the triage note and writes the
                             public-facing card in the house style. Final backstop: it can
-                            still decline. Opus 4.8 takes no extended-thinking budget and
-                            no "effort" parameter; the summarizer runs at the model default.
+                            still decline. The summarizer sends no extended-thinking budget
+                            and no "effort" parameter; it runs at the pinned model's default.
 
 Auto-lane keepers are appended to opinions.json, opinions_state.json is updated, and
 opinions.html/opinions.xml are re-rendered for a straight-to-main publish; guard-flagged
@@ -107,8 +107,8 @@ CL_TOKEN     = os.environ.get("COURTLISTENER_TOKEN", "")
 MODEL        = os.environ.get("OPINIONS_MODEL", "claude-opus-5")
 AUDIT_MODEL  = os.environ.get("OPINIONS_AUDIT_MODEL", MODEL)  # escalated treatment audit; Opus by default
 TRIAGE_MODEL = os.environ.get("OPINIONS_TRIAGE_MODEL", "claude-sonnet-5")
-# Defaults are the undated canonical ids (claude-haiku-4-5), like every other tier (opus-4-8,
-# sonnet-5, fable-5), not a dated snapshot. A dated snapshot such as claude-haiku-4-5-20251001
+# Defaults are the undated canonical ids (claude-haiku-4-5), like every other tier (the Opus,
+# Sonnet and Fable pins), not a dated snapshot. A dated snapshot such as claude-haiku-4-5-20251001
 # carries Anthropic's snapshot-retirement lifecycle -- it is eventually deprecated and stops
 # serving -- so it was the one model dependency here with a built-in expiry. The undated id has no
 # such expiry, which is what an unattended deployment wants. Pin a dated snapshot via the repo
@@ -1989,6 +1989,17 @@ def _guard_consensus(flags, clears, made, tries, clear_verdict, clear_reason, fo
                           last_error or "attempts lost, so the result is undecided, not clean"))}
 
 
+def _print_unconfirmed_flags(guard, name, flags):
+    """Print what each grounded flag that consensus did not stand up actually said. The NOT
+    CONFIRMED and no-majority lines carry only counts, so a 1-of-3 fidelity flag's reason and
+    quote were lost for good -- even when the card later proved to misstate the very facts that
+    attempt had faulted. The DISMISSED line already keeps an ungrounded flag's reason; a grounded
+    one that was merely outvoted or left undecided deserves no less."""
+    for reason, quote in flags:
+        print("  . %s unconfirmed flag for %s: reason=%r quote=%r"
+              % (guard, name[:40], reason[:160], quote[:120]))
+
+
 def crosscheck(name, text, entry):
     """Independent fidelity check on a drafted card: a model other than the Opus summarizer reads the
     opinion against the drafted holding and flags a summary that misstates it. Flag-and-surface, so it
@@ -2041,6 +2052,7 @@ def crosscheck(name, text, entry):
                            last_error)
     if out["verdict"] == "unavailable":
         print("  ! cross-check unavailable for %s: %s" % (name[:40], out["reason"]))
+        _print_unconfirmed_flags("cross-check", name, flags)
     # Report what consensus DECIDED, not merely that some attempt flagged. This branch used to be
     # a bare `elif flags`, so it also fired on the confirmed path: a flag that WON its majority
     # and was about to be reported as a finding printed "NOT CONFIRMED ... clearing as noise" on
@@ -2053,6 +2065,7 @@ def crosscheck(name, text, entry):
     elif flags:
         print("  . cross-check flag NOT CONFIRMED for %s (%d of %d attempts flagged); clearing as noise"
               % (name[:40], len(flags), made))
+        _print_unconfirmed_flags("cross-check", name, flags)
     return out
 
 
@@ -2133,6 +2146,7 @@ def completeness_check(name, text, entry):
                            last_error)
     if out["verdict"] == "unavailable":
         print("  ! completeness check unavailable for %s: %s" % (name[:40], out["reason"]))
+        _print_unconfirmed_flags("completeness", name, flags)
     # Same correction as the cross-check above, and for the same reason: a confirmed flag must not
     # print the sentence that dismisses one.
     elif out["verdict"] == "flag":
@@ -2141,6 +2155,7 @@ def completeness_check(name, text, entry):
     elif flags:
         print("  . completeness flag NOT CONFIRMED for %s (%d of %d attempts flagged); clearing as noise"
               % (name[:40], len(flags), made))
+        _print_unconfirmed_flags("completeness", name, flags)
     return out
 
 
@@ -2373,6 +2388,33 @@ def _same_case(a, b):
     return bool(a[1]) and a[1] == b[1] and len(a[3] & b[3]) >= 2
 
 
+def _select_candidates(results, since, today, have, seen, pending_review, redraft_pending):
+    """The run's candidate filter, moved out of main() with its selection unchanged so the since-floor
+    count below is unit-testable. Returns (cand, floor_dropped): the feed items to evaluate, in feed order, and
+    {court_id: n} of NEVER-SEEN items the since floor dropped, largest first. The count is logging
+    only; it changes nothing that is selected. It exists because the floor drops silently: juriscraper
+    stamps every new gasupreme.us release 2026-06-16, so ~15 unseen Supreme Court of Georgia items
+    fell under the floor every run for three months with no log line. An item already carded, seen
+    or held never reaches the floor check, so every count here is a case the pipeline never looked at."""
+    cand, ids, floored = [], set(), {}
+    for r in results:
+        cid = cluster_id_of(r)
+        if not cid or cid in have or cid in seen or cid in ids or cid in pending_review:
+            continue
+        if (r.get("dateFiled") or "") and r["dateFiled"] < since and cid not in redraft_pending:
+            floored.setdefault(cid, r.get("court_id") or "?")   # by cid: a repeated feed item counts once
+            continue
+        if (r.get("dateFiled") or "") and r["dateFiled"][:10] > today:
+            continue        # future-dated filing (typo'd CL metadata): never card it, never let it advance the watermark
+        ids.add(cid)
+        cand.append(r)
+    counts = {}
+    for cid, court in floored.items():
+        if cid not in ids:          # a cluster the feed also carried in-window was selected, not dropped
+            counts[court] = counts.get(court, 0) + 1
+    return cand, dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+
+
 def _drop_counts(skipped):
     """Break the run's dropped candidates down by the tier that dropped them, read
     from the reason prefix. The screen and triage counts are the recall signal: how
@@ -2423,6 +2465,10 @@ def _log_run(rec):
                        rec.get("flagged", 0), rec.get("treatment", 0), rec.get("dropped", 0),
                        d.get("screen", 0), d.get("pretriage", 0), d.get("triage", 0), d.get("summarizer", 0), d.get("other", 0),
                        rec.get("cl_calls", 0), rec.get("crosscheck_flags", 0), rec.get("completeness_flags", 0)))
+                fd = rec.get("floor_dropped") or {}
+                if fd:
+                    f.write("- since floor dropped %d never-seen item(s): %s\n"
+                            % (sum(fd.values()), ", ".join("%s=%d" % kv for kv in fd.items())))
         except Exception as e:
             print("  . run summary write skipped: %s" % e)
 
@@ -2848,6 +2894,20 @@ def _draft_pending(pending, deadline, finish_fn):
     return drafted
 
 
+def _step_output(key, value):
+    """Append key=value to $GITHUB_OUTPUT for a later workflow step to read. A no-op anywhere
+    but Actions. Best-effort, like safeio.step_summary: a failed write must not fail the run,
+    and opinions.yml fails open on a missing value (it stamps scanned_at as it always has)."""
+    path = os.environ.get("GITHUB_OUTPUT")
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write("%s=%s\n" % (key, value))
+    except OSError as e:
+        print("  . step-output write skipped: %s" % e)
+
+
 # Console log prefixes, so a raw job log reads at a glance: "+" an opinion added
 # or a routing override, "~" an adverse-treatment flag on an existing card or a duplicate skip,
 # "!" a warning or error, "." a minor or best-effort step that was skipped. The
@@ -2869,11 +2929,17 @@ def main():
     # API outage, skip cleanly without fetching, screening, or marking anything, so
     # the next scheduled run retries in a few hours instead of the day's work being
     # lost. Fail-open: an unknown/unreachable status never blocks the run.
+    #
+    # Both early returns below still exit 0, but they report scanned=false so the scan-status
+    # step does not stamp a fresh scanned_at: a run that read no feed is not evidence the funnel
+    # is alive, and stamping it would keep the MCP's trust_silence true and the heartbeat's stall
+    # check quiet through an outage of any length.
     slevel, sdesc = anthropic_status()
     print("Anthropic status: %s%s" % (sdesc, "" if slevel in ("operational", "unknown") else " [%s]" % slevel))
     if slevel == "outage" and STATUS_MODE == "on":
         print("  ! Anthropic API is in a reported outage; skipping this run. "
               "Nothing was fetched or marked seen, so the next scheduled run will retry.")
+        _step_output("scanned", "false")
         return
 
     entries = json.load(open(JSON_PATH, encoding="utf-8")) if os.path.exists(JSON_PATH) else []
@@ -2943,7 +3009,9 @@ def main():
               "(feed unreachable or empty); nothing written this run.")
         safeio.step_summary("## Georgia Appellate Watch \u00b7 funnel\n\n"
                             "**No candidates returned from the feeds this run.**")
+        _step_output("scanned", "false")
         return
+    _step_output("scanned", "true")
     # Cases a human vetoed were left un-seen and logged for redraft, on the promise that a later
     # run rediscovers and redrafts them. But a newer auto card advances last_filed past an older
     # vetoed case, so the `since` floor would silently drop it every run and the redraft never
@@ -2951,22 +3019,16 @@ def main():
     # while the feed still carries them. Self-clearing: once one is re-carded it enters have/seen
     # (or is re-held into pending_review), so it falls out of this set on the next run.
     redraft_pending = review_store.load_redraft_ids() - seen - have - pending_review
-    cand, ids = [], set()
-    for r in results:
-        cid = cluster_id_of(r)
-        if not cid or cid in have or cid in seen or cid in ids or cid in pending_review:
-            continue
-        if (r.get("dateFiled") or "") and r["dateFiled"] < since and cid not in redraft_pending:
-            continue
-        if (r.get("dateFiled") or "") and r["dateFiled"][:10] > today:
-            continue        # future-dated filing (typo'd CL metadata): never card it, never let it advance the watermark
-        ids.add(cid)
-        cand.append(r)
+    cand, floor_dropped = _select_candidates(results, since, today, have, seen, pending_review, redraft_pending)
     cand.sort(key=lambda r: (r.get("dateFiled") or "", cluster_id_of(r)), reverse=True)
     cand = cand[:MAX_RUN]
     print("since %s | candidates: %d | tiers: screen=%s pretriage=%s triage=%s summarize=%s%s"
           % (since, len(cand), SCREEN_MODEL or "off", PRETRIAGE_MODEL or "off", TRIAGE_MODEL or "off", MODEL,
              rss_note()), flush=True)
+    if floor_dropped:
+        print("  ! since floor dropped %d never-seen item(s): %s"
+              % (sum(floor_dropped.values()), ", ".join("%s=%d" % kv for kv in floor_dropped.items())),
+              flush=True)
 
     added, flagged, skipped = [], [], []
     rejections = []                            # screen/triage drops this run, logged to REJECT_PATH for recall review
@@ -3566,6 +3628,7 @@ def main():
         "cl_calls": cl_rate.PACER.calls,
         "crosscheck_flags": sum(1 for c in crosschecks.values() if c["verdict"] == "flag"),
         "completeness_flags": sum(1 for c in completeness.values() if c["verdict"] == "flag"),
+        "floor_dropped": floor_dropped,
     })
 
     if sa_events:

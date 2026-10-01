@@ -13,7 +13,9 @@ skill_manifest_check() is covered the same way (5 = stale, 0 = fresh/absent/off)
 easy to get backwards in the direction that hurts: an ABSENT manifest must read as 0, because a
 deployment that never adopted the skill-authority watch must not get a permanent issue about a file
 it does not want -- while a manifest that is present but UNDATABLE must read as 5, because a
-freshness net that cannot read its own timestamp must never report fresh.
+freshness net that cannot read its own timestamp must never report fresh. So must one that is
+freshly dated but EMPTY (zero skills or an empty by_authority): that is what the generator wrote
+when run with no skill tree mounted, and passing it would auto-close the issue on a dead watch.
 
 Run directly: `python scripts/test_heartbeat.py`.
 """
@@ -71,10 +73,11 @@ def stamp(days_ago, with_time=True):
     return t.strftime("%Y-%m-%dT%H:%M:%SZ") if with_time else t.strftime("%Y-%m-%d")
 
 
-def run_manifest(manifest, days=90.0, write=True):
+def run_manifest(manifest, days=90.0, write=True, alert=None):
     """Point heartbeat's manifest path at a synthetic file with a pinned clock, restoring after.
 
     manifest: the object written as skill-authorities.json; pass write=False to omit the file.
+    alert: a list to append the written alert text to ("" if none was written).
     Returns the exit code from skill_manifest_check()."""
     saved = (heartbeat.SA_PATH, heartbeat.SA_ALERT_PATH, heartbeat._now, heartbeat.SA_DAYS)
     with tempfile.TemporaryDirectory() as d:
@@ -92,6 +95,9 @@ def run_manifest(manifest, days=90.0, write=True):
         try:
             return heartbeat.skill_manifest_check()
         finally:
+            if alert is not None:
+                ap = heartbeat.SA_ALERT_PATH
+                alert.append(open(ap, encoding="utf-8").read() if os.path.exists(ap) else "")
             (heartbeat.SA_PATH, heartbeat.SA_ALERT_PATH,
              heartbeat._now, heartbeat.SA_DAYS) = saved
 
@@ -150,16 +156,51 @@ def main():
     def gen(days_ago):
         return (NOW - datetime.timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    code = run_manifest({"generated_at": gen(10), "skills": [1, 2]})
+    def populated(days_ago, **over):
+        """The shape skill_authorities.py writes from a real tree: skills, and an index over them."""
+        m = {"generated_at": gen(days_ago), "skills_root": "/mnt/skills/user", "skill_count": 2,
+             "skills": {"qpwb-core": {}, "qpwb-premises": {}},
+             "by_authority": {"O.C.G.A. § 51-3-1": ["qpwb-premises"],
+                              "Robinson v. Kroger Co.": ["qpwb-core", "qpwb-premises"]}}
+        m.update(over)
+        return m
+
+    code = run_manifest(populated(10))
     check("manifest generated 10d ago (threshold 90) -> 0", code == 0, "got %r" % code)
 
-    code = run_manifest({"generated_at": gen(120), "skills": [1, 2], "skills_root": "/mnt/skills/user"})
+    code = run_manifest(populated(120))
     check("manifest generated 120d ago (threshold 90) -> 5", code == 5, "got %r" % code)
 
     # Exactly at the threshold is fresh; one day past it is not. Pins the boundary so a later
     # rewrite can't quietly flip the comparison and move the alert by a day in either direction.
-    check("manifest exactly at the threshold -> 0", run_manifest({"generated_at": gen(90)}) == 0)
-    check("manifest one day past the threshold -> 5", run_manifest({"generated_at": gen(91)}) == 5)
+    check("manifest exactly at the threshold -> 0", run_manifest(populated(90)) == 0)
+    check("manifest one day past the threshold -> 5", run_manifest(populated(91)) == 5)
+
+    # Freshly dated but EMPTY -> 5. This is the shape the generator wrote, exit 0, when run with
+    # its default root absent: a fresh generated_at over zero skills. By age alone it passed, and
+    # the 0 auto-closed the issue while alert-out's watch list went to nothing.
+    empty = populated(0, skill_count=0, skills={}, by_authority={},
+                      curated={"qpwb-bankruptcy": {"code_context": "11 U.S.C."}})
+    out = []
+    code = run_manifest(empty, alert=out)
+    check("manifest fresh but zero skills, empty index -> 5", code == 5, "got %r" % code)
+    check("empty-manifest alert says how to regenerate from a real tree",
+          "empty" in out[0] and "--skills" in out[0] and "QPWB_SKILLS" in out[0]
+          and "scripts/skill_authorities.py" in out[0], out[0])
+    # Either half alone is enough: the watch reads by_authority, and a zero count means the
+    # generator saw no tree whatever the index claims.
+    check("manifest with skills but an empty by_authority -> 5",
+          run_manifest(populated(0, by_authority={})) == 5)
+    check("manifest with by_authority missing -> 5",
+          run_manifest({k: v for k, v in populated(0).items() if k != "by_authority"}) == 5)
+    check("manifest with skill_count 0 but an index -> 5",
+          run_manifest(populated(0, skill_count=0)) == 5)
+    # Empty AND stale still alerts, and with the empty diagnosis: regenerating on schedule does
+    # not help if it is regenerated from the same missing tree.
+    out = []
+    code = run_manifest(populated(200, skill_count=0, by_authority={}), alert=out)
+    check("empty and stale manifest -> 5 with the empty diagnosis",
+          code == 5 and "empty" in out[0], "got %r / %r" % (code, out[0][:80]))
 
     # Absent -> 0. update.py treats a missing manifest as "the watch is not in use"; this must
     # agree, or a deployment that never adopted it gets a permanent issue about a file it does
@@ -180,11 +221,13 @@ def main():
           run_manifest({"generated_at": gen(9999)}, days=0.0) == 0)
     check("threshold 0 disables the check (corrupt manifest)",
           run_manifest("{not json", days=0.0) == 0)
+    check("threshold 0 disables the check (empty manifest)",
+          run_manifest(empty, days=0.0) == 0)
 
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
-    print("\nALL TESTS PASSED (22 checks)")
+    print("\nALL TESTS PASSED (29 checks)")
     return 0
 
 

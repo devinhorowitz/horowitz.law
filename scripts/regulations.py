@@ -66,6 +66,7 @@ import siteconfig  # shared practice-area taxonomy  # noqa: E402
 JSON_PATH  = os.path.join(REPO, "regulations.json")
 STATE_PATH = os.path.join(REPO, "regulations_state.json")
 LOG_PATH   = os.path.join(REPO, "regulations_log.jsonl")
+REG_DROPS_PATH = os.path.join(REPO, "regulations_rejections.jsonl")
 
 FR_API     = "https://www.federalregister.gov/api/v1/documents.json"
 FR_AGENCIES_API = "https://www.federalregister.gov/api/v1/agencies.json"
@@ -387,6 +388,15 @@ def build_card(doc, verdict, today=None):
     }
 
 
+def drop_record(doc, stage, reason, ts):
+    """One drop-log line for a rule the screen dropped or the writer declined. `brief` is the exact
+    text that tier read, stored (as legislation.py's drop log stores it) so an audit judges the
+    reason against the same evidence the model saw."""
+    return {"ts": ts, "document_number": str(doc.get("document_number")),
+            "title": (doc.get("title") or "")[:300], "agency": agency_label(doc),
+            "stage": stage, "reason": reason, "brief": _doc_brief(doc)}
+
+
 # --------------------------------------------------------------------------- #
 # Orchestration.                                                              #
 # --------------------------------------------------------------------------- #
@@ -434,16 +444,24 @@ def _draft_cards(pending, deadline=None):
     return out
 
 
-def run(fetch=None, ai=None, today=None, max_run=None, lookback=None, batch_enabled=False):
+def run(fetch=None, ai=None, today=None, max_run=None, lookback=None, batch_enabled=False,
+        drops=None):
     """Full funnel: fetch recent agency rules, screen, write. Returns (cards, notes, seen_updates).
     `seen_updates` maps document_number -> publication_date for every rule that reached a DEFINITIVE
     outcome (carded, or read and declined). A transient error leaves it absent so it retries next
-    run. Writes nothing itself. Fail-open throughout. No API key needed for the Federal Register."""
+    run. `drops`, if a list, receives a drop_record for each screen drop and writer decline, for
+    main() to persist. Writes nothing itself. Fail-open throughout. No API key needed for the
+    Federal Register."""
     ai = ai or _default_ai
     max_run = MAX_RUN if max_run is None else max_run
     notes = []
     seen_updates = {}
     cards = []
+    # A drop is seen for good (a document_number never returns), and its reason used to go only to
+    # _dbg, which production never turns on: two FMCSA rules inside the screen's own keep categories
+    # were dropped with no trace of why. Every drop is now collected here for REG_DROPS_PATH.
+    drops = [] if drops is None else drops
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     seen = _load_seen()
     docs = fetch_documents(since=_since(today, lookback), fetch=fetch)
     fresh = new_documents(docs, seen)
@@ -471,9 +489,10 @@ def run(fetch=None, ai=None, today=None, max_run=None, lookback=None, batch_enab
         keep, areas, reason = screen_doc(d, ai)
         if not keep:
             _dbg("screen dropped %s: %s" % (dn, reason))
+            drops.append(drop_record(d, "screen", reason, ts))
             seen_updates[dn] = pub
             continue
-        pending.append({"dn": dn, "pub": pub, "doc": d, "areas": areas})
+        pending.append({"dn": dn, "pub": pub, "doc": d, "areas": areas, "reason": reason})
 
     if batch_enabled and pending:
         notes.append("REGULATION: batching %d card write(s) (REGULATION_BATCH)." % len(pending))
@@ -487,6 +506,10 @@ def run(fetch=None, ai=None, today=None, max_run=None, lookback=None, batch_enab
         if verdict is WRITER_ERROR:
             continue
         if verdict is None:
+            # The writer's schema has no reason field, so record the screen's reason for keeping
+            # it: the disagreement between the tiers is what an audit needs to see.
+            why = "writer declined; screen kept it: %s" % p["reason"]
+            drops.append(drop_record(d, "writer", why, ts))
             seen_updates[dn] = pub
             continue
         if not verdict.get("areas") and areas:
@@ -552,6 +575,32 @@ def append_log(rec, cap=2000):
         _dbg("log append failed: %s" % e)
 
 
+def log_drops(records, cap=4000):
+    """Append this run's drop records to REG_DROPS_PATH, one JSON line each.
+
+    APPEND-ONLY, like legislation.log_drops, so the file can ride the review branch without
+    conflicting the way the wholesale-rewritten opinions log did (#336). Each record is written once
+    and never rewritten. Bounded; best-effort, since losing a log line must never fail a run that has
+    already done its work. Returns the number of records written."""
+    if not records:
+        return 0
+    import safeio
+    try:
+        lines = []
+        try:
+            with open(REG_DROPS_PATH, encoding="utf-8") as f:
+                lines = [ln for ln in f.read().splitlines() if ln.strip()]
+        except FileNotFoundError:
+            pass
+        for r in records:
+            lines.append(json.dumps(r, ensure_ascii=False))
+        safeio.atomic_write_text(REG_DROPS_PATH, "\n".join(lines[-cap:]) + "\n")
+        return len(records)
+    except Exception as e:
+        _dbg("drop log append failed: %s" % e)
+        return 0
+
+
 def merge_cards(existing, new_cards):
     """Merge new cards into the existing list, keyed on document_number, preserving first_seen.
     Returns (merged, added, updated), newest publication_date first."""
@@ -594,7 +643,8 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     as_json = "--json" in argv
     apply = "--apply" in argv
-    cards, notes, seen_updates = run(batch_enabled=REGULATION_BATCH)   # REGULATION_BATCH default off
+    drops = []
+    cards, notes, seen_updates = run(batch_enabled=REGULATION_BATCH, drops=drops)
     for n in notes:
         print(n)
 
@@ -607,6 +657,10 @@ def main(argv=None):
         if content_changed:
             save_cards(merged)
         save_seen(seen)
+        # Only beside the seen marks they explain: each drop is then logged exactly once, and a dry
+        # run (which saves no seen state and re-screens next time) writes no record either.
+        if log_drops(drops):
+            _dbg("recorded %d drop(s) to %s" % (len(drops), os.path.basename(REG_DROPS_PATH)))
         append_log({"cards": len(cards), "added": added, "updated": updated,
                     "seen_total": len(seen), "notes": notes})
         if content_changed:

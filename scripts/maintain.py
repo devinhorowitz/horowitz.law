@@ -78,10 +78,11 @@ FINDING_MARKER = "MAINTENANCE_FINDING=1"
 _MR = os.environ.get("OPINIONS_MAINT_REVIEW", "").strip().lower()
 MAINT_REVIEW = (_MR in ("1", "on", "true", "yes")) if _MR else bool(siteconfig.MAINT_REVIEW)
 FETCH_SEC = int(os.environ.get("OPINIONS_MAINT_FETCH_SEC", "180"))  # per-run wall-clock budget for the slice's fetches; a full window or 429 defers the rest
-# Route the slice's guard calls through the 50%-priced Batch API. ON by default: the guards are a
-# latency-tolerant daily trickle (SLICE=3 cards -> <=6 small Sonnet calls), so half price is a clear
-# win and there is no reason to make the discount opt-in. Set MAINTAIN_BATCH=0 to force the
-# synchronous path (e.g. to debug a guard against the live model).
+# Route the slice's guard calls through the 50%-priced Batch API. The "on" fallback below applies
+# only when MAINTAIN_BATCH is absent from the environment, i.e. a local run. maintain.yml always
+# sets it, to '' unless the repo Variable is set, and '' parses as off -- so the scheduled run takes
+# the SYNCHRONOUS path, and revalidate() is the live code, not _revalidate_batch(). Set
+# MAINTAIN_BATCH=1 to batch, or MAINTAIN_BATCH=0 to force the synchronous path locally.
 BATCH     = os.environ.get("MAINTAIN_BATCH", "on").strip().lower() in ("1", "true", "yes", "on")
 # Wall-clock budget to wait on the guard batch before deferring the slice. MUST fit the workflow
 # timeout (30 min): the golden check + court/feed checks + the FETCH_SEC fetches run first, so this
@@ -201,17 +202,22 @@ def _senior_review(card, reason, text):
 
 
 def revalidate(cards):
-    """Re-run the per-card guards on the rotating slice. Returns (flags, checked, deferred),
-    where flags is a list of (name, reason) and each reason is prefixed with the guard that
-    raised it ("fidelity: ..." for the cross-check, "completeness: ..." for the completeness
+    """Re-run the per-card guards on the rotating slice. Returns (flags, checked, deferred,
+    undecided), where flags is a list of (name, reason) and each reason is prefixed with the guard
+    that raised it ("fidelity: ..." for the cross-check, "completeness: ..." for the completeness
     check). The opinion text is fetched once per card and reused by both guards, so adding the
     completeness guard costs model calls but no extra CourtListener calls. Defers cleanly on a
-    rate-budget stop."""
-    flags, checked, deferred = [], 0, 0
+    rate-budget stop.
+
+    A card on which any enabled guard came back "unavailable" is counted in `undecided`, not in
+    `checked`, and prints "undecided" rather than "ok": _guard_consensus returns "unavailable"
+    precisely so that an undecided card is never stamped clean, and counting it as re-validated
+    would do exactly that. A flag the other guard raised on the same card still stands."""
+    flags, checked, deferred, undecided = [], 0, 0, 0
     if not update.CROSSCHECK_MODEL and not update.COMPLETENESS_MODEL:
         print("  . both per-card guards disabled (OPINIONS_CROSSCHECK_MODEL and "
               "OPINIONS_COMPLETENESS_MODEL empty); skipping re-validation")
-        return flags, checked, deferred
+        return flags, checked, deferred, undecided
     if BATCH:
         return _revalidate_batch(cards)
     deadline = time.time() + FETCH_SEC
@@ -227,7 +233,7 @@ def revalidate(cards):
             print("  . no opinion text fetched for %s; skipping" % name[:50])
             continue
         checked += 1
-        raised = False
+        raised = unsettled = False
         try:
             if update.CROSSCHECK_MODEL:
                 cc = update.crosscheck(name, text, card)
@@ -236,7 +242,7 @@ def revalidate(cards):
                     print("  FLAG (fidelity) %s: %s" % (name[:50], cc.get("reason") or "")); raised = True
                     _senior_review(card, "fidelity: " + (cc.get("reason") or ""), text)
                 elif cc and cc.get("verdict") == "unavailable":
-                    print("  . cross-check unavailable for %s" % name[:50])
+                    print("  . cross-check unavailable for %s" % name[:50]); unsettled = True
             if update.COMPLETENESS_MODEL:
                 cp = update.completeness_check(name, text, card)
                 if cp and cp.get("verdict") == "flag":
@@ -244,7 +250,7 @@ def revalidate(cards):
                     print("  FLAG (completeness) %s: %s" % (name[:50], cp.get("reason") or "")); raised = True
                     _senior_review(card, "completeness: " + (cp.get("reason") or ""), text)
                 elif cp and cp.get("verdict") == "unavailable":
-                    print("  . completeness check unavailable for %s" % name[:50])
+                    print("  . completeness check unavailable for %s" % name[:50]); unsettled = True
         except update.ConfigError:
             raise                     # a real misconfig must surface, not be swallowed
         except Exception as e:
@@ -253,22 +259,27 @@ def revalidate(cards):
             checked -= 1
             print("  . guard error on %s; skipping card (%s)" % (name[:50], e))
             continue
-        if not raised:
+        if unsettled:
+            # Undecided is not clean: it must not print "ok" or count toward the re-validated total.
+            checked -= 1
+            undecided += 1
+            print("  undecided %s" % name[:50])
+        elif not raised:
             print("  ok   %s" % name[:50])
-    return flags, checked, deferred
+    return flags, checked, deferred, undecided
 
 
 def _revalidate_batch(cards):
-    """Batch variant of revalidate (MAINTAIN_BATCH=1). Same (flags, checked, deferred)
-    contract and the same rotating slice, text fetch, defer-on-rate-budget, and per-guard
-    labeling -- only the model calls change: instead of a synchronous cross-check and
-    completeness per card, it fetches all the slice's texts, submits every guard as one
-    Batch API job (billed at 50%), and interprets each result with update.guard_verdict.
+    """Batch variant of revalidate (MAINTAIN_BATCH=1). Same (flags, checked, deferred,
+    undecided) contract and the same rotating slice, text fetch, defer-on-rate-budget, per-guard
+    labeling, and undecided rule -- only the model calls change: instead of a synchronous
+    cross-check and completeness per card, it fetches all the slice's texts, submits every guard
+    as one Batch API job (billed at 50%), and interprets each result with update.guard_verdict.
     A batch that does not finish within BATCH_SEC defers the whole slice: the job keeps
     running server-side and the next run re-selects and re-submits, so nothing is lost but
     the (already-billed) tokens of that run. The batch path applies the grounding guardrail
     but a single attempt per guard (no consensus) -- see update.guard_verdict."""
-    flags, checked, deferred = [], 0, 0
+    flags, checked, deferred, undecided = [], 0, 0, 0
     deadline = time.time() + FETCH_SEC
     # meta: custom_id -> (kind, name, ground_text, card, opinion_text). The card and text
     # ride along only so a flag raised in the results loop below can be senior-reviewed
@@ -297,7 +308,7 @@ def _revalidate_batch(cards):
             reqs.append(batch.from_body(cid, body))
             meta[cid] = (kind, name, ground, card, text)
     if not reqs:
-        return flags, checked, deferred
+        return flags, checked, deferred, undecided
 
     # One job for the whole slice. The CL fetches above already spent FETCH_SEC of wall clock,
     # so give the batch its own window; on timeout or transport failure, defer the slice.
@@ -306,12 +317,12 @@ def _revalidate_batch(cards):
     except batch.BatchTimeout as e:
         print("  . maintenance guard batch %s not finished within the budget; deferring the slice"
               % e.batch_id)
-        return flags, checked, deferred + len(picked)
+        return flags, checked, deferred + len(picked), undecided
     except batch.BatchError as e:
         print("  . maintenance guard batch failed (%s); deferring the slice" % e)
-        return flags, checked, deferred + len(picked)
+        return flags, checked, deferred + len(picked), undecided
 
-    checked = len(picked)
+    answered = set()     # custom_ids that came back with a usable verdict
     for cid, res in results.items():
         if cid not in meta:
             # A custom_id we did not submit (should never happen); skip rather than crash --
@@ -328,12 +339,20 @@ def _revalidate_batch(cards):
             print("  . %s guard returned unparseable JSON for %s (%s)" % (kind, name[:50], pe))
             continue
         v = update.guard_verdict(kind, r, ground)
+        answered.add(cid)
         if v.get("verdict") == "flag":
             reason = "%s: %s" % (kind, v.get("reason") or "")
             flags.append((name, reason))
             print("  FLAG (%s) %s: %s" % (kind, name[:50], v.get("reason") or ""))
             _senior_review(card, reason, text)
-    return flags, checked, deferred
+    # As in the sync path: a card with any guard that errored, came back unparseable, or never
+    # came back at all is undecided, not re-validated.
+    unsettled = {card["cluster_id"]: name
+                 for cid, (_, name, _, card, _) in meta.items() if cid not in answered}
+    for name in unsettled.values():
+        print("  undecided %s" % name[:50])
+    undecided = len(unsettled)
+    return flags, len(picked) - undecided, deferred, undecided
 
 
 def completeness(cards):
@@ -395,10 +414,10 @@ def main():
         print("  . " + reason)
         _summary("\n### Opinions maintenance %s\n\n- re-validation %s" % (_stamp(), reason))
     else:
-        flags, checked, deferred = revalidate(cards)
-        line = ("re-validated %d published card(s), %d flag(s), %d deferred to the next run; "
-                "funnel CourtListener calls in the last 24h: %d (reserve %d); this run: %d"
-                % (checked, len(flags), deferred, used, RESERVE, cl_rate.PACER.calls))
+        flags, checked, deferred, undecided = revalidate(cards)
+        line = ("re-validated %d published card(s), %d flag(s), %d undecided, %d deferred to the "
+                "next run; funnel CourtListener calls in the last 24h: %d (reserve %d); this run: %d"
+                % (checked, len(flags), undecided, deferred, used, RESERVE, cl_rate.PACER.calls))
         print("  . " + line)
         body = "\n### Opinions maintenance %s\n\n- %s\n" % (_stamp(), line)
         for nm, rs in flags:
@@ -406,8 +425,9 @@ def main():
         _summary(body)
 
     # Exit nonzero only when a person should look: a golden regression or a published-card
-    # flag. A deferral or a budget skip is normal operation and exits clean. The workflow's
-    # failure step opens or updates the maintenance issue.
+    # flag. A deferral, a budget skip, or an undecided card is normal operation and exits clean;
+    # the undecided count is in the summary line, and the card comes round again on the rotation.
+    # The workflow's failure step opens or updates the maintenance issue.
     #
     # The marker distinguishes "found something" from "fell over". An uncaught exception exits
     # nonzero WITHOUT printing it, so its absence on a failed run means the run really did

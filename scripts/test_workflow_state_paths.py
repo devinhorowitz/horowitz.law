@@ -108,8 +108,12 @@ def persisted_logs_written_by(script_name):
     # The legislative watch's recall log. It is APPEND-only (log_drops), so it is safe on a review
     # branch where the opinions log is not -- but it still has to reach main by one route or the
     # other, which is what this check is for.
-    if "atomic_write_text" in src and "DROPS_PATH" in src:
+    if "atomic_write_text" in src and re.search(r"\bDROPS_PATH\b", src):
         found.add("legislation_rejections.jsonl")
+    # The regulatory watch's drop log, the same append-only shape. The \b above keeps its
+    # REG_DROPS_PATH from also reading as a phantom legislation-log requirement.
+    if "atomic_write_text" in src and "REG_DROPS_PATH" in src:
+        found.add("regulations_rejections.jsonl")
     return found
 
 

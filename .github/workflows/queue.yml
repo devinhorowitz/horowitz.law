@@ -79,6 +79,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Screen queued case(s) through the funnel and render
+        id: screen
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
@@ -116,19 +117,42 @@ jobs:
       # reconciled by hand. A file written wholesale by one job and appended to by another does
       # not belong on a review branch.
       #
-      # push_main.sh rebases onto freshly fetched main and retries, which is what makes this safe
-      # against the funnel pushing in the same window.
+      # Nor can it be committed from THIS tree. The tree also holds the drained queue.txt and any
+      # new card, uncommitted until the PR step below, and push_main.sh rebases -- which git
+      # refuses with unstaged changes. The step failed, the PR step behind it was skipped, and the
+      # verdict, the drain and the card were all discarded: the queue line stayed active, so every
+      # retry paid for the same reads again. So the script saves its verdicts to
+      # scripts/queue_audit_stamps.json, and this step re-applies them to a throwaway worktree of
+      # main and commits only the log from there. PUSH_MAIN_REGENERATE has push_main.sh redo that
+      # on each freshly fetched main instead of rebasing, so a funnel append landing in the same
+      # window cannot conflict with it even when it lands right after the stamped line. The
+      # worktree shares this checkout's git config, and actions/checkout's persisted credentials
+      # cover linked worktrees.
       - name: Record audit verdicts on main
         if: always()
         run: |
+          if [ ! -f scripts/queue_audit_stamps.json ]; then
+            echo "no audit verdicts to record"; exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add opinions_rejections.jsonl
-          git commit -m "opinions: record queue-read audit verdicts [skip ci]" \
-            || { echo "no audit verdicts to record"; exit 0; }
-          bash scripts/push_main.sh
+          ws="$PWD"
+          wt="$RUNNER_TEMP/verdicts"
+          git worktree add --detach "$wt" HEAD
+          trap 'git -C "$ws" worktree remove --force "$wt"' EXIT
+          cd "$wt"
+          export STAMPS="$ws/scripts/queue_audit_stamps.json" QUEUE_CASES="$ws/scripts/queue_cases.py"
+          export PUSH_MAIN_REGENERATE='
+            python "$QUEUE_CASES" --apply-stamps "$STAMPS" opinions_rejections.jsonl
+            git add opinions_rejections.jsonl
+            git diff --cached --quiet || git commit -m "opinions: record queue-read audit verdicts [skip ci]"'
+          bash "$ws/scripts/push_main.sh"
 
+      # Runs on the screen step's success whatever the record step did. With no condition it took
+      # an implicit success(), so a failed verdict push threw away the PR as well -- and with it the
+      # queue drain and the card, which do not depend on the verdicts at all.
       - name: Open pull request
+        if: always() && steps.screen.outcome == 'success'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           branch: bot/opinions-queue

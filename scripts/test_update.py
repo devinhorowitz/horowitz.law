@@ -304,6 +304,39 @@ def test_guard_log_distinguishes_a_standing_flag():
     print("  ok  guard log distinguishes a standing flag from a cleared one (6 cases)")
 
 
+def test_guard_log_keeps_unconfirmed_reason():
+    """A grounded flag that consensus does not stand up must still leave its reason and quote in
+    the log. The NOT CONFIRMED and no-majority lines printed only counts, so a 1-of-3 fidelity flag
+    on a card that later proved to misstate the facts was unrecoverable: the one attempt that saw
+    the defect had said what it was, and nothing kept it."""
+    why = "card says the LLC sold the scheduled car but the opinion says a member sold it"
+    why_c = "omits the independent statute-of-limitations holding in civil procedure"
+    cases = [
+        # (label, guard, tries-attr, scripted responses, tries, verdict, reason, quote, consensus line)
+        ("fidelity minority", update.crosscheck, "CROSSCHECK_TRIES",
+         [flag(REAL_QUOTE, why), match(), match()], 3, "match", why, REAL_QUOTE, "NOT CONFIRMED"),
+        ("fidelity no majority", update.crosscheck, "CROSSCHECK_TRIES",
+         [RuntimeError("x"), flag(REAL_QUOTE, why), RuntimeError("x")], 3, "unavailable", why, REAL_QUOTE,
+         "no majority"),
+        ("completeness minority", update.completeness_check, "COMPLETENESS_TRIES",
+         [cflag(COMP_REAL, why_c), complete(), complete()], 3, "complete", why_c, COMP_REAL, "NOT CONFIRMED"),
+        ("completeness no majority", update.completeness_check, "COMPLETENESS_TRIES",
+         [RuntimeError("x"), cflag(COMP_REAL, why_c), RuntimeError("x")], 3, "unavailable", why_c, COMP_REAL,
+         "no majority"),
+    ]
+    for label, fn, attr, seq, tries, want, reason, quote, line in cases:
+        verdict, out = _guard_log(fn, seq, tries, attr)
+        assert verdict == want, "%s: verdict %r != %r" % (label, verdict, want)
+        assert line in out, "%s: stdout lacks the consensus line %r\n%s" % (label, line, out)
+        assert reason in out, "%s: the unconfirmed flag's reason was not printed\n%s" % (label, out)
+        assert quote[:120] in out, "%s: the unconfirmed flag's quote was not printed\n%s" % (label, out)
+    # A confirmed flag already carries its reason in the verdict; it is not "unconfirmed".
+    verdict, out = _guard_log(update.crosscheck, [flag(REAL_QUOTE, why)] * 3, 3, "CROSSCHECK_TRIES")
+    assert verdict == "flag", verdict
+    assert "unconfirmed flag" not in out, "a standing flag printed as unconfirmed\n%s" % out
+    print("  ok  guard log keeps an unconfirmed flag's reason and quote (5 cases)")
+
+
 def test_crosscheck_why_carveout():
     """The fidelity guard must not report the EDITOR'S relevance line as a misstatement of the
     holding -- while still catching a fact about THIS case that the opinion does not support.
@@ -859,6 +892,158 @@ def test_screen_caption_rule():
           "and state-of-origin grounds")
 
 
+def test_since_floor_drop_count():
+    """The since floor (last_filed - 2 days) used to drop old-dated feed items with a bare `continue`.
+    juriscraper stamps every new gasupreme.us release 2026-06-16, so the Supreme Court of Georgia's
+    intake fell under the floor for three months and nothing said so. _select_candidates now counts
+    the NEVER-SEEN items the floor drops, per court. Logging only: selection must be unchanged, an
+    item already carded, seen or held is not "never-seen", and a redraft id is still exempt."""
+    import json as _json
+    import shutil as _sh
+    import tempfile as _tf
+
+    def item(cid, court, filed):
+        return {"cluster_id": cid, "caseName": "Case %d" % cid, "court_id": court, "dateFiled": filed}
+    results = [
+        item(1, "ga", "2026-06-16"), item(2, "ga", "2026-06-16"), item(3, "ga", "2026-06-16"),
+        item(1, "ga", "2026-06-16"),       # the same cluster twice in the feed counts once
+        item(4, "ga", "2026-06-16"),       # already in seen_clusters: skipped before the floor, not counted
+        item(10, "ala", "2026-09-01"),
+        item(11, "ala", "2026-09-01"),     # held in an open review PR: not never-seen
+        item(12, "ala", "2026-09-01"),     # already carded
+        item(20, "scotus", "2026-09-10"),
+        item(21, "scotus", "2026-09-10"),  # vetoed-and-redrafting: exempt from the floor, so selected
+        item(30, "gactapp", "2026-06-16"),  # floored here, but selected from its in-window copy below
+        item(30, "gactapp", "2026-09-25"),
+        item(31, "gactapp", "2026-10-01"),  # future-dated: dropped, but not by the floor
+        item(32, "ca11", ""),              # undated: the floor does not apply
+    ]
+    cand, fd = update._select_candidates(results, "2026-09-20", "2026-09-27", have={12}, seen={4},
+                                         pending_review={11}, redraft_pending={21})
+    assert [update.cluster_id_of(r) for r in cand] == [21, 30, 32], cand
+    assert fd == {"ga": 3, "ala": 1, "scotus": 1}, fd
+    assert list(fd) == ["ga", "ala", "scotus"], "largest first, then by court id: %r" % list(fd)
+    print("  ok  never-seen floor drops counted per court; selection unchanged")
+
+    cand, fd = update._select_candidates([item(30, "gactapp", "2026-09-25")], "2026-09-20", "2026-09-27",
+                                         set(), set(), set(), set())
+    assert len(cand) == 1 and fd == {}, (cand, fd)
+    print("  ok  nothing under the floor -> empty map")
+
+    # The map rides the run-log record and renders on the Actions summary. Paths stubbed to a
+    # tempdir so the test never touches the committed opinions_pipeline_log.jsonl.
+    tmp = _tf.mkdtemp(prefix="floor-test-")
+    real_log, real_summary = update.LOG_PATH, os.environ.get("GITHUB_STEP_SUMMARY")
+    try:
+        update.LOG_PATH = os.path.join(tmp, "log.jsonl")
+        os.environ["GITHUB_STEP_SUMMARY"] = os.path.join(tmp, "summary.md")
+        update._log_run({"ts": "2026-09-27T12:00:00Z", "floor_dropped": {"ga": 15, "ala": 3, "scotus": 1}})
+        rec = _json.loads(open(update.LOG_PATH, encoding="utf-8").read().splitlines()[-1])
+        assert rec["floor_dropped"] == {"ga": 15, "ala": 3, "scotus": 1}, rec
+        summ = open(os.environ["GITHUB_STEP_SUMMARY"], encoding="utf-8").read()
+        assert "- since floor dropped 19 never-seen item(s): ga=15, ala=3, scotus=1\n" in summ, summ
+        update._log_run({"ts": "2026-09-27T16:00:00Z", "floor_dropped": {}})
+        assert open(os.environ["GITHUB_STEP_SUMMARY"], encoding="utf-8").read().count("since floor") == 1, \
+            "an empty map adds no summary line"
+    finally:
+        update.LOG_PATH = real_log
+        if real_summary is None:
+            os.environ.pop("GITHUB_STEP_SUMMARY", None)
+        else:
+            os.environ["GITHUB_STEP_SUMMARY"] = real_summary
+        _sh.rmtree(tmp, ignore_errors=True)
+    src = open(os.path.join(HERE, "update.py"), encoding="utf-8").read()
+    assert '"floor_dropped": floor_dropped' in src, "main() must pass the map to _log_run"
+    print("  ok  floor_dropped rides the run-log record and the Actions summary")
+
+
+def test_scan_status_output():
+    """opinions.yml's scan-status step stamps a fresh scanned_at unless the funnel step reports
+    scanned=false, and that stamp is what the MCP's trust_silence and the heartbeat's 48h stall
+    check read. A run that read no feed -- the status-page outage skip, or every CourtListener feed
+    failing or empty -- must report false while still exiting 0; a run that read one reports true.
+    Everything main() touches before the feed loop is pointed at a temp dir, and the feeds are stubbed."""
+    import contextlib
+    import shutil as _sh
+    import tempfile as _tf
+    tmp = _tf.mkdtemp(prefix="scan-status-test-")
+    out = os.path.join(tmp, "github_output")
+    saved, saved_env = {}, {k: os.environ.get(k) for k in ("GITHUB_OUTPUT", "GITHUB_STEP_SUMMARY")}
+
+    class _Stop(Exception):
+        """Raised by the first call after the feed loop, so the real-scan case stops there."""
+
+    def sv(obj, name, val):
+        saved[(id(obj), name)] = (obj, name, getattr(obj, name))
+        setattr(obj, name, val)
+
+    def stop():
+        raise _Stop()
+
+    def run(status, feed):
+        """Run main() against a fresh $GITHUB_OUTPUT; return (what it wrote, whether it exited)."""
+        open(out, "w").close()
+        sv(update, "anthropic_status", lambda: status)
+        sv(update, "feed_court", feed)
+        exited = False
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                update.main()
+        except SystemExit:
+            exited = True
+        except _Stop:
+            pass
+        return open(out, encoding="utf-8").read(), exited
+
+    def failing(court, deadline=None):
+        raise OSError("feed unreachable")
+
+    try:
+        os.environ["GITHUB_OUTPUT"] = out
+        os.environ.pop("GITHUB_STEP_SUMMARY", None)
+        sv(update, "KEY", "test-key-not-used")
+        sv(update, "STATUS_MODE", "on")
+        sv(update, "COURTS", ["ga", "gactapp"])
+        for name in ("JSON_PATH", "STATE_PATH", "SA_MANIFEST_PATH", "SA_STATE_PATH"):
+            sv(update, name, os.path.join(tmp, name.lower() + ".json"))
+        sv(update, "PR_PATH", os.path.join(tmp, "pr_body.md"))
+        sv(update.review_store, "load_pending", lambda path=None: set())
+        sv(update.review_store, "load_redraft_ids", lambda path=None: stop())
+
+        got, exited = run(("outage", "Major outage"), failing)
+        assert got == "scanned=false\n" and not exited, (got, exited)
+        print("  ok  the status-page outage skip reports scanned=false and exits 0")
+
+        # One court's feed raises, the other returns nothing: no feed was read.
+        feeds = {"ga": failing, "gactapp": lambda court, deadline=None: []}
+        got, exited = run(("operational", "All Systems Operational"),
+                          lambda court, deadline=None: feeds[court](court, deadline))
+        assert got == "scanned=false\n" and not exited, (got, exited)
+        print("  ok  every feed failing or empty reports scanned=false and exits 0")
+
+        # A feed that returned candidates is a real scan, even if another court's feed failed.
+        feeds["gactapp"] = lambda court, deadline=None: [{"cluster_id": 1, "dateFiled": "2026-09-01"}]
+        got, exited = run(("operational", "All Systems Operational"),
+                          lambda court, deadline=None: feeds[court](court, deadline))
+        assert got == "scanned=true\n" and not exited, (got, exited)
+        print("  ok  a run that read a feed reports scanned=true")
+
+        # Outside Actions there is no $GITHUB_OUTPUT, and the helper must be a silent no-op.
+        os.environ.pop("GITHUB_OUTPUT", None)
+        update._step_output("scanned", "false")
+        assert open(out, encoding="utf-8").read() == "scanned=true\n"
+        print("  ok  no $GITHUB_OUTPUT (a local run) writes nothing")
+    finally:
+        for obj, name, val in saved.values():
+            setattr(obj, name, val)
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        _sh.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     print("crosscheck guardrails:")
     for c in CASES:
@@ -872,6 +1057,7 @@ def main():
     print("helpers:")
     test_substantiation_helper()
     test_guard_log_distinguishes_a_standing_flag()
+    test_guard_log_keeps_unconfirmed_reason()
     test_crosscheck_why_carveout()
     test_docket_set()
     test_treatment_citer_seen()
@@ -886,7 +1072,9 @@ def main():
     test_guard_token_budget()
     test_screen_caption_rule()
     test_batch_carry_over()
-    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 16))
+    test_since_floor_drop_count()
+    test_scan_status_output()
+    print("\nALL TESTS PASSED (%d cases)" % (len(CASES) + len(CASES_COMP) + len(CASES_DEDUP) + 19))
     return 0
 
 
