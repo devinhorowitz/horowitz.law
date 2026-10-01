@@ -34,6 +34,20 @@ that a newer version exists.
 
   python scripts/model_watch.py            # detect and report only (no edits)
   python scripts/model_watch.py --apply    # detect, rewrite the pins, write the PR body
+  python scripts/model_watch.py --report-issue check,summarize   # file the verdict (workflow)
+  python scripts/model_watch.py --close-issue                    # all pins current (workflow)
+
+MATCHED EFFORT. A candidate is judged through update.py's own request builders, which send the
+effort siteconfig.MODEL_EFFORT names for each tier, so the candidate and the incumbent run at the
+same level rather than at their own API defaults (which differ across generations). Before
+anything is bumped, every pin and candidate is checked against the Models API's own
+capabilities.effort: if update.effort_supported disagrees with what the API says a model accepts,
+the run stops as a broken run (exit 3) instead of evaluating an unfair or 400-bound comparison.
+
+REMEMBERED VERDICTS AND THE TRACKING ISSUE. The golden check runs with --memo, so an unchanged
+candidate is judged once, not daily (golden_check.py, THE MEMO). The verdict -- pass or
+regression, with the failing cases -- goes to ONE tracking issue (ISSUE_TITLE), once per
+verdict: a remembered verdict that has already been reported is not posted again.
 
 Needs ANTHROPIC_API_KEY (read via update.py). Pure standard library otherwise.
 
@@ -42,11 +56,14 @@ Outputs (written to $GITHUB_OUTPUT when present, for the workflow):
   run_check      true if a screen/pretriage/triage tier (Haiku/Sonnet) changed
   run_summarize  true if the summarizer tier (Opus) changed
   body_path      path to the written PR body markdown
+
+Exit codes: 0 ok, 1 Models API error, 2 no key, 3 the effort rule disagrees with the Models API.
 """
 import datetime
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -54,6 +71,7 @@ import urllib.request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import update  # the funnel's pins (MODEL/TRIAGE_MODEL/SCREEN_MODEL), repo root, and API auth (KEY, VERSION)
 import safeio  # crash-safe writes for the files this rewrites and the PR body
+import siteconfig  # MODEL_EFFORT, the per-tier effort the cross-check verifies
 
 API = "https://api.anthropic.com/v1/models"
 
@@ -149,14 +167,16 @@ def _api_get(url):
 
 def list_models():
     """Every available model from the Models API, paginated. Each entry is
-    {id, display_name, dt}, dt the parsed created_at (or None)."""
+    {id, display_name, dt, caps}, dt the parsed created_at (or None) and caps the API's
+    `capabilities` object (or None when the API omits it)."""
     out, after = [], None
     for _ in range(20):  # generous page cap; the catalog is well under this
         url = API + "?limit=100" + (("&after_id=" + after) if after else "")
         data = _api_get(url)
         for m in data.get("data", []):
             out.append({"id": m.get("id"), "display_name": m.get("display_name") or "",
-                        "dt": _parse_dt(m.get("created_at"))})
+                        "dt": _parse_dt(m.get("created_at")),
+                        "caps": m.get("capabilities") if isinstance(m.get("capabilities"), dict) else None})
         if not data.get("has_more"):
             break
         after = data.get("last_id")
@@ -255,6 +275,48 @@ def apply_bumps(upgrades):
     return changed
 
 
+# Which request roles each watched tier serves, for the effort cross-check below.
+TIER_ROLES = {"opus": ("summarize",), "sonnet": ("triage",), "haiku": ("screen", "pretriage")}
+
+
+def _api_effort(caps, level):
+    """What the Models API says about `level` effort, from a model's capabilities: True/False, or
+    None when the API did not say (no capabilities object, or no effort entry in it)."""
+    eff = (caps or {}).get("effort")
+    if not isinstance(eff, dict) or "supported" not in eff:
+        return None
+    if not eff.get("supported"):
+        return False
+    lvl = eff.get(level)
+    return bool(lvl.get("supported")) if isinstance(lvl, dict) and "supported" in lvl else True
+
+
+def effort_conflicts(models, upgrades, pins=None):
+    """Lines naming every pin or candidate where update.effort_supported disagrees with the Models
+    API's capabilities.effort for the level siteconfig.MODEL_EFFORT asks of that tier. Either
+    direction is a conflict: the rule says yes and the API says no (production would 400), or the
+    rule says no and the API says yes (the candidate would run at its own default against an
+    incumbent at a set level -- the unfair comparison this whole mechanism exists to remove).
+    Silent where the API reports no capabilities: then the documented rule stands."""
+    pins = pins or TIER_PINS
+    by_id = {m["id"]: m for m in models}
+    ids = {(t, i) for t, i in pins.items()} | {(u["tier"], u["new"]) for u in upgrades}
+    out = []
+    for tier, mid in sorted(ids):
+        entry = by_id.get(mid) or next((m for m in models if _canon(m["id"]) == _canon(mid)), None)
+        for role in TIER_ROLES.get(tier, ()):
+            level = siteconfig.MODEL_EFFORT.get(role, "")
+            if not level or entry is None:
+                continue
+            api = _api_effort(entry.get("caps"), level)
+            rule = update.effort_supported(mid, level)
+            if api is not None and api != rule:
+                out.append("%s on %s: update.effort_supported says %s for effort %r but the Models API "
+                           "says %s. Fix the rule in scripts/update.py before this model is judged."
+                           % (role, mid, "yes" if rule else "no", level, "yes" if api else "no"))
+    return out
+
+
 def _fmt_dt(dt):
     return dt.date().isoformat() if dt else "unknown date"
 
@@ -284,6 +346,128 @@ def write_report(upgrades, notes, changed, path):
     safeio.atomic_write_text(path, "\n".join(lines))
 
 
+# ---- The tracking issue -----------------------------------------------------------------------
+
+ISSUE_TITLE = "Model watch: candidate model evaluation"
+GH_RETRY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gh_retry.sh")
+
+
+def _gh(args):
+    """Run `gh` through gh_retry.sh against this repository; returns stdout, raises on failure."""
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    cmd = ["bash", GH_RETRY] + list(args) + (["--repo", repo] if repo else [])
+    return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
+
+
+def _verdicts_now(modes, memo_path=None):
+    """[(mode, key, entry)] for the verdicts named by `modes`, from the memo. Each item is either
+    "mode=key" (the key the eval step's golden_check reported, which the workflow passes so the
+    lookup cannot depend on the working tree still holding the bump) or a bare mode, whose key is
+    computed here from the pins this process reads."""
+    import golden_check  # imported here: it pulls the golden set, which detection never needs
+    data = golden_check.load_memo(memo_path)
+    out = []
+    for item in modes:
+        mode, _, key = item.partition("=")
+        if mode not in golden_check.MEMO_MODES:
+            continue
+        if not key:
+            key, _meta = golden_check.memo_key(mode)
+        entry = data["verdicts"].get(key)
+        if entry:
+            out.append((mode, key, entry))
+    return data, out
+
+
+def issue_text(verdicts, pr_url=""):
+    """The tracking-issue post for one set of verdicts: which models were judged, at what effort,
+    the result, and every failing case. Ends with a marker naming the memo keys."""
+    regressed = any(e.get("verdict") == "regression" for _m, _k, e in verdicts)
+    lines = ["## %s" % ("Candidate REGRESSED on the golden set" if regressed
+                        else "Candidate passed the golden set"), ""]
+    for mode, _key, e in verdicts:
+        what = "screen/pretriage/triage" if mode == "check" else "summarizer"
+        models = ", ".join("%s `%s`%s" % (r, m, (" at effort `%s`" % e["effort"][r])
+                                          if (e.get("effort") or {}).get(r) else " (no effort parameter)")
+                           for r, m in sorted((e.get("models") or {}).items()))
+        lines.append("### `%s` (%s): %s" % (mode, what, "**REGRESSION**" if e.get("verdict") == "regression"
+                                             else "pass"))
+        lines.append("")
+        lines.append("- Judged: %s" % models)
+        lines.append("- %d case(s) ok; evaluated %s%s" % (e.get("ok", 0), e.get("evaluated", "?"),
+                                                         (" ([run](%s))" % e["run"]) if e.get("run") else ""))
+        for f in e.get("failures") or []:
+            lines.append("- FAIL %s" % f)
+        if e.get("uncached"):
+            lines.append("- uncached (run `golden_check.py build`): %s" % ", ".join(e["uncached"]))
+        lines.append("")
+    if pr_url:
+        lines.append("The bump PR: %s" % pr_url)
+    elif regressed:
+        lines.append("Do not apply this bump as-is. The verdict is remembered, so model-watch will "
+                     "not spend on this candidate again until a model, prompt, effort setting or "
+                     "the golden set changes; it stays quiet (and green) until then.")
+    else:
+        lines.append("No PR was opened (MODEL_WATCH_TOKEN is not set). Apply the bump by hand: "
+                     "rewrite the old id to the new one in model_watch.PIN_FILES.")
+    lines += ["", "<!-- model-watch keys: %s -->" % ",".join(k for _m, k, _e in verdicts)]
+    return "\n".join(lines) + "\n"
+
+
+def _open_issue(gh):
+    """The open tracking issue's number, matched on the exact title, or ""."""
+    raw = gh(["issue", "list", "--state", "open", "--search", 'in:title "%s"' % ISSUE_TITLE,
+              "--json", "number,title"])
+    try:
+        rows = json.loads(raw or "[]")
+    except ValueError:
+        rows = []
+    nums = [str(r.get("number")) for r in rows if isinstance(r, dict) and r.get("title") == ISSUE_TITLE]
+    return min(nums, key=int) if nums else ""
+
+
+def report_issue(modes, gh=_gh, memo_path=None, pr_url=""):
+    """Post the current verdicts to the tracking issue unless they have been posted already.
+
+    Dedupe is by the memo: a verdict carries `reported` once posted, and the workflow commits the
+    memo, so the same candidate on the same prompts is posted once, not daily -- even if someone
+    closes the issue meanwhile. A new verdict comments on the open issue, or opens one."""
+    import golden_check
+    data, verdicts = _verdicts_now(modes, memo_path)
+    if not verdicts:
+        print("model_watch: no remembered verdict for %s; nothing to report" % ",".join(modes))
+        return 0
+    if all(e.get("reported") for _m, _k, e in verdicts):
+        print("model_watch: verdict already reported (%s); not posting again"
+              % ", ".join(e["reported"] for _m, _k, e in verdicts))
+        return 0
+    body = issue_text(verdicts, pr_url)
+    num = _open_issue(gh)
+    if num:
+        gh(["issue", "comment", num, "--body", body])
+        where = "#%s" % num
+    else:
+        out = gh(["issue", "create", "--title", ISSUE_TITLE, "--body", body]).strip()
+        m = re.search(r"/issues/(\d+)", out)
+        where = ("#" + m.group(1)) if m else (out or "issue")
+    for _m, _k, e in verdicts:
+        e["reported"] = where
+    golden_check.save_memo(data, memo_path)
+    print("model_watch: verdict reported on %s" % where)
+    return 0
+
+
+def close_issue(gh=_gh):
+    """No tier has a newer model (the bump was applied, or the candidate went away): close the
+    tracking issue if one is open."""
+    num = _open_issue(gh)
+    if num:
+        gh(["issue", "comment", num, "--body", "All model pins are current; closing automatically."])
+        gh(["issue", "close", num])
+        print("model_watch: closed #%s" % num)
+    return 0
+
+
 def _emit(key, value):
     out = os.environ.get("GITHUB_OUTPUT")
     if out:
@@ -292,6 +476,12 @@ def _emit(key, value):
 
 
 def main(argv):
+    if "--report-issue" in argv:
+        i = argv.index("--report-issue")
+        modes = [m for m in (argv[i + 1] if i + 1 < len(argv) else "").split(",") if m]
+        return report_issue(modes, pr_url=os.environ.get("PR_URL", ""))
+    if "--close-issue" in argv:
+        return close_issue()
     apply = "--apply" in argv
     if not update.KEY:
         print("model_watch: ANTHROPIC_API_KEY is not set; cannot query the Models API.")
@@ -311,6 +501,14 @@ def main(argv):
         print("  note: " + n)
     if not upgrades:
         print("  all tiers current")
+
+    conflicts = effort_conflicts(models, upgrades)
+    if conflicts:
+        for c in conflicts:
+            print("::error::effort rule out of date: " + c)
+        safeio.step_summary("### Model watch\n\nNot evaluated: the effort rule disagrees with the "
+                            "Models API.\n\n" + "\n".join("- " + c for c in conflicts))
+        return 3
 
     tiers = {up["tier"] for up in upgrades}
     body_path = os.path.join(os.environ.get("RUNNER_TEMP") or "/tmp", "model_watch_pr.md")

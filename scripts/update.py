@@ -18,8 +18,10 @@ expensive model only ever touches confirmed keepers:
                             catching holdings that are not visible from the opening.
   Tier 3  SUMMARIZE(Opus)   reads the FULL opinion plus the triage note and writes the
                             public-facing card in the house style. Final backstop: it can
-                            still decline. The summarizer sends no extended-thinking budget
-                            and no "effort" parameter; it runs at the pinned model's default.
+                            still decline. No tier sends an extended-thinking budget;
+                            summarize and triage send an explicit effort
+                            (siteconfig.MODEL_EFFORT), so a model bump cannot silently
+                            move them to the new model's default effort.
 
 Auto-lane keepers are appended to opinions.json, opinions_state.json is updated, and
 opinions.html/opinions.xml are re-rendered for a straight-to-main publish; guard-flagged
@@ -44,7 +46,7 @@ Environment:
   OPINIONS_MAX             max opinions evaluated per run (code default 25; the daily workflow raises it to 80 for heavy filing days)
   OPINIONS_SEEN_CAP        max cluster ids kept in opinions_state.json seen list (default 5000; bounds state-file growth)
   OPINIONS_MAXCHARS        opinion characters sent to triage and summarizer (default 60000)
-  OPINIONS_MAX_TOKENS      summarizer output token cap (default 4096)
+  OPINIONS_MAX_TOKENS      summarizer output token cap (default 16000; caps thinking plus the card)
   OPINIONS_FEED_MAX_BYTES  hard cap on a court-feed read; bounds memory vs a hostile/huge response (default 25 MiB)
   OPINIONS_PDF_MAX_BYTES   hard cap on an opinion-PDF read (default 75 MiB)
   DRY_RUN                  if set to 1, evaluate and print but write nothing
@@ -148,7 +150,13 @@ PDF_MIN_CHARS= int(os.environ.get("OPINIONS_PDF_MIN_CHARS", "500"))  # below thi
 # the XML parse / PDF extract and is handled like any bad fetch. Override via env if a real feed grows.
 FEED_MAX_BYTES = int(os.environ.get("OPINIONS_FEED_MAX_BYTES", str(25 * 1024 * 1024)))
 PDF_MAX_BYTES  = int(os.environ.get("OPINIONS_PDF_MAX_BYTES", str(75 * 1024 * 1024)))
-OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
+# Summarizer output budget. RAISED 2026-10, 4096 -> 16000, alongside the explicit effort below. On
+# the Opus 5 generation thinking is on by default and max_tokens caps thinking PLUS the card, so
+# 4096 left little room, and a successor that thinks more per turn at the same effort (the next
+# Opus does, per its migration notes) truncates mid-card -- which anthropic_json correctly raises
+# on, and which the golden summarize check then scored as a dropped area. A cap that is never
+# reached costs nothing; output bills on what is written.
+OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "16000"))
 # Tier-2 triage output budget. Was a hardcoded 1024, which a verbose model (Sonnet 5) can overflow
 # on an opinion with a substantive `note` plus several `treats` entries -- the anthropic_json guard
 # then (correctly) raises on the truncated JSON rather than card a partial verdict, which crashed the
@@ -167,6 +175,50 @@ OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
 # 8000 to match SMELL_TOKENS and GUARD_TOKENS rather than doubling again. Output budgets bill on what
 # is actually written, so a cap that is never reached costs nothing; a tight one buys only this.
 TRIAGE_TOKENS = int(os.environ.get("OPINIONS_TRIAGE_MAX_TOKENS", "8000"))
+
+# ---- Reasoning effort per tier (output_config.effort) ----
+# The level each tier asks for lives in siteconfig.MODEL_EFFORT (see the note there for why it is
+# explicit). This is the other half: WHICH models accept the parameter at all. Sending it to one
+# that does not is a 400, so the rule is a documented allowlist, not "any model": effort is GA on
+# Opus from 4.5 and Sonnet from 4.6 (low/medium/high/max; xhigh arrived with Opus 4.7 and Sonnet
+# 5), and Haiku 4.5 rejects it. Any other model id -- a family this rule has never heard of -- gets
+# no effort, i.e. the pre-2026-10 behaviour. model_watch cross-checks this rule against the Models
+# API's own capabilities.effort for every pin and candidate before the golden check spends
+# anything, so a model this rule misjudges is caught there, not as a 400 in production.
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+_EFFORT_MIN = {"opus": (4, 5), "sonnet": (4, 6)}          # first version accepting effort at all
+_XHIGH_MIN = {"opus": (4, 7), "sonnet": (5, 0)}           # first version accepting "xhigh"
+_MODEL_VERSION = re.compile(r"^claude-(opus|sonnet|haiku)-(\d{1,2})(?:-(\d{1,2}))?(?:-\d{8})?$")
+
+for _role, _lvl in siteconfig.MODEL_EFFORT.items():
+    if _lvl and _lvl not in EFFORT_LEVELS:
+        raise ValueError("siteconfig.MODEL_EFFORT[%r] = %r is not one of %s" % (_role, _lvl, EFFORT_LEVELS))
+
+
+def effort_supported(model, level="high"):
+    """True when `model` is documented to accept output_config.effort at `level`. Pure, by id."""
+    m = _MODEL_VERSION.match(model or "")
+    if not m or level not in EFFORT_LEVELS:
+        return False
+    fam, ver = m.group(1), (int(m.group(2)), int(m.group(3) or 0))
+    if fam not in _EFFORT_MIN or ver < _EFFORT_MIN[fam]:
+        return False
+    return level != "xhigh" or ver >= _XHIGH_MIN[fam]
+
+
+def effort_level(role, model):
+    """The effort `role` sends on `model`: siteconfig's level for the role when the model accepts it,
+    else "" (send nothing and run at the model's default -- the Haiku tiers, and any unknown model)."""
+    level = siteconfig.MODEL_EFFORT.get(role, "")
+    return level if level and effort_supported(model, level) else ""
+
+
+def effort_params(role, model):
+    """The request fields that carry `role`'s effort on `model`: {"output_config": {"effort": L}},
+    the documented shape (top-level output_config, no beta header), or {} when none is sent. Merged
+    into the request builders below, so the synchronous and the batch paths send the same thing."""
+    level = effort_level(role, model)
+    return {"output_config": {"effort": level}} if level else {}
 DRY_RUN      = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "yes")
 BUDGET_SEC   = int(os.environ.get("OPINIONS_BUDGET_SEC", "480"))
@@ -1583,16 +1635,26 @@ def clip(text, limit=None):
     return text[:head] + marker + text[-tail:]
 
 
-def screen(name, docket, snippet):
+def screen_request(name, docket, snippet):
+    """The Messages body for the tier-1 excerpt screen (golden_check fingerprints it)."""
     user = "Case name: %s\nDocket: %s\nOpening excerpt:\n%s" % (name, docket, (snippet or "")[:1500])
-    return anthropic_json({"model": SCREEN_MODEL, "max_tokens": 256, "system": SCREEN_SYSTEM,
-                           "messages": [{"role": "user", "content": user}]}, "screen")
+    return {"model": SCREEN_MODEL, "max_tokens": 256, "system": SCREEN_SYSTEM,
+            "messages": [{"role": "user", "content": user}], **effort_params("screen", SCREEN_MODEL)}
+
+
+def screen(name, docket, snippet):
+    return anthropic_json(screen_request(name, docket, snippet), "screen")
+
+
+def pretriage_request(name, docket, text):
+    """The Messages body for the tier-1.5 full-read screen (golden_check fingerprints it)."""
+    user = "Case name: %s\nDocket: %s\n\nFULL OPINION:\n%s" % (name, docket, clip(text))
+    return {"model": PRETRIAGE_MODEL, "max_tokens": 256, "system": PRETRIAGE_SYSTEM,
+            "messages": [{"role": "user", "content": user}], **effort_params("pretriage", PRETRIAGE_MODEL)}
 
 
 def pretriage(name, docket, text):
-    user = "Case name: %s\nDocket: %s\n\nFULL OPINION:\n%s" % (name, docket, clip(text))
-    return anthropic_json({"model": PRETRIAGE_MODEL, "max_tokens": 256, "system": PRETRIAGE_SYSTEM,
-                           "messages": [{"role": "user", "content": user}]}, "pretriage")
+    return anthropic_json(pretriage_request(name, docket, text), "pretriage")
 
 
 def triage_request(name, docket, text, feed_index=""):
@@ -1604,7 +1666,7 @@ def triage_request(name, docket, text, feed_index=""):
                  "negatively, report them in `treats` (low threshold; a later step confirms):\n"
                  + feed_index)
     return {"model": TRIAGE_MODEL, "max_tokens": TRIAGE_TOKENS, "system": TRIAGE_SYSTEM,
-            "messages": [{"role": "user", "content": user}]}
+            "messages": [{"role": "user", "content": user}], **effort_params("triage", TRIAGE_MODEL)}
 
 
 def triage(name, docket, text, feed_index=""):
@@ -1789,7 +1851,7 @@ def summarize_request(court_id, name, docket, date_filed, text, note, cl_status=
             "OPINION TEXT (the middle may be omitted for length):\n%s"
             % (court_id, name, docket, date_filed, cl_status or "(unknown)", note or "(none)", clip(text)))
     return {"model": MODEL, "max_tokens": OUT_TOKENS, "system": SYSTEM,
-            "messages": [{"role": "user", "content": user}]}
+            "messages": [{"role": "user", "content": user}], **effort_params("summarize", MODEL)}
 
 
 def summarize(court_id, name, docket, date_filed, text, note, cl_status=""):

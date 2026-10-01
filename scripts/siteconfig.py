@@ -196,6 +196,29 @@ SMELL_MODEL = ""
 # skill tree); HEARTBEAT_SKILL_MANIFEST_DAYS overrides for one run.
 SKILL_MANIFEST_MAX_AGE_DAYS = 90
 
+# The reasoning effort each funnel tier asks for, sent as `output_config.effort` (the documented
+# request shape; no beta header). Keyed by TIER, never by model id: the model pins live in the
+# scripts model_watch rewrites, and a model id here would be left behind by a bump.
+#
+# WHY THIS IS EXPLICIT. Until 2026-10 no tier sent an effort, so each ran at its model's API
+# default. That is `high` for the Opus and Sonnet pins the funnel has been tuned against -- but
+# a default belongs to the MODEL, not to the funnel, and the next Opus generation defaults to
+# `medium`. Model-watch then judged that candidate at `medium` against an incumbent at `high`,
+# and called the gap a regression (2026-09-23 on). Pinning the level here makes a model bump
+# change one thing, the model, and makes the golden comparison like for like.
+#
+# "high" reproduces exactly what summarize and triage ran at before this existed (it is the
+# documented default of their pinned models). The two Haiku tiers stay "": Haiku does not
+# accept an effort parameter, so they send none, as they always have. update.effort_params
+# also refuses to send an effort to any model not documented to support it, whatever this says.
+# Allowed values: "", "low", "medium", "high", "xhigh", "max".
+MODEL_EFFORT = {
+    "summarize": "high",   # tier 3, the Opus card writer
+    "triage":    "high",   # tier 2, the Sonnet full-read gate
+    "pretriage": "",       # tier 1.5, Haiku: no effort parameter
+    "screen":    "",       # tier 1, Haiku: no effort parameter
+}
+
 # ---- Top-level page registry --------------------------------------------
 # The site's top-level pages, as (path, label, changefreq, priority, lastmod).
 # render.py drives both the /404 "ls /" listing and the sitemap's static URLs

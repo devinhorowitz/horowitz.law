@@ -100,7 +100,7 @@ folder drag, so upload `.gitignore`, `.well-known/`, and `.github/` files indivi
 
 `opinions_state.json`, `opinions_rejections.jsonl`, `opinions_pipeline_log.jsonl`,
 `treatment_state.json`, `status.json`, `scripts/golden_set.json`, `skill-authorities.json`,
-`skill_alert_state.json`, and `.github/keepalive.txt`. These are written by the pipeline and
+`skill_alert_state.json`, `model_watch_state.json`, and `.github/keepalive.txt`. These are written by the pipeline and
 its tools.
 
 ### Not in the repo (gitignored, written at runtime)
@@ -151,7 +151,7 @@ Automatic, on a schedule:
 | treatment | every 6 hours | reverse citation sweep for adverse treatment of published cards |
 | maintain | daily | budget-gated upkeep: golden check, court check, feed-shape canary, repo keepalive |
 | render-sync | daily | re-renders pages from `opinions.json`; opens a PR if they drifted |
-| model-watch | daily | checks the Models API for a newer Claude model in a pinned tier; opens a bump PR gated by the golden set |
+| model-watch | daily | checks the Models API for a newer Claude model in a pinned tier; judges it once on the golden set at matched effort, posts the verdict to a tracking issue, and opens a bump PR when `MODEL_WATCH_TOKEN` is set |
 | heartbeat | daily | dead-man's-switch: opens a tracking issue if the funnel stalls (no scan in 48h) or stops finding cards (30d); the one alert that fires when runs stop |
 | automerge | every 6 hours | merges the verified-safe self-healing PRs (render-sync, and patch/minor dependabot bumps for GitHub Actions and Python deps) so they ship untended; holds major bumps and model-watch for a human |
 | dep-review | every 6 hours | posts a one-time AI good-to-go/caution note (Fable, via the 50%-priced Batch API) on each held major dependabot bump, scoped to how this repo uses the dep, from the PR's changelog. Advisory; merges nothing |
@@ -225,17 +225,25 @@ Run by hand, from the Actions tab:
   `pki.goog`.
 - Model pins do not drift. From the 4.6 generation on, a Claude model id is a fixed
   snapshot: a newer model ships under a new id (`claude-sonnet-5`), and the pinned id keeps
-  serving the same weights. The pins live as the `|| 'id'` fallback in the funnel workflows
-  (and the matching defaults in `update.py` / `treatment.py`); a repo Variable overrides a
-  pin without editing a file. `model-watch` proposes upgrades, but a pin only changes when
-  a PR merges (or you set a Variable).
-- `model-watch` needs a `MODEL_WATCH_TOKEN` secret to open its PR, because a bump edits the
-  workflow files and the default token cannot push to `.github/workflows/`. Use a
-  fine-grained PAT scoped to this repo with Contents, Pull requests, and Workflows set to
-  write. Without it the daily check and the golden-set eval still run and report on the
-  Actions summary; only the auto-PR is skipped. If a bump PR touches a tier whose pin is
-  also set as a repo Variable, update that Variable to match, or the Variable will keep
-  overriding the merged default.
+  serving the same weights. The pins live only as the script defaults in
+  `model_watch.PIN_FILES` (`update.py`, `treatment.py` and the four watch scripts); no
+  workflow restates one, and `test_model_watch` fails if one ever does. `model-watch` proposes
+  upgrades, but a pin only changes when a PR merges.
+- The effort each funnel tier asks for is `siteconfig.MODEL_EFFORT` (summarize and triage
+  `high`, the Haiku tiers none), keyed by tier, sent as `output_config.effort`, and only to a
+  model `update.effort_supported` knows accepts it. It is explicit so a model bump changes the
+  model and nothing else: a new generation can default to a different effort.
+- `model-watch` evaluates a candidate once. Its golden verdict is remembered in
+  `model_watch_state.json` (committed straight to main by the workflow) under a key over the
+  models, prompts, effort and golden set; an unchanged candidate costs no model calls on later
+  days. Each verdict, pass or regression with the failing cases, is posted once to the
+  **Model watch: candidate model evaluation** issue, which closes itself when all pins are
+  current. Delete the state file to force a re-evaluation. A broken run (bad key, no credit,
+  an effort rule that disagrees with the Models API) goes to **Model-watch run failures**.
+- `model-watch` needs a `MODEL_WATCH_TOKEN` secret only to open its PR: a fine-grained PAT
+  scoped to this repo with Contents and Pull requests set to write. Workflows scope is no longer
+  needed (a bump no longer edits `.github/workflows/`) and should be revoked. Without the token
+  the daily check, the golden-set eval and the tracking issue still run; only the PR is skipped.
 - The self-healing PRs merge themselves, so the fix ships without you. The `automerge` workflow
   merges a **render-sync** PR only after re-verifying it is a faithful re-render (data untouched,
   only `public/` changed, and re-rendering the PR head yields no further diff), and a **dependabot**

@@ -587,6 +587,26 @@ The corresponding environment variables (`OPINIONS_MODEL`, `OPINIONS_TRIAGE_MODE
 **one-run overrides** for a local experiment or a `workflow_dispatch` you edit by hand -- not the
 place a model id lives.
 
+### Effort, and how model-watch judges a candidate
+
+Summarize and triage send an explicit reasoning effort, `output_config: {"effort": ...}`, taken from
+`siteconfig.MODEL_EFFORT` (keyed by tier: summarize and triage `high`, the two Haiku tiers none,
+since Haiku 4.5 rejects the parameter). `high` is what those tiers ran at before the setting
+existed, because it is their pinned models' API default. It is explicit because a default belongs
+to the model: the next Opus generation defaults to `medium`, and model-watch spent September 2026
+judging it at `medium` against an incumbent at `high` and calling the gap a regression.
+`update.effort_supported` is the allowlist of models documented to take the parameter (Opus 4.5+,
+Sonnet 4.6+, `xhigh` from Opus 4.7 and Sonnet 5); any other model is sent none.
+
+`model-watch` (daily) bumps the pins on the runner and runs `golden_check.py check|summarize --memo`
+through the same request builders, so the candidate runs at the same effort as the incumbent.
+Before that it checks `update.effort_supported` against the Models API's `capabilities.effort` for
+every pin and candidate, and stops as a broken run if they disagree. The verdict is remembered in
+`model_watch_state.json` under a hash of the request bodies (models, prompts, max_tokens, effort)
+and the golden set, so an unchanged candidate is judged once, not daily; any change to those
+inputs buys one fresh evaluation. Each verdict is posted once to the **Model watch: candidate model
+evaluation** issue. Only a new regression turns the run red; a remembered one stays green and quiet.
+
 ## Test it before trusting the schedule
 
 - From GitHub: open the Actions tab, select "Georgia Appellate Watch", and use "Run workflow" (the
@@ -702,7 +722,8 @@ a handful of Variable edits and the derived checks move with them unless you set
 - `OPINIONS_MAX` (code default `25`; the workflow raises it to `80` for heavy filing days): cap on
   opinions evaluated per run.
 - `OPINIONS_MAXCHARS` (default `60000`): characters of opinion text sent to triage and the summarizer.
-- `OPINIONS_MAX_TOKENS` (default `4096`): summarizer output token cap.
+- `OPINIONS_MAX_TOKENS` (default `16000`): summarizer output token cap. It caps thinking plus the
+  card, so it has headroom for a model that thinks more at the same effort.
 - `OPINIONS_DEBUG=1`: log every model call and full API error bodies.
 - Schedule: edit the `cron` line in the workflow (`17 */4 * * *`, every four hours). It is in UTC.
 

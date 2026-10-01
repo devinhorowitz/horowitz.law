@@ -28,10 +28,24 @@ actual pipeline rather than a copy. It cards nothing and never writes opinions.j
   python scripts/golden_check.py check       # needs ANTHROPIC_API_KEY
   python scripts/golden_check.py summarize   # needs ANTHROPIC_API_KEY
   python scripts/golden_check.py recall      # needs ANTHROPIC_API_KEY (pretriage enabled)
+  python scripts/golden_check.py check --memo      # model-watch: remember the verdict (see below)
 
 Exit codes: 0 clean, 1 a regression (or nothing verified), 2 bad usage, 3 a ConfigError (bad key,
-no credit, retired model). model-watch.yml reads only 1 as a regression; 3 is a broken run.
+no credit, retired model), 4 any other crash (a broken run, not a verdict). model-watch.yml reads
+only 1 as a regression; every other nonzero code is a broken run.
+
+THE MEMO (--memo, check and summarize only). Model-watch used to re-run the whole golden set on
+the same candidate every day: same models, same prompts, same cases, so the same ~30 Opus calls
+bought the same answer, and the same red run, daily. With --memo a verdict is recorded in
+model_watch_state.json under a key that fingerprints everything the verdict depends on: the
+mode, every request body the mode sends (model id, system prompt, user template, max_tokens and
+the effort, built by update.py's own request builders) and the golden set's contents. If that
+key already has a verdict, it is reported and returned with ZERO model calls. Change any input --
+a new candidate, a prompt edit, a golden-set edit, an effort level -- and the key changes, so the
+set runs again exactly once. A ConfigError or a crash judged nothing and is never remembered.
 """
+import datetime
+import hashlib
 import json
 import os
 import sys
@@ -42,6 +56,15 @@ import safeio  # crash-safe atomic writes (golden_set.json is committed; never t
 
 GOLDEN_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden_set.json")
 SNIPPET_CHARS = 1500  # screen reads an opening excerpt; mirror its own [:1500] slice
+# Remembered model-watch verdicts (see THE MEMO above). Committed to main by model-watch.yml's
+# "Record the golden verdicts on main" step, so it persists across the daily runs.
+MEMO_STATE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "model_watch_state.json")
+MEMO_CAP = 40         # verdicts kept; one per (candidate, prompts, set) combination ever judged
+MEMO_MODES = ("check", "summarize")
+
+# The outcome of the last check()/summarize_check() in this process, for the memo:
+# {"ok": n, "failures": ["name: detail", ...], "uncached": [...]}.
+LAST = {}
 
 
 def _load():
@@ -123,6 +146,11 @@ def check():
                   % (c.get("name", "")[:55], "keep" if expect else "drop",
                      "keep" if kept else "drop", detail))
     print("\ngolden check: %d ok, %d regression(s), %d uncached" % (ok, len(regressions), len(uncached)))
+    LAST.clear()
+    LAST.update(ok=ok, uncached=list(uncached),
+                failures=["%s: expected %s, got %s (%s)" % (nm, "keep" if exp else "drop",
+                                                           "keep" if got else "drop", det)
+                          for nm, exp, got, det in regressions])
     if uncached:
         print("uncached (run `build` first): %s" % ", ".join(uncached))
 
@@ -182,6 +210,11 @@ def _summarize_attempts(name, docket, text, expect, tries):
     return (expect <= union), union, used, last_addl, last_error
 
 
+def _tries():
+    """Attempts per case in summarize mode: OPINIONS_GOLDEN_RETRIES (default 3) retries + 1."""
+    return max(1, int(os.environ.get("OPINIONS_GOLDEN_RETRIES", "3")) + 1)
+
+
 def summarize_check():
     """Re-run the real Opus summarizer on each cached keeper and assert the produced areas
     still cover its expect_areas. Catches a summarizer prompt or model change that drops a
@@ -193,7 +226,7 @@ def summarize_check():
     a miss. Entries with no expect_areas,
     and controls (expect_relevant false), are skipped, since a non-keeper is not summarized."""
     cases = _load()
-    tries = max(1, int(os.environ.get("OPINIONS_GOLDEN_RETRIES", "3")) + 1)
+    tries = _tries()
     regressions, uncached, skipped, ok = [], [], 0, 0
     for c in cases:
         expect = set(c.get("expect_areas") or [])
@@ -220,6 +253,8 @@ def summarize_check():
             print("  FAIL %-55s %s" % (name[:55], detail))
     print("\ngolden summarize: %d ok, %d regression(s), %d uncached, %d skipped"
           % (ok, len(regressions), len(uncached), skipped))
+    LAST.clear()
+    LAST.update(ok=ok, uncached=list(uncached), failures=["%s: %s" % (nm, det) for nm, det in regressions])
     if uncached:
         print("uncached (run `build` first): %s" % ", ".join(uncached))
 
@@ -305,16 +340,130 @@ def recall():
     return 1 if (missed or uncached or n_keep == 0) else 0
 
 
+# ---- The memo --------------------------------------------------------------------------------
+
+def _sha(obj):
+    return hashlib.sha256(json.dumps(obj, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def _mode_requests(mode):
+    """{role: request body} for every model call `mode` makes, built by update.py's own request
+    builders with empty inputs. The bodies carry the model id, system prompt, user template,
+    max_tokens and effort, so anything that changes what the model is asked changes the key."""
+    if mode == "check":
+        reqs = {"screen": update.screen_request("", "", ""), "triage": update.triage_request("", "", "")}
+        if update.PRETRIAGE_MODEL:
+            reqs["pretriage"] = update.pretriage_request("", "", "")
+        return reqs
+    if mode == "summarize":
+        return {"summarize": update.summarize_request("", "", "", "", "", "", cl_status="")}
+    raise ValueError("no memo for mode %r" % mode)
+
+
+def memo_key(mode):
+    """(key, meta) for the verdict `mode` would produce right now. meta names the models and
+    efforts in plain words for the report; the key is a hash over everything the verdict depends
+    on (the request bodies, the golden set, and the mode's own knobs)."""
+    reqs = _mode_requests(mode)
+    knobs = {"maxchars": update.MAXCHARS}
+    if mode == "check":
+        knobs.update(screen_exempt=sorted(update.SCREEN_EXEMPT_COURTS), snippet=SNIPPET_CHARS)
+    else:
+        knobs.update(tries=_tries())
+    payload = {"v": 1, "mode": mode, "requests": reqs, "knobs": knobs, "golden": _sha(_load())}
+    meta = {"mode": mode,
+            "models": {r: b.get("model", "") for r, b in sorted(reqs.items())},
+            "effort": {r: (b.get("output_config") or {}).get("effort", "") for r, b in sorted(reqs.items())}}
+    return _sha(payload)[:24], meta
+
+
+def load_memo(path=None):
+    try:
+        data = json.load(open(path or MEMO_STATE_PATH, encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"verdicts": {}}
+    if not isinstance(data, dict) or not isinstance(data.get("verdicts"), dict):
+        return {"verdicts": {}}
+    return data
+
+
+def save_memo(data, path=None):
+    v = data.get("verdicts") or {}
+    if len(v) > MEMO_CAP:   # insertion order is evaluation order; keep the newest
+        data["verdicts"] = dict(list(v.items())[-MEMO_CAP:])
+    data["_doc"] = ("Golden-set verdicts model-watch has already paid for, keyed by a fingerprint "
+                    "of the models, prompts, effort and golden set (scripts/golden_check.py, "
+                    "THE MEMO). Written by the model-watch workflow; safe to delete (the next run "
+                    "re-evaluates).")
+    safeio.atomic_write_text(path or MEMO_STATE_PATH,
+                             json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+
+
+def _run_url():
+    srv, repo, run = (os.environ.get(k, "") for k in ("GITHUB_SERVER_URL", "GITHUB_REPOSITORY", "GITHUB_RUN_ID"))
+    return "%s/%s/actions/runs/%s" % (srv, repo, run) if srv and repo and run else ""
+
+
+def _emit(key, value):
+    out = os.environ.get("GITHUB_OUTPUT")
+    if out:
+        with open(out, "a", encoding="utf-8") as f:
+            f.write("%s=%s\n" % (key, value))
+
+
+def run_memoized(mode, run):
+    """Run `run` (check or summarize_check) unless the memo already holds this exact verdict.
+    Returns the exit code either way, and writes key_<mode>=<key> and memo_<mode>=hit|miss to
+    $GITHUB_OUTPUT so the workflow can tell a fresh verdict from a remembered one and name it."""
+    key, meta = memo_key(mode)
+    _emit("key_" + mode, key)
+    data = load_memo()
+    hit = data["verdicts"].get(key)
+    if hit:
+        print("golden %s: REMEMBERED verdict %s from %s for %s (key %s); no model calls made."
+              % (mode, hit.get("verdict"), hit.get("evaluated"), meta["models"], key))
+        for f in hit.get("failures") or []:
+            print("  FAIL (remembered) %s" % f)
+        _emit("memo_" + mode, "hit")
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            try:
+                with open(summary, "a", encoding="utf-8") as fh:
+                    fh.write("### Golden-set %s (remembered)\n\n- %s, evaluated %s; nothing changed "
+                             "since, so no model calls were made\n"
+                             % (mode, hit.get("verdict"), hit.get("evaluated")))
+            except OSError as e:
+                print("  . summary write skipped: %s" % e)
+        return 1 if hit.get("verdict") == "regression" else 0
+    rc = run()
+    if rc in (0, 1):
+        data["verdicts"].pop(key, None)
+        data["verdicts"][key] = dict(meta, verdict="pass" if rc == 0 else "regression",
+                                     ok=LAST.get("ok", 0), failures=list(LAST.get("failures") or []),
+                                     uncached=list(LAST.get("uncached") or []),
+                                     evaluated=datetime.date.today().isoformat(), run=_run_url(),
+                                     reported="")
+        save_memo(data)
+        _emit("memo_" + mode, "miss")
+    return rc
+
+
 def main():
-    mode = sys.argv[1] if len(sys.argv) > 1 else "check"
+    args = sys.argv[1:]
+    memo = "--memo" in args
+    args = [a for a in args if a != "--memo"]
+    mode = args[0] if args else "check"
+    if memo and mode not in MEMO_MODES:
+        print("usage: --memo applies to %s only" % " and ".join(MEMO_MODES))
+        return 2
     try:
         if mode == "build":
             build()
             return 0
         if mode == "check":
-            return check()
+            return run_memoized("check", check) if memo else check()
         if mode == "summarize":
-            return summarize_check()
+            return run_memoized("summarize", summarize_check) if memo else summarize_check()
         if mode == "recall":
             return recall()
     except update.ConfigError as e:
@@ -323,7 +472,12 @@ def main():
         print("golden_check: configuration error (API key, credit balance, or model id), "
               "not a regression: %s" % e)
         return 3
-    print("usage: golden_check.py [build|check|summarize|recall]")
+    except Exception as e:  # noqa: BLE001 -- any crash is a broken run, never a verdict
+        # An uncaught exception used to exit 1 through the interpreter, which model-watch reads as
+        # a regression (and would now remember as one). A crash judged nothing.
+        print("golden_check: the run crashed, which is not a verdict: %s: %s" % (type(e).__name__, e))
+        return 4
+    print("usage: golden_check.py [build|check|summarize|recall] [--memo]")
     return 2
 
 

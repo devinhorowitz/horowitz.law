@@ -119,6 +119,21 @@ def job_is_silent(job):
         return False
 
     steps = [s for s in _steps(job) if s.get("name") not in IGNORED_TRAILING_STEPS]
+    # Post-steps are teardown, not work, and certainly not a report: the runner adds one named
+    # "Post <step>" for each action step with cleanup (checkout, harden-runner), and they run
+    # after a failure as a matter of course. Counting a successful "Post Harden the runner" as a
+    # step that ran after the failure made every failed job look handled -- model-watch's
+    # regression runs (2026-09-23 on) failed, skipped their only reporter, and still read as
+    # reported. A post-step is recognised by its name being "Post " + an earlier step's name,
+    # so an ordinary step that merely starts with "Post" ("Post the diagnosis") still counts.
+    seen, kept = set(), []
+    for s in steps:
+        name = s.get("name") or ""
+        if name.startswith("Post ") and name[5:] in seen:
+            continue
+        seen.add(name)
+        kept.append(s)
+    steps = kept
     first_failure = None
     for i, s in enumerate(steps):
         if s.get("conclusion") == "failure":

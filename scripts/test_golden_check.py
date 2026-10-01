@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hermetic unit tests for golden_check -- the gate that decides a model change is safe (no network).
 
-Three groups:
+Four groups:
 
   fail-closed exit codes  golden_check.check()/summarize_check()/recall() gate whether a model
       change is safe (model-watch.yml treats exit 0 as "safe to bump"). If every golden case is
@@ -19,6 +19,11 @@ Three groups:
   set integrity           the committed scripts/golden_set.json is data that four model tiers are
       judged against, and nothing validated it. A misspelled practice area in expect_areas would
       make summarize mode permanently red for a reason no output explains.
+
+  the memo                model-watch's --memo: an unchanged (models, prompts, effort, golden
+      set) key is answered with zero model calls; any change re-judges once; a ConfigError or a
+      crash is never remembered. And the golden check reaches the model through update.py's own
+      request builders, so it runs at the production effort.
 
 Run directly: `python scripts/test_golden_check.py`.
 """
@@ -367,6 +372,173 @@ def test_committed_set_integrity():
                  ", ".join(str(i) for i in uncached)))
 
 
+# --- 4. the memo (model-watch's --memo) and the production request path ----
+class Memo:
+    """Point the memo at a temp file and capture $GITHUB_OUTPUT, restoring afterwards."""
+    def __enter__(self):
+        import tempfile
+        self.dir = tempfile.TemporaryDirectory()
+        self.saved = golden_check.MEMO_STATE_PATH
+        self.saved_out = os.environ.get("GITHUB_OUTPUT")
+        golden_check.MEMO_STATE_PATH = os.path.join(self.dir.name, "model_watch_state.json")
+        self.out = os.path.join(self.dir.name, "out")
+        open(self.out, "w").close()
+        os.environ["GITHUB_OUTPUT"] = self.out
+        return self
+
+    def outputs(self):
+        return open(self.out, encoding="utf-8").read().split()
+
+    def verdicts(self):
+        return golden_check.load_memo()["verdicts"]
+
+    def __exit__(self, *exc):
+        golden_check.MEMO_STATE_PATH = self.saved
+        if self.saved_out is None:
+            os.environ.pop("GITHUB_OUTPUT", None)
+        else:
+            os.environ["GITHUB_OUTPUT"] = self.saved_out
+        self.dir.cleanup()
+        return False
+
+
+def run_memo(mode, cases):
+    saved = sys.argv
+    sys.argv = ["golden_check.py", mode, "--memo"]
+    try:
+        return with_set(cases, golden_check.main)
+    finally:
+        sys.argv = saved
+
+
+def test_memo():
+    """Model-watch re-ran ~30 Opus calls a day on the same candidate for the same answer. With
+    --memo an identical (models, prompts, effort, golden set) key is answered from the memo with
+    zero model calls; changing any of them re-runs exactly once."""
+    keeper = case("A v. B", areas=["premises", "expert"])
+    with Memo() as m, Tiers(summarize={"areas": ["premises"]}) as t:
+        check("a first (memo-miss) run judges and returns the regression", run_memo("summarize", [keeper]) == 1)
+        first = len(t.summarize_calls)
+        check("it made model calls", first > 0, str(first))
+        check("it reports memo_summarize=miss", "memo_summarize=miss" in m.outputs(), str(m.outputs()))
+        check("and the key it filed the verdict under",
+              "key_summarize=%s" % with_set([keeper], lambda: golden_check.memo_key("summarize"))[0]
+              in m.outputs(), str(m.outputs()))
+        v = list(m.verdicts().values())
+        check("one verdict is remembered, with the failing case",
+              len(v) == 1 and v[0]["verdict"] == "regression" and "A v. B" in v[0]["failures"][0]
+              and v[0]["reported"] == "", str(v))
+        check("the verdict names the model and the effort it was judged at",
+              v[0]["models"] == {"summarize": update.MODEL}
+              and v[0]["effort"] == {"summarize": update.effort_level("summarize", update.MODEL)}, str(v[0]))
+
+        check("an identical second run returns the remembered verdict", run_memo("summarize", [keeper]) == 1)
+        check("...with ZERO model calls", len(t.summarize_calls) == first, str(len(t.summarize_calls)))
+        check("...and reports memo_summarize=hit", "memo_summarize=hit" in m.outputs(), str(m.outputs()))
+
+        def misses(label, mutate, restore):
+            before = len(t.summarize_calls)
+            mutate()
+            try:
+                rc = run_memo("summarize", [keeper])
+            finally:
+                restore()
+            check("a changed %s is a memo miss (re-judged once)" % label,
+                  rc == 1 and len(t.summarize_calls) > before, "calls %d -> %d" % (before, len(t.summarize_calls)))
+
+        sys_saved = update.SYSTEM
+        misses("summarizer prompt", lambda: setattr(update, "SYSTEM", sys_saved + " edited"),
+               lambda: setattr(update, "SYSTEM", sys_saved))
+        model_saved = update.MODEL
+        misses("candidate model", lambda: setattr(update, "MODEL", "claude-opus-5-5"),
+               lambda: setattr(update, "MODEL", model_saved))
+        eff_saved = siteconfig_effort()
+        misses("effort level", lambda: set_effort("summarize", "medium"),
+               lambda: set_effort("summarize", eff_saved))
+        before = len(t.summarize_calls)
+        run_memo("summarize", [keeper, case("C v. D", areas=["auto"])])
+        check("a changed golden set is a memo miss", len(t.summarize_calls) > before)
+
+        check("the check mode keys separately from summarize",
+              golden_check.memo_key("check")[0] != golden_check.memo_key("summarize")[0])
+        with Tiers(relevant=True):
+            check("a passing check is remembered as a pass", run_memo("check", [case("A v. B")]) == 0)
+            n = len([1 for v in m.verdicts().values() if v["mode"] == "check" and v["verdict"] == "pass"])
+            check("...under its own key", n == 1, str(n))
+
+    with Memo() as m, Tiers(summarize=update.ConfigError("credit balance is too low")):
+        check("a ConfigError still exits 3 under --memo", run_memo("summarize", [keeper]) == 3)
+        check("...and is never remembered (it judged nothing)", m.verdicts() == {}, str(m.verdicts()))
+    with Memo() as m, Tiers(relevant=_crash):
+        check("a crash exits 4, not 1 (1 reads as a regression)", run_memo("check", [case("A v. B")]) == 4)
+        check("...and is never remembered", m.verdicts() == {}, str(m.verdicts()))
+    with Memo():
+        saved = sys.argv
+        sys.argv = ["golden_check.py", "recall", "--memo"]
+        try:
+            check("--memo on a mode without a memo is bad usage (2)", golden_check.main() == 2)
+        finally:
+            sys.argv = saved
+
+
+def _crash(_name):
+    raise RuntimeError("triage blew up")
+
+
+def siteconfig_effort():
+    import siteconfig
+    return siteconfig.MODEL_EFFORT["summarize"]
+
+
+def set_effort(role, level):
+    import siteconfig
+    siteconfig.MODEL_EFFORT[role] = level
+
+
+def test_uses_the_production_builder():
+    """The candidate must be judged through the same request builder production uses, or a
+    matched-effort fix in production would not reach the golden check (and vice versa). So stub
+    only the HTTP layer, update.anthropic_json, and look at what golden_check actually sends."""
+    sent = []
+
+    def fake(body, label="call"):
+        sent.append((label, body))
+        if label == "summarize":
+            return {"areas": ["premises"]}
+        if label in ("screen", "pretriage"):
+            return {"pass": True}
+        return {"relevant": True, "significance": "medium"}
+
+    orig, orig_pt = update.anthropic_json, update.PRETRIAGE_MODEL
+    update.anthropic_json = fake
+    update.PRETRIAGE_MODEL = "claude-haiku-4-5"
+    try:
+        with_set([case("A v. B", areas=["premises"])], golden_check.summarize_check)
+        with_set([case("A v. B")], golden_check.check)
+    finally:
+        update.anthropic_json, update.PRETRIAGE_MODEL = orig, orig_pt
+    by = {}
+    for label, body in sent:
+        by.setdefault(label, body)
+    s = by.get("summarize") or {}
+    check("summarize goes through update.summarize_request (model, system, max_tokens)",
+          s.get("model") == update.MODEL and s.get("max_tokens") == update.OUT_TOKENS
+          and s.get("system") == update.SYSTEM,
+          str({k: v for k, v in s.items() if k != "messages"})[:200])
+    check("...and sends the production effort for the summarize tier",
+          s.get("output_config") == update.effort_params("summarize", update.MODEL).get("output_config"),
+          str(s.get("output_config")))
+    check("...which today is high on the Opus pin",
+          s.get("output_config") == {"effort": "high"}, str(s.get("output_config")))
+    tr = by.get("triage") or {}
+    check("triage goes through update.triage_request with its effort",
+          tr.get("model") == update.TRIAGE_MODEL and tr.get("output_config") == {"effort": "high"},
+          str(tr.get("output_config")))
+    check("the Haiku screen and pretriage send no effort",
+          "output_config" not in (by.get("screen") or {"output_config": 1})
+          and "output_config" not in (by.get("pretriage") or {"output_config": 1}))
+
+
 def main():
     print("golden_check:")
     test_fail_closed()
@@ -375,6 +547,8 @@ def main():
     test_recall_verdicts()
     test_config_error_is_not_a_regression()
     test_committed_set_integrity()
+    test_memo()
+    test_uses_the_production_builder()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))
         return 1
