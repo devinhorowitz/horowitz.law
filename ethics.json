@@ -1,1 +1,22 @@
-[]
+[
+  {
+    "id": "24-1",
+    "number": "24-1",
+    "status": "approved",
+    "subject": "Third-party vendors for non-party requests for production",
+    "summary": "Approved by the Supreme Court of Georgia on August 11, 2026 (S26U0157). A lawyer, including one an insurer hires and pays to defend its insured, may use a third-party vendor, including one the insurer hired, to serve non-party requests for production under O.C.G.A. § 9-11-34(c) and to follow up on and effectuate them, but only if the lawyer retains the right and ability to supervise and direct the vendor's work under Rule 5.3 and the arrangement does not interfere with competent representation or the lawyer's independent professional judgment; if it would, the lawyer should not enter the arrangement, and if it has, the lawyer should end it or withdraw.",
+    "rules": [
+      "5.3",
+      "1.1",
+      "1.2(a)",
+      "1.7",
+      "1.8(f)",
+      "2.1",
+      "5.1",
+      "5.4(c)"
+    ],
+    "impact": "Before relying on an insurer-selected records vendor for non-party requests, confirm you can actually direct and supervise its work, and treat that supervision as legal work: footnote 5 says time spent supervising the vendor is not “administrative,” “secretarial,” or “paralegal” work.",
+    "url": "https://www.gabar.org/handbook/?rule=formal-advisory-opinion-no-24-1",
+    "first_seen": "2026-10-01"
+  }
+]

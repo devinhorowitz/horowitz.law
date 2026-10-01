@@ -130,9 +130,13 @@ the two could be compared; nothing in the watch would have noticed, then or late
   suspect *terminate*: it gets a definitive verdict this run either way, so a bill is never both
   dropped and locked out. Escalations respect `LEGISLATION_MAX`, and anything over the cap is left
   un-seen so it returns next run rather than vanishing.
-- **Fails closed** — the opposite of the screen. An auditor error leaves the drop standing, because
-  a broken auditor must not manufacture escalations that each cost a writer call. A missed audit is
-  recoverable: the drop is on the log without a verdict, so it is findable.
+- **Treats a failed audit as no audit** — a model or parse error (or a reply with no boolean
+  verdict) is logged `recall: "error"` with the cause in `recall_error`, counted as failed, and left
+  un-seen so the bill is re-screened next run; it used to be logged `ok` and locked in `seen`. It is
+  not escalated, since a broken auditor must not manufacture writer calls, but after
+  `RECALL_MAX_FAILS` (3) failed audits of the same `bill_id` + `change_hash`, counted off this log,
+  the writer decides it. A `ConfigError` (bad key, no credit, retired model) stops the pass and
+  leaves every remaining drop un-seen.
 
 `LEGISLATION_RECALL=0` disables it and restores the prior behaviour exactly;
 `LEGISLATION_RECALL_MODEL` overrides the auditor (default: the write model).
@@ -214,7 +218,11 @@ abstract + CFR references the endpoint already returns (so a run is a single pag
 per-document call), and runs the same cheapest-first funnel. A Federal Register document is
 **immutable** once published, so `seen` is just a set of processed `document_number`s (no
 change_hash). The relevance screen is moderately strict: it keeps substantive safety, liability, and
-financial-responsibility (insurance) rules and drops fee/technical/administrative ones.
+financial-responsibility (insurance) rules and drops fee/technical/administrative ones. Every screen
+drop and writer decline is recorded in `regulations_rejections.jsonl` — append-only, one record each:
+document number, title, agency, `stage` (`screen` or `writer`), `reason`, and `brief`, the exact text
+the model read — written on `--apply` beside the seen mark it explains, so a dropped rule can be
+audited after the fact.
 
 Regulation cards render in a **"Federal regulations"** section of the same /legislation page (with
 their own `regulations.xml` feed), because statutes and regulations are the two halves of "law that

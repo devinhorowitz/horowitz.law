@@ -342,6 +342,43 @@ def test_the_outage_ladder_actually_waits():
               all(("waiting %ds" % w) in out for w in (1, 2, 4, 8, 16)), out[-600:])
 
 
+def test_regenerate_mode():
+    """PUSH_MAIN_REGENERATE hard-resets onto main each attempt, so it must refuse a tree holding
+    uncommitted work rather than discard it. queue.yml's verdict step is the caller, and the
+    race it exists for is exercised end to end in test_queue_cases.py."""
+    regen = "echo x >> data.json\ngit commit -qam regenerated"
+    with tempfile.TemporaryDirectory() as tmp:
+        origin, _ = setup(tmp)
+        run = clone(tmp, origin, "run")
+        write(os.path.join(run, "queue.txt"), "uncommitted\n")
+        git("add", "queue.txt", cwd=run)
+        before = git("rev-parse", "main", cwd=origin).stdout
+        r = run_push_main(run, extra_env={"PUSH_MAIN_REGENERATE": regen})
+        check("regenerate mode refuses a dirty tree", r.returncode == 1 and "::error::" in r.stdout,
+              r.stdout + r.stderr)
+        check("and leaves that work and main alone",
+              os.path.exists(os.path.join(run, "queue.txt")) and
+              git("rev-parse", "main", cwd=origin).stdout == before)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        origin, _ = setup(tmp)
+        run = clone(tmp, origin, "run")
+        other = clone(tmp, origin, "other")
+        write(os.path.join(other, "o.txt"), "o\n")
+        git("add", "-A", cwd=other)
+        git("commit", "-m", "other", cwd=other)
+        git("push", "origin", "HEAD:main", cwd=other)
+        r = run_push_main(run, extra_env={"PUSH_MAIN_REGENERATE": regen})
+        check("regenerate mode redoes the change on the freshly fetched main",
+              r.returncode == 0 and log_subjects(origin, "main")[:2] == ["regenerated", "other"],
+              r.stdout + r.stderr)
+        tip = git("rev-parse", "main", cwd=origin).stdout
+        r = run_push_main(run, extra_env={"PUSH_MAIN_REGENERATE": "true"})
+        check("a regenerate that commits nothing is success with nothing pushed",
+              r.returncode == 0 and "nothing to push" in r.stdout
+              and git("rev-parse", "main", cwd=origin).stdout == tip, r.stdout + r.stderr)
+
+
 def test_no_force_push_anywhere():
     # Read the CODE, not the prose: the header comment discusses `git push` and would
     # otherwise be counted as a second push site.
@@ -366,6 +403,7 @@ def main():
     test_outage_exhaustion_uses_the_long_ladder()
     test_a_failed_fetch_is_an_outage_not_a_conflict()
     test_the_outage_ladder_actually_waits()
+    test_regenerate_mode()
     test_no_force_push_anywhere()
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))

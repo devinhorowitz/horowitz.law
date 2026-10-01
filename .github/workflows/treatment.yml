@@ -3,20 +3,30 @@ name: Georgia Appellate Watch treatment sweep
 # Reverse citation sweep. Short runs every few hours rather than one long weekly
 # sweep -- see the cron note below. Leave dry_run checked the
 # first time to preview the citing opinions and any flags in the run log without
-# writing anything or opening a PR; uncheck it (or let the cron run) to write.
+# writing anything or opening a PR; uncheck it to write.
 on:
-  schedule:
-    # Was a single weekly run (Saturdays 13:17) with a 5-hour budget. That run spent most of
-    # its time ASLEEP: treatment.py waits for the CourtListener hourly window to refill rather
-    # than stopping, so a two-hour sweep was largely a runner sitting idle. Idle time is the
-    # exposure that gets a job reclaimed (seven reclamations since 2026-07-17, every one while
-    # waiting), and the sweep lost its entire run three times on 2026-08-01.
-    #
-    # Same CourtListener throughput ceiling, spread over short runs instead of one long one.
-    # Safe because the sweep is already resumable: treatment_state.json carries per-card
-    # progress, a card cut short is simply not marked full and resumes next run, and
-    # FIRST_PER_RUN/FIRST_PAGES already bound each run's work.
-    - cron: '41 */6 * * *'   # every 6 hours, off-peak minute; was weekly
+  # PAUSED: the schedule below is commented out, so the sweep runs only on manual dispatch.
+  # Until the court filter is fixed it has only ever searched ONE court: treatment.py sent the
+  # scope courts as repeated court= parameters and CourtListener keeps only the last, so every
+  # run searched scotus, then fla, then alacivapp -- never Georgia or the 11th Cir. -- and
+  # reported 'No new adverse treatment' while spending about 128 of the shared 250/day
+  # CourtListener calls. Re-enable the cron only after all three: the court-filter fix lands;
+  # the sweep's state persistence (progress only reaches main through a PR nobody merges) and
+  # card rotation are fixed; and a full re-crawl budget for every card is approved, since
+  # every card's full:true was earned on a blind crawl and must be re-swept.
+  #
+  # schedule:
+  #   Was a single weekly run (Saturdays 13:17) with a 5-hour budget. That run spent most of
+  #   its time ASLEEP: treatment.py waits for the CourtListener hourly window to refill rather
+  #   than stopping, so a two-hour sweep was largely a runner sitting idle. Idle time is the
+  #   exposure that gets a job reclaimed (seven reclamations since 2026-07-17, every one while
+  #   waiting), and the sweep lost its entire run three times on 2026-08-01.
+  #
+  #   Same CourtListener throughput ceiling, spread over short runs instead of one long one.
+  #   Safe because the sweep is already resumable: treatment_state.json carries per-card
+  #   progress, a card cut short is simply not marked full and resumes next run, and
+  #   FIRST_PER_RUN/FIRST_PAGES already bound each run's work.
+  #   - cron: '41 */6 * * *'   # every 6 hours, off-peak minute; was weekly
   workflow_dispatch:
     inputs:
       dry_run:

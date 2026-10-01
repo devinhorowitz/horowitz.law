@@ -45,7 +45,7 @@ Env:
                            alone, two of them Alabama Supreme Court insurance decisions.
   SMELL_ALL=1              re-audit records that already carry a smell verdict
   SMELL_LIMIT              most-recent records to consider per run (default 500)
-  SMELL_BUDGET_SEC         soft wall clock for one run (default 1200, under the 30-min watchdog)
+  SMELL_BUDGET_SEC         soft wall clock for one run (default 600; see BUDGET below)
   DRY_RUN=1                report only; do not rewrite the log or write the suspects file
 
 Run directly: `python scripts/smell_check.py`. Exit 0 unless a configuration error.

@@ -25,14 +25,14 @@ content-stale (exit 4): the freshness net must not silently pass when the data i
 
 Prints a one-paragraph diagnosis and writes it to scripts/heartbeat_alert.md for the issue body.
 
-A THIRD signal runs SEPARATELY, under --skill-manifest (exit 5 = stale, 0 = fresh or not in use):
-the age of skill-authorities.json, the join key alert-out reads to decide which adverse treatments
-matter. It is deliberately not folded into check() above. That manifest is generated from a skill
-tree at /mnt/skills/user, which no workflow has, so it cannot regenerate in CI -- it is committed by
-hand and goes stale on its own. Its being stale says nothing about whether the funnel is alive, and
-folding it in would both mislabel the issue ("possible stall") and suppress the healthy-run ping to
-the external monitor, making a rotting manifest look like GitHub's crons had died. Separate signal,
-separate exit code, separate issue.
+A THIRD signal runs SEPARATELY, under --skill-manifest (exit 5 = stale or empty, 0 = fresh or not in
+use): the age of skill-authorities.json, the join key alert-out reads to decide which adverse
+treatments matter. It is deliberately not folded into check() above. That manifest is generated from
+a skill tree at /mnt/skills/user, which no workflow has, so it cannot regenerate in CI -- it is
+committed by hand and goes stale on its own. Its being stale says nothing about whether the funnel
+is alive, and folding it in would both mislabel the issue ("possible stall") and suppress the
+healthy-run ping to the external monitor, making a rotting manifest look like GitHub's crons had
+died. Separate signal, separate exit code, separate issue.
 """
 import datetime
 import json
@@ -159,8 +159,8 @@ def check():
 
 
 def skill_manifest_check():
-    """Age of skill-authorities.json. 5 = stale (or present but undatable), 0 = fresh, not in use,
-    or the check is switched off.
+    """Age of skill-authorities.json. 5 = stale (or present but undatable or empty), 0 = fresh,
+    not in use, or the check is switched off.
 
     Absent is NOT an alert: update.py treats a missing manifest as "the skill-authority watch is
     not in use," and this must agree with it, or a deployment that never adopted the watch gets a
@@ -168,7 +168,11 @@ def skill_manifest_check():
 
     Present but carrying no readable generated_at IS an alert, on the same reasoning as the
     malformed-opinions.json branch above: a freshness net that cannot read its own timestamp must
-    not report fresh."""
+    not report fresh.
+
+    Present and dated but EMPTY (skill_count 0, or nothing in by_authority) IS an alert too. That
+    is a manifest generated where no skill tree was mounted: its generated_at is fresh, so the age
+    test alone would pass it -- and auto-close the issue -- while alert-out watches nothing."""
     if not SA_DAYS:
         print("Skill manifest: age check disabled (siteconfig.SKILL_MANIFEST_MAX_AGE_DAYS = 0).")
         return 0
@@ -187,6 +191,22 @@ def skill_manifest_check():
                 "written by an older generator. Regenerate it with `python "
                 "scripts/skill_authorities.py` on a machine with the skill tree mounted, and commit "
                 "the result.")
+        print(body)
+        _write_alert(body, SA_ALERT_PATH)
+        return 5
+    count, auths = man.get("skill_count"), man.get("by_authority")
+    if not count or not auths:
+        body = ("Skill manifest: `skill-authorities.json` is dated %s but empty (`skill_count` %s, "
+                "%d entries in `by_authority`, from `%s`), so alert-out's watch list is empty and "
+                "no adverse treatment of a skill-relied authority can fire. Nothing errors: "
+                "`skill_alert.py` reads an empty index as a quiet watch. It was most likely "
+                "generated where the skill tree was not mounted.\n\nRegenerate it from a real "
+                "skill tree: run `python scripts/skill_authorities.py --skills <root of the "
+                "qpwb-* skills>` (or set `QPWB_SKILLS`) on a machine where that tree is mounted, "
+                "confirm it reports a nonzero skill count, and commit the result. Curated edits "
+                "are preserved across regeneration."
+                % (gen.date(), count, len(auths) if isinstance(auths, dict) else 0,
+                   man.get("skills_root") or "(unrecorded)"))
         print(body)
         _write_alert(body, SA_ALERT_PATH)
         return 5

@@ -16,8 +16,11 @@ on:
   workflow_run:
     # Every unattended workflow: anything on a cron, plus the long dispatch-driven jobs
     # nobody sits and watches. CI, Ruff lint, opinions-diagnose and opinions-review-veto
-    # are deliberately absent -- they run against a PR, where a failure is already visible
-    # in the checks list and a tracking issue would be noise.
+    # are deliberately absent. CI and Ruff run on a person's push or PR, where a failure is
+    # already visible in the checks list; review-veto runs on a comment on the review PR,
+    # where its result is visible too; and opinions-diagnose (on issues opened) never runs,
+    # because the monitors open their issues with GITHUB_TOKEN, which starts no workflow.
+    # A tracking issue for any of them would be noise.
     workflows:
       - Auto-merge self-healing PRs
       - Drop-reason audit

@@ -12,6 +12,7 @@ Run directly: `python scripts/test_treatment.py`.
 import datetime
 import os
 import sys
+import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import treatment      # noqa: E402  (sys.path shim must run first)
@@ -134,19 +135,23 @@ def test_classify_batch():
 
 def test_pending_rec():
     """The per-citer pending record (option b) trims a search result to just what a later run needs to
-    re-fetch its text and re-classify it: cluster id, name, date, court, sub-opinion ids + PDF urls,
-    and the _tries counter. _pending_key gives an order-independent identity for change detection."""
+    re-fetch its text and re-classify it: cluster id, name, date, court, sub-opinion ids + storage
+    local_paths, and the _tries counter. _pending_key gives an order-independent identity for change detection."""
     r = {"cluster_id": 4242, "caseName": "Later v. Earlier", "dateFiled": "2026-06-01", "court_id": "ga",
-         "opinions": [{"id": 91, "download_url": "https://x/91.pdf", "junk": "drop me"},
-                      {"id": 92, "download_url": None}, "not-a-dict"],
+         "opinions": [{"id": 91, "local_path": "pdf/2026/06/01/later.pdf",
+                       "download_url": "https://court.example/91.pdf", "junk": "drop me"},
+                      {"id": 92, "local_path": None}, "not-a-dict"],
          "html_with_citations": "HUGE TEXT " * 1000}
     rec = treatment._pending_rec(r, 2)
     check("pending rec keeps the identity + tries", rec["cluster_id"] == 4242 and rec["_tries"] == 2)
     check("pending rec keeps name/date/court", rec["caseName"] == "Later v. Earlier"
           and rec["dateFiled"] == "2026-06-01" and rec["court_id"] == "ga")
-    check("pending rec keeps only id + download_url per sub-opinion (drops bulk text)",
-          rec["opinions"] == [{"id": 91, "download_url": "https://x/91.pdf"}, {"id": 92, "download_url": None}]
+    check("pending rec keeps only id + local_path per sub-opinion (drops bulk text, court url)",
+          rec["opinions"] == [{"id": 91, "local_path": "pdf/2026/06/01/later.pdf"},
+                              {"id": 92, "local_path": None}]
           and "html_with_citations" not in rec)
+    check("a pending rec still resolves to its storage PDF on the next run",
+          treatment.citer_pdf_url(rec) == treatment.update.STORAGE + "pdf/2026/06/01/later.pdf")
     # A trimmed rec is itself a valid `r` for cluster_id_of / citer_text on the next run.
     check("a pending rec round-trips as an r (cluster_id_of resolves it)",
           treatment.update.cluster_id_of(rec) == 4242)
@@ -161,6 +166,145 @@ def test_pending_rec():
     check("pending key changes when tries change",
           treatment._pending_key(a) != treatment._pending_key([treatment._pending_rec({"cluster_id": 1}, 2),
                                                                treatment._pending_rec({"cluster_id": 2}, 3)]))
+
+
+def test_citing_url():
+    """The court filter. CourtListener's search binds court as ONE field and keeps only the LAST of
+    repeated court= params, so the sweep once searched a single court (scotus, then fla, then
+    alacivapp) and never Georgia or the 11th Cir. Every scope court must ride one space-separated value."""
+    url = treatment.citing_url(4321, "2020-01-01")
+    qs = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+    check("search url carries exactly one court= key", len(qs.get("court", [])) == 1, url)
+    courts = qs["court"][0].split(" ")
+    check("that one court value names every scope court",
+          sorted(courts) == sorted(treatment.SCOPE_COURTS), qs["court"][0])
+    check("the scope includes Georgia and the 11th Cir.",
+          {"ga", "gactapp", "ca11"} <= set(courts), qs["court"][0])
+    check("the cites query and since floor are kept",
+          qs.get("q") == ["cites:(4321)"] and qs.get("filed_after") == ["2020-01-01"])
+    # citing_results actually sends that URL as its first page.
+    sent = []
+    real_get, real_sleep = treatment.update.cl_get, treatment.time.sleep
+    treatment.update.cl_get = lambda u, deadline=None: (sent.append(u), {"results": [], "next": None})[1]
+    treatment.time.sleep = lambda _s: None
+    try:
+        treatment.citing_results(4321, "2020-01-01", None, max_pages=1)
+    finally:
+        treatment.update.cl_get, treatment.time.sleep = real_get, real_sleep
+    check("citing_results requests the single-court-value url", sent == [url], str(sent))
+
+
+def test_citer_text_source():
+    """Citer text comes from the free storage.courtlistener.com PDF (STORAGE + local_path), never the
+    court's own download_url (blocked by the job's egress allowlist), with REST as the fallback."""
+    r = {"cluster_id": 9, "opinions": [{"id": 1, "local_path": "pdf/a.pdf",
+                                        "download_url": "https://court.example/a.pdf"}]}
+    check("storage url built from local_path",
+          treatment.citer_pdf_url(r) == treatment.update.STORAGE + "pdf/a.pdf")
+    check("no local_path -> no PDF url, even with a court download_url",
+          treatment.citer_pdf_url({"opinions": [{"id": 1, "download_url": "https://court.example/a.pdf"}]}) == "")
+    check("no opinions -> no PDF url", treatment.citer_pdf_url({"opinions": None}) == "")
+
+    fetched, rest = [], []
+    real_pdf, real_full = treatment.update.pdf_text, treatment.update.opinion_text_full
+    good = "The court held that the rule applies. " * 40
+    treatment.update.pdf_text = lambda u, deadline=None: (fetched.append(u), good)[1]
+    treatment.update.opinion_text_full = lambda rr, deadline=None: (rest.append(rr), "REST TEXT")[1]
+    try:
+        check("a stored PDF that extracts is used without REST",
+              treatment.citer_text(r, None) == good and not rest)
+        check("and it was fetched from storage, not the court host",
+              fetched == [treatment.update.STORAGE + "pdf/a.pdf"], str(fetched))
+        fetched.clear()
+        no_local = {"cluster_id": 9, "opinions": [{"id": 1, "download_url": "https://court.example/a.pdf"}]}
+        check("without a local_path it falls back to REST, not the court url",
+              treatment.citer_text(no_local, None) == "REST TEXT" and not fetched)
+    finally:
+        treatment.update.pdf_text, treatment.update.opinion_text_full = real_pdf, real_full
+
+
+def test_text_skipped_pending():
+    """A citer skipped because its text is not ingested yet must be kept in pending (not dropped)
+    with its own clock-based limit, separate from the PENDING_TRIES classify-failure count, then
+    given up into CHECK MANUALLY. Before this a full-history crawl marked the card full while the
+    skipped citer was neither seen nor pending -- lost behind the incremental window for good."""
+    today = datetime.date(2026, 10, 1)
+    w = treatment.TEXT_WAIT_WEEKS
+    check("text wait is measured in weeks and is positive", w > 0, str(w))
+    check("not expired just before the limit",
+          treatment.text_wait_expired((today - datetime.timedelta(days=7 * w - 1)).isoformat(), today) is False)
+    check("expired at the limit",
+          treatment.text_wait_expired((today - datetime.timedelta(days=7 * w)).isoformat(), today) is True)
+    check("a missing or malformed clock is not expired",
+          treatment.text_wait_expired(None, today) is False
+          and treatment.text_wait_expired("garbage", today) is False)
+
+    r = {"cluster_id": 77, "caseName": "Later v. Earlier", "court_id": "ga",
+         "opinions": [{"id": 5, "local_path": "pdf/l.pdf"}]}
+    pending, given_up = treatment.recompute_pending([], [], set(), {77: r}, "", today)
+    check("a fresh text-skipped citer goes to pending (not dropped, not given up)",
+          [p["cluster_id"] for p in pending] == [77] and not given_up)
+    check("with its clock started today and no classify try burned",
+          pending[0]["_text_since"] == today.isoformat() and pending[0]["_tries"] == 0)
+    check("and its storage path kept for the retry",
+          pending[0]["opinions"] == [{"id": 5, "local_path": "pdf/l.pdf"}])
+    check("a new text-skipped citer changes the pending key (so the state is written)",
+          treatment._pending_key(pending) != treatment._pending_key([]))
+
+    # Still no text a few runs later, inside the window: kept, clock NOT reset, tries untouched.
+    later = today + datetime.timedelta(days=10)
+    p2, g2 = treatment.recompute_pending(pending, [], set(), {77: r}, "", later)
+    check("still text-skipped inside the window -> kept with the original clock",
+          len(p2) == 1 and p2[0]["_text_since"] == today.isoformat() and p2[0]["_tries"] == 0 and not g2)
+    check("an unchanged text-skip makes no pending-key change (no no-op state write)",
+          treatment._pending_key(p2) == treatment._pending_key(pending))
+    # Many runs inside the window never trip the 4-try classify limit.
+    p_many, g = pending, []
+    for d in range(1, 7 * w, 3):
+        p_many, g = treatment.recompute_pending(p_many, [], set(), {77: r}, "", today + datetime.timedelta(days=d))
+        if g:
+            break
+    check("dozens of text-skip runs inside the window never give up", len(p_many) == 1 and not g)
+
+    # Past the window: given up into CHECK MANUALLY.
+    past = today + datetime.timedelta(days=7 * w)
+    p3, g3 = treatment.recompute_pending(pending, [], set(), {77: r}, "", past)
+    check("past TEXT_WAIT_WEEKS the citer is given up", p3 == [] and [x[0] for x in g3] == [77])
+    check("with a reason naming the missing text", bool(g3) and "no opinion text" in g3[0][2], str(g3))
+
+    # Text arrives and classification succeeds -> resolved.
+    collect = [{"ccid": 77, "r": r}]
+    p4, g4 = treatment.recompute_pending(pending, collect, {77}, {}, "", later)
+    check("text arrives and classifies -> leaves pending", p4 == [] and not g4)
+    # Text arrives but classification fails -> ordinary classify-failure path; clock dropped.
+    p5, g5 = treatment.recompute_pending(pending, collect, set(), {}, "", later)
+    check("text arrives but classify fails -> one classify try, text clock dropped",
+          len(p5) == 1 and p5[0]["_tries"] == 1 and "_text_since" not in p5[0] and not g5)
+    # A malformed stored clock restarts rather than giving up.
+    bad = [dict(pending[0], _text_since="not-a-date")]
+    p6, g6 = treatment.recompute_pending(bad, [], set(), {77: r}, "", later)
+    check("a malformed clock restarts today, it does not give up",
+          len(p6) == 1 and p6[0]["_text_since"] == later.isoformat() and not g6)
+
+
+def test_classify_failure_pending():
+    """The PENDING_TRIES path is unchanged by the text-skip clock."""
+    today = datetime.date(2026, 10, 1)
+    r = {"cluster_id": 88, "caseName": "Fail v. Read", "opinions": []}
+    collect = [{"ccid": 88, "r": r}]
+    p1, g1 = treatment.recompute_pending([], collect, set(), {}, "", today)
+    check("a fresh classify failure enters pending with one try",
+          [(p["cluster_id"], p["_tries"]) for p in p1] == [(88, 1)] and "_text_since" not in p1[0] and not g1)
+    p0, _ = treatment.recompute_pending([], collect, set(), {}, "rest budget", today)
+    check("a global stop burns no try", p0[0]["_tries"] == 0)
+    ps, gs = treatment.recompute_pending(p1, collect, set(), {}, "time budget", today)
+    check("a stored citer under a global stop is preserved unchanged", ps[0]["_tries"] == 1 and not gs)
+    near = [dict(p1[0], _tries=treatment.PENDING_TRIES - 1)]
+    pg, gg = treatment.recompute_pending(near, collect, set(), {}, "", today)
+    check("PENDING_TRIES failures give up into CHECK MANUALLY",
+          pg == [] and bool(gg) and gg[0][0] == 88 and "failed classify" in gg[0][2])
+    pu, gu = treatment.recompute_pending(p1, [], set(), {}, "", today)
+    check("a stored citer not attempted this run is preserved", pu == p1 and not gu)
 
 
 def test_first_time_budget():
@@ -294,6 +438,11 @@ def main():
     test_sweep_since()
     test_swept_full()
     test_pending_rec()
+    print("treatment discovery + citer text + pending:")
+    test_citing_url()
+    test_citer_text_source()
+    test_text_skipped_pending()
+    test_classify_failure_pending()
     print("treatment backlog + progress:")
     test_first_time_budget()
     test_full_history_ceiling()

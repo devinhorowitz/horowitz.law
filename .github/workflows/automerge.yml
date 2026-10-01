@@ -13,8 +13,11 @@ name: Auto-merge self-healing PRs
 #     GitHub's anti-recursion rule -- so there is no check to gate on.
 #
 #   * dependabot/* (github_actions + pip) : a PATCH or MINOR bump is merged when authored by
-#     dependabot[bot] and every CI check is green (dependabot PRs DO trigger CI, so the check rollup
-#     is enough). A MAJOR bump is NOT auto-merged -- it is held for a human, because CI here is
+#     dependabot and `gh pr checks` reports no failing or pending check. That is weaker than "CI
+#     green": dependabot PRs do trigger workflows, but ci.yml's path filter excludes
+#     requirements*.txt, so a pip bump gets no ci.yml run at all, and `gh pr checks` counts a
+#     NEUTRAL conclusion (e.g. CodeQL) as passing. A pip bump can therefore pass this gate with
+#     only ruff, CodeQL and the Cloudflare preview behind it. A MAJOR bump is NOT auto-merged -- it is held for a human, because CI here is
 #     hermetic and never runs the risky runtime paths (e.g. pypdf parsing real court PDFs), so green
 #     CI does not prove a major bump safe. dep-review.yml posts an AI second opinion on each held
 #     major to give the human a head start. Same-major is required to merge; anything we cannot
@@ -26,8 +29,14 @@ name: Auto-merge self-healing PRs
 # merges it.
 #
 # A scheduled poll, not an event trigger, precisely because the GITHUB_TOKEN-created render-sync PR
-# emits no pull_request / workflow_run event to hook. It fails CLOSED throughout: any check that
-# does not clearly pass leaves the PR open for a human, never merges on doubt.
+# emits no pull_request / workflow_run event to hook. It is meant to fail CLOSED: any check that
+# does not clearly pass leaves the PR open for a human. The dependabot gate above is the exception
+# in practice (path filter, NEUTRAL counted as passing).
+#
+# Author checks: `gh ... --json author --jq '.author.login'` returns bot logins as 'app/dependabot'
+# and 'app/github-actions', not the 'dependabot[bot]' / 'github-actions[bot]' forms compared
+# against below, so as written both author checks never match: the render-sync job always leaves
+# its PR for a human, and the dependabot job never finds a PR to merge.
 
 on:
   schedule:

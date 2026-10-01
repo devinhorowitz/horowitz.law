@@ -2,13 +2,15 @@
 # or compromised upstream release cannot land in a funnel run unreviewed. These jobs hold the
 # ANTHROPIC_API_KEY and COURTLISTENER_TOKEN (and several have contents: write), and pypdf parses
 # UNTRUSTED court PDFs -- so an unpinned `pip install --upgrade` was the one supply-chain gap in
-# an otherwise SHA-pinned, egress-blocked setup. Dependabot now proposes bumps as reviewable,
-# CI-gated PRs instead (.github/dependabot.yml), the same posture as the pinned Actions.
+# an otherwise SHA-pinned, egress-blocked setup. Dependabot now proposes bumps as reviewable PRs
+# instead (.github/dependabot.yml). They are not CI-gated: ci.yml's path filter skips
+# requirements*.txt, and CI is hermetic and never parses a real PDF anyway.
 #
 # On 6.x: the 5.x line is end-of-life for security fixes. pypdf parses untrusted court PDFs, and
 # several DoS advisories that only the 6.x line fixes affect all 5.x -- e.g. CVE-2026-33123
 # (resource exhaustion, fixed 6.9.1), CVE-2026-49460 (FlateDecode PNG-predictor DoS, fixed 6.12.2),
-# CVE-2026-54651 (infinite loop on threads/articles, fixed 6.13.1). 6.14.2 covers all of them, and
-# the funnel uses only pypdf's stable PdfReader/.pages/.extract_text API (update.py), verified to
-# work unchanged on 6.x. Dependabot tracks further 6.x bumps (no major cap now).
-pypdf==6.16.2
+# CVE-2026-54651 (infinite loop on threads/articles, fixed 6.13.1). Any release from 6.13.1 on,
+# including the pin below, covers all of them, and the funnel uses only pypdf's stable
+# PdfReader/.pages/.extract_text API (update.py), verified to work unchanged on 6.x.
+# Dependabot tracks further 6.x bumps (no major cap now).
+pypdf==6.19.0

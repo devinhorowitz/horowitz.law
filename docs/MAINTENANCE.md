@@ -148,7 +148,7 @@ Automatic, on a schedule:
 | Workflow | When | What it does |
 | --- | --- | --- |
 | opinions | every 4 hours | the funnel: scans CourtListener, auto-publishes clean cards straight to `main`, and routes held cases to a review PR |
-| treatment | Saturdays | reverse citation sweep for adverse treatment of published cards |
+| treatment | every 6 hours | reverse citation sweep for adverse treatment of published cards |
 | maintain | daily | budget-gated upkeep: golden check, court check, feed-shape canary, repo keepalive |
 | render-sync | daily | re-renders pages from `opinions.json`; opens a PR if they drifted |
 | model-watch | daily | checks the Models API for a newer Claude model in a pinned tier; opens a bump PR gated by the golden set |
@@ -159,18 +159,29 @@ Automatic, on a schedule:
 | lighthouse | Mondays | performance scores of the deployed site |
 | links | Mondays | link-rot check, gentle on CourtListener |
 
-Automatic, on every push or pull request:
+On a push or pull request made by a person (ci only when it touches its watched paths:
+`scripts/`, `.github/workflows/`, `public/`, `opinions.json`, `functions/`; ruff on every pull
+request and on pushes that touch `scripts/`):
 
 | Workflow | What it does |
 | --- | --- |
 | ci | render idempotency and import checks for the pipeline and site |
 | ruff | Python lint |
 
-Automatic, when a monitor opens a tracking issue:
+The workflows' own commits do **not** trigger these. A push made with the default
+`GITHUB_TOKEN` starts no workflow (GitHub's anti-recursion rule), so the cards the funnel
+auto-publishes straight to `main` are not CI-validated at push time, whatever the commit
+message says; CI next runs on the following human push that touches its paths. PRs the
+workflows open with that token get no CI run to gate on either (automerge recomputes the
+render-sync check itself for this reason). Dependabot PRs do trigger workflows, but a
+dependency-only PR (`requirements*.txt`) falls outside ci's path filter, so ci does not run
+on it.
+
+Wired to fire when a monitor opens a tracking issue, but in practice never runs:
 
 | Workflow | What it does |
 | --- | --- |
-| diagnose | posts one best-effort AI first-pass diagnosis (Fable, via the 50%-priced Batch API, from the issue text + this runbook) as a comment, so you start with a hypothesis. An aid, not an authority; fails silently and never comments on human-filed issues |
+| diagnose | meant to post one best-effort AI first-pass diagnosis (Fable, via the 50%-priced Batch API, from the issue text + this runbook) as a comment. It triggers on `issues: opened`, but every monitor opens its issue with `GITHUB_TOKEN`, and an issue opened with that token starts no workflow, so diagnose has never run and no tracking issue has received a diagnosis. It also skips human-filed issues by design |
 
 Automatic, on a review-lane event (the held-case PR the funnel opens):
 
@@ -241,8 +252,9 @@ Run by hand, from the Actions tab:
   (`scripts/dep_review.py`, `DEP_USAGE`). It is advisory and merges nothing; a broken run posts
   nothing. Add a `DEP_USAGE` entry when a new dependency is worth a repo-specific review.
 - Latency-tolerant model calls run through the **50%-priced Batch API** (`batch.py`). `diagnose` and
-  `dep-review` always do; `maintain`'s daily guard trickle does **by default** now (`MAINTAIN_BATCH`,
-  set it to `0` to force the synchronous path). The trade is latency: the run polls for the batch
+  `dep-review` always do; `maintain`'s daily guard trickle does only when the repo Variable
+  `MAINTAIN_BATCH=1` is set (the workflow passes it empty otherwise, which runs the synchronous
+  path). The trade is latency: the run polls for the batch
   (usually minutes), capped by the matching `*_BATCH_SEC` budget (`diagnose`/`dep-review` 480s;
   `maintain` 900s, which must stay under the 30-min job); a slow batch just posts nothing / defers
   the slice that run (best-effort). `backfill` batches too, but stays opt-in (`BACKFILL_BATCH`) since
@@ -252,7 +264,7 @@ Run by hand, from the Actions tab:
   treatment escalation stay synchronous, so discovery and routing are unchanged; the trade is that a
   new card may publish up to a run later if a draft batch is slow (it defers to the next run, capped
   by `OPINIONS_SUMMARIZE_BATCH_SEC`, 1500s). Set `OPINIONS_BATCH=0` for the synchronous funnel — the
-  instant rollback if a run ever looks wrong. The weekly **`treatment` sweep batches too** by default
+  instant rollback if a run ever looks wrong. The **`treatment` sweep batches too** by default
   (`TREATMENT_BATCH`, `=0` for sync): each card's citer classifications go through one job, and a
   failed/slow batch defers that card's citers *and* leaves it not-fully-swept, so its history is
   re-searched next run rather than silently skipped. An *individual* citer that fails classification

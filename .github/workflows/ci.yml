@@ -1,6 +1,9 @@
 name: CI
 
-# Runs on every push or PR that touches the pipeline or the site surface.
+# Runs on every push or PR that touches the pipeline or the site surface, or the pins it runs
+# on (requirements*.txt, .python-version): a Dependabot pip bump touches nothing else, so without
+# them it got no CI run at all and the new version was never installed, imported, or exercised
+# (test_pypdf_real.py parses a real PDF with it) before automerge.yml could merge it.
 # Catches, as a red check on the commit instead of silently at the next
 # scheduled run: a syntax error or broken import; a mis-uploaded filename
 # (e.g. "cl rate.py" with a space, also caught by check_site); a CSP hash
@@ -15,6 +18,9 @@ on:
       - 'public/**'
       - 'opinions.json'
       - 'functions/**'
+      - 'requirements.txt'
+      - 'requirements-ci.txt'
+      - '.python-version'
   pull_request:
     paths:
       - 'scripts/**'
@@ -22,6 +28,9 @@ on:
       - 'public/**'
       - 'opinions.json'
       - 'functions/**'
+      - 'requirements.txt'
+      - 'requirements-ci.txt'
+      - '.python-version'
 
 permissions:
   contents: read

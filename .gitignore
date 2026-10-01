@@ -18,6 +18,7 @@ scripts/pr_body_regulations.md
 scripts/pr_body_courtrules.md
 scripts/pr_body_legreg.md
 scripts/queue_cases_pr_body.md
+scripts/queue_audit_stamps.json
 scripts/assess_precedential_pr_body.md
 scripts/heartbeat_alert.md
 scripts/feed_check_alert.md

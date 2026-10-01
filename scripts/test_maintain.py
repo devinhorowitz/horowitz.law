@@ -4,14 +4,19 @@
 Covers the wiring that runs both per-card guards on the rotating slice: the fidelity
 crosscheck and the completeness check share one opinion-text fetch, each flag is labeled
 with the guard that raised it, both can fire on one card, a rate-budget stop defers cleanly,
-and disabling both guards skips the slice without fetching anything.
+disabling both guards skips the slice without fetching anything, and a card on which any
+enabled guard was undecided ("unavailable") prints "undecided", never "ok", and is counted
+apart from the re-validated total.
 
 It stubs update.opinion_text_full, update.crosscheck, and update.completeness_check, so it
 makes no Anthropic and no CourtListener calls. Run directly: `python scripts/test_maintain.py`.
 """
+import contextlib
+import io
 import json
 import os
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import maintain      # noqa: E402  (sys.path shim must run first)
@@ -21,6 +26,7 @@ import batch         # noqa: E402
 
 MATCH = {"verdict": "match", "reason": ""}
 COMPLETE = {"verdict": "complete", "reason": ""}
+UNAVAILABLE = {"verdict": "unavailable", "reason": "no consensus"}
 
 
 def cc_flag(reason):
@@ -61,8 +67,19 @@ def _verdicts(by_name, default):
     return f
 
 
+def _expect_lines(label, out, exp_ok, exp_undecided):
+    """Assert exactly which cards printed "ok" and which printed "undecided"."""
+    if exp_ok is not None:
+        got = sorted(ln.split(None, 1)[1] for ln in out.splitlines() if ln.startswith("  ok   "))
+        assert got == sorted(exp_ok), "%s: 'ok' lines %r != %r" % (label, got, exp_ok)
+    if exp_undecided is not None:
+        got = sorted(ln.split(None, 1)[1] for ln in out.splitlines() if ln.startswith("  undecided "))
+        assert got == sorted(exp_undecided), "%s: 'undecided' lines %r != %r" % (label, got, exp_undecided)
+
+
 def run(label, cc_map, cp_map, *, text_stub=None, cross_model="x", comp_model="x",
-        exp_flags=None, exp_checked=None, exp_deferred=None, exp_fetches=None):
+        exp_flags=None, exp_checked=None, exp_deferred=None, exp_fetches=None,
+        exp_undecided=0, exp_ok=None, exp_undecided_names=None):
     text_stub = text_stub or TextStub()
     maintain.BATCH = False
     update.CROSSCHECK_MODEL = cross_model
@@ -71,7 +88,12 @@ def run(label, cc_map, cp_map, *, text_stub=None, cross_model="x", comp_model="x
     update.crosscheck = _verdicts(cc_map, MATCH)
     update.completeness_check = _verdicts(cp_map, COMPLETE)
     maintain.SLICE = len(CARDS)
-    flags, checked, deferred = maintain.revalidate(CARDS)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        flags, checked, deferred, undecided = maintain.revalidate(CARDS)
+    _expect_lines(label, buf.getvalue(), exp_ok, exp_undecided_names)
+    if exp_undecided is not None:
+        assert undecided == exp_undecided, "%s: undecided %d != %d" % (label, undecided, exp_undecided)
     if exp_checked is not None:
         assert checked == exp_checked, "%s: checked %d != %d" % (label, checked, exp_checked)
     if exp_deferred is not None:
@@ -80,8 +102,8 @@ def run(label, cc_map, cp_map, *, text_stub=None, cross_model="x", comp_model="x
         assert text_stub.calls == exp_fetches, "%s: %d text fetches != %d" % (label, text_stub.calls, exp_fetches)
     if exp_flags is not None:
         assert sorted(flags) == sorted(exp_flags), "%s: flags %r != %r" % (label, flags, exp_flags)
-    print("  ok  %-26s flags=%d checked=%d deferred=%d fetches=%d"
-          % (label, len(flags), checked, deferred, text_stub.calls))
+    print("  ok  %-26s flags=%d checked=%d undecided=%d deferred=%d fetches=%d"
+          % (label, len(flags), checked, undecided, deferred, text_stub.calls))
 
 
 class BatchStub:
@@ -111,7 +133,8 @@ class BatchStub:
 
 
 def run_batch(label, results, *, raise_timeout=False, raise_error=False, text_stub=None,
-              exp_flags=None, exp_checked=None, exp_deferred=None, exp_fetches=None, exp_requests=None):
+              exp_flags=None, exp_checked=None, exp_deferred=None, exp_fetches=None, exp_requests=None,
+              exp_undecided=0, exp_undecided_names=None):
     text_stub = text_stub or TextStub()
     bstub = BatchStub(results, raise_timeout=raise_timeout, raise_error=raise_error)
     maintain.BATCH = True
@@ -120,10 +143,15 @@ def run_batch(label, results, *, raise_timeout=False, raise_error=False, text_st
     update.opinion_text_full = text_stub
     batch.run = bstub
     maintain.SLICE = len(CARDS)
+    buf = io.StringIO()
     try:
-        flags, checked, deferred = maintain.revalidate(CARDS)
+        with contextlib.redirect_stdout(buf):
+            flags, checked, deferred, undecided = maintain.revalidate(CARDS)
     finally:
         maintain.BATCH = False
+    _expect_lines(label, buf.getvalue(), None, exp_undecided_names)
+    if exp_undecided is not None:
+        assert undecided == exp_undecided, "%s: undecided %d != %d" % (label, undecided, exp_undecided)
     if exp_checked is not None:
         assert checked == exp_checked, "%s: checked %d != %d" % (label, checked, exp_checked)
     if exp_deferred is not None:
@@ -134,8 +162,64 @@ def run_batch(label, results, *, raise_timeout=False, raise_error=False, text_st
         assert bstub.n_requests == exp_requests, "%s: %r requests != %d" % (label, bstub.n_requests, exp_requests)
     if exp_flags is not None:
         assert sorted(flags) == sorted(exp_flags), "%s: flags %r != %r" % (label, flags, exp_flags)
-    print("  ok  %-30s flags=%d checked=%d deferred=%d reqs=%s"
-          % (label, len(flags), checked, deferred, bstub.n_requests))
+    print("  ok  %-30s flags=%d checked=%d undecided=%d deferred=%d reqs=%s"
+          % (label, len(flags), checked, undecided, deferred, bstub.n_requests))
+
+
+def test_summary_reports_undecided():
+    """main()'s summary line reports the undecided count, and an undecided card alone exits
+    clean (exit code unchanged: only a golden regression or a flag needs a person). Fully
+    hermetic: the cards file, the run summary, the golden check and the 24h budget are stubbed
+    into a temp dir, so no real repo file is read or written."""
+    print("\nmaintain.main summary line:")
+    import golden_check
+    saved = (update.KEY, update.JSON_PATH, golden_check.check, maintain.trailing_24h_cl_calls,
+             os.environ.get("GITHUB_STEP_SUMMARY"))
+    with tempfile.TemporaryDirectory() as td:
+        cards_path = os.path.join(td, "opinions.json")
+        summary_path = os.path.join(td, "summary.md")
+        # Complete cards, so the field-integrity scan stays quiet and only the guards speak.
+        full = [dict(c, disposition="affirmed", url="https://example.invalid/%d" % c["cluster_id"],
+                     first_seen="2026-03-02", precedential=True) for c in CARDS]
+        with open(cards_path, "w", encoding="utf-8") as f:
+            json.dump(full, f)
+        try:
+            update.KEY = "test-key"
+            update.JSON_PATH = cards_path
+            golden_check.check = lambda: 0
+            maintain.trailing_24h_cl_calls = lambda: (0, 0)
+            os.environ["GITHUB_STEP_SUMMARY"] = summary_path
+            maintain.BATCH = False
+            update.CROSSCHECK_MODEL = "x"
+            update.COMPLETENESS_MODEL = "x"
+            update.opinion_text_full = TextStub()
+            update.crosscheck = _verdicts({"Alpha v. X": UNAVAILABLE}, MATCH)
+            update.completeness_check = _verdicts({}, COMPLETE)
+            maintain.SLICE = len(CARDS)
+            buf = io.StringIO()
+            code = None
+            with contextlib.redirect_stdout(buf):
+                try:
+                    maintain.main()
+                except SystemExit as e:
+                    code = e.code
+            out = buf.getvalue()
+            with open(summary_path, encoding="utf-8") as f:
+                summary = f.read()
+        finally:
+            (update.KEY, update.JSON_PATH, golden_check.check, maintain.trailing_24h_cl_calls,
+             prev) = saved
+            if prev is None:
+                os.environ.pop("GITHUB_STEP_SUMMARY", None)
+            else:
+                os.environ["GITHUB_STEP_SUMMARY"] = prev
+    assert code == 0, "an undecided card alone must exit clean, got %r:\n%s" % (code, out)
+    assert maintain.FINDING_MARKER not in out, "an undecided card is not a finding"
+    want = "re-validated 1 published card(s), 0 flag(s), 1 undecided, 0 deferred"
+    assert want in out, "summary line missing from stdout:\n%s" % out
+    assert want in summary, "summary line missing from the run summary:\n%s" % summary
+    assert "  undecided Alpha v. X" in out and "  ok   Alpha v. X" not in out, out
+    print("  ok  undecided count in the summary; exit 0")
 
 
 def test_finding_marker_matches_the_workflow():
@@ -315,7 +399,8 @@ def test_no_workflow_makes_the_switch_ui_only():
 def main():
     print("maintain.revalidate wiring:")
     # Both guards clean: no flags, both cards checked, one fetch per card.
-    run("both_clean", {}, {}, exp_flags=[], exp_checked=2, exp_deferred=0, exp_fetches=2)
+    run("both_clean", {}, {}, exp_flags=[], exp_checked=2, exp_deferred=0, exp_fetches=2,
+        exp_ok=["Alpha v. X", "Beta v. Y"], exp_undecided_names=[])
     # A fidelity flag is labeled and surfaced; completeness clean.
     run("fidelity_flag_labeled", {"Alpha v. X": cc_flag("holding misread")}, {},
         exp_flags=[("Alpha v. X", "fidelity: holding misread")], exp_checked=2)
@@ -332,6 +417,28 @@ def main():
     # Both guards disabled: the slice is skipped entirely, with no fetch.
     run("both_guards_disabled", {}, {}, cross_model="", comp_model="",
         exp_flags=[], exp_checked=0, exp_deferred=0, exp_fetches=0)
+    # An undecided guard is never stamped clean: a card whose cross-check came back
+    # "unavailable" prints "undecided", not "ok", and is counted apart from `checked`.
+    run("fidelity_unavailable_undecided", {"Alpha v. X": UNAVAILABLE}, {},
+        exp_flags=[], exp_checked=1, exp_undecided=1, exp_fetches=2,
+        exp_ok=["Beta v. Y"], exp_undecided_names=["Alpha v. X"])
+    # Same for the completeness guard.
+    run("completeness_unavailable_undecided", {}, {"Beta v. Y": UNAVAILABLE},
+        exp_flags=[], exp_checked=1, exp_undecided=1,
+        exp_ok=["Alpha v. X"], exp_undecided_names=["Beta v. Y"])
+    # Both guards undecided on every card: nothing re-validated, nothing "ok".
+    run("all_unavailable", {"Alpha v. X": UNAVAILABLE, "Beta v. Y": UNAVAILABLE},
+        {"Alpha v. X": UNAVAILABLE, "Beta v. Y": UNAVAILABLE},
+        exp_flags=[], exp_checked=0, exp_undecided=2, exp_ok=[],
+        exp_undecided_names=["Alpha v. X", "Beta v. Y"])
+    # A flag from one guard still stands when the other is undecided; the card is undecided.
+    run("flag_stands_when_other_undecided", {"Alpha v. X": cc_flag("misread")},
+        {"Alpha v. X": UNAVAILABLE},
+        exp_flags=[("Alpha v. X", "fidelity: misread")], exp_checked=1, exp_undecided=1,
+        exp_ok=["Beta v. Y"], exp_undecided_names=["Alpha v. X"])
+    # A disabled guard is not "unavailable": with only the cross-check enabled, clean is clean.
+    run("disabled_guard_not_undecided", {}, {"Alpha v. X": UNAVAILABLE}, comp_model="",
+        exp_flags=[], exp_checked=2, exp_undecided=0, exp_ok=["Alpha v. X", "Beta v. Y"])
 
     print("\nmaintain.revalidate batch path (MAINTAIN_BATCH=1):")
     # All guards clean via one batch: no flags, both cards checked, 4 requests (2 cards x 2 guards).
@@ -354,21 +461,28 @@ def main():
                "1-completeness": {"verdict": "complete"},
                "2-fidelity": {"verdict": "match"}, "2-completeness": {"verdict": "complete"}},
               exp_flags=[], exp_checked=2)
-    # A per-request failure (ok=False) yields no flag and does not sink the rest of the batch.
+    # A per-request failure (ok=False) yields no flag and does not sink the rest of the batch,
+    # but that card is undecided, not re-validated.
     run_batch("batch_unavailable_line",
               {"1-fidelity": "UNAVAIL", "1-completeness": {"verdict": "complete"},
                "2-fidelity": {"verdict": "match"}, "2-completeness": {"verdict": "complete"}},
-              exp_flags=[], exp_checked=2)
+              exp_flags=[], exp_checked=1, exp_undecided=1, exp_undecided_names=["Alpha v. X"])
+    # A guard line that never comes back at all is likewise undecided.
+    run_batch("batch_missing_line_undecided",
+              {"1-fidelity": {"verdict": "match"}, "1-completeness": {"verdict": "complete"},
+               "2-fidelity": {"verdict": "match"}},
+              exp_flags=[], exp_checked=1, exp_undecided=1, exp_undecided_names=["Beta v. Y"])
     # A batch that does not finish within the budget defers the whole (already-fetched) slice.
     run_batch("batch_timeout_defers", {}, raise_timeout=True,
               exp_flags=[], exp_checked=0, exp_deferred=2, exp_fetches=2, exp_requests=4)
+    test_summary_reports_undecided()
 
     test_finding_marker_matches_the_workflow()
     test_the_senior_review_can_never_suppress_a_flag()
     test_the_switch_lives_in_the_config_file()
     test_no_workflow_makes_the_switch_ui_only()
 
-    print("\nALL TESTS PASSED (11 cases + marker wiring)")
+    print("\nALL TESTS PASSED (18 cases + marker wiring)")
     return 0
 
 

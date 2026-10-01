@@ -15,8 +15,10 @@ updates:
 
   # Python deps pinned in requirements.txt / requirements-ci.txt (pypdf, pyyaml). pypdf parses
   # untrusted court PDFs inside jobs holding secrets, so keeping it patched is a security concern,
-  # not just hygiene. Dependabot opens a CI-gated PR on each release; automerge.yml merges it on
-  # green CI. No major-version cap: the 5.x line is EOL for security fixes (several DoS advisories
+  # not just hygiene. Dependabot opens a PR on each release. It is NOT CI-gated: ci.yml's path
+  # filter excludes requirements*.txt, so only ruff, CodeQL and the Cloudflare preview check it,
+  # and automerge.yml's gate (`gh pr checks`, which counts NEUTRAL as passing) is weaker than green
+  # CI. Review a pip bump before merging. No major-version cap: the 5.x line is EOL for security fixes (several DoS advisories
   # are 6.x-only), so pypdf tracks the latest 6.x and beyond.
   - package-ecosystem: "pip"
     directory: "/"
