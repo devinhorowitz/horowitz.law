@@ -92,6 +92,42 @@ The court set, labels, and citation suffixes are defined once in `scripts/jurisd
 `OPINIONS_JURISDICTION` selects the active jurisdiction and `OPINIONS_COURTS` narrows the
 active court set, both without editing code.
 
+### Supreme Court of Georgia intake
+
+Every court is read from its CourtListener court feed, filtered by the since floor
+(`last_filed` minus 2 days). The Supreme Court of Georgia needs more than that. Since the
+2026-06-30 release, gasupreme.us prints release dates inside an `<h3>`, and juriscraper still
+reads the first `<p>`, so CourtListener stamps every new release `date_filed` 2026-06-16. The
+floor dropped those opinions, and the 20 tied-date slots in `/feed/court/ga/` hid most of
+them, so the intake was dead from 06-30 until this fix. For `ga`, `update.py` now does four
+more things. None of them costs a CourtListener REST call.
+
+- **Discovery by cluster id.** Each run lists every GA cluster above a high-water mark
+  (`ga_high_water` in `opinions_state.json`) with the free search feed
+  (`/feed/search/?type=o&court=ga&q=cluster_id:[A TO B]`). That feed caps a page at 20 and
+  ignores paging, so a full page is split in half until each range fits. The first mark is
+  the newest scotga card or rejection, which brings in the post-06-30 backlog.
+- **Official dates.** Each GA candidate is re-dated from the court's release page
+  (`official_ga.release_index`, which parses both the `<p>` and `<h3>` layouts). The docket
+  comes from the opinion PDF's caption, or from a caption match on the page confirmed by a
+  `docketNumber` search-feed query. When the page does not list the docket, the date comes
+  from the PDF's `Decided:` line instead. CourtListener's date is kept on the card as
+  `cl_date_filed`. A card still on the stuck date with neither source is held for review,
+  never auto-published.
+- **Paced backlog.** Never-seen clusters above the mark that the floor would drop are
+  admitted `siteconfig.GA_BACKLOG_PER_RUN` at a time (8), oldest first. The rest wait, and
+  are not counted as floor drops. The mark stops just below the lowest cluster still waiting
+  or unsettled, so nothing above it is skipped. An admitted cluster that stays unsettled for
+  `GA_BACKLOG_MAX_TRIES` runs is let go. The log reads `. ga backlog: N admitted, M remain`,
+  and the run log carries a `ga` record.
+- **Re-scrapes.** When a docket also belongs to a cluster already seen or carded, and that
+  cluster carries the same date, the new cluster is skipped and marked seen
+  (`~ ga re-scrape duplicate`). Rease 10975744 is one, a re-scrape of 10875591.
+
+The knobs are in the Supreme Court of Georgia section of `scripts/siteconfig.py`. About 35
+releases since 06-30 are on gasupreme.us but not in CourtListener at all, and this intake does
+not card them (render keys every card on a cluster id).
+
 ## The funnel
 
 Candidates pass through four model tiers, cheapest first, so the expensive model only ever

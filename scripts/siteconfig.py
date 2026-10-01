@@ -196,6 +196,24 @@ SMELL_MODEL = ""
 # skill tree); HEARTBEAT_SKILL_MANIFEST_DAYS overrides for one run.
 SKILL_MANIFEST_MAX_AGE_DAYS = 90
 
+# ---- Supreme Court of Georgia intake --------------------------------------
+# Since the 2026-06-30 release gasupreme.us prints each release date inside an <h3>, and
+# juriscraper's ga.py still reads the first <p> after the heading, so CourtListener stamps every
+# new Supreme Court of Georgia opinion date_filed 2026-06-16. The CourtListener court feed then
+# sorts them as old (the since floor drops them) and its 20 tied-date slots fill arbitrarily, so
+# most never appear there at all. update.py therefore enumerates GA clusters by cluster id on the
+# free /feed/search/ endpoint (no REST quota), above a high-water mark kept in
+# opinions_state.json (ga_high_water), and dates each one from the court's own release page.
+GASUPREME_HOST = "https://www.gasupreme.us"   # the court's site; the year index is <host>/<year>-opinions/
+GA_BOGUS_DATE_FILED = "2026-06-16"            # CourtListener's stuck date_filed; a card is never auto-published on it unverified
+GA_BACKLOG_PER_RUN = 8          # never-seen GA clusters below the since floor admitted per run, oldest cluster id first; the rest wait
+GA_BACKLOG_MAX_TRIES = 3        # runs an admitted backlog cluster may stay unresolved (no text, deferred) before the mark passes it
+GA_HIGH_WATER_SEED = 10876000   # first mark when state has none and no scotga card or rejection gives a higher-known GA cluster id
+GA_FEED_ITEM_CAP = 20           # /feed/search/ returns at most this many entries and ignores page=; a full page is split in half
+GA_ENUM_MAX_QUERIES = 40        # per-run cap on enumeration feed queries (the 2026-09 backlog of 54 clusters took 29)
+GA_ENUM_BUDGET_SEC = 90         # per-run wall-clock budget for the enumeration and the docket lookups
+GA_NAME_GUESSES = 3             # official-page entries tried per cluster when only the caption is known (each costs one free feed query)
+
 # ---- Top-level page registry --------------------------------------------
 # The site's top-level pages, as (path, label, changefreq, priority, lastmod).
 # render.py drives both the /404 "ls /" listing and the sitemap's static URLs

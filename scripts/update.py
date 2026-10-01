@@ -2388,20 +2388,29 @@ def _same_case(a, b):
     return bool(a[1]) and a[1] == b[1] and len(a[3] & b[3]) >= 2
 
 
-def _select_candidates(results, since, today, have, seen, pending_review, redraft_pending):
+def _select_candidates(results, since, today, have, seen, pending_review, redraft_pending,
+                       exempt=frozenset(), held_back=frozenset()):
     """The run's candidate filter, moved out of main() with its selection unchanged so the since-floor
     count below is unit-testable. Returns (cand, floor_dropped): the feed items to evaluate, in feed order, and
     {court_id: n} of NEVER-SEEN items the since floor dropped, largest first. The count is logging
     only; it changes nothing that is selected. It exists because the floor drops silently: juriscraper
     stamps every new gasupreme.us release 2026-06-16, so ~15 unseen Supreme Court of Georgia items
     fell under the floor every run for three months with no log line. An item already carded, seen
-    or held never reaches the floor check, so every count here is a case the pipeline never looked at."""
+    or held never reaches the floor check, so every count here is a case the pipeline never looked at.
+
+    `exempt` is the Supreme Court of Georgia backlog admitted this run (see _ga_backlog): never-seen
+    clusters above the GA high-water mark, which pass the floor like a redraft id. `held_back` is the
+    rest of that backlog, waiting for a later run: skipped quietly, NOT counted as floor drops,
+    because they are carried, not lost."""
     cand, ids, floored = [], set(), {}
     for r in results:
         cid = cluster_id_of(r)
         if not cid or cid in have or cid in seen or cid in ids or cid in pending_review:
             continue
-        if (r.get("dateFiled") or "") and r["dateFiled"] < since and cid not in redraft_pending:
+        if cid in held_back:
+            continue
+        if (r.get("dateFiled") or "") and r["dateFiled"] < since and cid not in redraft_pending \
+                and cid not in exempt:
             floored.setdefault(cid, r.get("court_id") or "?")   # by cid: a repeated feed item counts once
             continue
         if (r.get("dateFiled") or "") and r["dateFiled"][:10] > today:
@@ -2413,6 +2422,288 @@ def _select_candidates(results, since, today, have, seen, pending_review, redraf
         if cid not in ids:          # a cluster the feed also carried in-window was selected, not dropped
             counts[court] = counts.get(court, 0) + 1
     return cand, dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+
+
+# ---- Supreme Court of Georgia intake ------------------------------------------------------------
+# Since the 2026-06-30 release gasupreme.us prints each release date inside an <h3>, and juriscraper
+# still reads the first <p> after the heading, so CourtListener stamps every new Supreme Court of
+# Georgia opinion date_filed 2026-06-16. The funnel lost them two ways: the since floor dropped the
+# ones the 20-entry /feed/court/ga/ carried, and most never reached that feed at all, because 20
+# tied-date slots fill arbitrarily. So, for GA only:
+#   A. discovery does not depend on the date: every run lists GA clusters above a high-water mark
+#      (opinions_state.json ga_high_water) by cluster-id range on the free search feed;
+#   B. each GA candidate is re-dated from the court's own release page (official_ga.release_index),
+#      falling back to the opinion's "Decided:" line, with CourtListener's date kept for audit;
+#   C. never-seen clusters the since floor would drop are admitted GA_BACKLOG_PER_RUN at a time,
+#      oldest first, and the mark never passes one that is still waiting or unresolved;
+#   D. all of it costs no CourtListener REST call: feeds, storage PDFs, and gasupreme.us only.
+# A re-scrape (a second cluster for a docket already seen or carded) is skipped and marked seen.
+GA_CL = "ga"                                             # CourtListener's id for the Supreme Court of Georgia
+FEED_SEARCH = "https://www.courtlistener.com/feed/search/"
+_GA_DOCKET_RE = re.compile(r"\bS\d{2}[A-Z]\d{4}\b")
+
+
+def _sc(name, default):
+    """A siteconfig value with a built-in default, so an older siteconfig cannot crash the run."""
+    return getattr(siteconfig, name, default)
+
+
+def ga_search_feed(q, deadline=None):
+    """One free CourtListener search-feed query for Supreme Court of Georgia opinions (the /feed/
+    path, not /api/rest/, so no REST quota). Returns _parse_feed items. The search feed carries no
+    PDF enclosure (pdf_url is "") and returns at most GA_FEED_ITEM_CAP entries, with no paging."""
+    url = FEED_SEARCH + "?" + urllib.parse.urlencode({"type": "o", "court": GA_CL, "q": q})
+    return _parse_feed(feed_get(url, deadline), GA_CL)
+
+
+def ga_docket_peers(docket, deadline=None):
+    """{cluster_id: CourtListener dateFiled} of every GA cluster filed under `docket`: one free
+    search-feed query. Used both to confirm a caption guess and to spot a re-scrape."""
+    out = {}
+    for it in ga_search_feed('docketNumber:"%s"' % docket, deadline):
+        c = cluster_id_of(it)
+        if c:
+            out[c] = (it.get("dateFiled") or "")[:10]
+    return out
+
+
+def ga_enumerate(after, ceiling, deadline=None, max_queries=None, search=None):
+    """Every GA cluster with id > `after`, by cluster-id range queries on the search feed. The feed
+    returns at most GA_FEED_ITEM_CAP entries in no useful order, ignores page=, and returns nothing
+    with order_by=cluster_id, so a FULL page means "maybe more": the range is split in half and the
+    halves are queried, lowest first. The closed range (after, ceiling] is walked first (`ceiling` is
+    the highest cluster id any feed carried this run, so it bounds the ids CourtListener has issued),
+    then the open tail; a full open tail is bounded at the highest id it returned and split.
+
+    Returns (items {cid: item}, covered, complete, queries). Ranges finish in ascending order, so
+    every GA cluster <= `covered` has been listed; `complete` means the open tail was listed too. On
+    the query cap, the deadline, or a feed error it stops early with complete=False, and the caller
+    never moves the high-water mark past what was covered."""
+    search = search or ga_search_feed
+    cap = int(_sc("GA_FEED_ITEM_CAP", 20))
+    max_queries = int(max_queries if max_queries is not None else _sc("GA_ENUM_MAX_QUERIES", 40))
+    after = int(after)
+    ceiling = max(int(ceiling or 0), after)
+    found, queries, covered = {}, 0, after
+    work = [(ceiling + 1, None)]           # a stack: pushed high-to-low, so popped lowest first
+    if ceiling > after:
+        work.append((after + 1, ceiling))
+    while work:
+        if queries >= max_queries or (deadline and time.time() > deadline):
+            return found, covered, False, queries
+        lo, hi = work.pop()
+        if queries:
+            time.sleep(0.5)                # polite pacing on a free endpoint
+        queries += 1
+        try:
+            items = search("cluster_id:[%d TO %s]" % (lo, "*" if hi is None else hi), deadline)
+        except Exception as e:
+            print("  ! ga discovery: search feed failed (%s); stopping at cluster %d" % (e, covered))
+            return found, covered, False, queries
+        got = {}
+        for it in items:
+            c = cluster_id_of(it)
+            if c and c >= lo and (hi is None or c <= hi):
+                got[c] = it
+        if len(items) >= cap:
+            if hi is None:
+                if not got:                # a full page with nothing in range: cannot narrow it
+                    return found, covered, False, queries
+                top = max(got)
+                work.append((top + 1, None))
+                hi = top
+            if hi > lo:
+                mid = (lo + hi) // 2
+                work.append((mid + 1, hi))
+                work.append((lo, mid))
+                continue
+        found.update(got)
+        if hi is None:
+            return found, max([covered] + list(found)), True, queries
+        covered = hi
+    return found, covered, True, queries   # not reached: the open tail always ends the walk
+
+
+def _ga_seed_mark(entries, reject_path=None):
+    """The first GA high-water mark, for a state that has none: the highest Supreme Court of Georgia
+    cluster id already known from a card or a logged rejection (seen_clusters carries no court), or
+    siteconfig.GA_HIGH_WATER_SEED if neither has one. Everything above it is enumerated, which is
+    how the 2026-06-30-onward backlog enters the funnel."""
+    best = 0
+    for e in entries:
+        if e.get("court") == "scotga":
+            try:
+                best = max(best, int(e.get("cluster_id") or 0))
+            except (TypeError, ValueError):
+                pass
+    if reject_path and os.path.exists(reject_path):
+        try:
+            with open(reject_path, encoding="utf-8") as f:
+                for ln in f:
+                    try:
+                        rec = json.loads(ln)
+                        if isinstance(rec, dict) and rec.get("court") == "scotga":
+                            best = max(best, int(rec.get("cluster_id") or 0))
+                    except (ValueError, TypeError):
+                        continue
+        except OSError:
+            pass
+    return best or int(_sc("GA_HIGH_WATER_SEED", 0))
+
+
+def _ga_backlog(found, mark, since, known, per_run):
+    """Split the enumerated never-seen GA clusters the since floor would drop into (admitted, waiting),
+    oldest cluster id first: `per_run` enter this run exempt from the floor, the rest wait for a later
+    one. An in-window cluster is neither; it is an ordinary candidate, bounded only by OPINIONS_MAX."""
+    pool = sorted(c for c, r in found.items()
+                  if c > mark and c not in known and (r.get("dateFiled") or "") and r["dateFiled"] < since)
+    per_run = max(0, int(per_run))
+    return pool[:per_run], pool[per_run:]
+
+
+def _ga_next_mark(old, found, covered, complete, resolved, waiting, tries, max_tries):
+    """The GA high-water mark after this run, plus the updated tries map and the clusters given up on.
+    The mark rises to the highest listed cluster (or to `covered`, on an incomplete walk) but stops
+    just below the lowest cluster still outstanding: one not yet seen, carded, held, or evaluated this
+    run. A waiting backlog cluster holds the mark without spending a try; any other outstanding one
+    (admitted but deferred, cut by OPINIONS_MAX, textless) spends one, and after `max_tries` runs the
+    mark passes it so one stuck cluster cannot stall the intake (it stays unseen, under the floor)."""
+    outstanding, new_tries, gave_up = [], {}, []
+    for c in sorted(found):
+        if c <= old or c in resolved:
+            continue
+        if c not in waiting:
+            n = int(tries.get(c, 0)) + 1
+            if n >= max_tries:
+                gave_up.append(c)
+                continue
+            new_tries[c] = n
+        outstanding.append(c)
+    top = max([old] + list(found)) if complete else covered
+    if outstanding:
+        top = min(top, outstanding[0] - 1)
+    new = max(int(old), int(top))
+    return new, {c: n for c, n in new_tries.items() if c > new}, gave_up
+
+
+def _ga_release_index(years):
+    """The gasupreme.us release index for each year in `years`, merged (a newer year's entry wins a
+    docket clash). Fails open to {}."""
+    idx = {}
+    for y in sorted({str(y) for y in years if y}, reverse=True):
+        try:
+            for d, ent in official_ga.release_index(y).items():
+                idx.setdefault(d, ent)
+        except Exception as e:
+            _dbg("gasupreme.us %s release index unavailable (%s)" % (y, e))
+    return idx
+
+
+def _ga_name_guesses(name, idx, not_before, limit):
+    """Official-page entries whose title shares a distinctive party token with a CourtListener caption,
+    best overlap first, released on or after `not_before` (CourtListener's stuck date is the last date
+    it read correctly, so nothing it carries was released earlier). Only a guess: the caller confirms
+    each one by a docket query before using it, since "Walker v. State" names several opinions."""
+    toks = party_tokens(name)
+    if not toks or limit <= 0:
+        return []
+    scored, ents = [], {id(e): e for e in idx.values()}
+    for ent in ents.values():
+        if not_before and ent.get("date", "") < not_before:
+            continue
+        et = party_tokens(ent.get("title", ""))
+        ov = len(toks & et)
+        if ov:
+            scored.append((ov / len(toks | et), ov, ent.get("date", ""), ent["dockets"][0], ent))
+    scored.sort(key=lambda t: t[:4], reverse=True)
+    return [t[4] for t in scored[:limit]]
+
+
+def _ga_resolve(r, ga, text=None):
+    """Find a GA candidate's docket and official release date, without CourtListener REST. Mutates r:
+    docketNumber (every docket of the opinion), dateFiled (the official date), cl_dateFiled
+    (CourtListener's original, kept for audit), and pdf_url (the gasupreme.us PDF when the search feed
+    gave none). `ga` carries idx (the release index), known (seen | carded | held cluster ids),
+    deadline, today, and a stats Counter.
+
+    Docket: the candidate's own docketNumber; else the caption of its PDF ("No. S26G0149"); else a
+    caption guess against the release page confirmed by a docket search-feed query. Date: the release
+    page's date for the docket; else the PDF's "Decided:" line. A docket another KNOWN cluster carries
+    under the same date (CourtListener's original scrape of the same release) is a re-scrape.
+
+    Returns "resolved", "dup" (r["_ga_twin"] names the earlier cluster), "pending" (no text yet:
+    r["_ga_pending"] is set and pass 1 calls again once it has fetched the text), or "unresolved" (keeps CourtListener's date; on the
+    stuck date the card is flagged r["_ga_unverified"] and held from auto-publication)."""
+    cid = cluster_id_of(r)
+    r.pop("_ga_pending", None)
+    if "cl_dateFiled" not in r:
+        r["cl_dateFiled"] = (r.get("dateFiled") or "")[:10]
+    cl_date = r["cl_dateFiled"]
+    idx, dl, stats = ga.get("idx") or {}, ga.get("deadline"), ga["stats"]
+    dockets = _GA_DOCKET_RE.findall(str(r.get("docketNumber") or "").upper())
+    if text is None and r.get("pdf_url"):
+        t = pdf_text(r["pdf_url"], deadline=dl)
+        if _pdf_ok(t):
+            text = r["_text"] = t
+            # The court feed's GA snippet is only the NOTICE boilerplate; give the screen the caption
+            # and opening of the opinion instead, as every other court's snippet does.
+            r["snippet"] = re.sub(r"\s+", " ", t).strip()[:1500]
+    if text and not dockets:
+        dockets = official_ga.dockets_in_text(text)
+    peers = None
+    if not dockets and idx and not text and not r.get("_ga_guessed"):
+        r["_ga_guessed"] = True
+        for ent in _ga_name_guesses(r.get("caseName") or "", idx, cl_date, int(_sc("GA_NAME_GUESSES", 3))):
+            try:
+                p = ga_docket_peers(ent["dockets"][0], dl)
+            except Exception as e:
+                _dbg("ga docket lookup failed (%s)" % e)
+                continue
+            if cid in p:
+                dockets, peers = list(ent["dockets"]), p
+                stats["guessed"] += 1
+                break
+    if dockets:
+        r["docketNumber"] = ", ".join(dockets)
+    ent = next((idx[d] for d in dockets if d in idx), None)
+    date, source = "", ""
+    if ent:
+        date, source = ent["date"], "gasupreme.us"
+        if not r.get("pdf_url"):
+            r["pdf_url"] = ent["url"]       # the court's own PDF: free, and spares the REST text fallback
+    elif text:
+        date = official_ga.decided_date(text)
+        source = "Decided: line" if date else ""
+    if dockets and not r.get("_ga_dup_checked"):
+        r["_ga_dup_checked"] = True
+        if peers is None:
+            try:
+                peers = ga_docket_peers(dockets[0], dl)
+            except Exception as e:
+                _dbg("ga docket lookup failed (%s)" % e)
+                peers = {}
+        twins = sorted(p for p, pd in peers.items()
+                       if p != cid and p in ga["known"] and pd and pd in {date, cl_date})
+        if twins:
+            r["_ga_twin"] = twins[0]
+            stats["dups"] += 1
+            return "dup"
+    if date and date <= ga["today"]:
+        r["dateFiled"] = date
+        r["_ga_date_source"] = source
+        r["_ga_resolved"] = True
+        r.pop("_ga_unverified", None)
+        stats["dated"] += 1
+        return "resolved"
+    if not text:
+        r["_ga_pending"] = True
+        return "pending"
+    r["_ga_unverified"] = cl_date == _sc("GA_BOGUS_DATE_FILED", "2026-06-16")
+    stats["unresolved"] += 1
+    print("  ! ga: no official release date for %s (cluster %s, docket %s); keeping CourtListener's %s%s"
+          % ((r.get("caseName") or "")[:50], cid, r.get("docketNumber") or "?", cl_date or "(none)",
+             " and holding the card for review" if r["_ga_unverified"] else ""))
+    return "unresolved"
 
 
 def _drop_counts(skipped):
@@ -2469,6 +2760,12 @@ def _log_run(rec):
                 if fd:
                     f.write("- since floor dropped %d never-seen item(s): %s\n"
                             % (sum(fd.values()), ", ".join("%s=%d" % kv for kv in fd.items())))
+                ga = rec.get("ga") or {}
+                if ga:
+                    f.write("- ga intake: %d listed above the mark, backlog %d admitted / %d remain, "
+                            "%d re-dated, %d re-scrape(s) skipped, %d undated; mark %s\n"
+                            % (ga.get("found", 0), ga.get("admitted", 0), ga.get("remain", 0),
+                               ga.get("dated", 0), ga.get("dups", 0), ga.get("unresolved", 0), ga.get("mark")))
         except Exception as e:
             print("  . run summary write skipped: %s" % e)
 
@@ -2737,7 +3034,7 @@ def fable_review_pass(added, flagged, crosschecks, completeness, overruling_cids
 
 def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, completeness,
                       overruling_cids, pending_review, state, seen, evaluated, have, now_iso,
-                      treat_flags, fable_cleared=None, fable_verdicts=None):
+                      treat_flags, fable_cleared=None, fable_verdicts=None, state_changed=False):
     """Route this run's carded output into the two lanes and write each. Returns a counts dict
     {auto, held, treatments, wrote_auto, noop}.
 
@@ -2752,7 +3049,8 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
     false positive, in OPINIONS_FABLE_REVIEW=clear) is routed to AUTO instead, carrying its hold
     reasons so the auto commit records that it was Fable-cleared. `fable_verdicts` maps cluster_id
     -> the verdict dict for the review PR body. The Fable network pass already ran in main(), so
-    this stays pure of network and unit-tested (test_review.py)."""
+    this stays pure of network and unit-tested (test_review.py). `state_changed` says the caller
+    changed `state` in a way a no-op run must still persist (the GA high-water mark)."""
     flagged_map = dict(flagged)
     fable_cleared = fable_cleared or set()
     fable_verdicts = fable_verdicts or {}
@@ -2771,7 +3069,7 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
 
     if not added and not treat_events:
         seen_all = seen | evaluated | have
-        if seen_all != seen:
+        if seen_all != seen or state_changed:
             state["seen_clusters"] = sorted(seen_all)[-SEEN_CAP:]
             state["updated"] = now_iso
             safeio.atomic_write_json(STATE_PATH, stamp_pending_batches(state))
@@ -3019,7 +3317,54 @@ def main():
     # while the feed still carries them. Self-clearing: once one is re-carded it enters have/seen
     # (or is re-held into pending_review), so it falls out of this set on the next run.
     redraft_pending = review_store.load_redraft_ids() - seen - have - pending_review
-    cand, floor_dropped = _select_candidates(results, since, today, have, seen, pending_review, redraft_pending)
+    # Supreme Court of Georgia: list every cluster above the high-water mark by cluster id (free
+    # search feed), since CourtListener's stuck date_filed hides them from the dated court feed and
+    # the since floor. See the GA intake helpers above _drop_counts.
+    known = have | seen | pending_review
+    ga_mark, ga_found, ga_cov, ga_complete, ga_admitted, ga_remain = None, {}, None, False, [], []
+    ga_stats = {"dated": 0, "guessed": 0, "dups": 0, "unresolved": 0}
+    if GA_CL in COURTS:
+        try:
+            ga_mark = int(state["ga_high_water"]) if state.get("ga_high_water") else None
+        except (TypeError, ValueError):
+            ga_mark = None
+        if ga_mark is None:
+            ga_mark = _ga_seed_mark(entries, REJECT_PATH)
+            print("  . ga high-water mark initialized at cluster %d" % ga_mark)
+        ceiling = max([cluster_id_of(r) or 0 for r in results] + [ga_mark])
+        ga_found, ga_cov, ga_complete, ga_q = ga_enumerate(
+            ga_mark, ceiling, deadline=time.time() + int(_sc("GA_ENUM_BUDGET_SEC", 90)))
+        feed_ga = {cluster_id_of(r): r for r in results if r.get("court_id") == GA_CL and cluster_id_of(r)}
+        for c, it in list(ga_found.items()):
+            if c in feed_ga:
+                ga_found[c] = feed_ga[c]    # the court-feed copy carries the PDF enclosure
+            else:
+                results.append(it)
+        ga_admitted, ga_remain = _ga_backlog(ga_found, ga_mark, since, known,
+                                             int(_sc("GA_BACKLOG_PER_RUN", 8)))
+        print("  . ga discovery: %d cluster(s) above mark %d, %d never seen (%d feed quer%s%s)"
+              % (len(ga_found), ga_mark, sum(1 for c in ga_found if c not in known), ga_q,
+                 "y" if ga_q == 1 else "ies", "" if ga_complete else "; incomplete, listed to %s" % ga_cov),
+              flush=True)
+        print("  . ga backlog: %d admitted, %d remain" % (len(ga_admitted), len(ga_remain)), flush=True)
+    cand, floor_dropped = _select_candidates(results, since, today, have, seen, pending_review, redraft_pending,
+                                             exempt=set(ga_admitted), held_back=set(ga_remain))
+    # Date every GA candidate from the court's release page (or its PDF's "Decided:" line) BEFORE the
+    # sort and the OPINIONS_MAX cut, and set aside re-scrapes of a docket already seen or carded.
+    ga_ctx, ga_dups = None, []
+    if GA_CL in COURTS and any(r.get("court_id") == GA_CL for r in cand):
+        years = {(r.get("dateFiled") or "")[:4] for r in cand if r.get("court_id") == GA_CL} | {today[:4]}
+        ga_ctx = {"idx": _ga_release_index(years), "known": known, "today": today, "stats": ga_stats,
+                  "deadline": time.time() + int(_sc("GA_ENUM_BUDGET_SEC", 90))}
+        kept = []
+        for r in cand:
+            if r.get("court_id") == GA_CL:
+                st = _ga_resolve(r, ga_ctx)
+                if st == "dup":
+                    ga_dups.append(r)
+                    continue
+            kept.append(r)
+        cand = kept
     cand.sort(key=lambda r: (r.get("dateFiled") or "", cluster_id_of(r)), reverse=True)
     cand = cand[:MAX_RUN]
     print("since %s | candidates: %d | tiers: screen=%s pretriage=%s triage=%s summarize=%s%s"
@@ -3045,6 +3390,19 @@ def main():
     cl_deferred = 0                                # candidates deferred this run on the CourtListener budget
     consec = 0
     cfg_error = False                              # set on a ConfigError (auth/model/credit); forces a non-zero exit
+
+    def ga_dup_skip(r):
+        """A GA re-scrape: a second CourtListener cluster for a docket a seen or carded cluster already
+        carries (Rease 10975744 of 10875591). Skip it, mark it seen, and say so."""
+        cid, name = cluster_id_of(r), r.get("caseName") or ""
+        skipped.append((name, "duplicate of cluster %s (same Supreme Court of Georgia docket %s; cluster %s "
+                              "is a CourtListener re-scrape)" % (r.get("_ga_twin"), r.get("docketNumber"), cid)))
+        print("  ~ ga re-scrape duplicate: %s (cluster %s) == cluster %s, docket %s; marked seen"
+              % (name[:50], cid, r.get("_ga_twin"), r.get("docketNumber")))
+        evaluated.add(cid)
+
+    for r in ga_dups:
+        ga_dup_skip(r)
     # Party tokens of every carded case, for the screen override below. Cards with
     # fewer than two distinctive tokens can never reach the two-token threshold, so
     # drop them here.
@@ -3076,6 +3434,8 @@ def main():
             skipped.append((name, "unrecognized court id %s" % court_id)); return
         entry = assemble_entry(v, cid, name, court, areas, docket, date_filed, url,
                                _today_eastern())
+        if r.get("cl_dateFiled") and r["cl_dateFiled"] != entry["date"]:
+            entry["cl_date_filed"] = r["cl_dateFiled"]   # CourtListener's date, kept for audit (GA re-dating)
         synopsis = entry["synopsis"]; why = entry["why"]; disp = entry["disposition"]
         additional_holdings = entry.get("additional_holdings", [])
         if entry["court"] == "scotga":
@@ -3105,6 +3465,10 @@ def main():
             reasons.append("no disposition")
         if not synopsis or not why:
             reasons.append("empty synopsis or reason")
+        if r.get("_ga_unverified"):
+            reasons.append("official release date unverified: CourtListener dates every Supreme Court of "
+                           "Georgia release since 2026-06-30 as %s, and neither gasupreme.us nor the "
+                           "opinion's Decided: line gave a date" % entry["date"])
         if reasons:
             flagged.append((entry["name"], reasons))
         # Fidelity guards: defer to the one post-draft batch (OPINIONS_GUARD_BATCH), or run the
@@ -3187,7 +3551,7 @@ def main():
             # Phase 2: read the PDF enclosure first (static file on storage.courtlistener.com,
             # no REST quota, fast). Fall back to the REST API only when extraction is empty,
             # too short, or unusable, so the worst case degrades to the prior REST behavior.
-            text = pdf_text(r.get("pdf_url"), deadline=run_start + BUDGET_SEC)
+            text = r.pop("_text", "") or pdf_text(r.get("pdf_url"), deadline=run_start + BUDGET_SEC)
             deferred = False
             if _pdf_ok(text):
                 _dbg("text via pdf for %s (%d chars)" % (name, len(text)))
@@ -3222,6 +3586,22 @@ def main():
                 continue
             if not text:
                 skipped.append((name, "no opinion text available")); consec = 0; continue
+            if ga_ctx is not None and court_id == GA_CL and r.get("_ga_pending"):
+                # A GA candidate the pre-pass could not date (no PDF enclosure and no caption match):
+                # read its docket and "Decided:" line from the text just fetched.
+                ga_ctx["deadline"] = run_start + BUDGET_SEC
+                if _ga_resolve(r, ga_ctx, text=text) == "dup":
+                    ga_dup_skip(r); consec = 0; continue
+                date_filed = (r.get("dateFiled") or "")[:10]
+                docket = r.get("docketNumber") or ""
+                csig = _dup_sig(COURT_MAP.get(court_id) or court_id, date_filed, docket, name)
+                dup = next((nm for sig, nm in dedup_index if _same_case(csig, sig)), None)
+                if dup:
+                    skipped.append((name, "duplicate of carded case %r (same court and shared docket; "
+                                          "cluster %s is a twin or a corrected republish)" % (dup[:60], cid)))
+                    print("  ~ duplicate skip: %s  ==  %s  (cluster %s)" % (name[:50], dup[:50], cid))
+                    evaluated.add(cid); consec = 0
+                    continue
             time.sleep(0.4)
             # Tier 1.5: cheap full-read screen (Haiku) before the costly Sonnet triage. Drops
             # opinions whose full text shows they cannot belong, so the Sonnet read only ever
@@ -3616,6 +3996,31 @@ def main():
     os.makedirs(os.path.dirname(PR_PATH), exist_ok=True)
     open(PR_PATH, "w", encoding="utf-8").write(pr_body)
 
+    # Supreme Court of Georgia high-water mark: rise past every listed cluster this run settled, but
+    # stop below the lowest one still waiting or outstanding (see _ga_next_mark), so nothing above the
+    # mark is ever skipped. Written with the state in route_and_publish.
+    ga_rec, ga_state_changed = None, False
+    if ga_mark is not None:
+        resolved = known | evaluated | {int(e["cluster_id"]) for e in added if e.get("cluster_id")}
+        old_tries = {int(k): int(v) for k, v in (state.get("ga_backlog_tries") or {}).items()}
+        new_mark, new_tries, gave_up = _ga_next_mark(
+            ga_mark, ga_found, ga_cov, ga_complete, resolved, set(ga_remain), old_tries,
+            int(_sc("GA_BACKLOG_MAX_TRIES", 3)))
+        for c in gave_up:
+            print("  ! ga backlog: cluster %d still unresolved after %d run(s); the mark passes it (left unseen)"
+                  % (c, int(_sc("GA_BACKLOG_MAX_TRIES", 3))))
+        ga_state_changed = (new_mark != state.get("ga_high_water")
+                            or new_tries != old_tries)
+        state["ga_high_water"] = new_mark
+        if new_tries:
+            state["ga_backlog_tries"] = {str(c): n for c, n in sorted(new_tries.items())}
+        else:
+            state.pop("ga_backlog_tries", None)
+        print("  . ga high-water mark: %d -> %d" % (ga_mark, new_mark))
+        ga_rec = {"found": len(ga_found), "admitted": len(ga_admitted), "remain": len(ga_remain),
+                  "dated": ga_stats["dated"], "guessed": ga_stats["guessed"], "dups": ga_stats["dups"],
+                  "unresolved": ga_stats["unresolved"], "gave_up": len(gave_up), "mark": new_mark}
+
     # Per-run health record (every non-dry run, no-op or not), so the funnel's activity
     # and how much each tier discards are visible without reading raw logs.
     _log_rejections(rejections)
@@ -3629,6 +4034,7 @@ def main():
         "crosscheck_flags": sum(1 for c in crosschecks.values() if c["verdict"] == "flag"),
         "completeness_flags": sum(1 for c in completeness.values() if c["verdict"] == "flag"),
         "floor_dropped": floor_dropped,
+        **({"ga": ga_rec} if ga_rec else {}),
     })
 
     if sa_events:
@@ -3649,7 +4055,8 @@ def main():
     routed = route_and_publish(added, treat_events, clean_entries, flagged, crosschecks,
                                completeness, overruling_cids, pending_review, state, seen,
                                evaluated, have, now_iso, treat_flags,
-                               fable_cleared=fable_cleared, fable_verdicts=fable_verdicts)
+                               fable_cleared=fable_cleared, fable_verdicts=fable_verdicts,
+                               state_changed=ga_state_changed)
     print(cl_line)
     if routed["noop"]:
         _summary("No new opinions this run.", "%s \u00b7 since %s" % (cl_line, since))
