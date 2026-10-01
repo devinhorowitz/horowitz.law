@@ -454,10 +454,11 @@ def recall_drop(drop, ai, model=None):
     identically for every one left, so the caller stops auditing."""
     model = model or RECALL_MODEL
     try:
-        v = ai({"model": model, "max_tokens": 200, "system": _recall_system(drop.get("state") or DEFAULT_STATE),
-                "messages": [{"role": "user", "content":
-                              "BRIEF:\n%s\n\nTHE FILTER'S REASON FOR DROPPING IT:\n%s"
-                              % (drop.get("brief") or "", drop.get("reason") or "(none given)")}]},
+        v = ai(_with_effort("leg_recall", {
+            "model": model, "max_tokens": 200, "system": _recall_system(drop.get("state") or DEFAULT_STATE),
+            "messages": [{"role": "user", "content":
+                          "BRIEF:\n%s\n\nTHE FILTER'S REASON FOR DROPPING IT:\n%s"
+                          % (drop.get("brief") or "", drop.get("reason") or "(none given)")}]}),
                "leg-recall")
         suspect = v.get("suspect")
         if not isinstance(suspect, bool):
@@ -615,8 +616,9 @@ def screen_bill(bill, ai, state=DEFAULT_STATE, model=None):
     dropping a real law."""
     model = model or SCREEN_MODEL
     try:
-        v = ai({"model": model, "max_tokens": 256, "system": _screen_system(state),
-                "messages": [{"role": "user", "content": _bill_brief(bill, state)}]}, "leg-screen")
+        v = ai(_with_effort("leg_screen", {"model": model, "max_tokens": 256, "system": _screen_system(state),
+                                           "messages": [{"role": "user", "content": _bill_brief(bill, state)}]}),
+               "leg-screen")
     except Exception as e:
         _dbg("screen failed, keeping: %s" % e)
         return True, [], "screen-error-kept"
@@ -636,8 +638,9 @@ WRITER_ERROR = object()
 def _write_body(bill, state=DEFAULT_STATE, model=None):
     """The Messages body for one card write. Shared by the synchronous write_card() and the batch
     path (batch.from_body), so both build byte-identical requests."""
-    return {"model": model or WRITE_MODEL, "max_tokens": 900, "system": _write_system(state),
-            "messages": [{"role": "user", "content": _bill_brief(bill, state)}]}
+    return _with_effort("leg_write", {"model": model or WRITE_MODEL, "max_tokens": 900,
+                                      "system": _write_system(state),
+                                      "messages": [{"role": "user", "content": _bill_brief(bill, state)}]})
 
 
 def _write_verdict(v):
@@ -779,10 +782,18 @@ def discover(key, state=DEFAULT_STATE, fetch=None, today=None, seen=None, pollst
     return cands
 
 
+def _with_effort(role, body):
+    """`body` with `role`'s effort (siteconfig.MODEL_EFFORT) attached by update.with_effort, the
+    one gate every Anthropic request goes through (no effort for Haiku or an unconfirmed model).
+    Imported lazily, like _default_ai, so importing this module stays cheap."""
+    import update
+    return update.with_effort(role, body)
+
+
 def _default_ai(body, label="call"):
     """Default model seam: delegate to update.anthropic_json (same JSON contract).
-    Imported lazily so this module imports cleanly with no ANTHROPIC_API_KEY and so
-    tests, which inject their own `ai`, never pull update.py in."""
+    Imported lazily so this module imports cleanly with no ANTHROPIC_API_KEY. (The request
+    builders import update too, through _with_effort, to attach the role's effort.)"""
     import update
     return update.anthropic_json(body, label)
 

@@ -706,23 +706,54 @@ place a model id lives.
 
 ### Effort, and how model-watch judges a candidate
 
-Summarize and triage send an explicit reasoning effort, `output_config: {"effort": ...}`, taken from
-`siteconfig.MODEL_EFFORT` (keyed by tier: summarize and triage `high`, the two Haiku tiers none,
-since Haiku 4.5 rejects the parameter). `high` is what those tiers ran at before the setting
-existed, because it is their pinned models' API default. It is explicit because a default belongs
-to the model: the next Opus generation defaults to `medium`, and model-watch spent September 2026
-judging it at `medium` against an incumbent at `high` and calling the gap a regression.
+Every Anthropic request the repo makes sends an explicit reasoning effort,
+`output_config: {"effort": ...}`, taken from `siteconfig.MODEL_EFFORT`. That table is keyed by
+**role** (what the call is for), never by model id, and every request builder attaches its role's
+level through one function, `update.with_effort`:
+
+| Role(s) | Where | Model today | Effort |
+|---|---|---|---|
+| `summarize` (also the redraft of a vetoed case), `triage` | the funnel; `backfill`, `queue_cases`, `golden_check` | Opus 5, Sonnet 5 | `high` |
+| `screen`, `pretriage` | the funnel's Haiku tiers | Haiku 4.5 | none |
+| `guard_fidelity`, `guard_completeness` | the finish-time guards, sync and batched; `maintain` re-validation | Sonnet 5 | `high` |
+| `smell`, `treatment_audit`, `authority_audit` | the drop-reason audit (`smell_check` too), the escalated audits | Opus 5 | `high` |
+| `fable_review` | Fable review of held cards and of published cards (`maintain`) | Fable 5 | `high` |
+| `treatment` | the treatment watch's classifier | Sonnet 5 | `high` |
+| `courtrules_extract`, `ethics_extract`, `leg_recall`, `leg_write`, `reg_write` | the rule, ethics, legislation and regulation watches | Opus 5 | `high` |
+| `leg_screen`, `reg_screen` | the legislation and regulation screens | Haiku 4.5 | none |
+| `diagnose`, `dep_review` | repository maintenance | Fable 5 | `high` |
+
+Every `high` is the documented API default of the model that role uses today, and sending a model
+its default is the same as omitting it, so the requests behave exactly as they did before the
+setting existed; the Haiku roles send nothing, as before, since Haiku 4.5 rejects the parameter. It
+is explicit because a default belongs to the model: the next Opus generation defaults to `medium`,
+and model-watch spent September 2026 judging it at `medium` against an incumbent at `high` and
+calling the gap a regression. The funnel tiers were pinned first; until the rest were, an Opus or
+Sonnet bump would have quietly moved the fidelity guards, the audits and the watch writers to the
+new model's default too.
+
+`update.with_effort` merges the level into any `output_config` a body already carries (so a future
+`format` or `task_budget` survives), returns the body unchanged when nothing is sent, and the batch
+path carries the field as is (`batch.from_body` passes every extra key through). `test_effort.py`
+drives every builder, checks each reads its own role, and scans `scripts/` so a request body written
+anywhere without `with_effort` fails CI. Raising a level is not free: `max_tokens` caps thinking plus
+the answer together, and several calls run on small budgets (the legislation recall audit at 200,
+the screens at 256, treatment at 400), so re-check `max_tokens` before raising any role above `high`.
+
 `update.effort_supported` sends it only where support is confirmed. `update.EFFORT_DOCUMENTED` lists
 the models the bundled docs cover, with the levels each accepts (Opus 4.5 through 5.5, Sonnet 4.6 and
-5, `xhigh` from Opus 4.7 and Sonnet 5, none on Haiku 4.5). A model it does not cover, such as a newer
-Sonnet candidate, is never extrapolated to: it gets an effort only if the Models API's
-`capabilities.effort` for that id confirms the level (looked up once per process). If the API reports
-no capabilities either, no effort is sent and the run logs that the comparison may be unmatched.
+5, Fable 5 and 5.1, `xhigh` from Opus 4.7 and Sonnet 5, none on Haiku 4.5). A model it does not
+cover, such as a newer Sonnet candidate, is never extrapolated to: it gets an effort only if the
+Models API's `capabilities.effort` for that id confirms the level (looked up once per process). If
+the API reports no capabilities either, no effort is sent and the run logs that the comparison may
+be unmatched.
 
 `model-watch` (daily) bumps the pins on the runner and runs `golden_check.py check|summarize --memo`
 through the same request builders, so the candidate runs at the same effort as the incumbent.
 Before that it checks the documented rule against the Models API's `capabilities.effort` for every
-pin and candidate it covers, and stops as a broken run if they disagree. The verdict is remembered in
+pin and candidate it covers, at the level of every role that tier serves (`model_watch.TIER_ROLES`:
+the funnel tiers, the guards and audits, and the watches, since a bump moves them all), and stops as
+a broken run if they disagree. The verdict is remembered in
 `model_watch_state.json` under a hash of the request bodies (models, prompts, max_tokens, effort)
 and the golden set, so an unchanged candidate is judged once, not daily; any change to those
 inputs buys one fresh evaluation. Each verdict is posted once to the **Model watch: candidate model

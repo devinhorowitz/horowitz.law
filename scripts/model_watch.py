@@ -41,7 +41,8 @@ MATCHED EFFORT. A candidate is judged through update.py's own request builders, 
 effort siteconfig.MODEL_EFFORT names for each tier, so the candidate and the incumbent run at the
 same level rather than at their own API defaults (which differ across generations). Before
 anything is bumped, every pin and candidate is checked against the Models API's own
-capabilities.effort: if the documented rule (update.EFFORT_DOCUMENTED) covers a model and disagrees
+capabilities.effort, at the level of every role its tier serves (the funnel tiers, the guards and
+audits, and the watches, TIER_ROLES), since a bump moves all of them: if the documented rule (update.EFFORT_DOCUMENTED) covers a model and disagrees
 with what the API says it accepts, the run stops as a broken run (exit 3) instead of evaluating an
 unfair or 400-bound comparison. A model the docs do not cover (a newer generation) is sent effort
 only when the API's capabilities.effort confirms it; when the API reports nothing either, it is
@@ -278,8 +279,18 @@ def apply_bumps(upgrades):
     return changed
 
 
-# Which request roles each watched tier serves, for the effort cross-check below.
-TIER_ROLES = {"opus": ("summarize",), "sonnet": ("triage",), "haiku": ("screen", "pretriage")}
+# Which request roles (siteconfig.MODEL_EFFORT keys) each watched tier serves by default, for the
+# effort cross-check below. A bump moves every one of them to the new model -- the funnel tiers, the
+# guards and audits, and the four watches that ride along in PIN_FILES -- so each must be confirmed
+# to accept the level it asks for, not just the tier golden_check judges. The Fable roles
+# (fable_review, diagnose, dep_review) are absent for the same reason their pins are absent from
+# PIN_FILES: a funnel bump never touches them. test_model_watch checks this covers every other role.
+TIER_ROLES = {
+    "opus":   ("summarize", "smell", "treatment_audit", "authority_audit", "courtrules_extract",
+               "ethics_extract", "leg_recall", "leg_write", "reg_write"),
+    "sonnet": ("triage", "guard_fidelity", "guard_completeness", "treatment"),
+    "haiku":  ("screen", "pretriage", "leg_screen", "reg_screen"),
+}
 
 
 def _api_effort(caps, level):
@@ -288,8 +299,8 @@ def _api_effort(caps, level):
 
 
 def _effort_review(models, upgrades, pins=None):
-    """(conflicts, unconfirmed) for every pin and candidate, at the level siteconfig.MODEL_EFFORT
-    asks of its tier. Also hands each model's listed capabilities to update, so this process's
+    """(conflicts, unconfirmed) for every pin and candidate, at each level siteconfig.MODEL_EFFORT
+    asks of a role its tier serves (TIER_ROLES), one line per model and level. Also hands each model's listed capabilities to update, so this process's
     effort decisions use what the API just reported rather than fetching it again.
 
     conflicts: the documented rule (update.effort_documented) covers the model and the Models API
@@ -306,12 +317,16 @@ def _effort_review(models, upgrades, pins=None):
     conflicts, unconfirmed = [], []
     for tier, mid in sorted(ids):
         entry = by_id.get(mid) or next((m for m in models if _canon(m["id"]) == _canon(mid)), None)
-        if entry is not None:
-            update.remember_capabilities(mid, entry.get("caps"))
+        if entry is None:
+            continue
+        update.remember_capabilities(mid, entry.get("caps"))
+        by_level = {}   # level -> the roles on this tier that ask for it: one line per (model, level)
         for role in TIER_ROLES.get(tier, ()):
             level = siteconfig.MODEL_EFFORT.get(role, "")
-            if not level or entry is None:
-                continue
+            if level:
+                by_level.setdefault(level, []).append(role)
+        for level, roles in sorted(by_level.items()):
+            role = ", ".join(roles)
             api = _api_effort(entry.get("caps"), level)
             doc = update.effort_documented(mid, level)
             if doc is None:

@@ -372,8 +372,8 @@ def classify_request(card, citing_name, citing_text):
     body = passage(citing_text, card.get("name", "")) or "(no text available)"
     user = ("CITED CASE (A):\n%s\n\nLATER OPINION THAT CITES IT (B) -- %s:\n%s"
             % (prop, citing_name, body))
-    return {"model": MODEL, "max_tokens": 400, "system": TREATMENT_SYSTEM,
-            "messages": [{"role": "user", "content": user}]}
+    return update.with_effort("treatment", {"model": MODEL, "max_tokens": 400, "system": TREATMENT_SYSTEM,
+                                            "messages": [{"role": "user", "content": user}]})
 
 
 def classify(card, citing_name, citing_text):

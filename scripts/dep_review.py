@@ -140,19 +140,20 @@ SYSTEM = (
 
 
 def build_request(dep, old, new, pr_body, usage, model=MODEL):
-    """The Messages API body for one review. Pure: no network, no env."""
+    """The Messages API body for one review. No network for a documented model (the effort
+    gate, update.with_effort, consults the Models API only for a model its table does not cover)."""
     user = (
         "HOW THIS REPO USES `%s`:\n\n%s\n\n---\n\n"
         "DEPENDABOT MAJOR BUMP: %s from %s to %s\n\n"
         "PR body (release notes / changelog follow):\n%s"
         % (dep, usage, dep, old, new, (pr_body or "(no PR body)"))
     )
-    return {
+    return update.with_effort("dep_review", {
         "model": model,
         "max_tokens": 1500,
         "system": SYSTEM,
         "messages": [{"role": "user", "content": user}],
-    }
+    })
 
 
 def _as_list(v):

@@ -318,8 +318,9 @@ def screen_doc(doc, ai, model=None):
     keep the rule (route it to the writer) rather than silently dropping a real regulation."""
     model = model or SCREEN_MODEL
     try:
-        v = ai({"model": model, "max_tokens": 256, "system": SCREEN_SYSTEM,
-                "messages": [{"role": "user", "content": _doc_brief(doc)}]}, "reg-screen")
+        v = ai(_with_effort("reg_screen", {"model": model, "max_tokens": 256, "system": SCREEN_SYSTEM,
+                                           "messages": [{"role": "user", "content": _doc_brief(doc)}]}),
+               "reg-screen")
     except Exception as e:
         _dbg("screen failed, keeping: %s" % e)
         return True, [], "screen-error-kept"
@@ -337,8 +338,8 @@ WRITER_ERROR = object()
 def _write_body(doc, model=None):
     """The Messages body for one card write. Shared by the synchronous write_card() and the batch
     path (batch.from_body), so both build byte-identical requests."""
-    return {"model": model or WRITE_MODEL, "max_tokens": 900, "system": WRITE_SYSTEM,
-            "messages": [{"role": "user", "content": _doc_brief(doc)}]}
+    return _with_effort("reg_write", {"model": model or WRITE_MODEL, "max_tokens": 900, "system": WRITE_SYSTEM,
+                                      "messages": [{"role": "user", "content": _doc_brief(doc)}]})
 
 
 def _write_verdict(v):
@@ -407,6 +408,14 @@ def _since(today=None, lookback=None):
     today = today or datetime.date.today()
     lookback = LOOKBACK_DAYS if lookback is None else lookback
     return (today - datetime.timedelta(days=lookback)).isoformat()
+
+
+def _with_effort(role, body):
+    """`body` with `role`'s effort (siteconfig.MODEL_EFFORT) attached by update.with_effort, the
+    one gate every Anthropic request goes through (no effort for Haiku or an unconfirmed model).
+    Imported lazily, like _default_ai, so importing this module stays cheap."""
+    import update
+    return update.with_effort(role, body)
 
 
 def _default_ai(body, label="call"):

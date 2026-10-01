@@ -19,9 +19,10 @@ expensive model only ever touches confirmed keepers:
   Tier 3  SUMMARIZE(Opus)   reads the FULL opinion plus the triage note and writes the
                             public-facing card in the house style. Final backstop: it can
                             still decline. No tier sends an extended-thinking budget;
-                            summarize and triage send an explicit effort
-                            (siteconfig.MODEL_EFFORT), so a model bump cannot silently
-                            move them to the new model's default effort.
+                            every Anthropic request (these tiers, the guards, the audits,
+                            the watches) sends an explicit effort where its model takes one
+                            (siteconfig.MODEL_EFFORT, attached by with_effort), so a model
+                            bump cannot silently move a call to the new model's default.
 
 Auto-lane keepers are appended to opinions.json, opinions_state.json is updated, and
 opinions.html/opinions.xml are re-rendered for a straight-to-main publish; guard-flagged
@@ -176,16 +177,18 @@ OUT_TOKENS   = int(os.environ.get("OPINIONS_MAX_TOKENS", "4096"))
 # is actually written, so a cap that is never reached costs nothing; a tight one buys only this.
 TRIAGE_TOKENS = int(os.environ.get("OPINIONS_TRIAGE_MAX_TOKENS", "8000"))
 
-# ---- Reasoning effort per tier (output_config.effort) ----
-# The level each tier asks for lives in siteconfig.MODEL_EFFORT (see the note there for why it is
-# explicit). This is the other half: WHICH models accept the parameter at all. Sending it to one
+# ---- Reasoning effort per request role (output_config.effort) ----
+# The level each role asks for lives in siteconfig.MODEL_EFFORT (see the note there for why it is
+# explicit), and every request builder attaches it through with_effort() below. This is the other
+# half: WHICH models accept the parameter at all. Sending it to one
 # that does not is a 400, and sending it to one side of a comparison but not the other makes the
 # comparison unmatched, so effort is sent only where support is CONFIRMED, by one of two sources:
 #
 #   1. The documented rule, EFFORT_DOCUMENTED: the models the API docs this was written against
 #      cover, each with the levels it accepts (effort is GA on Opus from 4.5 and Sonnet from 4.6;
 #      xhigh arrived with Opus 4.7 and Sonnet 5; Opus 4.5 has no xhigh or max; Haiku 4.5 rejects
-#      it). A version OLDER than a family's first documented one is documented as "no".
+#      it; Fable 5 and 5.1 take the full ladder). A version OLDER than a family's first documented
+#      one is documented as "no".
 #   2. For any model the table does not cover (a newer generation such as a Sonnet 5.5 candidate,
 #      or a family it has never heard of): the Models API's own capabilities.effort for that id,
 #      fetched once per process. Extrapolating "Sonnet 4.6+ takes effort" to a version nobody
@@ -202,8 +205,14 @@ EFFORT_DOCUMENTED = {
              (4, 8): EFFORT_LEVELS, (5, 0): EFFORT_LEVELS, (5, 5): EFFORT_LEVELS},
     "sonnet": {(4, 6): _EFFORT_NO_XHIGH, (5, 0): EFFORT_LEVELS},
     "haiku": {(4, 5): ()},
+    # Fable 5 is documented to take effort through `max` (model-migration.md, Effort parameter: "max is
+    # supported on Fable 5, ..."), Fable 5.1 takes the full ladder ("Supported at launch:
+    # output_config.effort (low/medium/high/xhigh/max)") and is documented as the "same API surface as
+    # Claude Fable 5" (models.md); both default to `high`. Listing them keeps the Fable calls (held-card
+    # review, diagnose, dep_review) off the Models API lookup.
+    "fable": {(5, 0): EFFORT_LEVELS, (5, 1): EFFORT_LEVELS},
 }
-_MODEL_VERSION = re.compile(r"^claude-(opus|sonnet|haiku)-(\d{1,2})(?:-(\d{1,2}))?(?:-\d{8})?$")
+_MODEL_VERSION = re.compile(r"^claude-(opus|sonnet|haiku|fable)-(\d{1,2})(?:-(\d{1,2}))?(?:-\d{8})?$")
 MODELS_API = "https://api.anthropic.com/v1/models/"
 
 for _role, _lvl in siteconfig.MODEL_EFFORT.items():
@@ -311,6 +320,22 @@ def effort_params(role, model):
     into the request builders below, so the synchronous and the batch paths send the same thing."""
     level = effort_level(role, model)
     return {"output_config": {"effort": level}} if level else {}
+
+
+def with_effort(role, body):
+    """`body` (a Messages request) with `role`'s effort for body["model"] added, the one way every
+    request builder in the pipeline attaches effort (test_effort enumerates them). It MERGES into
+    an output_config the body already carries, so a builder that also sets output_config.format (or
+    task_budget) keeps it; a bare `**effort_params(...)` spread would replace the whole object. When
+    no effort is sent (Haiku, a disabled "" pin, an unconfirmed model) the body comes back unchanged,
+    so a key that is absent stays absent. Returns a new dict; the caller's is not mutated."""
+    out = dict(body)
+    eff = effort_params(role, out.get("model"))
+    if eff:
+        oc = dict(out.get("output_config") or {})
+        oc.update(eff["output_config"])
+        out["output_config"] = oc
+    return out
 DRY_RUN      = os.environ.get("DRY_RUN", "") in ("1", "true", "True", "yes")
 DEBUG        = os.environ.get("OPINIONS_DEBUG", "") in ("1", "true", "True", "yes")
 BUDGET_SEC   = int(os.environ.get("OPINIONS_BUDGET_SEC", "480"))
@@ -1847,8 +1872,8 @@ def clip(text, limit=None):
 def screen_request(name, docket, snippet):
     """The Messages body for the tier-1 excerpt screen (golden_check fingerprints it)."""
     user = "Case name: %s\nDocket: %s\nOpening excerpt:\n%s" % (name, docket, (snippet or "")[:1500])
-    return {"model": SCREEN_MODEL, "max_tokens": 256, "system": SCREEN_SYSTEM,
-            "messages": [{"role": "user", "content": user}], **effort_params("screen", SCREEN_MODEL)}
+    return with_effort("screen", {"model": SCREEN_MODEL, "max_tokens": 256, "system": SCREEN_SYSTEM,
+                                  "messages": [{"role": "user", "content": user}]})
 
 
 def screen(name, docket, snippet):
@@ -1858,8 +1883,8 @@ def screen(name, docket, snippet):
 def pretriage_request(name, docket, text):
     """The Messages body for the tier-1.5 full-read screen (golden_check fingerprints it)."""
     user = "Case name: %s\nDocket: %s\n\nFULL OPINION:\n%s" % (name, docket, clip(text))
-    return {"model": PRETRIAGE_MODEL, "max_tokens": 256, "system": PRETRIAGE_SYSTEM,
-            "messages": [{"role": "user", "content": user}], **effort_params("pretriage", PRETRIAGE_MODEL)}
+    return with_effort("pretriage", {"model": PRETRIAGE_MODEL, "max_tokens": 256, "system": PRETRIAGE_SYSTEM,
+                                     "messages": [{"role": "user", "content": user}]})
 
 
 def pretriage(name, docket, text):
@@ -1874,8 +1899,8 @@ def triage_request(name, docket, text, feed_index=""):
         user += ("\n\nCASES TO WATCH (id: name). If THIS opinion treats any of them "
                  "negatively, report them in `treats` (low threshold; a later step confirms):\n"
                  + feed_index)
-    return {"model": TRIAGE_MODEL, "max_tokens": TRIAGE_TOKENS, "system": TRIAGE_SYSTEM,
-            "messages": [{"role": "user", "content": user}], **effort_params("triage", TRIAGE_MODEL)}
+    return with_effort("triage", {"model": TRIAGE_MODEL, "max_tokens": TRIAGE_TOKENS, "system": TRIAGE_SYSTEM,
+                                  "messages": [{"role": "user", "content": user}]})
 
 
 def triage(name, docket, text, feed_index=""):
@@ -1972,8 +1997,9 @@ def smell_request(items):
              % (i + 1, it.get("court") or "?", it.get("date") or "?",
                 it.get("name") or "(unnamed)", (it.get("reason") or "").strip() or "(none given)")
              for i, it in enumerate(items)]
-    return {"model": SMELL_MODEL, "max_tokens": SMELL_TOKENS, "system": SMELL_SYSTEM,
-            "messages": [{"role": "user", "content": "CASES DROPPED BY THE JUNIOR REVIEWER:\n" + "\n".join(lines)}]}
+    return with_effort("smell", {"model": SMELL_MODEL, "max_tokens": SMELL_TOKENS, "system": SMELL_SYSTEM,
+                                 "messages": [{"role": "user", "content": "CASES DROPPED BY THE JUNIOR REVIEWER:\n"
+                                               + "\n".join(lines)}]})
 
 
 SMELL_CHUNK = 40   # reasons per request; keeps each verdict list well inside the 2000-token budget
@@ -2074,8 +2100,8 @@ def summarize_request(court_id, name, docket, date_filed, text, note, cl_status=
             "Triage note (what a prior reviewer flagged as relevant): %s\n\n"
             "OPINION TEXT (the middle may be omitted for length):\n%s"
             % (court_id, name, docket, date_filed, cl_status or "(unknown)", note or "(none)", clip(text)))
-    return {"model": MODEL, "max_tokens": OUT_TOKENS, "system": SYSTEM,
-            "messages": [{"role": "user", "content": user}], **effort_params("summarize", MODEL)}
+    return with_effort("summarize", {"model": MODEL, "max_tokens": OUT_TOKENS, "system": SYSTEM,
+                                     "messages": [{"role": "user", "content": user}]})
 
 
 def summarize(court_id, name, docket, date_filed, text, note, cl_status=""):
@@ -2114,8 +2140,9 @@ def treatment_audit(new_name, new_text, card):
         card.get("name", ""), card.get("synopsis", ""), card.get("why", ""))
     user = ("FEED CARD (A):\n%s\n\nLATER OPINION THAT CITES IT (B) -- %s:\n%s"
             % (prop, new_name, clip(new_text)))
-    return anthropic_json({"model": AUDIT_MODEL, "max_tokens": 700, "system": AUDIT_SYSTEM,
-                           "messages": [{"role": "user", "content": user}]}, "treatment-audit")
+    return anthropic_json(with_effort("treatment_audit", {
+        "model": AUDIT_MODEL, "max_tokens": 700, "system": AUDIT_SYSTEM,
+        "messages": [{"role": "user", "content": user}]}), "treatment-audit")
 
 
 AUTHORITY_AUDIT_SYSTEM = (
@@ -2141,8 +2168,9 @@ def authority_audit(new_name, new_text, authority_name):
     model and the same adverse-kinds vocabulary."""
     user = ("AUTHORITY (A): %s\n\nLATER OPINION THAT CITES IT (B) -- %s:\n%s"
             % (authority_name, new_name, clip(new_text)))
-    return anthropic_json({"model": AUDIT_MODEL, "max_tokens": 500, "system": AUTHORITY_AUDIT_SYSTEM,
-                           "messages": [{"role": "user", "content": user}]}, "authority-audit")
+    return anthropic_json(with_effort("authority_audit", {
+        "model": AUDIT_MODEL, "max_tokens": 500, "system": AUTHORITY_AUDIT_SYSTEM,
+        "messages": [{"role": "user", "content": user}]}), "authority-audit")
 
 
 CROSSCHECK_SYSTEM = (
@@ -2464,6 +2492,9 @@ def _guard_spec(kind):
     raise ValueError("unknown guard kind %r" % kind)
 
 
+GUARD_ROLES = {"fidelity": "guard_fidelity", "completeness": "guard_completeness"}   # siteconfig.MODEL_EFFORT keys
+
+
 def guard_request(kind, name, text, entry):
     """Build one guard's Messages body plus the text a flag must quote to be grounded (the
     DRAFTED summary for fidelity, the FULL OPINION for completeness). One source of truth for
@@ -2478,8 +2509,8 @@ def guard_request(kind, name, text, entry):
     opinion = clip(text)
     user = ("Case name: %s\nDisposition as drafted: %s\n\nDRAFTED SUMMARY:\n%s\n\nFULL OPINION:\n%s"
             % (name, entry.get("disposition") or "(none stated)", drafted, opinion))
-    body = {"model": model, "max_tokens": GUARD_TOKENS, "system": system,
-            "messages": [{"role": "user", "content": user}]}
+    body = with_effort(GUARD_ROLES[kind], {"model": model, "max_tokens": GUARD_TOKENS, "system": system,
+                                           "messages": [{"role": "user", "content": user}]})
     return body, (drafted if kind == "fidelity" else opinion)
 
 
