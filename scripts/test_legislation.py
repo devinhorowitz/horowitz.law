@@ -358,6 +358,193 @@ def test_recall(check, L, make_ai, fake_fetch, BILLS):
           "failed audits, ConfigError, retry cap)")
 
 
+def test_carry(check, L, make_ai, fake_fetch):
+    """A write batch still running at its deadline is CARRIED, not abandoned (run 36318024609 paid for
+    9 writes it never recorded). The next run collects it first and applies each result ONLY to the
+    bill and version its custom_id names; an unusable or mismatched result re-queues that bill."""
+    import contextlib
+    import datetime
+    import io
+    import time
+    import batch as B
+    import watchbatch as W
+    print("carried write batches:")
+    today = datetime.date(2026, 7, 17)
+    cid111, cid222 = L._carry_cid("111", "h-sb68-v1"), L._carry_cid("222", "h-sb69-v1")
+    check("the custom_id names the bill AND its version", cid111 == "111-hsb68v1")
+    check("the custom_id is a valid batch id even for an odd hash",
+          B.CUSTOM_ID_RE.match(L._carry_cid("9", "a:b/c" * 30)) is not None)
+    screened = []
+
+    def screen(body):
+        txt = body["messages"][0]["content"]
+        screened.append(txt)
+        relevant = "appropriations" not in txt.lower() and "budget" not in txt.lower()
+        return {"relevant": relevant, "areas": ["damages"], "reason": "x"}
+
+    ai = make_ai({"leg-screen": screen, "leg-recall": {"suspect": False, "note": "drop stands"}})
+    real = (B.run, B.status, B.collect, L._load_seen)
+
+    def keep(syn):
+        return {"ok": True, "text": json.dumps({"keep": True, "areas": ["damages"], "synopsis": syn,
+                                                "impact": "i", "effective_date": ""})}
+
+    def go(book, **kw):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            out = L.run(key="GOODKEY", fetch=fake_fetch, ai=ai, states=["GA"], today=today,
+                        batch_enabled=True, carry=book, **kw)
+        return out, buf.getvalue()
+
+    def screened_bills():
+        return {t for t in screened if "SB 68" in t or "SB 69" in t}
+
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "watch_batches.json")
+            # ---- 1. the write batch is still running at the deadline: carry it ----
+            sent = []
+
+            def slow(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+                sent.extend(r["custom_id"] for r in reqs)
+                on_submit("msgbatch_A")
+                raise B.BatchTimeout("msgbatch_A", "batch msgbatch_A still in_progress at deadline")
+
+            B.run = slow
+            book = W.CarryBook.load("legislation", persist=True, path=path)
+            (cards, _notes, seen), out = go(book)
+            book.save()
+            disk = W.load_carries("legislation", path)
+            check("deferral: no cards, and the paid batch is carried",
+                  cards == [] and [r["id"] for r in disk] == ["msgbatch_A"])
+            check("deferral: the carry names each bill and version it covers",
+                  set(disk[0]["items"]) == {cid111, cid222} == set(sent))
+            item = disk[0]["items"][cid111]
+            check("deferral: the carried item holds what a card needs, and the prior seen hash",
+                  item["bid"] == "111" and item["ch"] == "h-sb68-v1" and item["prev"] is None
+                  and item["detail"]["title"].startswith("Tort reform") and disk[0]["at"])
+            check("deferral: the carried bills stay un-seen; the settled screen drop is seen",
+                  "111" not in seen and "222" not in seen and "444" in seen)
+            check("deferral: the carrying line is logged",
+                  "  . carrying 1 batch(es) to next run: msgbatch_A" in out, out)
+
+            # ---- 2. next run, the batch is STILL running: leave its bills alone ----
+            B.status = lambda bid, label="batch": {"id": bid, "processing_status": "in_progress"}
+
+            def no_batch(*_a, **_kw):
+                raise AssertionError("nothing should be submitted")
+
+            B.run = no_batch
+            screened.clear()
+            book = W.CarryBook.load("legislation", persist=True, path=path)
+            (cards, notes, seen), out = go(book)
+            check("in flight: the carried bills are not screened again", not screened_bills(), str(screened))
+            check("in flight: nothing is re-submitted, nothing carded, nothing marked seen",
+                  cards == [] and "111" not in seen and "222" not in seen)
+            check("in flight: the carry is kept", [r["id"] for r in book.carries] == ["msgbatch_A"])
+            check("in flight: the run says so", any("still in a carried write batch" in n for n in notes))
+
+            # ---- 3. next run, the batch has ENDED: apply only the matching ids ----
+            B.status = lambda bid, label="batch": {"id": bid, "processing_status": "ended", "results_url": "u"}
+            B.collect = lambda obj, label="batch": {
+                cid111: keep("CARRIED synopsis."),
+                cid222: {"ok": False, "type": "expired"},
+                "999-hzzz": keep("A stray result for a bill this carry never covered."),
+            }
+            fresh = []
+
+            def fresh_batch(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+                fresh.extend(r["custom_id"] for r in reqs)
+                return {r["custom_id"]: {"ok": True, "text": json.dumps({"keep": False})} for r in reqs}
+
+            B.run = fresh_batch
+            screened.clear()
+            book = W.CarryBook.load("legislation", persist=True, path=path)
+            (cards, notes, seen), out = go(book)
+            by_id = {c["bill_id"]: c for c in cards}
+            check("collected: the carried card is applied to its own bill",
+                  by_id.get(111, {}).get("synopsis") == "CARRIED synopsis.")
+            check("collected: the applied bill is neither screened nor written again",
+                  not any("SB 68" in t for t in screened) and cid111 not in fresh, str(screened))
+            check("collected: the expired result's bill is re-queued (screened and written fresh)",
+                  any("SB 69" in t for t in screened) and set(fresh) == {cid222}, str(fresh))
+            check("collected: both bills reach a definitive outcome and are seen",
+                  seen.get("111") == "h-sb68-v1" and seen.get("222") == "h-sb69-v1")
+            check("collected: a stray id in the results is never applied", 999 not in by_id)
+            check("collected: the per-batch line reports applied and re-queued",
+                  "  . collected carried batch msgbatch_A (1 results applied, 1 re-queued)" in out, out)
+            check("collected: the carry is gone once collected", book.carries == [])
+
+            # ---- 4. the bill MOVED after the batch was sent: the old card is not applied ----
+            stale_cid = L._carry_cid("111", "h-sb68-OLD")
+            stale = [{"id": "msgbatch_S", "at": W._iso(time.time()), "items": {stale_cid: {
+                "bid": "111", "ch": "h-sb68-OLD", "state": "GA", "areas": [], "prev": None,
+                "detail": {"bill_id": 111, "number": "SB 68", "title": "old"}}}}]
+            B.collect = lambda obj, label="batch": {stale_cid: keep("STALE synopsis.")}
+
+            def write_batch(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+                fresh.extend(r["custom_id"] for r in reqs)
+                return {r["custom_id"]: keep("Fresh synopsis.") for r in reqs}
+
+            B.run = write_batch
+            fresh.clear()
+            screened.clear()
+            (cards, _notes, seen), out = go(W.CarryBook("legislation", stale))
+            syn = {c["bill_id"]: c["synopsis"] for c in cards}
+            check("moved: the stale carried card is not applied", "STALE synopsis." not in syn.values())
+            check("moved: the current version is screened and written as usual",
+                  syn.get(111) == "Fresh synopsis." and cid111 in fresh and any("SB 68" in t for t in screened),
+                  "%r %r %r" % (syn, fresh, screened))
+            check("moved: reported as re-queued",
+                  "msgbatch_S (0 results applied, 1 re-queued)" in out, out)
+
+            # ---- 5. settled since the batch was sent (seen moved): not applied ----
+            L._load_seen = lambda: {"111": "h-sb68-v0"}
+            settled = [{"id": "msgbatch_P", "at": W._iso(time.time()), "items": {cid111: {
+                "bid": "111", "ch": "h-sb68-v1", "state": "GA", "areas": [], "prev": "h-sb68-older",
+                "detail": {"bill_id": 111, "number": "SB 68", "title": "t"}}}}]
+            B.collect = lambda obj, label="batch": {cid111: keep("PREV-MISMATCH synopsis.")}
+            fresh.clear()
+            (cards, _notes, _seen), out = go(W.CarryBook("legislation", settled))
+            check("settled since: a carry whose prior seen hash no longer matches is re-queued",
+                  "PREV-MISMATCH synopsis." not in {c["synopsis"] for c in cards}
+                  and cid111 in fresh and "msgbatch_P (0 results applied, 1 re-queued)" in out, out)
+            L._load_seen = real[3]
+
+            # ---- 6. a carry too old to collect is dropped and its bills processed again ----
+            polled = []
+            B.status = lambda bid, label="batch": polled.append(bid) or {"processing_status": "ended"}
+            old = [{"id": "msgbatch_OLD", "at": W._iso(time.time() - 30 * 86400), "items": {
+                cid111: {"bid": "111", "ch": "h-sb68-v1", "prev": None, "detail": {"bill_id": 111}}}}]
+            fresh.clear()
+            book = W.CarryBook("legislation", old)
+            (cards, _notes, _seen), out = go(book)
+            check("expired: the old carry is dropped with a log line, never polled",
+                  "dropping carried batch msgbatch_OLD" in out and polled == [] and book.carries == [], out)
+            check("expired: its bill is processed again as usual", cid111 in fresh)
+
+            # ---- 7. the step budget shortens the wait and stops the screen ----
+            seen_deadline = []
+
+            def capture(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+                seen_deadline.append(deadline)
+                return {r["custom_id"]: keep("ok.") for r in reqs}
+
+            B.run = capture
+            end = time.time() + 900
+            go(W.CarryBook("legislation"), budget=W.Budget(end))
+            check("budget: the batch deadline is the step's end, not the watch's own 30 minutes",
+                  seen_deadline and seen_deadline[0] == end and L.BATCH_SEC > 900, str(seen_deadline))
+            seen_deadline.clear()
+            screened.clear()
+            (cards, notes, seen), _out = go(W.CarryBook("legislation"), budget=W.Budget(time.time() + 5))
+            check("budget: with the step nearly out of time, nothing is screened or sent",
+                  screened == [] and seen_deadline == [] and cards == [] and seen == {})
+            check("budget: and the run says why", any("running low" in n for n in notes))
+    finally:
+        B.run, B.status, B.collect, L._load_seen = real
+
+
 def main():
     print("legislation watch:")
 
@@ -708,15 +895,15 @@ def main():
     screen_keep = make_ai({"leg-screen": screen_router, "leg-recall": clean_recall})
 
     def _fake_batch(reqs, deadline=None, interval=20.0, label="batch", **_kw):
-        # custom_id is the bill_id: 111 kept, 222 declined, anything else an errored line.
+        # custom_id is "<bill_id>-<change_hash>": 111 kept, 222 declined, anything else errored.
         out = {}
         for r in reqs:
             cid = r["custom_id"]
-            if cid == "111":
+            if cid.split("-")[0] == "111":
                 out[cid] = {"ok": True, "text": json.dumps(
                     {"keep": True, "areas": ["damages"], "synopsis": "Changes apportionment.",
                      "impact": "It matters.", "effective_date": ""})}
-            elif cid == "222":
+            elif cid.split("-")[0] == "222":
                 out[cid] = {"ok": True, "text": json.dumps({"keep": False})}
             else:
                 out[cid] = {"ok": False, "type": "errored"}
@@ -823,6 +1010,9 @@ def main():
 
     # --- the recall check over screen drops ---
     test_recall(check, L, make_ai, fake_fetch, BILLS)
+
+    # --- carried write batches and the step budget ---
+    test_carry(check, L, make_ai, fake_fetch)
 
     if FAILS:
         print("\nFAILED: %s" % ", ".join(FAILS))

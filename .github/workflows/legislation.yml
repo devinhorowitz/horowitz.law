@@ -37,7 +37,16 @@ concurrency:
 jobs:
   legislation:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The hard backstop. It must cover every watch step's own timeout-minutes, plus the setup steps
+    # and the steps that save the run (results, bookkeeping, render, review PR, failure report).
+    # The numbers live in scripts/siteconfig.py (WATCH_JOB_TIMEOUT_MIN / WATCH_STEP_MIN /
+    # WATCH_SETUP_MIN / WATCH_RESERVE_MIN), and scripts/test_watchbatch.py holds this file to them.
+    # At 60 minutes, with all four watches in one step, two slow batches killed the 2026-09-27 run
+    # before anything was saved.
+    timeout-minutes: 90
+    env:
+      # --json previews (a manual dispatch defaults to dry_run); --apply writes cards and state.
+      WATCH_MODE: ${{ inputs.dry_run == true && '--json' || '--apply' }}
     steps:
       # Supply-chain hardening (block mode). Egress this job needs:
       #   api.legiscan.com          the enacted-bill data (getSessionList / getMasterList / getBill).
@@ -72,8 +81,22 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run the legislative and regulatory watches
-        id: run
+      # Each watch runs in its OWN step, with its own time limit. They used to share one bash step,
+      # so if any watch failed or was killed, the job lost every file the earlier watches had already
+      # written. On 2026-09-27 the statutes and regulations watches had both finished cleanly, and
+      # their state was still discarded when the court-rules batch ran the job out of time.
+      #
+      # Now each step's timeout-minutes is siteconfig.WATCH_STEP_MIN[watch]. Each script ends its
+      # batch wait, and its synchronous model loops, a margin before that limit. A batch still running
+      # at that point is carried in watch_batches.json, and the next run collects it.
+      #
+      # Every step after the first runs `if: !cancelled()`. A watch that fails or times out therefore
+      # fails only its own step: the later watches still run, and the results, bookkeeping, render
+      # and review-PR steps still save whatever the run produced. The job still ends red, so the
+      # failure report fires.
+      - name: Statutes watch (legislation.py)
+        id: leg
+        timeout-minutes: 40
         env:
           LEGISCAN_API_KEY: ${{ secrets.LEGISCAN_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -82,44 +105,75 @@ jobs:
           # LEGISLATION_STATES repo Variable to narrow (e.g. 'GA') or widen without editing this file.
           LEGISLATION_STATES: ${{ vars.LEGISLATION_STATES || 'GA,US' }}
           LEGISLATION_MAX: ${{ vars.LEGISLATION_MAX || '40' }}
-          # FMCSA rulemaking; add agencies (comma list of Federal Register slugs) via the repo Variable.
-          REGULATION_AGENCIES: ${{ vars.REGULATION_AGENCIES || 'federal-motor-carrier-safety-administration' }}
-          # Federal Rules amendments; override the source page list via the repo Variable if it moves.
-          COURTRULES_URLS: ${{ vars.COURTRULES_URLS }}
           # Flip these repo Variables to '1' to trace a run (per-session bill/status/resolution counts).
           LEGISLATION_DEBUG: ${{ vars.LEGISLATION_DEBUG }}
-          REGULATION_DEBUG: ${{ vars.REGULATION_DEBUG }}
-          COURTRULES_DEBUG: ${{ vars.COURTRULES_DEBUG }}
-          ETHICS_DEBUG: ${{ vars.ETHICS_DEBUG }}
-          ETHICS_URLS: ${{ vars.ETHICS_URLS }}
         run: |
           set -o pipefail
+          echo "== statutes ==" | tee "$RUNNER_TEMP/run.log"
+          python scripts/legislation.py "$WATCH_MODE" 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+
+      - name: Regulations watch (regulations.py)
+        id: reg
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # FMCSA rulemaking; add agencies (comma list of Federal Register slugs) via the repo Variable.
+          REGULATION_AGENCIES: ${{ vars.REGULATION_AGENCIES || 'federal-motor-carrier-safety-administration' }}
+          REGULATION_DEBUG: ${{ vars.REGULATION_DEBUG }}
+        run: |
+          set -o pipefail
+          echo "== regulations ==" | tee -a "$RUNNER_TEMP/run.log"
+          python scripts/regulations.py "$WATCH_MODE" 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+
+      - name: Court rules watch (courtrules.py)
+        id: crc
+        if: ${{ !cancelled() }}
+        timeout-minutes: 15
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Federal Rules amendments; override the source page list via the repo Variable if it moves.
+          COURTRULES_URLS: ${{ vars.COURTRULES_URLS }}
+          COURTRULES_DEBUG: ${{ vars.COURTRULES_DEBUG }}
+        run: |
+          set -o pipefail
+          echo "== court rules ==" | tee -a "$RUNNER_TEMP/run.log"
+          python scripts/courtrules.py "$WATCH_MODE" 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+
+      - name: Ethics opinions watch (ethics.py)
+        id: eth
+        if: ${{ !cancelled() }}
+        timeout-minutes: 12
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ETHICS_URLS: ${{ vars.ETHICS_URLS }}
+          ETHICS_DEBUG: ${{ vars.ETHICS_DEBUG }}
+        run: |
+          set -o pipefail
+          echo "== ethics opinions ==" | tee -a "$RUNNER_TEMP/run.log"
+          python scripts/ethics.py "$WATCH_MODE" 2>&1 | tee -a "$RUNNER_TEMP/run.log"
+
+      # Decide whether the run produced cards, from whichever watches got far enough to say so, and
+      # build the combined review-PR body. Runs even when a watch step failed.
+      - name: Collect the watches' results
+        id: run
+        if: ${{ !cancelled() }}
+        run: |
+          touch "$RUNNER_TEMP/run.log"
           if [ "${{ inputs.dry_run }}" = "true" ]; then
-            echo "== statutes ==" | tee    "$RUNNER_TEMP/run.log"
-            python scripts/legislation.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            echo "== regulations ==" | tee -a "$RUNNER_TEMP/run.log"
-            python scripts/regulations.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            echo "== court rules ==" | tee -a "$RUNNER_TEMP/run.log"
-            python scripts/courtrules.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            echo "== ethics opinions ==" | tee -a "$RUNNER_TEMP/run.log"
-            python scripts/ethics.py --json 2>&1 | tee -a "$RUNNER_TEMP/run.log"
             echo "changed=0" >> "$GITHUB_OUTPUT"
           else
-            echo "== statutes ==" | tee    "$RUNNER_TEMP/run.log"
-            python scripts/legislation.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            echo "== regulations ==" | tee -a "$RUNNER_TEMP/run.log"
-            python scripts/regulations.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            echo "== court rules ==" | tee -a "$RUNNER_TEMP/run.log"
-            python scripts/courtrules.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            echo "== ethics opinions ==" | tee -a "$RUNNER_TEMP/run.log"
-            python scripts/ethics.py --apply 2>&1 | tee -a "$RUNNER_TEMP/run.log"
-            leg=$(grep -oE 'LEGISLATION_CONTENT_CHANGED=[01]' "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
-            reg=$(grep -oE 'REGULATION_CONTENT_CHANGED=[01]'  "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
-            crc=$(grep -oE 'COURTRULES_CONTENT_CHANGED=[01]'  "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
-            eth=$(grep -oE 'ETHICS_CONTENT_CHANGED=[01]'      "$RUNNER_TEMP/run.log" | tail -1 | cut -d= -f2)
             changed=0
-            { [ "${leg:-0}" = "1" ] || [ "${reg:-0}" = "1" ] || [ "${crc:-0}" = "1" ] \
-              || [ "${eth:-0}" = "1" ]; } && changed=1
+            for w in LEGISLATION REGULATION COURTRULES ETHICS; do
+              if grep -qE "^${w}_CONTENT_CHANGED=1" "$RUNNER_TEMP/run.log"; then
+                changed=1
+              fi
+            done
+            # A watch that wrote its cards and then failed before printing its marker still changed
+            # content. Its card file says so, and those cards must reach the review PR.
+            if ! git diff --quiet -- legislation.json regulations.json courtrules.json ethics.json; then
+              changed=1
+            fi
             echo "changed=${changed}" >> "$GITHUB_OUTPUT"
             # One combined review-PR body from whichever watches produced cards.
             # `if`, not `[ -f ] && { }`. A for loop's exit status is its last iteration's,
@@ -140,11 +194,36 @@ jobs:
             done
           fi
 
-      # New/updated cards in either watch: re-render the shared page + both feeds and open (or
-      # update) the one review PR. A person confirms every card before it publishes -- merge to
-      # accept, edit legislation.json / regulations.json on the branch to correct.
+      # Straight to main, on every non-dry run that got this far, even if a watch step failed:
+      #   * watch_batches.json (the batches carried to the next run) ALWAYS goes to main. A carry
+      #     records Anthropic work that is already paid for, and the next run starts from main. If
+      #     the carry rode the review branch, it would be lost until that branch merged, and the
+      #     next run would pay for the same work again. Its results are never published here: the
+      #     next run applies them to the matching items, and any cards they produce go to review.
+      #   * On a quiet run (no cards), the advanced seen-state and run logs go too: a settled
+      #     non-match must not be re-screened. On a run with cards, those files ride the review PR
+      #     with the cards they explain (below).
+      # This runs BEFORE the review PR is opened, so the PR is opened on top of this commit.
+      - name: Commit bookkeeping and carried batches
+        if: ${{ !cancelled() && inputs.dry_run != true && steps.run.outputs.changed != '' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ "${{ steps.run.outputs.changed }}" = "1" ]; then
+            git add watch_batches.json
+          else
+            git add watch_batches.json legislation_state.json legislation_log.jsonl legislation_rejections.jsonl regulations_state.json regulations_log.jsonl regulations_rejections.jsonl courtrules_state.json courtrules_log.jsonl ethics_state.json ethics_log.jsonl
+          fi
+          if ! git diff --cached --quiet; then
+            git commit -m "legislation/regulation/courtrules/ethics: record run state [skip ci]"
+            git push || { git pull --rebase --autostash origin main && git push; }
+          fi
+
+      # New/updated cards in any watch: re-render the shared page + feeds and open (or update) the one
+      # review PR. A person confirms every card before it publishes -- merge to accept, edit the
+      # watch's JSON on the branch to correct.
       - name: Render the page and feeds
-        if: steps.run.outputs.changed == '1'
+        if: ${{ !cancelled() && steps.run.outputs.changed == '1' }}
         run: python scripts/render.py
 
       # legislation_rejections.jsonl (the recall check's drop log) and regulations_rejections.jsonl
@@ -155,10 +234,10 @@ jobs:
       # gains lines while the review branch sits, both sides have appended at end of file and the
       # merge reports a content conflict. Resolving it is mechanical (keep both sides' lines),
       # unlike the wholesale rewrite that made the opinions log unfit for a review branch. Both are
-      # tracked (seeded empty) because `git add` of a missing path stages nothing at all, and the
-      # bookkeeping step's `|| true` would hide that.
+      # tracked (seeded empty, like watch_batches.json) because `git add` of a missing path fails
+      # and stages nothing at all.
       - name: Open review pull request
-        if: steps.run.outputs.changed == '1'
+        if: ${{ !cancelled() && steps.run.outputs.changed == '1' }}
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           branch: bot/legislation-review
@@ -204,16 +283,6 @@ jobs:
             public/stats.html
             public/subscribe.html
             public/follow.html
-      # Nothing new: the seen-state and run logs still advanced (a settled non-match must not be
-      # re-screened), so commit only that bookkeeping straight to main, like the opinion no-op run.
-      - name: Commit bookkeeping (nothing new)
-        if: steps.run.outputs.changed == '0' && inputs.dry_run != true
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add legislation_state.json legislation_log.jsonl legislation_rejections.jsonl regulations_state.json regulations_log.jsonl regulations_rejections.jsonl courtrules_state.json courtrules_log.jsonl 2>/dev/null || true
-          git diff --cached --quiet || { git commit -m "legislation/regulation/courtrules: record run state [skip ci]"; git push; }
-
       # Surfaces a broken run instead of letting it fail silently: comments on the one open
       # tracking issue, or opens it the first time, so repeated failures collect on one issue.
       - name: Report a failed run

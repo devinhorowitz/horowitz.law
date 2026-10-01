@@ -47,13 +47,15 @@ Environment:
                            rules have been carded (FMCSA's low volume needs no separate screen cap)
   REGULATION_BATCH         batch the Opus card-write pass via the 50%-priced Message Batches API
                            (default on; set 0 for the synchronous rollback). REGULATION_BATCH_SEC
-                           bounds the in-run wait (default 1800).
-  REGULATION_DEBUG         if 1, log each step
+                           bounds the in-run wait (default 1800), further capped by the workflow
+                           step's budget; an unfinished batch is carried to the next run
+                           (scripts/watchbatch.py).
+  REGULATION_DEBUG        if 1, log each step
 """
 import os
+import re
 import sys
 import json
-import time
 import datetime
 import urllib.request
 import urllib.parse
@@ -62,6 +64,7 @@ import urllib.error
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
 import siteconfig  # shared practice-area taxonomy  # noqa: E402
+import watchbatch  # run budget + carried batches  # noqa: E402
 
 JSON_PATH  = os.path.join(REPO, "regulations.json")
 STATE_PATH = os.path.join(REPO, "regulations_state.json")
@@ -413,45 +416,86 @@ def _default_ai(body, label="call"):
     return update.anthropic_json(body, label)
 
 
-def _draft_cards(pending, deadline=None):
+def _carry_cid(dn):
+    """The batch custom_id for one rule: its document_number, which the Federal Register never
+    reuses, restricted to the Batch API's ^[a-zA-Z0-9_-]{1,64}$."""
+    return re.sub(r"[^A-Za-z0-9_-]", "", str(dn))[:64] or "x"
+
+
+def _batch_verdict(res):
+    """One batch result line -> write_card's verdict space (dict / None / WRITER_ERROR)."""
+    if not res or not res.get("ok"):
+        return WRITER_ERROR
+    import update
+    try:
+        v = update.parse_json(res["text"])
+    except Exception:
+        return WRITER_ERROR
+    if not isinstance(v, dict):
+        return WRITER_ERROR
+    return _write_verdict(v)
+
+
+def _draft_cards(pending, deadline=None, book=None):
     """Write the cards for the screened-relevant rules in `pending` as ONE 50%-priced Message Batches
     job (REGULATION_BATCH), mirroring legislation._draft_cards. `pending` is a list of dicts each with
     `dn` (str document_number) and `doc`. Returns {dn: verdict|None|WRITER_ERROR}, the SAME verdict
-    space write_card produces, so run()'s downstream (seen / card) logic does not branch. A whole-batch
-    timeout/transport failure defers ALL (retry next run); a per-request error or unparseable body is
-    that one rule's WRITER_ERROR; a success parses through _write_verdict."""
+    space write_card produces, so run()'s downstream (seen / card) logic does not branch. A batch
+    still running at the deadline defers ALL (un-seen) and is CARRIED in `book`, so the next run
+    collects it rather than paying again; a transport failure before submit defers ALL; a
+    per-request error or unparseable body is that one rule's WRITER_ERROR."""
     import batch
-    import update
-    reqs = [batch.from_body(p["dn"], _write_body(p["doc"])) for p in pending]
-    try:
-        results = batch.run(reqs, deadline=deadline, label="regulation-write")
-    except (batch.BatchTimeout, batch.BatchError) as e:
-        print("  ! regulation write batch deferred (%s); %d draft(s) roll to next run"
-              % (e, len(pending)), flush=True)
-        return {p["dn"]: WRITER_ERROR for p in pending}
-    out = {}
+    book = book if book is not None else watchbatch.CarryBook("regulations")
+    reqs, items = [], {}
     for p in pending:
-        res = results.get(p["dn"])
-        if not res or not res.get("ok"):
-            out[p["dn"]] = WRITER_ERROR
-            continue
-        try:
-            v = update.parse_json(res["text"])
-        except Exception:
-            out[p["dn"]] = WRITER_ERROR
-            continue
-        out[p["dn"]] = _write_verdict(v)
-    return out
+        cid = _carry_cid(p["dn"])
+        items[cid] = {"dn": p["dn"], "pub": p["pub"], "doc": p["doc"], "areas": p.get("areas") or [],
+                      "reason": p.get("reason") or ""}
+        reqs.append(batch.from_body(cid, _write_body(p["doc"])))
+    results = book.run(reqs, items, deadline, "regulation-write")
+    if results is None:
+        print("  ! regulation write batch deferred; %d draft(s) roll to next run" % len(pending),
+              flush=True)
+        return {p["dn"]: WRITER_ERROR for p in pending}
+    return {p["dn"]: _batch_verdict(results.get(_carry_cid(p["dn"]))) for p in pending}
+
+
+def _carried_writes(book, seen):
+    """Collect the write batches earlier runs carried. Returns (carried, inflight, tally, ready):
+    `carried` maps dn -> {"item", "verdict", "rec"} for each usable result on a rule still unseen;
+    `inflight` is the set of dns in a batch still running; `tally` is {batch id: [applied,
+    re-queued]}. A document_number is immutable, so the only checks are that the result is usable
+    and that nothing has settled the rule since; anything else is re-queued (processed normally)."""
+    ready, inflight_items = book.collect("regulation-write")
+    inflight = {str(it.get("dn")) for it in inflight_items.values()}
+    carried, tally = {}, {}
+    for rec in ready:
+        tally[rec["id"]] = [0, 0]
+        for cid, item in rec["items"].items():
+            dn = str(item.get("dn"))
+            verdict = _batch_verdict(rec["results"].get(cid))
+            if (verdict is WRITER_ERROR or cid != _carry_cid(dn) or dn in seen
+                    or not isinstance(item.get("doc"), dict)):
+                tally[rec["id"]][1] += 1
+                continue
+            carried[dn] = {"item": item, "verdict": verdict, "rec": rec["id"]}
+    return carried, inflight, tally, ready
 
 
 def run(fetch=None, ai=None, today=None, max_run=None, lookback=None, batch_enabled=False,
-        drops=None):
+        drops=None, carry=None, budget=None):
     """Full funnel: fetch recent agency rules, screen, write. Returns (cards, notes, seen_updates).
     `seen_updates` maps document_number -> publication_date for every rule that reached a DEFINITIVE
     outcome (carded, or read and declined). A transient error leaves it absent so it retries next
     run. `drops`, if a list, receives a drop_record for each screen drop and writer decline, for
     main() to persist. Writes nothing itself. Fail-open throughout. No API key needed for the
-    Federal Register."""
+    Federal Register.
+
+    `carry` (watchbatch.CarryBook) and `budget` (watchbatch.Budget) work as in legislation.run: a
+    carried write result is applied to exactly the rule it was written for, a rule still in a running
+    batch is left alone, and the screen loop and batch wait stop before the step's limit."""
+    book = carry if carry is not None else watchbatch.CarryBook("regulations")
+    budget = budget if budget is not None else watchbatch.Budget()
     ai = ai or _default_ai
     max_run = MAX_RUN if max_run is None else max_run
     notes = []
@@ -463,6 +507,8 @@ def run(fetch=None, ai=None, today=None, max_run=None, lookback=None, batch_enab
     drops = [] if drops is None else drops
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     seen = _load_seen()
+    # Carried write batches first, so a rule whose card is already written is not screened again.
+    carried, inflight, tally, ready = _carried_writes(book, seen)
     docs = fetch_documents(since=_since(today, lookback), fetch=fetch)
     fresh = new_documents(docs, seen)
     notes.append("REGULATION: %d document(s) in window, %d new." % (len(docs), len(fresh)))
@@ -481,11 +527,20 @@ def run(fetch=None, ai=None, today=None, max_run=None, lookback=None, batch_enab
     # screen loop -- one batch (batch_enabled) or a synchronous loop -- so both share the exact
     # downstream seen/card logic. max_run bounds the rules queued for a write.
     pending = []
+    held = 0
     for d in fresh:
+        dn, pub = str(d.get("document_number")), (d.get("publication_date") or "")
+        if dn in inflight:
+            held += 1                       # its write is still running in a carried batch
+            continue
+        if dn in carried:
+            continue                        # applied below, from the carried result
         if len(pending) >= max_run:
             notes.append("REGULATION: hit REGULATION_MAX=%d; remaining rules retry next run." % max_run)
             break
-        dn, pub = str(d.get("document_number")), (d.get("publication_date") or "")
+        if budget.low():
+            notes.append("REGULATION: step time is running low; remaining rules retry next run.")
+            break
         keep, areas, reason = screen_doc(d, ai)
         if not keep:
             _dbg("screen dropped %s: %s" % (dn, reason))
@@ -494,15 +549,28 @@ def run(fetch=None, ai=None, today=None, max_run=None, lookback=None, batch_enab
             continue
         pending.append({"dn": dn, "pub": pub, "doc": d, "areas": areas, "reason": reason})
 
+    resumed = []
+    for dn, c in carried.items():
+        it = c["item"]
+        tally[c["rec"]][0] += 1
+        resumed.append(({"dn": dn, "pub": it.get("pub") or "", "doc": it["doc"],
+                         "areas": it.get("areas") or [], "reason": it.get("reason") or ""}, c["verdict"]))
+    for rec in ready:
+        book.report(rec, *tally[rec["id"]])
+    if held:
+        notes.append("REGULATION: %d rule(s) still in a carried write batch; collected next run." % held)
+
     if batch_enabled and pending:
         notes.append("REGULATION: batching %d card write(s) (REGULATION_BATCH)." % len(pending))
-        verdicts = _draft_cards(pending, deadline=time.time() + BATCH_SEC)
+        verdicts = _draft_cards(pending, deadline=budget.deadline(BATCH_SEC), book=book)
     else:
-        verdicts = {p["dn"]: write_card(p["doc"], ai) for p in pending}
+        verdicts = {}
+        for p in pending:
+            # Out of step time: un-seen, retry next run.
+            verdicts[p["dn"]] = WRITER_ERROR if budget.low() else write_card(p["doc"], ai)
 
-    for p in pending:
+    for p, verdict in resumed + [(p, verdicts.get(p["dn"], WRITER_ERROR)) for p in pending]:
         dn, pub, d, areas = p["dn"], p["pub"], p["doc"], p["areas"]
-        verdict = verdicts.get(dn, WRITER_ERROR)
         if verdict is WRITER_ERROR:
             continue
         if verdict is None:
@@ -517,6 +585,7 @@ def run(fetch=None, ai=None, today=None, max_run=None, lookback=None, batch_enab
         cards.append(build_card(d, verdict, today=today))
         seen_updates[dn] = pub
     notes.append("REGULATION: drafted %d card(s)." % len(cards))
+    book.announce()
     return cards, notes, seen_updates
 
 
@@ -644,7 +713,9 @@ def main(argv=None):
     as_json = "--json" in argv
     apply = "--apply" in argv
     drops = []
-    cards, notes, seen_updates = run(batch_enabled=REGULATION_BATCH, drops=drops)
+    book = watchbatch.CarryBook.load("regulations", persist=apply)
+    cards, notes, seen_updates = run(batch_enabled=REGULATION_BATCH, drops=drops, carry=book,
+                                     budget=watchbatch.Budget.for_step("regulations"))
     for n in notes:
         print(n)
 
@@ -657,6 +728,7 @@ def main(argv=None):
         if content_changed:
             save_cards(merged)
         save_seen(seen)
+        book.save()
         # Only beside the seen marks they explain: each drop is then logged exactly once, and a dry
         # run (which saves no seen state and re-screens next time) writes no record either.
         if log_drops(drops):

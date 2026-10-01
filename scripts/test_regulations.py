@@ -97,6 +97,8 @@ def main():
     # Same hygiene for the drop log: log_drops WRITES, so point it at a temp file for the whole
     # process and a test can never leave a regulations_rejections.jsonl change in the working tree.
     R.REG_DROPS_PATH = os.path.join(tempfile.mkdtemp(prefix="regtest-"), "regulations_rejections.jsonl")
+    # And for the carried-batch file: main(["--apply"]) below saves it.
+    R.watchbatch.CARRY_PATH = os.path.join(tempfile.mkdtemp(prefix="regtest-"), "watch_batches.json")
 
     # --- query URL ---
     u = R._query_url(["federal-motor-carrier-safety-administration"], ["RULE", "PRORULE"], "2026-06-01", page=2)
@@ -236,6 +238,68 @@ def main():
     check("batch timeout drafts no cards", tcards == [])
     check("batch timeout leaves the writes un-seen (retry); only the screen drop is seen",
           "2025-11111" not in tseen and "2025-33333" not in tseen and "2025-22222" in tseen)
+
+    # --- a deferred write batch is CARRIED; the next run applies only the ids it recorded ---
+    import contextlib
+    import io
+    import watchbatch as _W
+    _real = (_B.run, _B.status, _B.collect)
+    day0 = __import__("datetime").date(2026, 7, 17)
+    screened = []
+    sai = make_ai({"reg-screen": lambda b: screened.append(b["messages"][0]["content"]) or screen_router(b),
+                   "reg-write": write_router})
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "watch_batches.json")
+
+            def _slow(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+                on_submit("msgbatch_R")
+                raise _B.BatchTimeout("msgbatch_R", "still running")
+
+            _B.run = _slow
+            book = _W.CarryBook.load("regulations", persist=True, path=path)
+            with contextlib.redirect_stdout(io.StringIO()):
+                ccards, _, cseen = R.run(fetch=fake_fetch, ai=sai, batch_enabled=True, today=day0, carry=book)
+            book.save()
+            disk = _W.load_carries("regulations", path)
+            check("carry: a deferred write batch is recorded with the rules it covers",
+                  [r["id"] for r in disk] == ["msgbatch_R"]
+                  and set(disk[0]["items"]) == {"2025-11111", "2025-33333"})
+            check("carry: the carried rules stay un-seen",
+                  ccards == [] and "2025-11111" not in cseen and "2025-33333" not in cseen)
+
+            _B.status = lambda bid, label="batch": {"id": bid, "processing_status": "ended", "results_url": "u"}
+            _B.collect = lambda obj, label="batch": {
+                "2025-11111": {"ok": True, "text": json.dumps({"keep": True, "areas": ["auto"],
+                               "synopsis": "CARRIED.", "impact": "i", "effective_date": ""})},
+                "2025-33333": {"ok": False, "type": "expired"},
+                "2025-99999": {"ok": True, "text": json.dumps({"keep": True, "synopsis": "stray"})},
+            }
+            fresh = []
+
+            def _decline(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+                fresh.extend(r["custom_id"] for r in reqs)
+                return {r["custom_id"]: {"ok": True, "text": json.dumps({"keep": False})} for r in reqs}
+
+            _B.run = _decline
+            screened.clear()
+            buf = io.StringIO()
+            book = _W.CarryBook.load("regulations", persist=True, path=path)
+            with contextlib.redirect_stdout(buf):
+                ncards, _, nseen = R.run(fetch=fake_fetch, ai=sai, batch_enabled=True, today=day0, carry=book)
+            syn = {c["document_number"]: c["synopsis"] for c in ncards}
+            check("carry: the carried card is applied to its own rule, with no second screen or write",
+                  syn == {"2025-11111": "CARRIED."} and "2025-11111" not in fresh
+                  and not any("Hours of Service" in t for t in screened), "%r %r" % (syn, fresh))
+            check("carry: the expired result's rule is re-queued (screened and written fresh)",
+                  fresh == ["2025-33333"] and "2025-33333" in nseen)
+            check("carry: a stray id is never applied", "2025-99999" not in syn and "2025-99999" not in nseen)
+            check("carry: the collected line reports it",
+                  "collected carried batch msgbatch_R (1 results applied, 1 re-queued)" in buf.getvalue(),
+                  buf.getvalue())
+            check("carry: nothing left to carry", book.carries == [])
+    finally:
+        _B.run, _B.status, _B.collect = _real
 
     # --- the drop log: every rule marked seen without a card leaves its reason and the brief read ---
     day = __import__("datetime").date(2026, 7, 17)

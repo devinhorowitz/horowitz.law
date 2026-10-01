@@ -277,6 +277,49 @@ allowlist. It runs all four watches, renders once, and mirrors the opinion pipel
 - **Nothing new** → commit only the advanced seen-state and run logs straight to `main` with
   `[skip ci]`.
 
+### Time budget and carried batches
+
+Each watch's Opus pass is one Anthropic Message Batch. Batch latency runs from minutes to over an
+hour. On 2026-09-27 (run 36318024609) two slow batches together ran past the old 60-minute job
+timeout. The run was killed before anything was saved, and the paid statutes batch was recorded
+nowhere. The run is now organized so that no watch can cost the others their work:
+
+- **One step per watch.** Each watch has its own step and its own `timeout-minutes`, set from
+  `siteconfig.WATCH_STEP_MIN` (statutes 40, regulations 10, court rules 15, ethics 12).
+  - The job timeout is 90 minutes (`WATCH_JOB_TIMEOUT_MIN`). It covers all four watch steps, plus
+    setup, plus a reserve for saving the run.
+  - Every later step runs `if: !cancelled()`. If a watch fails or times out, the later watches, the
+    bookkeeping, render and the review PR still run, and the failure report still fires.
+  - `scripts/test_watchbatch.py` checks the YAML against these numbers. It also evaluates the `if:`
+    conditions against a failed watch.
+- **Batch waits fit the step's budget** (`scripts/watchbatch.py`, `Budget`). A watch waits on its
+  batch until its own `*_BATCH_SEC` runs out or until 150 seconds before its step limit, whichever
+  comes first. The synchronous screen and recall loops also stop starting model calls when the step
+  is nearly out of time. Anything they leave is unseen and retried next run.
+- **Carrying a deferred batch.** A batch still running at its deadline is not abandoned. Its id goes
+  to `watch_batches.json` at submit time, before the wait begins, so the record survives a killed
+  step. The record also holds the time and exactly which item each `custom_id` stands for:
+  - statutes: the bill at one `change_hash`;
+  - regulations: the Federal Register document number;
+  - court rules and ethics: the page URL and the hash of the text sent. These used to be list
+    indexes (`cr-0`).
+
+  The covered items stay unseen. The next run collects the carry before it does anything else.
+- **Applying collected results.** A result is applied only to the exact item its id recorded, and
+  only while nothing has settled that item since. A result is never substituted for different
+  current work.
+  - Any other result is **re-queued**, meaning the item goes through the normal pass again. This
+    covers an expired, errored or unparseable result, a bill that moved after the batch was sent,
+    and a page whose text changed.
+  - A batch that is still running keeps its items out of this run.
+  - A carry older than 25 days (`WATCH_CARRY_MAX_AGE_DAYS`) is dropped with a log line, because
+    Anthropic keeps batch results for 29 days.
+  - The log shows `. carrying N batch(es) to next run: …` and
+    `. collected carried batch … (k results applied, j re-queued)`.
+- **`watch_batches.json` always goes to `main`,** even on a run that opens the review PR. The next
+  run starts from `main`, and a carry left on the unmerged review branch would be paid for again. A
+  carry never publishes anything by itself: the cards it produces go to review like any others.
+
 A manual dispatch defaults to `dry_run` (prints the drafted cards, writes nothing). The regulatory
 half runs with no key, so it works on the first scheduled run even before `LEGISCAN_API_KEY` is set.
 

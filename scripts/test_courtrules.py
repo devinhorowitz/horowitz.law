@@ -161,9 +161,12 @@ def main():
     import batch as _B
     _real_run = _B.run
 
+    # The custom_id names the page AND the text sent (url + page hash), never a list index.
+    _want_cid = C.page_cid("cr", "u", C.page_hash(C.strip_html(PAGE_V1)))
+
     def _fake_batch(reqs, deadline=None, interval=20.0, label="batch", **_kw):
-        assert [r["custom_id"] for r in reqs] == ["cr-0"], [r["custom_id"] for r in reqs]
-        return {"cr-0": {"ok": True, "text": __import__("json").dumps({"amendments": [AMEND_26]})}}
+        assert [r["custom_id"] for r in reqs] == [_want_cid], [r["custom_id"] for r in reqs]
+        return {_want_cid: {"ok": True, "text": __import__("json").dumps({"amendments": [AMEND_26]})}}
 
     _B.run = _fake_batch
     try:
@@ -189,6 +192,79 @@ def main():
         _B.run = _real_run
     check("batch extract timeout: no cards, page left un-hashed (retry next run)",
           tcards == [] and tupd["pages"] == {})
+
+    # --- a deferred extraction batch is CARRIED (run 36318024609 was killed waiting on this one);
+    #     the next run uses its result only for the same page with the same text ---
+    import contextlib
+    import io
+    import tempfile
+    import watchbatch as _W
+    _real = (_B.run, _B.status, _B.collect)
+    h1 = C.page_hash(C.strip_html(PAGE_V1))
+    h2 = C.page_hash(C.strip_html(PAGE_V2))
+    cid1, cid2 = C.page_cid("cr", "u", h1), C.page_cid("cr", "u", h2)
+    day = __import__("datetime").date(2026, 7, 17)
+
+    def go(page, book):
+        buf = io.StringIO()
+        with _m.patch.object(C, "_load_seen", lambda: {"pages": {}, "cards": {}}), \
+                contextlib.redirect_stdout(buf):
+            out = C.run(fetch=lambda url: page, ai=ai_boom, sources=[("Pending", "u")], today=day,
+                        batch_enabled=True, carry=book)
+        return out, buf.getvalue()
+
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "watch_batches.json")
+
+            def _slow(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+                on_submit("msgbatch_C")
+                raise _B.BatchTimeout("msgbatch_C", "still running")
+
+            _B.run = _slow
+            book = _W.CarryBook.load("courtrules", persist=True, path=path)
+            (ccards, _n, cupd), out = go(PAGE_V1, book)
+            book.save()
+            disk = _W.load_carries("courtrules", path)
+            check("carry: the extraction batch is recorded under the page's url + hash id",
+                  [r["id"] for r in disk] == ["msgbatch_C"] and list(disk[0]["items"]) == [cid1]
+                  and disk[0]["items"][cid1]["url"] == "u" and disk[0]["items"][cid1]["h"] == h1)
+            check("carry: the page stays un-hashed", ccards == [] and cupd["pages"] == {})
+
+            def _no_batch(*_a, **_kw):
+                raise AssertionError("no new batch expected")
+
+            _B.run = _no_batch
+            _B.status = lambda bid, label="batch": {"id": bid, "processing_status": "in_progress"}
+            (hcards, hnotes, hupd), _ = go(PAGE_V1, _W.CarryBook.load("courtrules", path=path))
+            check("in flight: the page is left un-hashed and nothing is re-sent",
+                  hcards == [] and hupd["pages"] == {} and any("carried batch" in n for n in hnotes))
+
+            _B.status = lambda bid, label="batch": {"id": bid, "processing_status": "ended", "results_url": "x"}
+            _B.collect = lambda obj, label="batch": {
+                cid1: {"ok": True, "text": __import__("json").dumps({"amendments": [AMEND_26]})}}
+            book = _W.CarryBook.load("courtrules", path=path)
+            (rcards, _n, rupd), out = go(PAGE_V1, book)
+            check("collected: the carried extraction cards the page with no new call",
+                  len(rcards) == 1 and rcards[0]["rule"] == "Rule 26" and rupd["pages"].get("u") == h1)
+            check("collected: reported, and nothing left to carry",
+                  "msgbatch_C (1 results applied, 0 re-queued)" in out and book.carries == [], out)
+
+            # The page CHANGED after the batch was sent: that result describes old text.
+            sent = []
+
+            def _fresh(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+                sent.extend(r["custom_id"] for r in reqs)
+                return {r["custom_id"]: {"ok": True, "text": __import__("json").dumps({"amendments": []})}
+                        for r in reqs}
+
+            _B.run = _fresh
+            (mcards, _n, mupd), out = go(PAGE_V2, _W.CarryBook.load("courtrules", path=path))
+            check("moved: a carried result for different text is not applied (re-queued)",
+                  mcards == [] and sent == [cid2] and mupd["pages"].get("u") == h2
+                  and "msgbatch_C (0 results applied, 1 re-queued)" in out, "%r %s" % (sent, out))
+    finally:
+        _B.run, _B.status, _B.collect = _real
 
     # ---- A relabelled amendment is the SAME amendment ----------------------------------------
     # The regression this pins: the extractor wrote "Rule 707", then "Rule 707 (new)", then
