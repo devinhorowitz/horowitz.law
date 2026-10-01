@@ -260,25 +260,30 @@ def run(fetch=None, ai=None, today=None, sources=None, batch_enabled=False, carr
     carried, inflight, tally, ready = courtrules.carried_pages(book, "ethics-extract", "eth",
                                                                _extract_parse)
     pending = []
+    unread = set()  # sources not read this run: their carried extractions stay carried
     for label, url in sources:
         text = courtrules.fetch_text(url, fetch)
         if not text:
             notes.append("ETHICS: %s unreachable; will retry." % label)
+            unread.add(url)
             continue
         h = courtrules.page_hash(text)
         if seen_pages.get(url) == h:
             notes.append("ETHICS: %s unchanged." % label)
             new_pages[url] = h
+            courtrules.settle_carried(url, h, carried, tally, "ethics-extract",
+                                      "the page is unchanged since it was settled at %s")
             continue
         if not has_ethics_markers(text):
             notes.append("ETHICS: %s fetched but shows no advisory-opinion markers "
                          "(shell/redesign/moved?); not recording, will retry." % label)
+            unread.add(url)
             continue
         got = courtrules.resolve_carried(url, h, label, carried, inflight, tally, notes, "ETHICS")
         if isinstance(got, str):
             continue                       # "held": still in a carried batch, stays un-hashed
         pending.append({"label": label, "url": url, "text": text, "h": h, "carried": got})
-    courtrules.finish_carried(book, carried, tally, ready)
+    courtrules.finish_carried(book, carried, tally, ready, unread)
 
     extractions = {p["url"]: p["carried"] for p in pending if p["carried"] is not None}
     to_extract = [p for p in pending if p["carried"] is None]

@@ -289,7 +289,7 @@ AREA_GLOSSES = {
 WATCH_JOB_TIMEOUT_MIN = 90
 WATCH_STEP_MIN = {"legislation": 40, "regulations": 10, "courtrules": 15, "ethics": 12}
 WATCH_SETUP_MIN = 3          # harden-runner, checkout, setup-python, pip install
-WATCH_RESERVE_MIN = 10       # collecting the results, render, review PR, bookkeeping, failure report
+WATCH_RESERVE_MIN = 10       # results, bookkeeping, render, review PR, carry save, failure report
 WATCH_STEP_MARGIN_SEC = 150  # left inside a step after the last wait, for saving cards and state
 # A synchronous model loop (a screen, a recall audit) starts no new call once less than this much of
 # the step is left: one call can take minutes on a retrying API, and the batch submit and the state

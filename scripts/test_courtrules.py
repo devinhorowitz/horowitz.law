@@ -263,6 +263,47 @@ def main():
             check("moved: a carried result for different text is not applied (re-queued)",
                   mcards == [] and sent == [cid2] and mupd["pages"].get("u") == h2
                   and "msgbatch_C (0 results applied, 1 re-queued)" in out, "%r %s" % (sent, out))
+
+            # An ENDED carry of the old text beside an IN-FLIGHT carry of the current text: the
+            # old result is discarded with a log line (it used to sit behind the in-flight check),
+            # and the page is held for the running batch.
+            import time as _time
+            now_iso = _W._iso(_time.time())
+            pair = [{"id": "msgbatch_X", "at": now_iso, "items": {cid1: {"url": "u", "h": h1, "label": "P"}}},
+                    {"id": "msgbatch_Y", "at": now_iso, "items": {cid2: {"url": "u", "h": h2, "label": "P"}}}]
+            _B.run = _no_batch
+            _B.status = lambda bid, label="batch": (
+                {"id": bid, "processing_status": "ended", "results_url": "x"} if bid == "msgbatch_X"
+                else {"id": bid, "processing_status": "in_progress"})
+            _B.collect = lambda obj, label="batch": {
+                cid1: {"ok": True, "text": __import__("json").dumps({"amendments": [AMEND_26]})}}
+            book = _W.CarryBook("courtrules", pair)
+            (scards, snotes, supd), out = go(PAGE_V2, book)
+            check("stale ended + current in flight: the stale extraction is discarded, logged",
+                  scards == [] and "discarding carried extraction of u from batch msgbatch_X" in out
+                  and "msgbatch_X (0 results applied, 1 re-queued)" in out, out)
+            check("stale ended + current in flight: the page is held, un-hashed, for the running batch",
+                  supd["pages"] == {} and any("carried batch" in n for n in snotes)
+                  and [r["id"] for r in book.carries] == ["msgbatch_Y"], str(book.carries))
+
+            # The page did not fetch (or failed its marker check): its carried extraction can be
+            # neither applied nor called stale, so it STAYS carried for the next run.
+            _B.status = lambda bid, label="batch": {"id": bid, "processing_status": "ended", "results_url": "x"}
+            for why, page in (("unreachable", ""), ("no markers", "<html><body>Site maintenance</body></html>")):
+                book = _W.CarryBook("courtrules", [{"id": "msgbatch_K", "label": "courtrules-extract",
+                                                    "at": now_iso, "items": {cid1: {"url": "u", "h": h1,
+                                                                                    "label": "P"}}}])
+                (kcards, _n, kupd), out = go(page, book)
+                check("%s: the carried extraction is not applied, and stays carried" % why,
+                      kcards == [] and kupd["pages"] == {}
+                      and [(r["id"], list(r["items"]), r["at"]) for r in book.carries]
+                      == [("msgbatch_K", [cid1], now_iso)], "%r %s" % (book.carries, out))
+                check("%s: reported as kept carried" % why,
+                      "msgbatch_K (0 results applied, 0 re-queued, 1 kept carried)" in out, out)
+            # ...and the next run, with the page back at the same text, applies it.
+            (bcards, _n, bupd), out = go(PAGE_V1, book)
+            check("kept carry: applied once the page is read at the same text",
+                  len(bcards) == 1 and bupd["pages"].get("u") == h1 and book.carries == [], out)
     finally:
         _B.run, _B.status, _B.collect = _real
 

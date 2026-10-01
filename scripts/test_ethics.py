@@ -225,6 +225,26 @@ def main():
                   [c["id"] for c in rcards] == ["24-1"] and rupd["pages"].get("u") == h)
             check("and reports it", "msgbatch_E (1 results applied, 0 re-queued)" in buf.getvalue(),
                   buf.getvalue())
+
+            # A page that did not fetch this run keeps its carried extraction for the next run
+            # (it used to be discarded), and the next run applies it once the page reads the same.
+            at = W._iso(__import__("time").time())
+            book = W.CarryBook("ethics", [{"id": "msgbatch_K", "label": "ethics-extract", "at": at,
+                                           "items": {cid: {"url": "u", "h": h, "label": "FAO"}}}])
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                kcards, _n, kupd = E.run(fetch=lambda url: "", ai=ai_boom, today=TODAY,
+                                         sources=[("FAO", "u")], batch_enabled=True, carry=book)
+            check("unreachable: the carried extraction is not applied, and stays carried",
+                  kcards == [] and kupd["pages"] == {}
+                  and [(r["id"], list(r["items"]), r["at"]) for r in book.carries] == [("msgbatch_K", [cid], at)]
+                  and "1 kept carried" in buf.getvalue(), buf.getvalue())
+            with contextlib.redirect_stdout(io.StringIO()):
+                kcards, _n, kupd = E.run(fetch=lambda url: PAGE, ai=ai_boom, today=TODAY,
+                                         sources=[("FAO", "u")], batch_enabled=True, carry=book)
+            check("unreachable: the next run applies the kept extraction once the page reads the same",
+                  [c["id"] for c in kcards] == ["24-1"] and kupd["pages"].get("u") == h
+                  and book.carries == [])
     finally:
         B.run, B.status, B.collect, E._load_seen = real
 

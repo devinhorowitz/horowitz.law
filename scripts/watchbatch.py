@@ -48,6 +48,7 @@ batch.status / batch.collect / batch.run and set `clock`.
 import datetime
 import json
 import os
+import re
 import sys
 import time
 
@@ -149,6 +150,21 @@ def save_carries(watch, carries, path=None):
     safeio.atomic_write_text(path, json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
 
+def batch_gone(err):
+    """True only when a BatchError says the batch itself no longer exists: HTTP 404, or a 400 whose
+    body names the batch id as invalid. 401/403 (a key problem), 429 (rate limit) and any other 4xx
+    say nothing about the batch, so they do not justify dropping a paid carry."""
+    msg = str(err)
+    m = re.search(r"-> HTTP (\d{3})\b", msg)
+    if not m:
+        return False
+    code = int(m.group(1))
+    if code == 404:
+        return True
+    return code == 400 and re.search(r"invalid[^.\n]{0,40}batch[ _]?id|batch[ _]?id[^.\n]{0,40}invalid",
+                                     msg, re.I) is not None
+
+
 class CarryBook:
     """One watch's carried batches for one run.
 
@@ -176,9 +192,12 @@ class CarryBook:
         `inflight` maps custom_id -> item for batches still running. The watch must leave those
         items alone: not re-submit them, not mark them seen. They stay carried.
 
-        A carry that is too old, or that the API no longer knows (a 4xx), is dropped with a log
-        line, and its items are processed again as usual. A transport failure (5xx, network) keeps
-        the carry for the next run."""
+        A carry that is too old, or that the API says no longer exists (HTTP 404, or a 400 that
+        names the batch id invalid), is dropped with a log line, and its items are processed again
+        as usual. Every other failure keeps the carry for the next run: a transport failure (5xx,
+        network), and also 401/403/429 and any other 4xx, which say something about the key, the
+        rate limit or the request, not that the paid batch is gone. The age limit still bounds a
+        carry that keeps failing."""
         now = clock()
         max_age = siteconfig.WATCH_CARRY_MAX_AGE_DAYS * 86400
         ready, inflight, keep = [], {}, []
@@ -202,7 +221,7 @@ class CarryBook:
                     continue
                 results = batch.collect(obj, label)
             except Exception as e:   # BatchError, or a garbled response body (ValueError)
-                if isinstance(e, batch.BatchError) and "HTTP 4" in str(e):
+                if isinstance(e, batch.BatchError) and batch_gone(e):
                     print("  . %s: dropping carried batch %s (%s); its %d item(s) are processed again"
                           % (label, bid, e, len(items)), flush=True)
                 else:
@@ -215,15 +234,34 @@ class CarryBook:
             if stray:
                 print("  . %s: carried batch %s returned %d result(s) for ids it did not carry; ignored"
                       % (label, bid, len(stray)), flush=True)
-            ready.append({"id": bid, "items": items,
+            ready.append({"id": bid, "items": items, "at": rec.get("at"), "label": rec.get("label"),
                           "results": {c: results[c] for c in items if c in results}})
         self.carries = keep
         return ready, inflight
 
     @staticmethod
-    def report(rec, applied, requeued):
-        print("  . collected carried batch %s (%d results applied, %d re-queued)"
-              % (rec["id"], applied, requeued), flush=True)
+    def report(rec, applied, requeued, kept=0):
+        print("  . collected carried batch %s (%d results applied, %d re-queued%s)"
+              % (rec["id"], applied, requeued, (", %d kept carried" % kept) if kept else ""),
+              flush=True)
+
+    def recarry(self, rec, cids):
+        """Put the ended batch `rec` (one of collect()'s `ready`) back in the book for the custom_ids
+        in `cids`: results this run could not confirm against its item, because the item was not
+        read this run (a page that did not fetch, a bill the run never reached). The next run
+        collects them again and applies each one only if it then matches its item. The original
+        timestamp is kept, so the age limit still bounds a result that is never confirmed."""
+        items = {c: rec["items"][c] for c in cids if c in rec["items"]}
+        if not items:
+            return 0
+        for r in self.carries:
+            if r["id"] == rec["id"]:
+                r["items"].update(items)
+                r["n"] = len(r["items"])
+                return len(items)
+        self.carries.append({"id": rec["id"], "label": rec.get("label") or "", "at": rec.get("at"),
+                             "n": len(items), "items": items})
+        return len(items)
 
     # ---- this run's batch ----
     def run(self, reqs, items, deadline, label):

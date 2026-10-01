@@ -272,21 +272,22 @@ def draft_page_batch(pending, deadline, book, label, prefix, body, parse):
 
 def carried_pages(book, label, prefix, parse):
     """Collect the extraction batches earlier runs carried. Returns (carried, inflight, tally, ready):
-    `carried` maps url -> {"h", "items", "rec"} for each usable result, `inflight` maps url -> h for
-    pages in a batch still running, and `tally` is {batch id: [applied, re-queued]}. The caller
-    applies a carried result only when the page's text this run hashes to the carried `h`."""
+    `carried` maps url -> [{"h", "items", "rec", "cid"}, ...] for each usable result (a page can have
+    more than one, from runs that each saw different text), `inflight` maps url -> h for pages in a
+    batch still running, and `tally` is {batch id: [applied, re-queued, kept]}. The caller applies a
+    carried result only when the page's text this run hashes to the carried `h`."""
     ready, inflight_items = book.collect(label)
     inflight = {it.get("url"): it.get("h") for it in inflight_items.values()}
     carried, tally = {}, {}
     for rec in ready:
-        tally[rec["id"]] = [0, 0]
+        tally[rec["id"]] = [0, 0, 0]
         for cid, it in rec["items"].items():
             url, h = it.get("url"), it.get("h")
             got = _page_result(rec["results"].get(cid), parse)
             if got is None or not url or cid != page_cid(prefix, url, h):
                 tally[rec["id"]][1] += 1
                 continue
-            carried[url] = {"h": h, "items": got, "rec": rec["id"]}
+            carried.setdefault(url, []).append({"h": h, "items": got, "rec": rec["id"], "cid": cid})
     return carried, inflight, tally, ready
 
 
@@ -377,29 +378,51 @@ def _default_ai(body, label="call"):
     return update.anthropic_json(body, label)
 
 
+def settle_carried(url, h, carried, tally, tag, why="the page now hashes to %s"):
+    """Take the carried results for `url` out of `carried`, given the page's CURRENT hash `h`.
+    Returns the one written for exactly that text (or None); every other one describes text the page
+    no longer has and is discarded with a log line (counted re-queued). Called first for every page
+    that was read, before any in-flight check, so a stale result is never left standing."""
+    hit = None
+    for c in carried.pop(url, None) or ():
+        if hit is None and c["h"] == h:
+            hit = c
+            continue
+        tally[c["rec"]][1] += 1
+        print("  . %s: discarding carried extraction of %s from batch %s: it was made from text "
+              "hashing %s, %s" % (tag, url, c["rec"], c["h"], why % h), flush=True)
+    return hit
+
+
 def resolve_carried(url, h, label, carried, inflight, tally, notes, tag):
-    """Decide what a CHANGED, content-valid page does with the carries. Returns "held" (its
-    extraction is still running in a carried batch: leave it un-hashed this run), a list (the
-    carried extraction of exactly this text: use it, no new call), or None (extract it now). A
-    carried result for different text is re-queued -- the page moved after the batch was sent."""
+    """Decide what a CHANGED, content-valid page does with the carries. Returns a list (the carried
+    extraction of exactly this text: use it, no new call), "held" (its extraction is still running
+    in a carried batch: leave it un-hashed this run), or None (extract it now). The carried results
+    are matched first: one for different text is discarded -- the page moved after the batch was
+    sent -- whether or not another batch for the page is still running."""
+    c = settle_carried(url, h, carried, tally, tag)
+    if c is not None:
+        tally[c["rec"]][0] += 1
+        return c["items"]
     if url in inflight and inflight[url] == h:
         notes.append("%s: %s extraction still in a carried batch; collected next run." % (tag, label))
         return "held"
-    c = carried.pop(url, None)
-    if c is None:
-        return None
-    if c["h"] == h:
-        tally[c["rec"]][0] += 1
-        return c["items"]
-    tally[c["rec"]][1] += 1
     return None
 
 
-def finish_carried(book, carried, tally, ready):
-    """Count every carried result no page claimed this run (unreachable, unchanged, or no longer a
-    source) as re-queued, and print one line per collected batch."""
-    for c in carried.values():
-        tally[c["rec"]][1] += 1
+def finish_carried(book, carried, tally, ready, unread=()):
+    """Settle every carried result no page claimed this run, and print one line per collected batch.
+    A result for a page in `unread` -- a source this run could not read (unreachable, or fetched
+    without its content markers) -- stays carried: its page's current text is unknown, so it can be
+    neither applied nor called stale, and the next run tries it against the page again. The carry's
+    age limit bounds it. Any other (a page no longer among the sources) is re-queued."""
+    recs = {rec["id"]: rec for rec in ready}
+    for url, entries in carried.items():
+        for c in entries:
+            if url in unread:
+                tally[c["rec"]][2] += book.recarry(recs[c["rec"]], [c["cid"]])
+            else:
+                tally[c["rec"]][1] += 1
     carried.clear()
     for rec in ready:
         book.report(rec, *tally[rec["id"]])
@@ -432,15 +455,21 @@ def run(fetch=None, ai=None, today=None, sources=None, batch_enabled=False, carr
 
     # Phase 1: fetch + hash + marker-check each source; collect the CHANGED, content-valid pages.
     pending = []   # {label, url, text, h, carried}
+    unread = set()  # sources not read this run: their carried extractions stay carried
     for label, url in sources:
         text = fetch_text(url, fetch)
         if not text:
             notes.append("COURTRULES: %s unreachable; will retry." % label)
+            unread.add(url)
             continue
         h = page_hash(text)
         if seen_pages.get(url) == h:
             notes.append("COURTRULES: %s unchanged." % label)
             new_pages[url] = h
+            # Already settled at this text: a carried extraction of it is not needed, and one of
+            # other text is stale.
+            settle_carried(url, h, carried, tally, "courtrules-extract",
+                           "the page is unchanged since it was settled at %s")
             continue
         if not has_rules_markers(text):
             # Fetched, but it does not look like the amendments content (a JS-only shell, a redesign,
@@ -449,12 +478,13 @@ def run(fetch=None, ai=None, today=None, sources=None, batch_enabled=False, carr
             # it, and surface it so a silent stall becomes a visible, recurring note.
             notes.append("COURTRULES: %s fetched but shows no Federal Rules markers "
                          "(shell/redesign/moved?); not recording, will retry." % label)
+            unread.add(url)
             continue
         got = resolve_carried(url, h, label, carried, inflight, tally, notes, "COURTRULES")
         if isinstance(got, str):
             continue                       # "held": still in a carried batch, stays un-hashed
         pending.append({"label": label, "url": url, "text": text, "h": h, "carried": got})
-    finish_carried(book, carried, tally, ready)
+    finish_carried(book, carried, tally, ready, unread)
 
     # Phase 2: extract the changed pages -- one batch job, or synchronously per page. Same {url: ams}
     # space either way (ams is a list, or None on a transient error that must retry un-hashed). A

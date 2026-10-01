@@ -13,7 +13,8 @@ What is pinned here:
     synchronous loop is told to stop when the step is nearly out of time.
   * CarryBook.collect: an ended batch's results come back only for the custom_ids the carry
     recorded. A running batch stays carried and its items are reported as in flight. A too-old
-    carry is dropped with a log line. A 4xx drops the carry; a transport failure keeps it.
+    carry is dropped with a log line. A 404 (the batch is gone) drops the carry; a transport
+    failure, a 401/403/429 or any other 4xx keeps it.
   * CarryBook.run: the id is written to disk at SUBMIT (before the wait) on --apply. A timeout
     carries the batch, and a finished batch leaves the book. A dry run never writes.
   * legislation.yml: each watch step's timeout-minutes equals siteconfig, and the steps plus setup
@@ -146,11 +147,55 @@ def test_collect():
     check("a result for an id the carry did not record is ignored, and said so",
           "zz-9" not in ready[0]["results"] and "did not carry" in out, out)
     check("a running batch's items are in flight", set(inflight) == {"c-1", "f-1"})
-    check("a 4xx drops the carry (its items are processed again)",
+    check("a 404 drops the carry (its items are processed again)",
           "dropping carried batch b_gone" in out and "e-1" not in inflight)
     check("a transport failure keeps the carry", "keeping it for next run" in out)
     check("the book keeps only the running and the unreadable batches",
           [r["id"] for r in book.carries] == ["b_running", "b_flaky"])
+
+    # Only "the batch is gone" justifies dropping a paid carry. A key problem (401/403), a rate
+    # limit (429) or another 4xx says nothing about the batch: keep it (the age limit bounds it).
+    errs = {
+        "k401": ("legislation-write GET -> HTTP 401: invalid x-api-key", True),
+        "k403": ("legislation-write GET -> HTTP 403: permission_error", True),
+        "k429": ("legislation-write GET -> HTTP 429: rate_limit_error", True),
+        "k400": ("legislation-write GET -> HTTP 400: invalid_request_error: bad header", True),
+        "k409": ("legislation-write GET -> HTTP 409: conflict", True),
+        "g404": ("legislation-write GET -> HTTP 404: not_found_error", False),
+        "g400": ("legislation-write GET -> HTTP 400: invalid_request_error: Invalid batch id 'g400'",
+                 False),
+    }
+
+    def status4(bid, label="batch"):
+        raise batch.BatchError(errs[bid][0])
+
+    book4 = W.CarryBook("legislation", [_rec(b, iso_now, {"%s-1" % b: {"k": b}}) for b in errs])
+    with patched(W, clock=clk), patched(batch, status=status4):
+        (_ready4, inflight4), out4 = quiet(book4.collect, "lbl")
+    for b, (msg, kept) in errs.items():
+        code = msg.split("HTTP ")[1][:3]
+        if kept:
+            check("an HTTP %s (%s) keeps the carry, its items in flight" % (code, b),
+                  b in [r["id"] for r in book4.carries] and "%s-1" % b in inflight4, out4)
+        else:
+            check("an HTTP %s that says the batch is gone (%s) drops the carry" % (code, b),
+                  b not in [r["id"] for r in book4.carries] and "dropping carried batch %s" % b in out4, out4)
+    check("batch_gone ignores a transport error with no HTTP status",
+          not W.batch_gone(batch.BatchError("x GET -> <urlopen error timed out>")))
+
+    # recarry: an ended batch put back for the ids this run could not confirm keeps its id and
+    # timestamp (so the age limit still applies) and only those ids.
+    rec = {"id": "b_back", "label": "x", "at": iso_now, "items": {"p-1": {}, "q-1": {}},
+           "results": {}}
+    book4 = W.CarryBook("legislation", [])
+    n = book4.recarry(rec, ["q-1", "nope"])
+    check("recarry keeps only the named ids, under the same id and timestamp",
+          n == 1 and book4.carries == [{"id": "b_back", "label": "x", "at": iso_now, "n": 1,
+                                       "items": {"q-1": {}}}], str(book4.carries))
+    book4.recarry(rec, ["p-1"])
+    check("a second recarry of the same batch merges into the one record",
+          len(book4.carries) == 1 and set(book4.carries[0]["items"]) == {"p-1", "q-1"}
+          and book4.carries[0]["n"] == 2)
     _, out2 = quiet(W.CarryBook.report, ready[0], 1, 1)
     check("the collected line is the documented one",
           "  . collected carried batch b_ended (1 results applied, 1 re-queued)" in out2, out2)
@@ -260,8 +305,10 @@ def _step_running(steps, script):
 
 def _eval_if(expr, ctx):
     """Evaluate a step `if:` the way GitHub does, for the subset this workflow uses: status
-    functions, `steps.<id>.outputs.<name>`, `inputs.<name>`, ==, !=, !, &&, ||, quoted strings,
-    true/false. An expression with no status function is implicitly `success() && (...)`."""
+    functions, `steps.<id>.outputs.<name>`, `steps.<id>.outcome`, `inputs.<name>`, ==, !=, !, &&,
+    ||, quoted strings, true/false. An expression with no status function is implicitly
+    `success() && (...)`. Once the run is cancelled (the job timeout), success() and !cancelled()
+    are false and only always() / cancelled() steps run."""
     if expr is None:
         expr = "success()"
     expr = str(expr).strip()
@@ -272,37 +319,105 @@ def _eval_if(expr, ctx):
     py = expr
     py = re.sub(r"steps\.([A-Za-z_][\w-]*)\.outputs\.([\w-]+)",
                 lambda m: "S(%r,%r)" % (m.group(1), m.group(2)), py)
+    py = re.sub(r"steps\.([A-Za-z_][\w-]*)\.outcome",
+                lambda m: "O(%r)" % m.group(1), py)
     py = re.sub(r"inputs\.([\w-]+)", lambda m: "I(%r)" % m.group(1), py)
     py = py.replace("&&", " and ").replace("||", " or ")
     py = re.sub(r"!(?!=)", " not ", py)
     py = re.sub(r"\btrue\b", "True", py)
     py = re.sub(r"\bfalse\b", "False", py)
+    cancelled = ctx.get("cancelled", False)
     ns = {
         "S": lambda sid, name: ctx["outputs"].get(sid, {}).get(name, ""),
+        "O": lambda sid: ctx.get("outcomes", {}).get(sid, ""),
         "I": lambda name: ctx["inputs"].get(name),
-        "success": lambda: not ctx["failed"],
-        "failure": lambda: ctx["failed"],
+        "success": lambda: not ctx["failed"] and not cancelled,
+        "failure": lambda: ctx["failed"] and not cancelled,
         "always": lambda: True,
-        "cancelled": lambda: False,
+        "cancelled": lambda: cancelled,
     }
     return bool(eval(py, {"__builtins__": {}}, ns))   # noqa: S307 -- fixed, local expression
 
 
-def _simulate(steps, fail_ids=(), changed="0", dry_run=None):
+def _simulate(steps, fail_ids=(), changed="0", dry_run=None, cancel_at=None):
     """Walk the steps in order: which ran. A step listed in fail_ids fails when it runs (and, with
-    no continue-on-error, turns the job red); `changed` is the results step's output."""
-    ctx = {"failed": False, "outputs": {}, "inputs": {"dry_run": dry_run}}
+    no continue-on-error, turns the job red); `changed` is the results step's output. `cancel_at`
+    names a step during which the run is cancelled (the job timeout firing): it does not succeed,
+    and every later step is evaluated as GitHub evaluates it on a cancelled run."""
+    ctx = {"failed": False, "cancelled": False, "outputs": {}, "outcomes": {}, "inputs": {"dry_run": dry_run}}
     ran = []
     for st in steps:
         sid = st.get("id") or st.get("name")
         if not _eval_if(st.get("if"), ctx):
+            ctx["outcomes"][sid] = "skipped"
             continue
         ran.append(sid)
-        if sid in fail_ids and not st.get("continue-on-error"):
-            ctx["failed"] = True
+        if sid == cancel_at:
+            ctx["cancelled"] = True
+            ctx["outcomes"][sid] = "cancelled"
+            continue
+        if sid in fail_ids:
+            ctx["outcomes"][sid] = "failure"
+            if not st.get("continue-on-error"):
+                ctx["failed"] = True
+            continue
+        ctx["outcomes"][sid] = "success"
         if st.get("id") == "run":
             ctx["outputs"]["run"] = {"changed": changed}
+        if "$GITHUB_OUTPUT" in (st.get("run") or "") and st.get("id") == "setup":
+            ctx["outputs"]["setup"] = {"ok": "1"}
     return ran
+
+
+def _carry_save_behaves(script):
+    """Run the carry-save step's script for real against a local bare "origin": the remote file is
+    replaced by the runner's, nothing else in the runner's tree or its local commits is pushed, and
+    a second run with the file unchanged pushes nothing."""
+    import shutil
+    import subprocess
+    if not shutil.which("git") or not shutil.which("bash"):     # pragma: no cover
+        print("  git/bash not available; skipping the carry-save execution check")
+        return
+    env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@e", GIT_COMMITTER_NAME="t",
+               GIT_COMMITTER_EMAIL="t@e", GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+
+    def sh(cmd, cwd):
+        return subprocess.run(cmd, cwd=cwd, env=env, shell=True, check=True, capture_output=True,
+                              text=True).stdout
+
+    with tempfile.TemporaryDirectory() as td:
+        origin, work = os.path.join(td, "origin.git"), os.path.join(td, "work")
+        sh("git init -q --bare -b main %s" % origin, td)
+        sh("git clone -q %s %s" % (origin, work), td)
+        with open(os.path.join(work, "watch_batches.json"), "w") as f:
+            f.write("{}\n")
+        with open(os.path.join(work, "legislation_state.json"), "w") as f:
+            f.write("{\"seen\": {}}\n")
+        sh("git add -A && git commit -qm seed && git push -q origin main", work)
+        # The runner: a carry written, a state file changed, and an unpushed local commit.
+        with open(os.path.join(work, "notes.txt"), "w") as f:
+            f.write("local only\n")
+        sh("git add notes.txt && git commit -qm 'local only'", work)
+        with open(os.path.join(work, "watch_batches.json"), "w") as f:
+            f.write('{"legislation": [{"id": "msgbatch_X", "items": {}}]}\n')
+        with open(os.path.join(work, "legislation_state.json"), "w") as f:
+            f.write("{\"seen\": {\"1\": \"h\"}}\n")
+        renv = dict(env, GITHUB_REF_NAME="main", RUNNER_TEMP=td)
+        r = subprocess.run(["bash", "-e", "-c", script], cwd=work, env=renv, capture_output=True, text=True)
+        check("carry-save (executed): the step succeeds", r.returncode == 0, r.stdout + r.stderr)
+        files = sh("git ls-tree -r --name-only main", origin).split()
+        remote_carry = sh("git show main:watch_batches.json", origin)
+        check("carry-save (executed): main now holds the runner's watch_batches.json",
+              "msgbatch_X" in remote_carry, remote_carry)
+        check("carry-save (executed): nothing else reached main (no local commit, no state file)",
+              sorted(files) == ["legislation_state.json", "watch_batches.json"]
+              and sh("git show main:legislation_state.json", origin) == "{\"seen\": {}}\n"
+              and sh("git log --format=%s main", origin).split("\n")[1] == "seed", str(files))
+        head = sh("git rev-parse main", origin)
+        r2 = subprocess.run(["bash", "-e", "-c", script], cwd=work, env=renv, capture_output=True, text=True)
+        check("carry-save (executed): a second run with nothing new pushes nothing",
+              r2.returncode == 0 and sh("git rev-parse main", origin) == head
+              and "already current" in r2.stdout, r2.stdout + r2.stderr)
 
 
 def test_workflow():
@@ -379,6 +494,65 @@ def test_workflow():
     check("a dry run commits nothing", book not in dry and pr not in dry, str(dry))
     check("the eval helper is not trivially true (a plain step is skipped after a failure)",
           not _eval_if(None, {"failed": True, "outputs": {}, "inputs": {}}))
+    check("the eval helper honors cancellation (!cancelled() is false, always() true)",
+          not _eval_if("${{ !cancelled() }}", {"failed": False, "cancelled": True, "outputs": {},
+                                               "inputs": {}})
+          and _eval_if("${{ always() }}", {"failed": False, "cancelled": True, "outputs": {}, "inputs": {}}))
+
+    # ---- the setup gate: a failed checkout / setup-python / pip install stops every later step
+    #      that needs the repo, but the failure report still fires ----
+    setup_ids = [st.get("id") for st in steps[:min(idx.values())]]
+    check("every setup step has an id, and the last is the setup-ok marker",
+          all(setup_ids) and setup_ids[-1] == "setup"
+          and 'echo "ok=1" >> "$GITHUB_OUTPUT"' in (steps[min(idx.values()) - 1].get("run") or ""),
+          str(setup_ids))
+    carry = next((st.get("id") for st in steps if "watch_batches.json" in (st.get("run") or "")
+                  and "commit-tree" in (st.get("run") or "")), None)
+    check("a carry-save step exists", carry is not None)
+    for failing in ("checkout", "python", "deps"):
+        rs = _simulate(steps, fail_ids=(failing,), changed="1")
+        check("after %s fails: no watch, results, bookkeeping, render, PR or carry step runs" % failing,
+              not any(x in rs for x in (leg, reg, crc, eth, "run", book, render, pr, carry)), str(rs))
+        check("after %s fails: the failure report fires" % failing, report in rs, str(rs))
+
+    # ---- the job timeout: every !cancelled() step is skipped, but the carry is still saved ----
+    for at in (leg, crc, eth, "run", render):
+        rc = _simulate(steps, changed="1", cancel_at=at)
+        check("cancelled during %s: the carry-save step still runs" % at, carry in rc, str(rc))
+        after = [x for x in (book, pr) if x in rc and rc.index(x) > rc.index(at)]
+        check("cancelled during %s: the !cancelled() steps after it do not" % at, not after, str(rc))
+    check("the carry-save step does not run on a dry run, even when cancelled",
+          carry not in _simulate(steps, changed="0", dry_run=True)
+          and carry not in _simulate(steps, changed="0", dry_run=True, cancel_at=crc))
+    check("the carry-save step also runs on a clean run (a no-op when main already has the file)",
+          carry in quiet_ok and carry in cards_ok)
+    check("the carry-save step comes after the bookkeeping and the review PR",
+          ids.index(carry) > ids.index(book) and ids.index(carry) > ids.index(pr))
+    cst = next(st for st in steps if st.get("id") == carry)
+    crun = cst.get("run") or ""
+    check("the carry-save step's `if` is always() and not a dry run",
+          "always()" in str(cst.get("if")) and "inputs.dry_run != true" in str(cst.get("if")))
+    check("the carry-save step commits ONLY watch_batches.json, onto the freshly fetched tip",
+          "git fetch" in crun and "read-tree" in crun and "update-index --add --cacheinfo" in crun
+          and crun.count("watch_batches.json") >= 3 and "git add" not in crun
+          and not re.search(r"git commit\b(?!-tree)", crun), crun)
+    check("the carry-save step never pushes local HEAD (only the commit it built)",
+          re.search(r'git push origin "\$commit:refs/heads/\$branch"', crun) is not None
+          and not re.search(r"git push\s*($|\|\||;|&&)", crun, re.M), crun)
+    check("the carry-save step is a no-op when the remote file already matches",
+          '= "$blob" ]' in crun and "exit 0" in crun)
+    _carry_save_behaves(crun)
+
+    # ---- a failed bookkeeping push must not leak its local commit into the review PR ----
+    rb = _simulate(steps, fail_ids=(book,), changed="1")
+    check("bookkeeping push fails: the review PR does not run (its base would hold the unpushed commit)",
+          pr not in rb, str(rb))
+    check("bookkeeping push fails: the carry still reaches main through the carry-save step",
+          carry in rb, str(rb))
+    check("bookkeeping push fails: the failure report fires", report in rb, str(rb))
+    prst = next(st for st in steps if st.get("id") == pr)
+    check("the review PR requires the bookkeeping step's success",
+          "steps.%s.outcome == 'success'" % book in str(prst.get("if")))
 
     # What the bookkeeping commits.
     brun = next(st["run"] for st in steps if "bookkeeping" in (st.get("name") or ""))

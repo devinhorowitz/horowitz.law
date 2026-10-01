@@ -530,11 +530,14 @@ def run(fetch=None, ai=None, today=None, max_run=None, lookback=None, batch_enab
     held = 0
     for d in fresh:
         dn, pub = str(d.get("document_number")), (d.get("publication_date") or "")
+        # The carried result is checked before the in-flight one, as in legislation.run. A document
+        # number names one immutable document, so a carried result for it is never stale: it is
+        # applied below even when another carried batch for the same rule is still running.
+        if dn in carried:
+            continue                        # applied below, from the carried result
         if dn in inflight:
             held += 1                       # its write is still running in a carried batch
             continue
-        if dn in carried:
-            continue                        # applied below, from the carried result
         if len(pending) >= max_run:
             notes.append("REGULATION: hit REGULATION_MAX=%d; remaining rules retry next run." % max_run)
             break

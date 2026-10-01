@@ -57,6 +57,7 @@ jobs:
       #   github.com / api.github.com  checkout + PR push, the PR-open and failure-alert gh steps.
       # Cache/infra endpoints are auto-allowed.
       - name: Harden the runner
+        id: harden
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
@@ -73,13 +74,25 @@ jobs:
             release-assets.githubusercontent.com:443
             raw.githubusercontent.com:443
             api.github.com:443
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - id: python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: .python-version
       - name: Install dependencies
+        id: deps
         run: pip install -r requirements.txt
+
+      # The setup gate. This step runs only if every setup step above succeeded, so ok=1 means the
+      # repo is checked out and Python and the requirements are installed. Every step after it that
+      # needs the repo or Python checks steps.setup.outputs.ok. The watch steps keep `!cancelled()`
+      # so a failed WATCH does not stop the later ones, but a failed SETUP stops them all: without a
+      # checkout or the requirements they could only fail again, or commit an incomplete tree.
+      - name: Setup complete
+        id: setup
+        run: echo "ok=1" >> "$GITHUB_OUTPUT"
 
       # Each watch runs in its OWN step, with its own time limit. They used to share one bash step,
       # so if any watch failed or was killed, the job lost every file the earlier watches had already
@@ -93,9 +106,10 @@ jobs:
       # Every step after the first runs `if: !cancelled()`. A watch that fails or times out therefore
       # fails only its own step: the later watches still run, and the results, bookkeeping, render
       # and review-PR steps still save whatever the run produced. The job still ends red, so the
-      # failure report fires.
+      # failure report fires. Each also requires the setup gate (steps.setup.outputs.ok).
       - name: Statutes watch (legislation.py)
         id: leg
+        if: ${{ steps.setup.outputs.ok == '1' }}
         timeout-minutes: 40
         env:
           LEGISCAN_API_KEY: ${{ secrets.LEGISCAN_API_KEY }}
@@ -114,7 +128,7 @@ jobs:
 
       - name: Regulations watch (regulations.py)
         id: reg
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' }}
         timeout-minutes: 10
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -128,7 +142,7 @@ jobs:
 
       - name: Court rules watch (courtrules.py)
         id: crc
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' }}
         timeout-minutes: 15
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -142,7 +156,7 @@ jobs:
 
       - name: Ethics opinions watch (ethics.py)
         id: eth
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' }}
         timeout-minutes: 12
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -157,7 +171,7 @@ jobs:
       # build the combined review-PR body. Runs even when a watch step failed.
       - name: Collect the watches' results
         id: run
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' }}
         run: |
           touch "$RUNNER_TEMP/run.log"
           if [ "${{ inputs.dry_run }}" = "true" ]; then
@@ -203,9 +217,14 @@ jobs:
       #   * On a quiet run (no cards), the advanced seen-state and run logs go too: a settled
       #     non-match must not be re-screened. On a run with cards, those files ride the review PR
       #     with the cards they explain (below).
-      # This runs BEFORE the review PR is opened, so the PR is opened on top of this commit.
+      # This runs BEFORE the review PR is opened, so the PR is opened on top of this commit. If its
+      # push fails (twice), its commit exists only on this runner, and create-pull-request would
+      # carry that unpushed commit into the review branch. So render and the review PR run only
+      # when this step SUCCEEDED (or was skipped on a dry run, where no PR opens anyway). The carry
+      # still reaches main through the "Save carried batches" step below, and the job ends red.
       - name: Commit bookkeeping and carried batches
-        if: ${{ !cancelled() && inputs.dry_run != true && steps.run.outputs.changed != '' }}
+        id: book
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' && inputs.dry_run != true && steps.run.outputs.changed != '' }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -223,7 +242,8 @@ jobs:
       # review PR. A person confirms every card before it publishes -- merge to accept, edit the
       # watch's JSON on the branch to correct.
       - name: Render the page and feeds
-        if: ${{ !cancelled() && steps.run.outputs.changed == '1' }}
+        id: render
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' && steps.run.outputs.changed == '1' && steps.book.outcome == 'success' }}
         run: python scripts/render.py
 
       # legislation_rejections.jsonl (the recall check's drop log) and regulations_rejections.jsonl
@@ -237,7 +257,8 @@ jobs:
       # tracked (seeded empty, like watch_batches.json) because `git add` of a missing path fails
       # and stages nothing at all.
       - name: Open review pull request
-        if: ${{ !cancelled() && steps.run.outputs.changed == '1' }}
+        id: pr
+        if: ${{ !cancelled() && steps.setup.outputs.ok == '1' && steps.run.outputs.changed == '1' && steps.book.outcome == 'success' }}
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           branch: bot/legislation-review
@@ -283,6 +304,48 @@ jobs:
             public/stats.html
             public/subscribe.html
             public/follow.html
+
+      # The carry's last line of defence. If the job timeout (or a manual cancel) stops the run, every
+      # `!cancelled()` step above is skipped, the bookkeeping included, and a batch id a watch wrote
+      # to watch_batches.json at submit time would be lost with the runner. This step runs even then
+      # (always()), on every non-dry run that got through setup. It commits watch_batches.json ALONE
+      # onto the branch's current tip, fetched fresh, with git plumbing: it never commits any other
+      # file and never pushes a local commit (an unpushed bookkeeping commit stays where it is).
+      # When the remote file already matches (the normal case, after the bookkeeping), it does
+      # nothing. On a scheduled run the branch is main, the same branch the bookkeeping pushes to.
+      - name: Save carried batches
+        id: carry
+        if: ${{ always() && steps.setup.outputs.ok == '1' && inputs.dry_run != true }}
+        timeout-minutes: 3
+        run: |
+          [ -f watch_batches.json ] || { echo "no watch_batches.json; nothing to save"; exit 0; }
+          python -c 'import json, sys; json.load(open(sys.argv[1]))' watch_batches.json \
+            || { echo "watch_batches.json is not valid JSON; not saving it"; exit 1; }
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          branch="${GITHUB_REF_NAME}"
+          blob=$(git hash-object -w watch_batches.json)
+          for attempt in 1 2 3; do
+            git fetch --no-tags --depth=1 origin "$branch" || { sleep 5; continue; }
+            base=$(git rev-parse FETCH_HEAD)
+            if [ "$(git rev-parse -q --verify "$base:watch_batches.json" || true)" = "$blob" ]; then
+              echo "watch_batches.json already current on $branch"
+              exit 0
+            fi
+            tree=$(GIT_INDEX_FILE="$RUNNER_TEMP/carry.index" sh -c '
+              git read-tree "$1" &&
+              git update-index --add --cacheinfo "100644,$2,watch_batches.json" &&
+              git write-tree' _ "$base" "$blob")
+            commit=$(git commit-tree "$tree" -p "$base" -m "legislation watch: save carried batches [skip ci]")
+            if git push origin "$commit:refs/heads/$branch"; then
+              echo "saved watch_batches.json to $branch"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "could not save watch_batches.json to $branch"
+          exit 1
+
       # Surfaces a broken run instead of letting it fail silently: comments on the one open
       # tracking issue, or opens it the first time, so repeated failures collect on one issue.
       - name: Report a failed run

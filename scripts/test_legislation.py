@@ -511,6 +511,74 @@ def test_carry(check, L, make_ai, fake_fetch):
                   and cid111 in fresh and "msgbatch_P (0 results applied, 1 re-queued)" in out, out)
             L._load_seen = real[3]
 
+            # ---- 5b. REGRESSION: an ENDED carry A holds bill 111 at an old hash while an IN-FLIGHT
+            #      carry B holds 111 at its current hash. The in-flight check used to run first and
+            #      `continue`, leaving A's result standing, so the run carded A's stale synopsis and
+            #      recorded seen['111'] = 'h-OLD'. A carried result is applied only at the bill's
+            #      current hash; A must be discarded (logged) and B left in flight. ----
+            old_cid = L._carry_cid("111", "h-OLD")
+            pair = [
+                {"id": "msgbatch_A_ended", "at": W._iso(time.time()), "items": {old_cid: {
+                    "bid": "111", "ch": "h-OLD", "state": "GA", "areas": [], "prev": None,
+                    "detail": {"bill_id": 111, "number": "SB 68", "title": "old", "change_hash": "h-OLD"}}}},
+                {"id": "msgbatch_B_running", "at": W._iso(time.time()), "items": {cid111: {
+                    "bid": "111", "ch": "h-sb68-v1", "state": "GA", "areas": [], "prev": None,
+                    "detail": {"bill_id": 111, "number": "SB 68", "title": "current"}}}},
+            ]
+            B.status = lambda bid, label="batch": (
+                {"id": bid, "processing_status": "ended", "results_url": "u"} if bid == "msgbatch_A_ended"
+                else {"id": bid, "processing_status": "in_progress"})
+            B.collect = lambda obj, label="batch": {old_cid: keep("STALE A synopsis.")}
+            fresh.clear()
+            screened.clear()
+            book = W.CarryBook("legislation", pair)
+            (cards, notes, seen), out = go(book)
+            check("stale ended + current in flight: the stale result is NOT carded",
+                  "STALE A synopsis." not in {c["synopsis"] for c in cards} and 111 not in
+                  {c["bill_id"] for c in cards}, str(cards))
+            check("stale ended + current in flight: the stale hash is NOT recorded seen",
+                  seen.get("111") != "h-OLD" and "111" not in seen, str(seen))
+            check("stale ended + current in flight: the stale result is discarded with a log line",
+                  "discarding carried result for bill 111 from batch msgbatch_A_ended" in out
+                  and "msgbatch_A_ended (0 results applied, 1 re-queued)" in out, out)
+            check("stale ended + current in flight: the bill is held for the running batch, not "
+                  "screened or written again",
+                  not any("SB 68" in t for t in screened) and cid111 not in fresh
+                  and any("still in a carried write batch" in n for n in notes), str(screened))
+            check("stale ended + current in flight: only the running batch stays carried",
+                  [r["id"] for r in book.carries] == ["msgbatch_B_running"])
+
+            # ---- 5c. a carried result for a bill discovery did not list this run cannot be checked
+            #      against the bill's current hash: it is not applied, and it stays carried ----
+            lost_cid = L._carry_cid("555", "h-555")
+            unlisted = [{"id": "msgbatch_U", "label": "legislation-write", "at": W._iso(time.time()),
+                         "items": {lost_cid: {"bid": "555", "ch": "h-555", "state": "GA", "areas": [],
+                                              "prev": None, "detail": {"bill_id": 555, "number": "HB 5",
+                                                                       "title": "t"}}}}]
+            B.status = lambda bid, label="batch": {"id": bid, "processing_status": "ended", "results_url": "u"}
+            B.collect = lambda obj, label="batch": {lost_cid: keep("UNCONFIRMED synopsis.")}
+            book = W.CarryBook("legislation", unlisted)
+            (cards, _notes, seen), out = go(book)
+            check("unlisted: the unconfirmed result is not applied",
+                  555 not in {c["bill_id"] for c in cards} and "555" not in seen)
+            check("unlisted: it stays carried (same batch, same timestamp) for the next run",
+                  [(r["id"], list(r["items"]), r["at"]) for r in book.carries]
+                  == [("msgbatch_U", [lost_cid], unlisted[0]["at"])], str(book.carries))
+            check("unlisted: reported as kept carried",
+                  "msgbatch_U (0 results applied, 0 re-queued, 1 kept carried)" in out, out)
+
+            # ---- 5d. past the card cap, discovery still matches carried results ----
+            B.collect = lambda obj, label="batch": {cid111: keep("CAPPED-RUN synopsis.")}
+            capped = [{"id": "msgbatch_C", "at": W._iso(time.time()), "items": {cid111: {
+                "bid": "111", "ch": "h-sb68-v1", "state": "GA", "areas": [], "prev": None,
+                "detail": {"bill_id": 111, "number": "SB 68", "title": "t"}}}}]
+            book = W.CarryBook("legislation", capped)
+            (cards, notes, seen), out = go(book, max_run=0)
+            check("capped run: the carried result is still matched and applied",
+                  {c["bill_id"]: c["synopsis"] for c in cards}.get(111) == "CAPPED-RUN synopsis."
+                  and seen.get("111") == "h-sb68-v1" and any("LEGISLATION_MAX" in n for n in notes),
+                  "%r %r" % (cards, notes))
+
             # ---- 6. a carry too old to collect is dropped and its bills processed again ----
             polled = []
             B.status = lambda bid, label="batch": polled.append(bid) or {"processing_status": "ended"}

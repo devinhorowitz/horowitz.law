@@ -855,21 +855,24 @@ def _draft_cards(pending, deadline=None, book=None, seen=None):
 def _carried_writes(book, seen):
     """Collect the write batches earlier runs carried. Returns (carried, inflight, tally, ready):
 
-      * carried  -- {bid: {"item", "verdict", "rec"}} for each result that can be applied: a parsed
-                    verdict (a card or a definitive decline) for a bill whose seen hash is still the
-                    one recorded when the batch was submitted (nothing has settled it since);
+      * carried  -- {bid: [{"item", "verdict", "rec", "cid"}, ...]} for each result that could be
+                    applied: a parsed verdict (a card or a definitive decline) for a bill whose seen
+                    hash is still the one recorded when the batch was submitted. A bill can have
+                    more than one (two runs each carried a different version); run() applies at
+                    most the one whose change_hash is the bill's CURRENT hash and discards the rest;
       * inflight -- {bid: ch} for the bills in a batch that is still running, left alone this run;
-      * tally    -- {batch id: [applied, re-queued]}; re-queued already counts the results that
-                    cannot be used (errored, expired, unparseable, or settled since);
+      * tally    -- {batch id: [applied, re-queued, kept]}; re-queued already counts the results
+                    that cannot be used (errored, expired, unparseable, or settled since);
       * ready    -- the collected batches, reported once the run knows what was applied.
 
-    A carried result is only ever applied to the bill AND version its custom_id names; anything
-    else goes back through the normal pass, so a carry never stands in for different work."""
+    A carried result is only ever applied to the bill AND version its custom_id names, and only once
+    discovery has shown that version is the bill's current one; anything else goes back through the
+    normal pass, so a carry never stands in for different work."""
     ready, inflight_items = book.collect("legislation-write")
     inflight = {str(it.get("bid")): it.get("ch") or "" for it in inflight_items.values()}
     carried, tally = {}, {}
     for rec in ready:
-        tally[rec["id"]] = [0, 0]
+        tally[rec["id"]] = [0, 0, 0]
         for cid, item in rec["items"].items():
             bid, ch = str(item.get("bid")), item.get("ch") or ""
             verdict = _batch_verdict(rec["results"].get(cid))
@@ -877,8 +880,27 @@ def _carried_writes(book, seen):
                     or seen.get(bid) != item.get("prev") or not item.get("detail")):
                 tally[rec["id"]][1] += 1
                 continue
-            carried[bid] = {"item": dict(item, bid=bid, ch=ch), "verdict": verdict, "rec": rec["id"]}
+            carried.setdefault(bid, []).append({"item": dict(item, bid=bid, ch=ch), "verdict": verdict,
+                                                "rec": rec["id"], "cid": cid})
     return carried, inflight, tally, ready
+
+
+def _match_carried(entries, bid, ch, tally):
+    """The one carried result for bill `bid` written at its CURRENT change_hash `ch`, or None. Every
+    other carried result for the bill describes a version that is no longer current: it is discarded
+    with a log line (counted re-queued), whatever else is true of the bill -- including a newer write
+    for it still running in another carried batch. Applying it would card a stale synopsis and record
+    the stale hash as seen."""
+    hit = None
+    for e in entries or ():
+        if hit is None and e["item"]["ch"] == ch:
+            hit = e
+            continue
+        tally[e["rec"]][1] += 1
+        print("  . legislation-write: discarding carried result for bill %s from batch %s: it was "
+              "written at change_hash %s, the bill is now at %s"
+              % (bid, e["rec"], e["item"]["ch"] or "?", ch or "?"), flush=True)
+    return hit
 
 
 def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, screen_max=None,
@@ -930,6 +952,7 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
     # Carried write batches first: what an earlier run paid for is collected before anything is
     # screened, so a bill whose card is already written is neither re-screened nor re-written.
     carried, inflight, tally, ready = _carried_writes(book, seen)
+    confirmed = {}           # bid -> the carried result discovery matched to the bill's current hash
     held = 0
     screened = 0
     stop = False
@@ -942,35 +965,44 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
     drops = []
     drop_bills = {}          # bill_id -> the master-list bill, for an escalation that cannot re-fetch
     for state in states:
-        if stop:
-            break
+        if stop and not carried:
+            break                       # past a cap, discovery goes on only to match carried results
         cands = discover(key, state=state, fetch=fetch, today=today, seen=seen,
                          pollstate=pollstate, now=now)
         note("LEGISLATION[%s]: %d enacted/vetoed bill(s) moved since last run." % (state, len(cands)))
         for b, _sess in cands:
             # Carried bills are settled before the caps: they cost no screen and no new write.
             bid, ch = str(b.get("bill_id")), (b.get("change_hash") or "")
+            # Carried results are matched FIRST, against the hash discovery just read. A result
+            # written at any other hash is discarded here (the bill moved after its batch was
+            # submitted, so that card describes an old version), before the in-flight check below
+            # can skip the bill and leave a stale result standing to be applied after the loop.
+            entries = carried.pop(bid, None)
+            if bid in confirmed:
+                # The same bill listed again (it can appear in more than one watched session):
+                # matched already. Under a different hash, the match is no longer known current.
+                entries = [confirmed.pop(bid)] + (entries or [])
+            hit = _match_carried(entries, bid, ch, tally)
+            if hit is not None:
+                confirmed[bid] = hit        # applied below, from the carried result
+                continue
             if bid in inflight and inflight[bid] == ch:
                 held += 1                   # its write is still running in a carried batch
                 continue
-            if bid in carried:
-                if carried[bid]["item"]["ch"] == ch:
-                    continue                # applied below, from the carried result
-                # The bill moved after its batch was submitted: that card describes an old version.
-                # Re-queue it, and this run screens and writes the current version as usual.
-                tally[carried.pop(bid)["rec"]][1] += 1
+            if stop:
+                continue                    # past a cap: only carried results are still matched
             if len(pending) >= max_run:
                 note("LEGISLATION: hit LEGISLATION_MAX=%d cards; remaining bills retry next run." % max_run)
                 stop = True
-                break
+                continue
             if screened >= screen_max:
                 note("LEGISLATION: hit LEGISLATION_SCREEN_MAX=%d; remaining bills retry next run." % screen_max)
                 stop = True
-                break
+                continue
             if budget.low():
                 note("LEGISLATION: step time is running low; remaining bills retry next run.")
                 stop = True
-                break
+                continue
             screened += 1
             keep, areas, reason = screen_bill(b, ai, state=state)
             if not keep:
@@ -1076,10 +1108,18 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
         note("LEGISLATION: recall audited %d screen drop(s), %d failed, %d suspect, %d escalated."
              % (len(drops), failed_n, suspect_n, escalated_n))
 
-    # Carried results that survived discovery: each is applied to exactly the bill and version it was
-    # written for, and only while nothing has settled that bill since (see _carried_writes).
+    # Carried results discovery confirmed: each is applied to exactly the bill and version it was
+    # written for, that version is the bill's current one, and nothing has settled the bill since.
     resumed = []
-    for bid, c in carried.items():
+    # A carried result for a bill discovery did not return this run (its session's master list
+    # failed or was skipped, or the bill left the enacted/vetoed list) cannot be checked against the
+    # bill's current hash, so it is not applied. It stays carried: the next run collects it again and
+    # applies it only if discovery then shows the same version. The carry's age limit bounds it.
+    recs = {rec["id"]: rec for rec in ready}
+    for entries in carried.values():
+        for e in entries:
+            tally[e["rec"]][2] += book.recarry(recs[e["rec"]], [e["cid"]])
+    for bid, c in confirmed.items():
         it = c["item"]
         tally[c["rec"]][0] += 1
         resumed.append(({"bid": bid, "ch": it["ch"], "detail": dict(it["detail"]), "state": it.get("state")
