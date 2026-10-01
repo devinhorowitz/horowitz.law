@@ -1,9 +1,18 @@
 name: Ruff lint
 
 on:
-  pull_request: {}
-  # Also lint commits pushed straight to main (bots, the golden build, review-apply):
-  # ruff otherwise runs on PRs only, so a direct-to-main push skipped it entirely.
+  # Only PRs that can change what ruff sees: the code it lints (src below is ./scripts; ruff.toml
+  # adds no other include), its config, and this workflow. The bots' data-only PRs (new cards,
+  # render-sync, treatment) change no Python, and linting them only parked a run in
+  # action_required on every one.
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'ruff.toml'
+      - '.github/workflows/ruff.yml'
+  # Also lint Python pushed straight to main by hand, which has no PR run to catch it. No bot
+  # pushes Python: the direct-to-main bots commit data and state files only, and model-watch's
+  # scripts/ edits ride a PR, linted above.
   push:
     paths:
       - 'scripts/**'
