@@ -207,7 +207,12 @@ SKILL_MANIFEST_MAX_AGE_DAYS = 90
 GASUPREME_HOST = "https://www.gasupreme.us"   # the court's site; the year index is <host>/<year>-opinions/
 GA_BOGUS_DATE_FILED = "2026-06-16"            # CourtListener's stuck date_filed; a card is never auto-published on it unverified
 GA_BACKLOG_PER_RUN = 8          # never-seen GA clusters below the since floor admitted per run, oldest cluster id first; the rest wait
-GA_BACKLOG_MAX_TRIES = 3        # runs an admitted backlog cluster may stay unresolved (no text, deferred) before the mark passes it
+GA_BACKLOG_MAX_TRIES = 3        # runs in which an admitted cluster was actually evaluated and failed (no text after a real fetch, an
+                                # error) before the mark passes it; a run that never reaches it (OPINIONS_MAX cut, time budget,
+                                # REST-budget deferral) costs no try. A passed cluster is recorded in ga_abandoned, never dropped
+GA_ABANDONED_RETRY_DAYS = 7     # an abandoned GA cluster is re-admitted (floor-exempt) once this many days after its last try
+GA_ABANDONED_RETRY_PER_RUN = 2  # abandoned GA clusters re-admitted per run, oldest last-try first
+GA_REDRAFT_MAX_QUERIES = 10     # per-run cap on single-id search-feed lookups for vetoed (redraft) clusters the feeds did not carry
 GA_HIGH_WATER_SEED = 10876000   # first mark when state has none and no scotga card or rejection gives a higher-known GA cluster id
 GA_FEED_ITEM_CAP = 20           # /feed/search/ returns at most this many entries and ignores page=; a full page is split in half
 GA_ENUM_MAX_QUERIES = 40        # per-run cap on enumeration feed queries (the 2026-09 backlog of 54 clusters took 29)

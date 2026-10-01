@@ -109,20 +109,40 @@ from the feed or the release page falls back to the REST text path.
   (`ga_high_water` in `opinions_state.json`) with the free search feed
   (`/feed/search/?type=o&court=ga&q=cluster_id:[A TO B]`). That feed caps a page at 20 and
   ignores paging, so a full page is split in half until each range fits. The first mark is
-  the newest scotga card or rejection, which brings in the post-06-30 backlog.
+  the newest scotga card or rejection, which brings in the post-06-30 backlog. A full page
+  whose entries fall outside the queried range means the feed ignored the filter: the walk
+  stops there (`! ga discovery: ... feed malfunction`) and the mark does not pass it. The
+  court feed is a second witness: a never-seen GA cluster it carries above the mark is added
+  even when the walk missed it (`! ga discovery: /feed/court/ga/ carries never-seen cluster`).
 - **Official dates.** Each GA candidate is re-dated from the court's release page
   (`official_ga.release_index`, which parses both the `<p>` and `<h3>` layouts). The docket
   comes from the opinion PDF's caption, or from a caption match on the page confirmed by a
   `docketNumber` search-feed query. When the page does not list the docket, the date comes
   from the PDF's `Decided:` line instead. CourtListener's date is kept on the card as
   `cl_date_filed`. A card still on the stuck date with neither source is held for review,
-  never auto-published.
+  never auto-published. When the release index is empty or a year page fails, the run says
+  so once: `! ga: release index unavailable (<reason>); dating falls back to PDF Decided: lines`.
 - **Paced backlog.** Never-seen clusters above the mark that the floor would drop are
   admitted `siteconfig.GA_BACKLOG_PER_RUN` at a time (8), oldest first. The rest wait, and
   are not counted as floor drops. The mark stops just below the lowest cluster still waiting
-  or unsettled, so nothing above it is skipped. An admitted cluster that stays unsettled for
-  `GA_BACKLOG_MAX_TRIES` runs is let go. The log reads `. ga backlog: N admitted, M remain`,
-  and the run log carries a `ga` record.
+  or unsettled, so nothing above it is skipped. A cluster spends a try (`ga_backlog_tries`)
+  only in a run that actually evaluated it and failed: no text after a real fetch, or an
+  error. A run that never reached it (cut by `OPINIONS_MAX`, stopped by the time budget,
+  deferred on the CourtListener REST budget) costs nothing, so a quota-starved stretch only
+  holds the mark. After `GA_BACKLOG_MAX_TRIES` failures the mark passes the cluster, but it
+  is not dropped: it is recorded in `opinions_state.json` `ga_abandoned` (id, name, reason,
+  dates), the run prints `! ga backlog: ABANDONED cluster N`, and every run lists the ones
+  outstanding. An abandoned cluster is looked up by id and re-admitted past the floor every
+  `GA_ABANDONED_RETRY_DAYS` (7), `GA_ABANDONED_RETRY_PER_RUN` (2) at a time, so a fix for
+  what stopped it reaches it on its own; to force one now, add its bare cluster id as a line
+  in `queue.txt`. The log reads `. ga backlog: N admitted, M remain`, and the run log
+  carries a `ga` record.
+- **Redrafts below the mark.** A vetoed card is redrafted only when a feed carries its
+  cluster again, and the 20-entry court feed may never carry an older GA release. So each
+  run looks up, by `cluster_id:[x TO x]` on the search feed, the still-pending redraft ids
+  (`review_store.load_redraft_ids`) that no feed carried, up to `GA_REDRAFT_MAX_QUERIES` (10),
+  newest first. An id the GA search feed does not know is another court's and is remembered
+  in `ga_redraft_not_ga`, so it is not queried again.
 - **Re-scrapes.** When a docket also belongs to a cluster already seen or carded, and that
   cluster carries the same date, the new cluster is skipped and marked seen
   (`~ ga re-scrape duplicate`). Rease 10975744 is one, a re-scrape of 10875591.

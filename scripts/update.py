@@ -1183,10 +1183,12 @@ def _pdf_ok(text):
 
 
 def pdf_text(pdf_url, deadline=None):
-    """Extract opinion text from the PDF enclosure on storage.courtlistener.com. The enclosure
-    is a static file, so it needs no token and does not draw on the REST API daily rate limit.
-    Returns cleaned text, or "" on any failure (missing or non-http url, download error,
-    image-only PDF, or pypdf unavailable) so the caller can fall back to the REST API."""
+    """Extract opinion text from an opinion PDF: the enclosure on storage.courtlistener.com, or, for
+    a Supreme Court of Georgia candidate, the court's own PDF on www.gasupreme.us (the release page's
+    link, set by _ga_resolve when the search feed gave no enclosure). Either is a static file, so it
+    needs no token and does not draw on the CourtListener REST daily rate limit. Returns cleaned
+    text, or "" on any failure (missing or non-http url, download error, image-only PDF, or pypdf
+    unavailable) so the caller can fall back to the REST API."""
     if not pdf_url or not pdf_url.lower().startswith(("http://", "https://")):
         return ""
     try:
@@ -2508,9 +2510,16 @@ def ga_enumerate(after, ceiling, deadline=None, max_queries=None, search=None):
             if c and c >= lo and (hi is None or c <= hi):
                 got[c] = it
         if len(items) >= cap:
+            # A full page whose entries are not in the queried range means the feed ignored the
+            # range filter (a single id can match at most one cluster). Splitting cannot help, and
+            # taking the page as "listed" would let `covered` pass clusters never seen: stop here.
+            if not got or (hi is not None and hi == lo and len(items) > 1):
+                print("  ! ga discovery: the search feed returned a full page (%d entries, %d in range) for "
+                      "cluster_id:[%d TO %s]; it ignored the range filter (feed malfunction). Stopping the "
+                      "walk at cluster %d; the high-water mark will not pass it"
+                      % (len(items), len(got), lo, "*" if hi is None else hi, covered))
+                return found, covered, False, queries
             if hi is None:
-                if not got:                # a full page with nothing in range: cannot narrow it
-                    return found, covered, False, queries
                 top = max(got)
                 work.append((top + 1, None))
                 hi = top
@@ -2524,6 +2533,87 @@ def ga_enumerate(after, ceiling, deadline=None, max_queries=None, search=None):
             return found, max([covered] + list(found)), True, queries
         covered = hi
     return found, covered, True, queries   # not reached: the open tail always ends the walk
+
+
+def ga_lookup_ids(ids, deadline=None, max_queries=None, search=None):
+    """Look up specific cluster ids on the free search feed, one cluster_id:[x TO x] query each (in
+    the order given), for clusters below the high-water mark the enumeration no longer walks: vetoed
+    cases awaiting a redraft and abandoned backlog due a retry. Returns (items {cid: item}, absent,
+    queries): `absent` are ids the feed answered with no entry, i.e. not a Supreme Court of Georgia
+    cluster (the query is court=ga). A response carrying any OTHER cluster means the feed ignored
+    the range filter: the lookups stop there, loudly, and nothing from that page is used."""
+    search = search or ga_search_feed
+    max_queries = len(ids) if max_queries is None else int(max_queries)
+    found, absent, queries = {}, set(), 0
+    for cid in ids:
+        cid = int(cid)
+        if queries >= max_queries or (deadline and time.time() > deadline):
+            break
+        if queries:
+            time.sleep(0.5)
+        queries += 1
+        try:
+            items = search("cluster_id:[%d TO %d]" % (cid, cid), deadline)
+        except Exception as e:
+            print("  ! ga lookup: search feed failed for cluster %d (%s); stopping the lookups" % (cid, e))
+            break
+        items = [it for it in items if cluster_id_of(it)]
+        stray = sorted({cluster_id_of(it) for it in items} - {cid})
+        if stray:
+            print("  ! ga lookup: the search feed answered cluster_id:[%d TO %d] with %d entr%s, including "
+                  "cluster(s) %s; it ignored the range filter (feed malfunction). Stopping the lookups"
+                  % (cid, cid, len(items), "y" if len(items) == 1 else "ies", ", ".join(map(str, stray[:5]))))
+            break
+        if items:
+            found[cid] = items[0]
+        else:
+            absent.add(cid)
+    return found, absent, queries
+
+
+def _ga_abandoned_due(abandoned, known, today, retry_days, per_run):
+    """The abandoned GA clusters to re-admit this run: not yet seen, carded or held, last tried at
+    least `retry_days` before `today`, oldest last try first, at most `per_run`. Re-admitting one
+    is how a fix for whatever stopped it (a text source, a parser) reaches it without a hand edit."""
+    try:
+        cutoff = (datetime.date.fromisoformat(today) - datetime.timedelta(days=int(retry_days))).isoformat()
+    except ValueError:
+        return []
+    due = [a for a in abandoned if int(a.get("cluster_id") or 0) not in known
+           and (a.get("last_try") or "") <= cutoff]
+    due.sort(key=lambda a: (a.get("last_try") or "", int(a.get("cluster_id") or 0)))
+    return [int(a["cluster_id"]) for a in due[:max(0, int(per_run))]]
+
+
+def _ga_abandon_update(abandoned, gave_up, retried, resolved, reasons, names, today, tries):
+    """The ga_abandoned list after this run: drop entries now resolved (seen, carded, held, or
+    evaluated this run), stamp last_try on the ones re-admitted this run (with the new failure
+    reason, if any), and append the clusters the mark passed this run. Returns (list, newly)."""
+    out, have = [], set()
+    for a in abandoned:
+        c = int(a.get("cluster_id") or 0)
+        if not c or c in resolved or c in have:
+            continue
+        a = dict(a)
+        if c in retried:
+            a["last_try"] = today
+            a["retries"] = int(a.get("retries") or 0) + 1
+            if reasons.get(c):
+                a["reason"] = reasons[c]
+        have.add(c)
+        out.append(a)
+    newly = []
+    for c in gave_up:
+        if c in have:
+            continue
+        rec = {"cluster_id": int(c), "name": (names.get(c) or "")[:120],
+               "reason": reasons.get(c) or "unresolved", "tries": int(tries),
+               "abandoned": today, "last_try": today}
+        out.append(rec)
+        newly.append(rec)
+        have.add(c)
+    out.sort(key=lambda a: int(a["cluster_id"]))
+    return out, newly
 
 
 def _ga_seed_mark(entries, reject_path=None):
@@ -2563,23 +2653,29 @@ def _ga_backlog(found, mark, since, known, per_run):
     return pool[:per_run], pool[per_run:]
 
 
-def _ga_next_mark(old, found, covered, complete, resolved, waiting, tries, max_tries):
+def _ga_next_mark(old, found, covered, complete, resolved, waiting, tries, max_tries, failed=frozenset()):
     """The GA high-water mark after this run, plus the updated tries map and the clusters given up on.
     The mark rises to the highest listed cluster (or to `covered`, on an incomplete walk) but stops
     just below the lowest cluster still outstanding: one not yet seen, carded, held, or evaluated this
-    run. A waiting backlog cluster holds the mark without spending a try; any other outstanding one
-    (admitted but deferred, cut by OPINIONS_MAX, textless) spends one, and after `max_tries` runs the
-    mark passes it so one stuck cluster cannot stall the intake (it stays unseen, under the floor)."""
-    outstanding, new_tries, gave_up = [], {}, []
+    run. An outstanding cluster spends a try ONLY when this run actually evaluated it and it failed
+    (`failed`: no text after a real fetch, or an error while evaluating it). One the run never
+    reached -- waiting in the backlog, cut by OPINIONS_MAX, stopped by the time budget, deferred on
+    the CourtListener REST budget -- holds the mark for free, so a quota-starved run cannot burn a
+    cluster's tries. After `max_tries` failed runs the mark passes it so one broken cluster cannot
+    stall the intake; the caller records it in ga_abandoned (never a silent drop). Tries of a
+    cluster this run did not list (an incomplete walk) are carried, not forgotten."""
+    outstanding, gave_up = [], []
+    new_tries = {int(c): int(n) for c, n in tries.items() if int(c) not in found}
     for c in sorted(found):
         if c <= old or c in resolved:
             continue
         if c not in waiting:
-            n = int(tries.get(c, 0)) + 1
+            n = int(tries.get(c, 0)) + (1 if c in failed else 0)
             if n >= max_tries:
                 gave_up.append(c)
                 continue
-            new_tries[c] = n
+            if n:
+                new_tries[c] = n
         outstanding.append(c)
     top = max([old] + list(found)) if complete else covered
     if outstanding:
@@ -2588,16 +2684,31 @@ def _ga_next_mark(old, found, covered, complete, resolved, waiting, tries, max_t
     return new, {c: n for c, n in new_tries.items() if c > new}, gave_up
 
 
+_GA_INDEX_WARNED = []   # set once per process (one run), so the release-index warning prints once
+
+
 def _ga_release_index(years):
     """The gasupreme.us release index for each year in `years`, merged (a newer year's entry wins a
-    docket clash). Fails open to {}."""
-    idx = {}
+    docket clash). Fails open to {}, but never quietly: when the merged index is empty, or a year
+    page failed to fetch or parse, one loud line per run says so, because every GA candidate is then
+    dated from its PDF's Decided: line alone (and one without it is held for review)."""
+    idx, reasons = {}, []
     for y in sorted({str(y) for y in years if y}, reverse=True):
+        errs = []
         try:
-            for d, ent in official_ga.release_index(y).items():
-                idx.setdefault(d, ent)
-        except Exception as e:
-            _dbg("gasupreme.us %s release index unavailable (%s)" % (y, e))
+            got = official_ga.release_index(y, errors=errs)
+        except Exception as e:     # release_index fails open; this guards a future change to that
+            got, errs = {}, errs + ["%s: %s" % (type(e).__name__, e)]
+        for d, ent in got.items():
+            idx.setdefault(d, ent)
+        # A missing page is expected for a year the court has not opened yet (January); it is only
+        # worth a warning when nothing else was found either.
+        reasons += ["%s %s" % (y, r) for r in errs if r != "page not found" or not got]
+    hard = [r for r in reasons if not r.endswith("page not found")]
+    if (hard or not idx) and not _GA_INDEX_WARNED:
+        _GA_INDEX_WARNED.append(True)
+        why = "; ".join(hard or reasons) or "no releases parsed from the year page(s)"
+        print("  ! ga: release index unavailable (%s); dating falls back to PDF Decided: lines" % why, flush=True)
     return idx
 
 
@@ -3325,6 +3436,9 @@ def main():
     known = have | seen | pending_review
     ga_mark, ga_found, ga_cov, ga_complete, ga_admitted, ga_remain = None, {}, None, False, [], []
     ga_stats = {"dated": 0, "guessed": 0, "dups": 0, "unresolved": 0}
+    ga_retry, ga_not_ga = [], set()     # abandoned GA clusters re-admitted this run; redraft ids known not GA
+    ga_state_keys = ("ga_high_water", "ga_backlog_tries", "ga_abandoned", "ga_redraft_not_ga")
+    ga_state_before = json.dumps({k: state.get(k) for k in ga_state_keys}, sort_keys=True)
     if GA_CL in COURTS:
         try:
             ga_mark = int(state["ga_high_water"]) if state.get("ga_high_water") else None
@@ -3333,15 +3447,27 @@ def main():
         if ga_mark is None:
             ga_mark = _ga_seed_mark(entries, REJECT_PATH)
             print("  . ga high-water mark initialized at cluster %d" % ga_mark)
+        ga_deadline = time.time() + int(_sc("GA_ENUM_BUDGET_SEC", 90))
         ceiling = max([cluster_id_of(r) or 0 for r in results] + [ga_mark])
-        ga_found, ga_cov, ga_complete, ga_q = ga_enumerate(
-            ga_mark, ceiling, deadline=time.time() + int(_sc("GA_ENUM_BUDGET_SEC", 90)))
+        ga_found, ga_cov, ga_complete, ga_q = ga_enumerate(ga_mark, ceiling, deadline=ga_deadline)
         feed_ga = {cluster_id_of(r): r for r in results if r.get("court_id") == GA_CL and cluster_id_of(r)}
         for c, it in list(ga_found.items()):
             if c in feed_ga:
                 ga_found[c] = feed_ga[c]    # the court-feed copy carries the PDF enclosure
             else:
                 results.append(it)
+        # The court feed is a second witness: a never-seen GA cluster it carries above the mark joins the
+        # backlog even if the enumeration missed it (a feed hiccup, the query cap), so discovery never
+        # rests on the enumeration alone. Loud when the walk claimed to have covered it.
+        for c in sorted(feed_ga):
+            if c > ga_mark and c not in ga_found and c not in known:
+                ga_found[c] = feed_ga[c]
+                if ga_complete or c <= (ga_cov or 0):
+                    print("  ! ga discovery: /feed/court/ga/ carries never-seen cluster %d above the mark, but the "
+                          "cluster-id enumeration did not list it; adding it from the court feed" % c)
+                else:
+                    print("  . ga discovery: cluster %d (beyond the walk's reach this run) added from the court feed"
+                          % c)
         ga_admitted, ga_remain = _ga_backlog(ga_found, ga_mark, since, known,
                                              int(_sc("GA_BACKLOG_PER_RUN", 8)))
         print("  . ga discovery: %d cluster(s) above mark %d, %d never seen (%d feed quer%s%s)"
@@ -3349,12 +3475,33 @@ def main():
                  "y" if ga_q == 1 else "ies", "" if ga_complete else "; incomplete, listed to %s" % ga_cov),
               flush=True)
         print("  . ga backlog: %d admitted, %d remain" % (len(ga_admitted), len(ga_remain)), flush=True)
+        # Below the mark the walk no longer looks, so two kinds of GA cluster are fetched by id: an
+        # abandoned backlog cluster due a retry (see _ga_next_mark), and a vetoed card awaiting its
+        # redraft, which the 20-entry court feed may never carry again. Free single-id feed queries.
+        in_results = {cluster_id_of(r) for r in results}
+        ga_retry = _ga_abandoned_due(state.get("ga_abandoned") or [], known, today,
+                                     _sc("GA_ABANDONED_RETRY_DAYS", 7), _sc("GA_ABANDONED_RETRY_PER_RUN", 2))
+        try:
+            ga_not_ga = {int(c) for c in (state.get("ga_redraft_not_ga") or [])}
+        except (TypeError, ValueError):
+            ga_not_ga = set()
+        redraft_look = sorted(redraft_pending - in_results - ga_not_ga - set(ga_found) - set(ga_retry),
+                              reverse=True)[:int(_sc("GA_REDRAFT_MAX_QUERIES", 10))]
+        look = [c for c in ga_retry if c not in in_results] + redraft_look
+        if look:
+            got, absent, lq = ga_lookup_ids(look, deadline=ga_deadline)
+            results.extend(got.values())
+            ga_not_ga |= absent & set(redraft_look)
+            print("  . ga lookups: %d abandoned retr%s, %d redraft id(s) checked: %d GA cluster(s) re-entered "
+                  "(%d feed quer%s)" % (len(ga_retry), "y" if len(ga_retry) == 1 else "ies", len(redraft_look),
+                                        len(got), lq, "y" if lq == 1 else "ies"), flush=True)
     cand, floor_dropped = _select_candidates(results, since, today, have, seen, pending_review, redraft_pending,
-                                             exempt=set(ga_admitted), held_back=set(ga_remain))
+                                             exempt=set(ga_admitted) | set(ga_retry), held_back=set(ga_remain))
     # Date every GA candidate from the court's release page (or its PDF's "Decided:" line) BEFORE the
     # sort and the OPINIONS_MAX cut, and set aside re-scrapes of a docket already seen or carded.
     ga_ctx, ga_dups = None, []
     if GA_CL in COURTS and any(r.get("court_id") == GA_CL for r in cand):
+        _GA_INDEX_WARNED.clear()       # one warning per run (a test process runs main() repeatedly)
         years = {(r.get("dateFiled") or "")[:4] for r in cand if r.get("court_id") == GA_CL} | {today[:4]}
         ga_ctx = {"idx": _ga_release_index(years), "known": known, "today": today, "stats": ga_stats,
                   "deadline": time.time() + int(_sc("GA_ENUM_BUDGET_SEC", 90))}
@@ -3392,6 +3539,13 @@ def main():
     cl_deferred = 0                                # candidates deferred this run on the CourtListener budget
     consec = 0
     cfg_error = False                              # set on a ConfigError (auth/model/credit); forces a non-zero exit
+    ga_failed = {}   # GA cluster -> why: actually evaluated this run and failed (spends a backlog try)
+
+    def ga_fail(cid, court_id, why):
+        """Charge a GA cluster's failed evaluation (no text after a real fetch, or an error while
+        evaluating it). A cluster the run never reached is not charged; see _ga_next_mark."""
+        if court_id == GA_CL and cid:
+            ga_failed[cid] = why
 
     def ga_dup_skip(r):
         """A GA re-scrape: a second CourtListener cluster for a docket a seen or carded cluster already
@@ -3587,7 +3741,9 @@ def main():
                 # retries it. Listing it under "dropped" would poison the recall review.
                 continue
             if not text:
-                skipped.append((name, "no opinion text available")); consec = 0; continue
+                skipped.append((name, "no opinion text available")); consec = 0
+                ga_fail(cid, court_id, "no opinion text available (%s run)" % today)
+                continue
             if ga_ctx is not None and court_id == GA_CL and r.get("_ga_pending"):
                 # A GA candidate the pre-pass could not date (no PDF enclosure and no caption match):
                 # read its docket and "Decided:" line from the text just fetched.
@@ -3635,6 +3791,7 @@ def main():
             break
         except Exception as e:
             print("  ! error on cluster %s (%s): %s" % (cid, name, e))
+            ga_fail(cid, court_id, "error while evaluating (%s run): %s" % (today, str(e)[:160]))
             consec += 1
             if consec >= BREAKER:
                 print("  ! %d consecutive failures; stopping early (API likely rate-limited). "
@@ -3804,6 +3961,7 @@ def main():
             break
         except Exception as e:
             print("  ! error on cluster %s (%s): %s" % (cid, name, e))
+            ga_fail(cid, court_id, "error while evaluating (%s run): %s" % (today, str(e)[:160]))
             consec += 1
             if consec >= BREAKER:
                 print("  ! %d consecutive failures; stopping early (API likely rate-limited). "
@@ -4005,23 +4163,39 @@ def main():
     if ga_mark is not None:
         resolved = known | evaluated | {int(e["cluster_id"]) for e in added if e.get("cluster_id")}
         old_tries = {int(k): int(v) for k, v in (state.get("ga_backlog_tries") or {}).items()}
+        max_tries = int(_sc("GA_BACKLOG_MAX_TRIES", 3))
         new_mark, new_tries, gave_up = _ga_next_mark(
-            ga_mark, ga_found, ga_cov, ga_complete, resolved, set(ga_remain), old_tries,
-            int(_sc("GA_BACKLOG_MAX_TRIES", 3)))
-        for c in gave_up:
-            print("  ! ga backlog: cluster %d still unresolved after %d run(s); the mark passes it (left unseen)"
-                  % (c, int(_sc("GA_BACKLOG_MAX_TRIES", 3))))
-        ga_state_changed = (new_mark != state.get("ga_high_water")
-                            or new_tries != old_tries)
+            ga_mark, ga_found, ga_cov, ga_complete, resolved, set(ga_remain), old_tries, max_tries,
+            failed=set(ga_failed))
+        names = {c: (it.get("caseName") or "") for c, it in ga_found.items()}
+        abandoned, newly = _ga_abandon_update(state.get("ga_abandoned") or [], gave_up,
+                                              set(ga_retry) & set(ga_failed), resolved, ga_failed, names,
+                                              today, max_tries)
+        for a in newly:
+            print("  ! ga backlog: ABANDONED cluster %d (%s): failed in %d run(s), last: %s. The mark passes it; "
+                  "it is recorded in opinions_state.json ga_abandoned and re-admitted every %s day(s). To "
+                  "force it now, add the line %d to queue.txt"
+                  % (a["cluster_id"], a["name"][:50] or "?", max_tries, a["reason"],
+                     _sc("GA_ABANDONED_RETRY_DAYS", 7), a["cluster_id"]))
+        if abandoned:
+            state["ga_abandoned"] = abandoned
+            print("  ! ga backlog: %d abandoned cluster(s) outstanding: %s"
+                  % (len(abandoned), ", ".join(str(a["cluster_id"]) for a in abandoned[:20])))
+        else:
+            state.pop("ga_abandoned", None)
+        if ga_not_ga:
+            state["ga_redraft_not_ga"] = sorted(ga_not_ga)[-1000:]
         state["ga_high_water"] = new_mark
         if new_tries:
             state["ga_backlog_tries"] = {str(c): n for c, n in sorted(new_tries.items())}
         else:
             state.pop("ga_backlog_tries", None)
+        ga_state_changed = json.dumps({k: state.get(k) for k in ga_state_keys}, sort_keys=True) != ga_state_before
         print("  . ga high-water mark: %d -> %d" % (ga_mark, new_mark))
         ga_rec = {"found": len(ga_found), "admitted": len(ga_admitted), "remain": len(ga_remain),
                   "dated": ga_stats["dated"], "guessed": ga_stats["guessed"], "dups": ga_stats["dups"],
-                  "unresolved": ga_stats["unresolved"], "gave_up": len(gave_up), "mark": new_mark}
+                  "unresolved": ga_stats["unresolved"], "gave_up": len(gave_up), "abandoned": len(abandoned),
+                  "retried": len(ga_retry), "failed": len(ga_failed), "mark": new_mark}
 
     # Per-run health record (every non-dry run, no-op or not), so the funnel's activity
     # and how much each tier discards are visible without reading raw logs.

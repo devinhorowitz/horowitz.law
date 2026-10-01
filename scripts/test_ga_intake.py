@@ -12,6 +12,12 @@ date_filed 2026-06-16 (juriscraper reads the release date from a <p>; gasupreme.
   * a GA card carries the official date (CourtListener's kept as cl_date_filed), and an undated
     one on the stuck date is held, not auto-published;
   * the high-water mark persists, carries the waiting backlog, and never passes an open cluster;
+  * a backlog try is spent only when the cluster was actually evaluated and failed, never on a
+    run that did not reach it (OPINIONS_MAX cut, REST-budget deferral); a cluster the mark passes
+    is recorded in ga_abandoned, said loudly, and re-admitted later;
+  * a feed that ignores the cluster-id range stops the walk; the court feed backs up the walk;
+  * a vetoed GA card below the mark is looked up by id for its redraft;
+  * an unavailable release index is said loudly, once per run;
   * a non-GA court is unchanged.
 
 No network: every feed, page and PDF is stubbed, and every path main() writes is a temp dir.
@@ -121,6 +127,26 @@ class FakeSearch:
         hits.sort(key=lambda c: (c * 7919) % 104729)        # arbitrary, not by id
         raw = atom([(c, self.u[c][0], self.u[c][1], "") for c in hits[:self.cap]], enclosure=False)
         return update._parse_feed(raw, "ga")
+
+
+class RangeBlindSearch(FakeSearch):
+    """A malfunctioning search feed: for a closed cluster-id range no wider than `blind_width` it
+    ignores the range and returns a full page of arbitrary clusters (as if no filter were given)."""
+
+    def __init__(self, universe, blind_width=0, cap=20):
+        super().__init__(universe, cap=cap)
+        self.blind_width = blind_width
+
+    def __call__(self, q, deadline=None):
+        m = re.match(r"cluster_id:\[(\d+) TO (\d+)\]$", q)
+        if m and int(m.group(2)) - int(m.group(1)) <= self.blind_width:
+            self.queries.append(q)
+            lo = int(m.group(1))
+            hits = sorted(c for c in self.u if c > lo + self.blind_width or c < lo)
+            hits.sort(key=lambda c: (c * 7919) % 104729)
+            raw = atom([(c, self.u[c][0], self.u[c][1], "") for c in hits[:self.cap]], enclosure=False)
+            return update._parse_feed(raw, "ga")
+        return super().__call__(q, deadline)
 
 
 @contextlib.contextmanager
@@ -248,6 +274,27 @@ def test_enumerate():
     fs5 = FakeSearch(universe)
     found5, cov5, complete5, q5 = update.ga_enumerate(7000, 7000, search=fs5)
     check("quiet day: one query, complete, nothing found", found5 == {} and complete5 and q5 == 1)
+    # A feed that ignores the range filter on a single id: a full page with nothing in range is a
+    # malfunction, never "listed": the walk stops, `covered` stays put, and the log says so loudly.
+    fs6 = RangeBlindSearch(universe, blind_width=0)
+    with contextlib.redirect_stdout(io.StringIO()) as out6, patched((update.time, "sleep", lambda *a, **k: None)):
+        found6, cov6, complete6, _ = update.ga_enumerate(1000, 1001, search=fs6)
+    check("single-id full page with no in-range item -> stop, covered not advanced, loud",
+          not complete6 and cov6 == 1000 and found6 == {} and "! ga discovery" in out6.getvalue()
+          and "ignored the range filter" in out6.getvalue(), (cov6, complete6, out6.getvalue()))
+    # The same blindness on narrow ranges deep in a split walk: everything listed is real, covered is
+    # still a prefix, and nothing is taken from the bad page.
+    fs7 = RangeBlindSearch(universe, blind_width=30)
+    with contextlib.redirect_stdout(io.StringIO()) as out7, patched((update.time, "sleep", lambda *a, **k: None)):
+        found7, cov7, complete7, _ = update.ga_enumerate(999, 7000, search=fs7)
+    check("range-blind feed mid-walk -> incomplete, covered is a true prefix, loud",
+          not complete7 and all(c in found7 for c in universe if c <= cov7)
+          and all(c in universe for c in found7) and "! ga discovery" in out7.getvalue(),
+          (cov7, complete7, out7.getvalue()))
+    # A single-id query the feed answers correctly (one entry) is fine.
+    fs8 = FakeSearch(universe)
+    found8, cov8, complete8, _ = update.ga_enumerate(1000, 1001, search=fs8)
+    check("a true single-id answer is listed", 1001 in found8 and complete8, (sorted(found8)[:3], complete8))
 
 
 def test_seed_mark():
@@ -290,14 +337,27 @@ def test_backlog_and_floor():
 
 def test_next_mark():
     found = {c: {} for c in (101, 102, 103, 104, 105)}
-    # 101, 102 settled; 103 admitted but deferred; 104/105 waiting.
+    # 101, 102 settled; 103 admitted but never reached (cut, budget, deferral); 104/105 waiting.
     new, tries, gave = update._ga_next_mark(100, found, 105, True, resolved={101, 102}, waiting={104, 105},
                                             tries={}, max_tries=3)
-    check("mark stops below the first outstanding cluster", new == 102 and tries == {103: 1} and gave == [], (new, tries))
+    check("mark stops below the first outstanding cluster", new == 102 and gave == [], (new, tries))
+    check("a cluster the run never reached spends no try", tries == {}, tries)
+    for _ in range(10):      # a quota-starved stretch: nothing is ever charged, nothing is ever passed
+        new, tries, gave = update._ga_next_mark(102, found, 105, True, resolved={101, 102}, waiting={104, 105},
+                                                tries=tries, max_tries=3)
+    check("ten starved runs: the mark still holds below it, no tries spent", new == 102 and tries == {} and gave == [],
+          (new, tries, gave))
     new, tries, gave = update._ga_next_mark(102, found, 105, True, resolved={101, 102}, waiting={104, 105},
-                                            tries={103: 2}, max_tries=3)
-    check("a stuck admitted cluster is given up after max tries; waiting ones still hold the mark",
+                                            tries={103: 1}, max_tries=3, failed={103})
+    check("an evaluated failure spends one try", new == 102 and tries == {103: 2} and gave == [], (new, tries, gave))
+    new, tries, gave = update._ga_next_mark(102, found, 105, True, resolved={101, 102}, waiting={104, 105},
+                                            tries={103: 2}, max_tries=3, failed={103})
+    check("a cluster that failed max_tries evaluations is given up; waiting ones still hold the mark",
           gave == [103] and new == 103 and tries == {}, (new, tries, gave))
+    new, tries, gave = update._ga_next_mark(102, {101: {}, 102: {}}, 102, False, resolved={101, 102},
+                                            waiting=set(), tries={103: 2}, max_tries=3)
+    check("tries of a cluster an incomplete walk did not list are carried", tries == {103: 2} and gave == [],
+          (new, tries, gave))
     new, tries, gave = update._ga_next_mark(100, found, 105, True, resolved=set(found), waiting=set(),
                                             tries={}, max_tries=3)
     check("everything settled: mark rises to the highest listed cluster", new == 105)
@@ -306,6 +366,85 @@ def test_next_mark():
     check("incomplete walk: mark never passes what was covered", new == 120, new)
     new, _, _ = update._ga_next_mark(300, {}, 250, False, resolved=set(), waiting=set(), tries={}, max_tries=3)
     check("mark never moves backwards", new == 300)
+
+
+def test_lookup_ids():
+    universe = {500: ("Vetoed v. State", "2026-06-16", "S26A0300"), 501: ("Other v. State", "2026-06-16", "")}
+    fs = FakeSearch(universe)
+    with patched((update.time, "sleep", lambda *a, **k: None)):
+        got, absent, q = update.ga_lookup_ids([500, 999], search=fs)
+    check("lookup by id: a GA cluster is returned, a non-GA id is absent",
+          set(got) == {500} and absent == {999} and q == 2 and fs.queries == ["cluster_id:[500 TO 500]",
+                                                                             "cluster_id:[999 TO 999]"],
+          (got, absent, fs.queries))
+    blind = RangeBlindSearch({c: ("C%d" % c, "2026-06-16", "") for c in range(600, 640)}, blind_width=0)
+    with contextlib.redirect_stdout(io.StringIO()) as out, patched((update.time, "sleep", lambda *a, **k: None)):
+        got2, absent2, q2 = update.ga_lookup_ids([500, 501], search=blind)
+    check("a range-blind answer is a malfunction: nothing taken, nothing marked absent, loud, stop",
+          got2 == {} and absent2 == set() and q2 == 1 and "ignored the range filter" in out.getvalue(),
+          (got2, absent2, q2, out.getvalue()))
+    with patched((update.time, "sleep", lambda *a, **k: None)):
+        _, _, q3 = update.ga_lookup_ids([500, 501, 502], search=FakeSearch(universe), max_queries=2)
+    check("lookups respect the query cap", q3 == 2)
+
+
+def test_abandoned_helpers():
+    ab = [{"cluster_id": 10, "last_try": "2026-09-01", "reason": "x"},
+          {"cluster_id": 11, "last_try": "2026-09-30", "reason": "x"},
+          {"cluster_id": 12, "last_try": "2026-08-01", "reason": "x"},
+          {"cluster_id": 13, "last_try": "2026-07-01", "reason": "x"}]
+    due = update._ga_abandoned_due(ab, known={13}, today="2026-10-01", retry_days=7, per_run=2)
+    check("abandoned retry: due by last try, oldest first, known ones skipped, capped", due == [12, 10], due)
+    out, newly = update._ga_abandon_update(ab, gave_up=[20, 11], retried={12}, resolved={10},
+                                           reasons={12: "no text again", 20: "no opinion text available"},
+                                           names={20: "Lost v. Found"}, today="2026-10-01", tries=3)
+    by = {a["cluster_id"]: a for a in out}
+    check("resolved entries leave the list; a retried one is re-stamped with its new reason",
+          10 not in by and by[12]["last_try"] == "2026-10-01" and by[12]["reason"] == "no text again"
+          and by[12]["retries"] == 1 and by[11]["last_try"] == "2026-09-30", out)
+    check("a newly passed cluster is recorded with its reason; an already-recorded one is not duplicated",
+          [a["cluster_id"] for a in newly] == [20] and by[20]["reason"] == "no opinion text available"
+          and by[20]["name"] == "Lost v. Found" and by[20]["tries"] == 3
+          and sum(1 for a in out if a["cluster_id"] == 11) == 1, newly)
+
+
+def test_release_index_warning():
+    def fails(url):
+        raise OSError("connection reset")
+    clear_ga_caches()
+    with patched((official_ga, "_fetch", fails)):
+        errs = []
+        check("release_index still fails open, and reports why when asked",
+              official_ga.release_index("2026", errors=errs) == {} and errs and "connection reset" in errs[0], errs)
+        update._GA_INDEX_WARNED.clear()
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            idx = update._ga_release_index({"2026"})
+            update._ga_release_index({"2026"})
+    lines = [ln for ln in out.getvalue().splitlines() if "release index unavailable" in ln]
+    check("unavailable index -> one loud line per run, naming the reason and the fallback",
+          idx == {} and len(lines) == 1 and lines[0].strip().startswith("! ga: release index unavailable (")
+          and "connection reset" in lines[0] and "dating falls back to PDF Decided: lines" in lines[0], out.getvalue())
+    clear_ga_caches()
+
+    def next_year_missing(url):
+        if url.endswith("/2026-opinions/"):
+            return PAGE
+        raise update.urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+    with patched((official_ga, "_fetch", next_year_missing)):
+        update._GA_INDEX_WARNED.clear()
+        with contextlib.redirect_stdout(io.StringIO()) as out2:
+            idx2 = update._ga_release_index({"2026", "2027"})
+    check("a year page not yet opened is quiet when another year has releases",
+          "S26G0149" in idx2 and "release index unavailable" not in out2.getvalue(), out2.getvalue())
+    clear_ga_caches()
+    with patched((official_ga, "_fetch", lambda url: "<html>redesigned</html>")):
+        update._GA_INDEX_WARNED.clear()
+        with contextlib.redirect_stdout(io.StringIO()) as out3:
+            update._ga_release_index({"2026"})
+    check("a page that parses to nothing (a redesign) is loud too",
+          "! ga: release index unavailable (no releases parsed" in out3.getvalue(), out3.getvalue())
+    clear_ga_caches()
+    update._GA_INDEX_WARNED.clear()
 
 
 # ---- dating and dedupe ------------------------------------------------------------------------------
@@ -412,16 +551,20 @@ TEXTS = {
 REST_TEXTS = {10975746: opinion("S26A0999", "September 9, 2026")}
 
 
+GA_COURT_FEED = [(10975752, "McLamb v. Mayor and Aldermen of the City of Savannah", "2026-06-16", MCLAMB_PDF),
+                 (10875591, "Rease v. State", "2026-06-16", "https://x/rease.pdf")]
+
+
 def court_feed(court, deadline=None):
     if court == "ga":    # the 20-entry feed: tied dates, carries only some of the backlog
-        return update._parse_feed(atom([(10975752, UNIVERSE[10975752][0], "2026-06-16", MCLAMB_PDF),
-                                        (10875591, "Rease v. State", "2026-06-16", "https://x/rease.pdf")]), "ga")
+        return update._parse_feed(atom(GA_COURT_FEED), "ga")
     return update._parse_feed(atom([(20000001, "Acme v. Roe", "2026-09-28", "https://storage.courtlistener.com/pdf/coa.pdf"),
                                     (20000002, "Old v. Stale", "2026-06-01", "https://x/old.pdf")]), "gactapp")
 
 
-def run_main(tmp, calls):
-    """One real main() over stubbed I/O, with every written path in `tmp`. Returns stdout."""
+def run_main(tmp, calls, extra=()):
+    """One real main() over stubbed I/O, with every written path in `tmp`. Returns stdout. `extra`
+    is more (obj, name, value) patches, applied last (so they override the defaults here)."""
     def summarize(court_id, name, docket, date_filed, text, note, cl_status=""):
         calls["summarize"].append((name, date_filed, docket))
         return {"relevant": True, "significance": "high", "areas": [next(iter(update.VALID_AREAS))],
@@ -468,7 +611,8 @@ def run_main(tmp, calls):
                  (update.review_store, "stage_card", lambda e, reasons: calls["held"].append((e["cluster_id"], reasons))),
                  (update.review_store, "stage_treatment", no_network),
                  (update.review_store, "save_pending", lambda *a, **k: None),
-                 (official_ga, "_fetch", lambda url: PAGE if url.endswith("/2026-opinions/") else no_network())):
+                 (official_ga, "_fetch", lambda url: PAGE if url.endswith("/2026-opinions/") else no_network()),
+                 *extra):
         clear_ga_caches()
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
@@ -581,6 +725,158 @@ def test_unverified_card_is_held():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+@contextlib.contextmanager
+def scenario(prefix, universe, texts, rest_texts, state, cards=(), feed=None):
+    """A temp dir seeded with opinions.json and opinions_state.json, and the module fixtures swapped."""
+    global UNIVERSE, TEXTS, REST_TEXTS, GA_COURT_FEED
+    tmp = tempfile.mkdtemp(prefix=prefix)
+    saved_env = {k: os.environ.pop(k, None) for k in ("GITHUB_OUTPUT", "GITHUB_STEP_SUMMARY")}
+    old = UNIVERSE, TEXTS, REST_TEXTS, GA_COURT_FEED
+    try:
+        UNIVERSE, TEXTS, REST_TEXTS = universe, texts, rest_texts
+        if feed is not None:
+            GA_COURT_FEED = feed
+        with open(os.path.join(tmp, "json_path"), "w") as f:
+            json.dump(list(cards), f)
+        with open(os.path.join(tmp, "state_path"), "w") as f:
+            json.dump(state, f)
+        yield tmp
+    finally:
+        UNIVERSE, TEXTS, REST_TEXTS, GA_COURT_FEED = old
+        for k, v in saved_env.items():
+            if v is not None:
+                os.environ[k] = v
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _state(tmp):
+    return json.load(open(os.path.join(tmp, "state_path")))
+
+
+def _cards(tmp):
+    return {c["cluster_id"]: c for c in json.load(open(os.path.join(tmp, "json_path")))}
+
+
+def _calls():
+    return {"summarize": [], "rest": [], "render": [], "held": []}
+
+
+def test_starved_backlog_is_never_charged_then_abandoned_loudly():
+    """A backlog cluster the run never reaches (cut by OPINIONS_MAX, deferred on the REST budget)
+    holds the mark for free, however many runs that lasts; one that is evaluated and fails spends a
+    try, and after GA_BACKLOG_MAX_TRIES failures it is abandoned -- recorded, said loudly, and
+    re-admitted later, so a fix for its text source still cards it."""
+    textless = 10990001
+    uni = {textless: ("Textless v. Nobody", "2026-06-16", "S26A0777")}
+    texts = {"https://storage.courtlistener.com/pdf/coa.pdf": "Court of Appeals opinion." + PAD}
+    with scenario("ga-starved-", uni, texts, {}, {"last_filed": "2026-09-29", "seen_clusters": [],
+                                                  "ga_high_water": 10990000}, feed=[]) as tmp:
+        # Run 1: cut by OPINIONS_MAX (the in-window Court of Appeals card sorts first).
+        c1 = _calls()
+        run_main(tmp, c1, extra=[(update, "MAX_RUN", 1)])
+        st = _state(tmp)
+        check("OPINIONS_MAX cut: no try spent, mark held below the cluster",
+              st.get("ga_high_water") == 10990000 and not st.get("ga_backlog_tries") and c1["rest"] == [],
+              (st.get("ga_high_water"), st.get("ga_backlog_tries"), c1["rest"]))
+        # Runs 2-5: the CourtListener REST budget is spent, so its text fetch is deferred every time.
+        for _ in range(4):
+            run_main(tmp, _calls(), extra=[(update.cl_rate, "remaining", lambda: 0)])
+        st = _state(tmp)
+        check("four REST-starved runs: still no try spent, mark still held, nothing abandoned",
+              st.get("ga_high_water") == 10990000 and not st.get("ga_backlog_tries") and not st.get("ga_abandoned"),
+              st)
+        # Runs 6-8: REST is available but returns no text -- a real, failed evaluation each time.
+        outs = []
+        for _ in range(3):
+            outs.append(run_main(tmp, _calls()))
+        st = _state(tmp)
+        ab = {a["cluster_id"]: a for a in st.get("ga_abandoned") or []}
+        check("after three failed evaluations the mark passes it, and it is recorded in ga_abandoned",
+              st.get("ga_high_water") == textless and textless in ab and "no opinion text" in ab[textless]["reason"]
+              and ab[textless]["tries"] == 3 and ab[textless]["name"].startswith("Textless"), st)
+        check("abandonment is loud and names the queue.txt recovery",
+              "! ga backlog: ABANDONED cluster %d" % textless in outs[-1] and "queue.txt" in outs[-1]
+              and "! ga backlog: 1 abandoned cluster(s) outstanding" in outs[-1], outs[-1])
+        check("...and only on the run that passed it", all("ABANDONED" not in o for o in outs[:-1]))
+        # Run 9: the retry is not due yet (last try today); no fetch, entry kept.
+        c9 = _calls()
+        run_main(tmp, c9)
+        check("not due yet: no retry, still recorded", c9["rest"] == [] and _state(tmp).get("ga_abandoned"),
+              (c9["rest"], _state(tmp).get("ga_abandoned")))
+        # Run 10: a week later and the text source fixed: the abandoned cluster is looked up by id,
+        # re-admitted past the floor, carded, and leaves the list.
+        st = _state(tmp)
+        st["ga_abandoned"][0]["last_try"] = "2026-09-20"
+        with open(os.path.join(tmp, "state_path"), "w") as f:
+            json.dump(st, f)
+        global REST_TEXTS
+        REST_TEXTS = {textless: opinion("S26A0777", "September 15, 2026")}
+        c10 = _calls()
+        out10 = run_main(tmp, c10)
+        st = _state(tmp)
+        check("a due abandoned cluster is re-admitted and carded under its Decided: date",
+              _cards(tmp).get(textless, {}).get("date") == "2026-09-15" and "1 abandoned retry" in out10,
+              (out10, _cards(tmp).get(textless)))
+        check("...and leaves ga_abandoned", not st.get("ga_abandoned"), st.get("ga_abandoned"))
+
+
+def test_redraft_lookup():
+    """A vetoed GA card below the mark is redrafted even though /feed/court/ga/ no longer carries it:
+    its id is looked up on the search feed. A non-GA redraft id is remembered so it is not re-queried."""
+    muhammad = 10975754
+    uni = {muhammad: ("Muhammad v. Clayton County", "2026-06-16", "S26G0155")}
+    texts = {"https://www.gasupreme.us/wp-content/uploads/2026/08/s26g0155.pdf": opinion("S26G0155", "August 11, 2026"),
+             "https://storage.courtlistener.com/pdf/coa.pdf": "Court of Appeals opinion." + PAD}
+    with scenario("ga-redraft-", uni, texts, {}, {"last_filed": "2026-09-29", "seen_clusters": [],
+                                                  "ga_high_water": 10990000}, feed=[]) as tmp:
+        fs = FakeSearch(uni)
+        redraft = (update.review_store, "load_redraft_ids", lambda *a, **k: {muhammad, 20000099})
+        out = run_main(tmp, _calls(), extra=[redraft, (update, "ga_search_feed", fs)])
+        check("vetoed GA cluster below the mark is looked up by id and redrafted under its official date",
+              _cards(tmp).get(muhammad, {}).get("date") == "2026-08-11"
+              and "cluster_id:[%d TO %d]" % (muhammad, muhammad) in fs.queries, (out, fs.queries))
+        st = _state(tmp)
+        check("a redraft id the GA feed does not know is remembered as not GA",
+              st.get("ga_redraft_not_ga") == [20000099], st.get("ga_redraft_not_ga"))
+        fs2 = FakeSearch(uni)
+        run_main(tmp, _calls(), extra=[redraft, (update, "ga_search_feed", fs2)])
+        check("...and not queried again", not any("20000099" in q for q in fs2.queries), fs2.queries)
+
+
+def test_court_feed_backs_up_enumeration():
+    """A never-seen GA cluster the court feed carries above the mark is admitted even when the
+    cluster-id enumeration did not list it."""
+    uni = {}       # the search feed lists nothing (it missed the cluster)
+    texts = {MCLAMB_PDF: opinion("S26G0149", "August 11, 2026"),
+             "https://storage.courtlistener.com/pdf/coa.pdf": "Court of Appeals opinion." + PAD}
+    with scenario("ga-witness-", uni, texts, {}, {"last_filed": "2026-09-29", "seen_clusters": [10875591],
+                                                  "ga_high_water": 10975000}) as tmp:
+        out = run_main(tmp, _calls())
+        st = _state(tmp)
+        check("court-feed GA cluster missed by the enumeration is added, loudly, and carded",
+              "! ga discovery: /feed/court/ga/ carries never-seen cluster 10975752" in out
+              and _cards(tmp).get(10975752, {}).get("date") == "2026-08-11" and st.get("ga_high_water") == 10975752,
+              (out, st.get("ga_high_water")))
+
+
+def test_main_release_index_unavailable():
+    """gasupreme.us down: one loud line, and the PDF's Decided: line still dates the card."""
+    def down(url):
+        raise OSError("gasupreme.us unreachable")
+    uni = {10975752: UNIVERSE[10975752]}
+    texts = {MCLAMB_PDF: opinion("S26G0149", "August 11, 2026"),
+             "https://storage.courtlistener.com/pdf/coa.pdf": "Court of Appeals opinion." + PAD}
+    with scenario("ga-index-", uni, texts, {}, {"last_filed": "2026-09-29", "seen_clusters": [10875591],
+                                                "ga_high_water": 10975000}) as tmp:
+        out = run_main(tmp, _calls(), extra=[(official_ga, "_fetch", down)])
+        lines = [ln for ln in out.splitlines() if "release index unavailable" in ln]
+        check("main(): unavailable release index is said once, with the reason",
+              len(lines) == 1 and "gasupreme.us unreachable" in lines[0]
+              and "dating falls back to PDF Decided: lines" in lines[0], out)
+        check("...and the Decided: line still dates the card",
+              _cards(tmp).get(10975752, {}).get("date") == "2026-08-11", _cards(tmp).get(10975752))
+
+
 def main():
     print("official_ga release page:")
     test_release_page()
@@ -596,11 +892,20 @@ def main():
     test_backlog_and_floor()
     print("high-water mark:")
     test_next_mark()
+    print("lookups by id, abandoned backlog:")
+    test_lookup_ids()
+    test_abandoned_helpers()
+    print("release index warning:")
+    test_release_index_warning()
     print("dating and dedupe:")
     test_resolve()
     print("main() end to end:")
     test_main_end_to_end()
     test_unverified_card_is_held()
+    test_starved_backlog_is_never_charged_then_abandoned_loudly()
+    test_redraft_lookup()
+    test_court_feed_backs_up_enumeration()
+    test_main_release_index_unavailable()
     if FAILS:
         print("\n%d FAILED: %s" % (len(FAILS), ", ".join(FAILS)))
         return 1

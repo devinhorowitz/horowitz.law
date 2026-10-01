@@ -163,11 +163,15 @@ def parse_releases(doc):
     return out
 
 
-def release_index(year, *, html=None):
+def release_index(year, *, html=None, errors=None):
     """{DOCKET (upper-case): release entry} for one year page; every docket of a consolidated
     entry points at the same entry dict. A docket listed twice keeps its newest release (the page
     runs newest first). Cached per process. Fails open to {} (the caller falls back to the PDF's
-    "Decided:" line); a transport error is not cached, so a later call retries."""
+    "Decided:" line); a transport error is not cached, so a later call retries.
+
+    `errors`, if a list, receives a one-line reason for a failure that would otherwise be silent:
+    the exception of a failed fetch or parse, or "page not found" for a year page the court does not
+    serve (an HTTP error, cached as a definitive miss). The caller decides how loudly to say so."""
     year = str(year)
     if html is None and year in _index_cache:
         return _index_cache[year]
@@ -177,8 +181,12 @@ def release_index(year, *, html=None):
         for ent in parse_releases(doc):
             for d in ent["dockets"]:
                 idx.setdefault(d, ent)
-    except Exception:
+    except Exception as e:
+        if errors is not None:
+            errors.append("%s: %s" % (type(e).__name__, e))
         return {}
+    if errors is not None and html is None and not doc:
+        errors.append("page not found")
     if html is None:
         _index_cache[year] = idx
     return idx
