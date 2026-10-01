@@ -16,7 +16,12 @@ date_filed 2026-06-16 (juriscraper reads the release date from a <p>; gasupreme.
     run that did not reach it (OPINIONS_MAX cut, REST-budget deferral); a cluster the mark passes
     is recorded in ga_abandoned, said loudly, and re-admitted later;
   * a feed that ignores the cluster-id range stops the walk; the court feed backs up the walk;
-  * a vetoed GA card below the mark is looked up by id for its redraft;
+  * a vetoed GA card below the mark is looked up by id for its redraft, and an id is declared not GA
+    only after empty answers on two separate runs;
+  * infrastructure failures (timeouts, rate budgets, transport, API 429/5xx) never spend a try;
+  * an attempted abandoned retry is re-stamped, so stuck entries rotate out of the retry slots;
+  * a partial search-feed page carrying out-of-range clusters is a malfunction;
+  * a mark held GA_MARK_STALL_RUNS runs with backlog left is said loudly, naming the blocker;
   * an unavailable release index is said loudly, once per run;
   * a non-GA court is unchanged.
 
@@ -836,11 +841,43 @@ def test_redraft_lookup():
               _cards(tmp).get(muhammad, {}).get("date") == "2026-08-11"
               and "cluster_id:[%d TO %d]" % (muhammad, muhammad) in fs.queries, (out, fs.queries))
         st = _state(tmp)
-        check("a redraft id the GA feed does not know is remembered as not GA",
-              st.get("ga_redraft_not_ga") == [20000099], st.get("ga_redraft_not_ga"))
+        check("one empty answer is only noted, not a verdict: the id is not yet declared not GA",
+              not st.get("ga_redraft_not_ga") and st.get("ga_redraft_absent_once") == {"20000099": "2026-10-01"}
+              and ". ga redraft: cluster 20000099" in out and "first time" in out,
+              (st.get("ga_redraft_not_ga"), st.get("ga_redraft_absent_once"), out))
+        # A second run the same day is not a separate run: still only noted.
+        fs_same = FakeSearch(uni)
+        run_main(tmp, _calls(), extra=[redraft, (update, "ga_search_feed", fs_same)])
+        st = _state(tmp)
+        check("a second empty answer the same day does not count",
+              not st.get("ga_redraft_not_ga") and "cluster_id:[20000099 TO 20000099]" in fs_same.queries,
+              (st.get("ga_redraft_not_ga"), fs_same.queries))
+        # A later run, still empty: now it is remembered as not GA, with a loud line.
         fs2 = FakeSearch(uni)
-        run_main(tmp, _calls(), extra=[redraft, (update, "ga_search_feed", fs2)])
-        check("...and not queried again", not any("20000099" in q for q in fs2.queries), fs2.queries)
+        out2 = run_main(tmp, _calls(), extra=[redraft, (update, "ga_search_feed", fs2),
+                                              (update, "_today_eastern", lambda: "2026-10-02")])
+        st = _state(tmp)
+        check("a second empty answer on a later run: remembered as not GA, loudly",
+              st.get("ga_redraft_not_ga") == [20000099] and not st.get("ga_redraft_absent_once")
+              and "! ga redraft: cluster 20000099 is not on the Supreme Court of Georgia search feed" in out2,
+              (st.get("ga_redraft_not_ga"), st.get("ga_redraft_absent_once"), out2))
+        fs3 = FakeSearch(uni)
+        run_main(tmp, _calls(), extra=[redraft, (update, "ga_search_feed", fs3)])
+        check("...and not queried again", not any("20000099" in q for q in fs3.queries), fs3.queries)
+    # A first empty answer followed by a real one clears the note: nothing is ever declared not GA.
+    with scenario("ga-redraft-hiccup-", {}, {"https://storage.courtlistener.com/pdf/coa.pdf": "Court of Appeals opinion." + PAD},
+                  {}, {"last_filed": "2026-09-29", "seen_clusters": [], "ga_high_water": 10990000}, feed=[]) as tmp:
+        flaky = 10975760
+        redraft = (update.review_store, "load_redraft_ids", lambda *a, **k: {flaky})
+        run_main(tmp, _calls(), extra=[redraft, (update, "ga_search_feed", FakeSearch({}))])
+        check("hiccup: first empty answer noted", _state(tmp).get("ga_redraft_absent_once") == {str(flaky): "2026-10-01"},
+              _state(tmp))
+        back = FakeSearch({flaky: ("Flaky v. State", "2026-06-16", "S26A0888")})
+        run_main(tmp, _calls(), extra=[redraft, (update, "ga_search_feed", back),
+                                       (update, "_today_eastern", lambda: "2026-10-02")])
+        st = _state(tmp)
+        check("...the feed answers it on the next run: the note clears and it is never declared not GA",
+              not st.get("ga_redraft_absent_once") and not st.get("ga_redraft_not_ga"), st)
 
 
 def test_court_feed_backs_up_enumeration():
@@ -877,6 +914,201 @@ def test_main_release_index_unavailable():
               _cards(tmp).get(10975752, {}).get("date") == "2026-08-11", _cards(tmp).get(10975752))
 
 
+def test_enumerate_partial_stray_page():
+    """A PARTIAL page carrying a cluster outside the queried range is a feed malfunction too (as in
+    ga_lookup_ids): nothing from it is listed, the walk stops loudly, and `covered` does not advance."""
+    universe = {c: ("Case %d v. State" % c, "2026-06-16", "") for c in (1000, 1001, 1002, 1003, 3000)}
+    blind = RangeBlindSearch(universe, blind_width=0)          # a single-id query gets 4 strays: a partial page
+    with contextlib.redirect_stdout(io.StringIO()) as out, patched((update.time, "sleep", lambda *a, **k: None)):
+        found, cov, complete, _ = update.ga_enumerate(1000, 1001, search=blind)
+    check("partial page of strays for a single id -> stop, covered not advanced, loud",
+          found == {} and cov == 1000 and not complete and "out-of-range cluster(s)" in out.getvalue()
+          and out.getvalue().startswith("  ! ga discovery"), (found, cov, complete, out.getvalue()))
+
+    def mixed(q, deadline=None):       # the in-range cluster plus one from far outside, well under the cap
+        lo = int(re.match(r"cluster_id:\[(\d+) TO", q).group(1))
+        return update._parse_feed(atom([(lo, "In v. Range", "2026-06-16", ""),
+                                        (lo - 500, "Out v. Range", "2026-06-16", "")], enclosure=False), "ga")
+    with contextlib.redirect_stdout(io.StringIO()) as out2, patched((update.time, "sleep", lambda *a, **k: None)):
+        found2, cov2, complete2, q2 = update.ga_enumerate(5000, 5010, search=mixed)
+    check("partial page mixing in-range and out-of-range clusters -> nothing taken, covered not advanced",
+          found2 == {} and cov2 == 5000 and not complete2 and q2 == 1 and "4501" in out2.getvalue(),
+          (found2, cov2, complete2, out2.getvalue()))
+
+
+def test_infra_error_classification():
+    import http.client
+    import urllib.error
+    infra = [TimeoutError("courtlistener deadline exceeded"), update.cl_rate.RateBudgetExceeded("budget"),
+             urllib.error.URLError("reset"), urllib.error.HTTPError("u", 503, "busy", {}, None),
+             update.TransientAPIError("summarize m -> HTTP 529: overloaded"), ConnectionResetError("reset"),
+             http.client.IncompleteRead(b"x"), RuntimeError("triage m -> HTTP 500: internal"),
+             RuntimeError("pretriage m -> network error: timed out"), OSError(113, "No route to host")]
+    genuine = [RuntimeError("summarize m returned unparseable JSON: x"), RuntimeError("triage m hit max_tokens (900)"),
+               ValueError("verdict must be one of"), KeyError("areas"), TypeError("NoneType")]
+    check("infrastructure failures are recognized", all(update._ga_infra_error(e) for e in infra),
+          [repr(e) for e in infra if not update._ga_infra_error(e)])
+    check("genuine evaluation failures are not", not any(update._ga_infra_error(e) for e in genuine),
+          [repr(e) for e in genuine if update._ga_infra_error(e)])
+
+    # anthropic_json: an overload that outlasts the retries, and a dead network, raise TransientAPIError;
+    # an unusable answer raises a plain RuntimeError.
+    class Resp:
+        def __init__(self, body):
+            self.body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return self.body
+
+    def overloaded(req, timeout=None):
+        raise urllib.error.HTTPError("u", 529, "overloaded", {}, io.BytesIO(b'{"type":"overloaded_error"}'))
+
+    def offline(req, timeout=None):
+        raise urllib.error.URLError("unreachable")
+
+    def garbage(req, timeout=None):
+        return Resp(json.dumps({"content": [{"type": "text", "text": "no json here"}],
+                                "stop_reason": "end_turn"}).encode())
+    body = {"model": "m", "max_tokens": 10, "messages": []}
+    got = []
+    for fn in (overloaded, offline, garbage):
+        with contextlib.redirect_stdout(io.StringIO()), \
+                patched((update.urllib.request, "urlopen", fn), (update.time, "sleep", lambda *a, **k: None)):
+            try:
+                update.anthropic_json(dict(body), label="t")
+                got.append(None)
+            except Exception as e:
+                got.append(e)
+    check("anthropic_json: exhausted 529 and network errors raise TransientAPIError; bad JSON does not",
+          isinstance(got[0], update.TransientAPIError) and isinstance(got[1], update.TransientAPIError)
+          and isinstance(got[2], RuntimeError) and not isinstance(got[2], update.TransientAPIError),
+          [repr(e) for e in got])
+
+
+def test_infra_failures_spend_no_try():
+    """A GA cluster stopped by infrastructure -- the Anthropic API overloaded or rate-limited after its
+    retries, a transport error, the CourtListener budget, the time budget -- holds the mark and keeps
+    every try; only a genuinely unusable answer spends one."""
+    import urllib.error
+    stuck = 10990001
+    uni = {stuck: ("Stuck v. Nobody", "2026-06-16", "S26A0777")}
+    texts = {"https://storage.courtlistener.com/pdf/coa.pdf": "Court of Appeals opinion." + PAD}
+    rest = {stuck: opinion("S26A0777", "September 15, 2026")}
+
+    def raising(exc):
+        def pre(name, docket, text):
+            if name.startswith("Stuck"):
+                raise exc
+            return {"pass": True}
+        return (update, "pretriage", pre)
+
+    def rest_raises(exc):
+        def f(r, deadline=None):
+            if update.cluster_id_of(r) == stuck:
+                raise exc
+            return ""
+        return (update, "opinion_text_full", f)
+    with scenario("ga-infra-", uni, texts, rest, {"last_filed": "2026-09-29", "seen_clusters": [],
+                                                  "ga_high_water": 10990000}, feed=[]) as tmp:
+        infra = [raising(update.TransientAPIError("pretriage m -> HTTP 529: overloaded")),
+                 raising(update.TransientAPIError("pretriage m -> HTTP 429: rate limited")),
+                 raising(RuntimeError("pretriage m -> HTTP 503: unavailable")),
+                 raising(urllib.error.URLError("connection reset")),
+                 raising(update.cl_rate.RateBudgetExceeded("courtlistener throttled")),
+                 rest_raises(TimeoutError("courtlistener deadline exceeded")),
+                 rest_raises(urllib.error.HTTPError("u", 502, "bad gateway", {}, None))]
+        outs = [run_main(tmp, _calls(), extra=[p]) for p in infra]
+        st = _state(tmp)
+        check("seven infrastructure failures in a row: no try spent, mark held, nothing abandoned",
+              not st.get("ga_backlog_tries") and st.get("ga_high_water") == 10990000 and not st.get("ga_abandoned"),
+              st)
+        check("each says it charged no try",
+              all(". ga backlog: cluster %d not charged a try" % stuck in o for o in outs),
+              [o for o in outs if "not charged" not in o][:1])
+        out = run_main(tmp, _calls(), extra=[raising(RuntimeError("pretriage m returned unparseable JSON: x"))])
+        st = _state(tmp)
+        check("an unusable model answer is a genuine failure: one try spent",
+              st.get("ga_backlog_tries") == {str(stuck): 1} and "not charged" not in out, (st, out))
+
+
+def test_abandoned_retry_rotation():
+    """last_try is stamped whenever an abandoned retry is attempted, not only when it fails, so two
+    entries that never resolve cannot hold the GA_ABANDONED_RETRY_PER_RUN slots forever."""
+    a, b, c = 10970001, 10970002, 10970003
+    ab = [{"cluster_id": a, "name": "A", "reason": "x", "tries": 3, "abandoned": "2026-08-01", "last_try": "2026-08-01"},
+          {"cluster_id": b, "name": "B", "reason": "x", "tries": 3, "abandoned": "2026-08-01", "last_try": "2026-08-02"},
+          {"cluster_id": c, "name": "C", "reason": "x", "tries": 3, "abandoned": "2026-08-01", "last_try": "2026-09-01"}]
+    out, _ = update._ga_abandon_update(ab, gave_up=[], retried={a, b}, resolved=set(), reasons={}, names={},
+                                       today="2026-10-01", tries=3)
+    check("helper: attempted retries are stamped even with no failure",
+          [x["last_try"] for x in out] == ["2026-10-01", "2026-10-01", "2026-09-01"], out)
+    check("helper: so the third entry is due next", update._ga_abandoned_due(out, set(), "2026-10-01", 7, 2) == [c])
+    # main(): A is a GA cluster that is never reached (REST budget spent, no PDF), B is absent from the
+    # feed. Neither ever resolves or fails; C must still get its retry on the following run.
+    uni = {a: ("Alpha v. Stuck", "2026-06-16", "S26A0901")}
+    texts = {"https://storage.courtlistener.com/pdf/coa.pdf": "Court of Appeals opinion." + PAD}
+    with scenario("ga-rotate-", uni, texts, {}, {"last_filed": "2026-09-29", "seen_clusters": [],
+                                                 "ga_high_water": 10990000, "ga_abandoned": ab}, feed=[]) as tmp:
+        fs1 = FakeSearch(uni)
+        run_main(tmp, _calls(), extra=[(update, "ga_search_feed", fs1), (update.cl_rate, "remaining", lambda: 0)])
+        st = _state(tmp)
+        by = {x["cluster_id"]: x for x in st.get("ga_abandoned") or []}
+        check("run 1: A and B retried (looked up), stamped though neither resolved nor failed; C waits",
+              "cluster_id:[%d TO %d]" % (a, a) in fs1.queries and "cluster_id:[%d TO %d]" % (b, b) in fs1.queries
+              and not any(str(c) in q for q in fs1.queries)
+              and by[a]["last_try"] == "2026-10-01" and by[b]["last_try"] == "2026-10-01"
+              and by[c]["last_try"] == "2026-09-01" and not st.get("ga_backlog_tries"), (fs1.queries, by))
+        fs2 = FakeSearch(uni)
+        run_main(tmp, _calls(), extra=[(update, "ga_search_feed", fs2), (update.cl_rate, "remaining", lambda: 0)])
+        st = _state(tmp)
+        by = {x["cluster_id"]: x for x in st.get("ga_abandoned") or []}
+        check("run 2: the third entry gets its retry; the two stuck ones do not hog the slots",
+              "cluster_id:[%d TO %d]" % (c, c) in fs2.queries
+              and not any(str(a) in q or str(b) in q for q in fs2.queries)
+              and by[c]["last_try"] == "2026-10-01", (fs2.queries, by))
+
+
+def test_stall_warning():
+    """When the high-water mark holds for GA_MARK_STALL_RUNS consecutive runs while backlog remains,
+    the run says so loudly and names the blocking cluster; a moved mark clears the count."""
+    global REST_TEXTS
+    rec, loud = None, False
+    for _ in range(5):
+        rec, loud = update._ga_stall_update(rec, 100, 100, 101, 6)
+    check("helper: five held runs are counted, not yet loud",
+          rec == {"mark": 100, "runs": 5, "blocker": 101} and not loud, rec)
+    rec, loud = update._ga_stall_update(rec, 100, 100, 101, 6)
+    check("helper: the sixth is loud", loud and rec["runs"] == 6)
+    check("helper: a moved mark or no backlog clears it",
+          update._ga_stall_update(rec, 100, 101, 102, 6) == (None, False)
+          and update._ga_stall_update(rec, 100, 100, None, 6) == (None, False))
+    check("siteconfig default is 6", update.siteconfig.GA_MARK_STALL_RUNS == 6)
+    stuck = 10990001
+    uni = {stuck: ("Stalled v. Nobody", "2026-06-16", "S26A0779")}
+    texts = {"https://storage.courtlistener.com/pdf/coa.pdf": "Court of Appeals opinion." + PAD}
+    with scenario("ga-stall-", uni, texts, {}, {"last_filed": "2026-09-29", "seen_clusters": [],
+                                                "ga_high_water": 10990000}, feed=[]) as tmp:
+        outs = [run_main(tmp, _calls(), extra=[(update.cl_rate, "remaining", lambda: 0)]) for _ in range(6)]
+        check("five held runs: no stall line yet", all("STALLED" not in o for o in outs[:5]),
+              [o for o in outs[:5] if "STALLED" in o][:1])
+        line = [ln for ln in outs[5].splitlines() if "STALLED" in ln]
+        check("sixth held run: a loud '!' line naming the blocking cluster",
+              len(line) == 1 and line[0].startswith("  ! ga high-water mark STALLED at 10990000 for 6")
+              and "blocking cluster %d (Stalled v. Nobody)" % stuck in line[0], outs[5])
+        check("the count is kept in the state", _state(tmp).get("ga_mark_stall", {}).get("runs") == 6, _state(tmp))
+        REST_TEXTS = {stuck: opinion("S26A0779", "September 15, 2026")}
+        out = run_main(tmp, _calls())
+        st = _state(tmp)
+        check("once the blocker resolves the mark moves and the stall record clears",
+              st.get("ga_high_water") == stuck and "ga_mark_stall" not in st and "STALLED" not in out, st)
+
+
 def main():
     print("official_ga release page:")
     test_release_page()
@@ -906,6 +1138,12 @@ def main():
     test_redraft_lookup()
     test_court_feed_backs_up_enumeration()
     test_main_release_index_unavailable()
+    print("verifier fixes (infra tries, retry rotation, redraft confirmation, stray pages, stall):")
+    test_enumerate_partial_stray_page()
+    test_infra_error_classification()
+    test_infra_failures_spend_no_try()
+    test_abandoned_retry_rotation()
+    test_stall_warning()
     if FAILS:
         print("\n%d FAILED: %s" % (len(FAILS), ", ".join(FAILS)))
         return 1

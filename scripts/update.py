@@ -89,6 +89,12 @@ class ConfigError(RuntimeError):
     error so the run can stop fast and exit non-zero (surfacing it by email)
     instead of silently deferring like it does for an outage or a rate limit."""
 
+
+class TransientAPIError(RuntimeError):
+    """An Anthropic call that still failed after its retries for a reason outside the opinion: a
+    429 (rate/credit window), an overload or other 5xx, or a network error. A RuntimeError, so every
+    existing handler still catches it; the GA intake uses the type to charge no backlog try."""
+
 JSON_PATH  = os.path.join(REPO, "opinions.json")
 STATE_PATH = os.path.join(REPO, "opinions_state.json")
 LOG_PATH   = os.path.join(REPO, "opinions_pipeline_log.jsonl")  # append-only per-run health log (observability)
@@ -1502,6 +1508,8 @@ def anthropic_json(body, label="call"):
                 else:
                     _dbg(msg)
                 time.sleep(wait); continue
+            if e.code in RETRY_STATUS:
+                raise TransientAPIError(last)
             lo = detail.lower()
             if e.code in (401, 403):
                 print("  ! Anthropic AUTHENTICATION failed (HTTP %s) on %s. Check the ANTHROPIC_API_KEY secret." % (e.code, model))
@@ -1520,7 +1528,7 @@ def anthropic_json(body, label="call"):
                 wait = min(2 ** attempt * 2, 30)
                 _dbg("%s network error, retrying in %ss" % (label, wait))
                 time.sleep(wait); continue
-            raise RuntimeError(last)
+            raise TransientAPIError(last)
     raise RuntimeError(last or (label + " failed"))
 
 
@@ -2452,6 +2460,26 @@ def _sc(name, default):
     return getattr(siteconfig, name, default)
 
 
+_GA_INFRA_MSG_RE = re.compile(r"-> HTTP (?:429|5\d\d)\b|-> network error|overloaded_error|rate_limit_error", re.I)
+
+
+def _ga_infra_error(e):
+    """True when an exception that stopped a GA candidate's evaluation says nothing about the
+    opinion itself: the run's time budget (TimeoutError), the CourtListener REST budget
+    (cl_rate.RateBudgetExceeded), a transport failure (URLError/HTTPError, a reset connection, a
+    truncated read), or the Anthropic API still overloaded, rate-limited or 5xx after its retries
+    (TransientAPIError, or a wrapper whose message carries the same status). Such a failure spends
+    no backlog try: only a genuine evaluation failure (no text after a real fetch, an answer that
+    cannot be used) does. See _ga_next_mark."""
+    import http.client
+    if isinstance(e, (TimeoutError, cl_rate.RateBudgetExceeded, TransientAPIError, urllib.error.URLError,
+                      ConnectionError, http.client.HTTPException)):
+        return True
+    if isinstance(e, OSError) and not isinstance(e, (FileNotFoundError, PermissionError, IsADirectoryError)):
+        return True    # socket-level errors that are not ConnectionError subclasses (EHOSTUNREACH, ...)
+    return bool(_GA_INFRA_MSG_RE.search(str(e) or ""))
+
+
 def ga_search_feed(q, deadline=None):
     """One free CourtListener search-feed query for Supreme Court of Georgia opinions (the /feed/
     path, not /api/rest/, so no REST quota). Returns _parse_feed items. The search feed carries no
@@ -2504,11 +2532,23 @@ def ga_enumerate(after, ceiling, deadline=None, max_queries=None, search=None):
         except Exception as e:
             print("  ! ga discovery: search feed failed (%s); stopping at cluster %d" % (e, covered))
             return found, covered, False, queries
-        got = {}
+        got, stray = {}, set()
         for it in items:
             c = cluster_id_of(it)
             if c and c >= lo and (hi is None or c <= hi):
                 got[c] = it
+            elif c:
+                stray.add(c)
+        if stray:
+            # Any page, full or partial, carrying a cluster outside the queried range: the feed ignored
+            # the range filter (as ga_lookup_ids treats it). Its in-range entries cannot be trusted to
+            # be the whole range, so nothing from it is listed and `covered` does not advance.
+            print("  ! ga discovery: the search feed answered cluster_id:[%d TO %s] with %d entr%s, including "
+                  "out-of-range cluster(s) %s; it ignored the range filter (feed malfunction). Stopping the "
+                  "walk at cluster %d; the high-water mark will not pass it"
+                  % (lo, "*" if hi is None else hi, len(items), "y" if len(items) == 1 else "ies",
+                     ", ".join(map(str, sorted(stray)[:5])), covered))
+            return found, covered, False, queries
         if len(items) >= cap:
             # A full page whose entries are not in the queried range means the feed ignored the
             # range filter (a single id can match at most one cluster). Splitting cannot help, and
@@ -2614,6 +2654,23 @@ def _ga_abandon_update(abandoned, gave_up, retried, resolved, reasons, names, to
         have.add(c)
     out.sort(key=lambda a: int(a["cluster_id"]))
     return out, newly
+
+
+def _ga_stall_update(prev, old_mark, new_mark, blocker, stall_runs):
+    """Track how many consecutive runs the GA high-water mark has not moved while a cluster above it
+    is still outstanding (`blocker`, the lowest one; None when no backlog remains). Returns
+    (record, loud): the {"mark", "runs", "blocker"} record to keep in opinions_state.json
+    ga_mark_stall (None to clear it), and whether this run must say so loudly, i.e. the mark has
+    held for at least `stall_runs` runs. A moved mark or an empty backlog resets the count."""
+    if blocker is None or new_mark != old_mark:
+        return None, False
+    prev = prev if isinstance(prev, dict) else {}
+    try:
+        runs = int(prev.get("runs") or 0) + 1 if int(prev.get("mark") or -1) == int(new_mark) else 1
+    except (TypeError, ValueError):
+        runs = 1
+    rec = {"mark": int(new_mark), "runs": runs, "blocker": int(blocker)}
+    return rec, runs >= max(1, int(stall_runs))
 
 
 def _ga_seed_mark(entries, reject_path=None):
@@ -3437,7 +3494,11 @@ def main():
     ga_mark, ga_found, ga_cov, ga_complete, ga_admitted, ga_remain = None, {}, None, False, [], []
     ga_stats = {"dated": 0, "guessed": 0, "dups": 0, "unresolved": 0}
     ga_retry, ga_not_ga = [], set()     # abandoned GA clusters re-admitted this run; redraft ids known not GA
-    ga_state_keys = ("ga_high_water", "ga_backlog_tries", "ga_abandoned", "ga_redraft_not_ga")
+    ga_retry_tried = set()              # ...of those, the ones actually attempted (answered by a lookup, or carried)
+    ga_absent_once = {}                 # redraft id -> date the GA feed first answered it with nothing
+    ga_stall = {}                       # {"mark", "runs"}: consecutive runs the mark held with backlog left
+    ga_state_keys = ("ga_high_water", "ga_backlog_tries", "ga_abandoned", "ga_redraft_not_ga",
+                     "ga_redraft_absent_once", "ga_mark_stall")
     ga_state_before = json.dumps({k: state.get(k) for k in ga_state_keys}, sort_keys=True)
     if GA_CL in COURTS:
         try:
@@ -3485,13 +3546,36 @@ def main():
             ga_not_ga = {int(c) for c in (state.get("ga_redraft_not_ga") or [])}
         except (TypeError, ValueError):
             ga_not_ga = set()
+        try:
+            ga_absent_once = {int(c): str(d) for c, d in (state.get("ga_redraft_absent_once") or {}).items()
+                              if int(c) in redraft_pending}
+        except (TypeError, ValueError, AttributeError):
+            ga_absent_once = {}
         redraft_look = sorted(redraft_pending - in_results - ga_not_ga - set(ga_found) - set(ga_retry),
                               reverse=True)[:int(_sc("GA_REDRAFT_MAX_QUERIES", 10))]
+        ga_retry_tried = set(ga_retry) & in_results     # carried by a feed: admitted without a lookup
         look = [c for c in ga_retry if c not in in_results] + redraft_look
         if look:
             got, absent, lq = ga_lookup_ids(look, deadline=ga_deadline)
             results.extend(got.values())
-            ga_not_ga |= absent & set(redraft_look)
+            # An abandoned retry the feed answered (either way) was attempted: its last_try is stamped
+            # below, so one that never resolves cannot hold a GA_ABANDONED_RETRY_PER_RUN slot forever.
+            ga_retry_tried |= (set(got) | absent) & set(ga_retry)
+            # A redraft id is declared "not GA" only after the GA feed answered it with nothing on two
+            # separate runs: a single empty answer (a feed hiccup, an index lag) must not strand a veto.
+            for c in sorted(set(got) & set(redraft_look)):
+                ga_absent_once.pop(c, None)
+            for c in sorted(absent & set(redraft_look)):
+                first = ga_absent_once.get(c)
+                if first and first != today:
+                    ga_not_ga.add(c)
+                    ga_absent_once.pop(c, None)
+                    print("  ! ga redraft: cluster %d is not on the Supreme Court of Georgia search feed (empty "
+                          "answers on %s and %s); remembered in ga_redraft_not_ga, no longer looked up" % (c, first, today))
+                elif not first:
+                    ga_absent_once[c] = today
+                    print("  . ga redraft: cluster %d: the GA search feed returned nothing (first time, %s); "
+                          "asking again on a later run before treating it as not GA" % (c, today))
             print("  . ga lookups: %d abandoned retr%s, %d redraft id(s) checked: %d GA cluster(s) re-entered "
                   "(%d feed quer%s)" % (len(ga_retry), "y" if len(ga_retry) == 1 else "ies", len(redraft_look),
                                         len(got), lq, "y" if lq == 1 else "ies"), flush=True)
@@ -3541,11 +3625,21 @@ def main():
     cfg_error = False                              # set on a ConfigError (auth/model/credit); forces a non-zero exit
     ga_failed = {}   # GA cluster -> why: actually evaluated this run and failed (spends a backlog try)
 
-    def ga_fail(cid, court_id, why):
-        """Charge a GA cluster's failed evaluation (no text after a real fetch, or an error while
-        evaluating it). A cluster the run never reached is not charged; see _ga_next_mark."""
-        if court_id == GA_CL and cid:
-            ga_failed[cid] = why
+    def ga_fail(cid, court_id, why, exc=None):
+        """Charge a GA cluster's failed evaluation (no text after a real fetch, or a model answer that
+        cannot be used). A cluster the run never reached is not charged (see _ga_next_mark), and
+        neither is one stopped by infrastructure: the time budget, the CourtListener REST budget, a
+        transport error, or the Anthropic API overloaded / rate-limited / 5xx (_ga_infra_error)."""
+        if court_id != GA_CL or not cid:
+            return
+        if exc is not None and _ga_infra_error(exc):
+            print("  . ga backlog: cluster %s not charged a try (infrastructure, not the opinion: %s: %s)"
+                  % (cid, type(exc).__name__, str(exc)[:120]))
+            return
+        if time.time() > run_start + BUDGET_SEC:
+            print("  . ga backlog: cluster %s not charged a try (the run's time budget expired mid-candidate)" % cid)
+            return
+        ga_failed[cid] = why
 
     def ga_dup_skip(r):
         """A GA re-scrape: a second CourtListener cluster for a docket a seen or carded cluster already
@@ -3791,7 +3885,7 @@ def main():
             break
         except Exception as e:
             print("  ! error on cluster %s (%s): %s" % (cid, name, e))
-            ga_fail(cid, court_id, "error while evaluating (%s run): %s" % (today, str(e)[:160]))
+            ga_fail(cid, court_id, "error while evaluating (%s run): %s" % (today, str(e)[:160]), exc=e)
             consec += 1
             if consec >= BREAKER:
                 print("  ! %d consecutive failures; stopping early (API likely rate-limited). "
@@ -3961,7 +4055,7 @@ def main():
             break
         except Exception as e:
             print("  ! error on cluster %s (%s): %s" % (cid, name, e))
-            ga_fail(cid, court_id, "error while evaluating (%s run): %s" % (today, str(e)[:160]))
+            ga_fail(cid, court_id, "error while evaluating (%s run): %s" % (today, str(e)[:160]), exc=e)
             consec += 1
             if consec >= BREAKER:
                 print("  ! %d consecutive failures; stopping early (API likely rate-limited). "
@@ -4169,7 +4263,7 @@ def main():
             failed=set(ga_failed))
         names = {c: (it.get("caseName") or "") for c, it in ga_found.items()}
         abandoned, newly = _ga_abandon_update(state.get("ga_abandoned") or [], gave_up,
-                                              set(ga_retry) & set(ga_failed), resolved, ga_failed, names,
+                                              ga_retry_tried | (set(ga_retry) & set(ga_failed)), resolved, ga_failed, names,
                                               today, max_tries)
         for a in newly:
             print("  ! ga backlog: ABANDONED cluster %d (%s): failed in %d run(s), last: %s. The mark passes it; "
@@ -4185,6 +4279,29 @@ def main():
             state.pop("ga_abandoned", None)
         if ga_not_ga:
             state["ga_redraft_not_ga"] = sorted(ga_not_ga)[-1000:]
+        if ga_absent_once:
+            state["ga_redraft_absent_once"] = {str(c): d for c, d in sorted(ga_absent_once.items())[-1000:]}
+        else:
+            state.pop("ga_redraft_absent_once", None)
+        # A mark that holds run after run while backlog remains means one cluster is blocking the
+        # intake (never reached, never resolving): name it loudly so it is looked at, not waited out.
+        outstanding = sorted(c for c in ga_found if c > new_mark and c not in resolved and c not in gave_up)
+        blocker = outstanding[0] if outstanding else None
+        stall_runs = int(_sc("GA_MARK_STALL_RUNS", 6))
+        ga_stall, stall_loud = _ga_stall_update(state.get("ga_mark_stall"), ga_mark, new_mark, blocker, stall_runs)
+        if stall_loud:
+            why = ("waiting in the backlog (GA_BACKLOG_PER_RUN)" if blocker in set(ga_remain)
+                   else ga_failed.get(blocker) or ("%d failed evaluation(s) so far" % new_tries[blocker]
+                                                   if new_tries.get(blocker) else
+                                                   "not reached (OPINIONS_MAX cut, time budget, or REST-budget deferral)"))
+            print("  ! ga high-water mark STALLED at %d for %d consecutive run(s) with %d cluster(s) outstanding; "
+                  "blocking cluster %d (%s): %s"
+                  % (new_mark, ga_stall["runs"], len(outstanding), blocker,
+                     (ga_found.get(blocker, {}).get("caseName") or "?")[:60], why))
+        if ga_stall:
+            state["ga_mark_stall"] = ga_stall
+        else:
+            state.pop("ga_mark_stall", None)
         state["ga_high_water"] = new_mark
         if new_tries:
             state["ga_backlog_tries"] = {str(c): n for c, n in sorted(new_tries.items())}

@@ -126,14 +126,21 @@ from the feed or the release page falls back to the REST text path.
   admitted `siteconfig.GA_BACKLOG_PER_RUN` at a time (8), oldest first. The rest wait, and
   are not counted as floor drops. The mark stops just below the lowest cluster still waiting
   or unsettled, so nothing above it is skipped. A cluster spends a try (`ga_backlog_tries`)
-  only in a run that actually evaluated it and failed: no text after a real fetch, or an
-  error. A run that never reached it (cut by `OPINIONS_MAX`, stopped by the time budget,
-  deferred on the CourtListener REST budget) costs nothing, so a quota-starved stretch only
-  holds the mark. After `GA_BACKLOG_MAX_TRIES` failures the mark passes the cluster, but it
+  only in a run that actually evaluated it and failed: no text after a real fetch, or a
+  model answer that cannot be used. A run that never reached it (cut by `OPINIONS_MAX`,
+  stopped by the time budget, deferred on the CourtListener REST budget) costs nothing, and
+  neither does a run stopped by infrastructure (the time budget expiring mid-candidate, the
+  REST budget, a transport error, the Anthropic API still 429/overloaded/5xx after its
+  retries; the run prints `. ga backlog: cluster N not charged a try`), so a quota-starved or
+  outage-hit stretch only holds the mark. When the mark has not moved for
+  `GA_MARK_STALL_RUNS` (6) consecutive runs while backlog remains, the run prints
+  `! ga high-water mark STALLED at M ...; blocking cluster N (name): why`
+  (`ga_mark_stall` in the state counts the runs). After `GA_BACKLOG_MAX_TRIES` failures the mark passes the cluster, but it
   is not dropped: it is recorded in `opinions_state.json` `ga_abandoned` (id, name, reason,
   dates), the run prints `! ga backlog: ABANDONED cluster N`, and every run lists the ones
   outstanding. An abandoned cluster is looked up by id and re-admitted past the floor every
-  `GA_ABANDONED_RETRY_DAYS` (7), `GA_ABANDONED_RETRY_PER_RUN` (2) at a time, so a fix for
+  `GA_ABANDONED_RETRY_DAYS` (7), `GA_ABANDONED_RETRY_PER_RUN` (2) at a time (its `last_try` is
+  stamped whenever a retry is attempted, so a never-resolving one rotates out), so a fix for
   what stopped it reaches it on its own; to force one now, add its bare cluster id as a line
   in `queue.txt`. The log reads `. ga backlog: N admitted, M remain`, and the run log
   carries a `ga` record.
@@ -141,8 +148,11 @@ from the feed or the release page falls back to the REST text path.
   cluster again, and the 20-entry court feed may never carry an older GA release. So each
   run looks up, by `cluster_id:[x TO x]` on the search feed, the still-pending redraft ids
   (`review_store.load_redraft_ids`) that no feed carried, up to `GA_REDRAFT_MAX_QUERIES` (10),
-  newest first. An id the GA search feed does not know is another court's and is remembered
-  in `ga_redraft_not_ga`, so it is not queried again.
+  newest first. An id the GA search feed answers with nothing on two separate runs is another
+  court's and is remembered in `ga_redraft_not_ga`, so it is not queried again; the first empty
+  answer is only noted (`ga_redraft_absent_once`), since one empty answer may be a feed hiccup.
+  A search-feed page carrying any cluster outside the queried range, full or partial, is a feed
+  malfunction: the walk (or the lookups) stops loudly and nothing from that page is used.
 - **Re-scrapes.** When a docket also belongs to a cluster already seen or carded, and that
   cluster carries the same date, the new cluster is skipped and marked seen
   (`~ ga re-scrape duplicate`). Rease 10975744 is one, a re-scrape of 10875591.
