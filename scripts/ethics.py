@@ -171,8 +171,9 @@ EXTRACT_SYSTEM = (
 
 
 def _extract_body(text, model=None):
-    return {"model": model or MODEL, "max_tokens": EXTRACT_MAX_TOKENS, "system": EXTRACT_SYSTEM,
-            "messages": [{"role": "user", "content": "PAGE TEXT:\n" + (text or "")[:MAX_TEXT]}]}
+    return courtrules._with_effort("ethics_extract", {
+        "model": model or MODEL, "max_tokens": EXTRACT_MAX_TOKENS, "system": EXTRACT_SYSTEM,
+        "messages": [{"role": "user", "content": "PAGE TEXT:\n" + (text or "")[:MAX_TEXT]}]})
 
 
 def _extract_parse(v):

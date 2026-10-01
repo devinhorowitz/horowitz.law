@@ -36,6 +36,15 @@ FABLE_SYSTEM = (
     "the flag, set confidence to \"low\"."
 )
 
+
+def _with_effort(role, body):
+    """`body` with `role`'s effort (siteconfig.MODEL_EFFORT) attached by update.with_effort.
+    Imported at call time, not at module load, so this module still has no import cycle with
+    update.py. Called inside the reviews' try blocks: any failure is the usual fail-closed hold."""
+    import update
+    return update.with_effort(role, body)
+
+
 MIN_TEXT_ALPHA = 400   # below this the opinion text cannot support a confident clear
 
 
@@ -131,8 +140,9 @@ def review_published(entry, reasons, opinion_text, call_json, grounded=None,
     user = ("PUBLISHED CARD:\n%s\n\nWHAT THE GUARD FLAGGED:\n- %s\n\nOPINION TEXT:\n%s"
             % (card, "\n- ".join(reasons or ["(unspecified)"]), opinion_text))
     try:
-        v = call_json({"model": model, "max_tokens": out_tokens, "system": PUBLISHED_SYSTEM,
-                       "messages": [{"role": "user", "content": user}]}, "fable-review-published")
+        v = call_json(_with_effort("fable_review", {
+            "model": model, "max_tokens": out_tokens, "system": PUBLISHED_SYSTEM,
+            "messages": [{"role": "user", "content": user}]}), "fable-review-published")
     except Exception as e:
         return _no_review("Senior review unavailable (%s)." % e)
     if not isinstance(v, dict):
@@ -189,8 +199,9 @@ def review_held(entry, reasons, opinion_text, call_json, model="claude-fable-5",
     user = ("FLAGGED CARD:\n%s\n\nWHY IT WAS HELD:\n- %s\n\nOPINION TEXT:\n%s"
             % (card, "\n- ".join(reasons or ["(unspecified)"]), opinion_text))
     try:
-        v = call_json({"model": model, "max_tokens": out_tokens, "system": FABLE_SYSTEM,
-                       "messages": [{"role": "user", "content": user}]}, "fable-review")
+        v = call_json(_with_effort("fable_review", {
+            "model": model, "max_tokens": out_tokens, "system": FABLE_SYSTEM,
+            "messages": [{"role": "user", "content": user}]}), "fable-review")
     except Exception as e:
         return _held("Fable review unavailable (%s); left for human review." % e)
     if not isinstance(v, dict):

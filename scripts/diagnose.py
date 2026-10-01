@@ -112,7 +112,8 @@ def _runbook_context():
 
 
 def build_request(title, body, context, model=MODEL):
-    """The Messages API body for one diagnosis. Pure: no network, no env."""
+    """The Messages API body for one diagnosis. No network for a documented model (the effort
+    gate, update.with_effort, consults the Models API only for a model its table does not cover)."""
     parts = []
     if context:
         parts.append("REPO RUNBOOK (docs/MAINTENANCE.md), for grounding:\n\n" + context)
@@ -120,12 +121,12 @@ def build_request(title, body, context, model=MODEL):
         "MONITOR ISSUE TO DIAGNOSE\n\nTitle: %s\n\nBody:\n%s"
         % (title or "(no title)", (body or "(no body)"))
     )
-    return {
+    return update.with_effort("diagnose", {
         "model": model,
         "max_tokens": 1500,
         "system": SYSTEM,
         "messages": [{"role": "user", "content": "\n\n---\n\n".join(parts)}],
-    }
+    })
 
 
 def _as_list(v):

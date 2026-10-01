@@ -196,28 +196,66 @@ SMELL_MODEL = ""
 # skill tree); HEARTBEAT_SKILL_MANIFEST_DAYS overrides for one run.
 SKILL_MANIFEST_MAX_AGE_DAYS = 90
 
-# The reasoning effort each funnel tier asks for, sent as `output_config.effort` (the documented
-# request shape; no beta header). Keyed by TIER, never by model id: the model pins live in the
-# scripts model_watch rewrites, and a model id here would be left behind by a bump.
+# The reasoning effort each Anthropic request asks for, sent as `output_config.effort` (the
+# documented request shape; no beta header). Keyed by ROLE -- what the call is for -- never by model
+# id: the model pins live in the scripts model_watch rewrites, and a model id here would be left
+# behind by a bump. Every request builder attaches its role's level through update.with_effort, and
+# test_effort fails if a builder appears that does not (or if a role here has no builder).
 #
-# WHY THIS IS EXPLICIT. Until 2026-10 no tier sent an effort, so each ran at its model's API
-# default. That is `high` for the Opus and Sonnet pins the funnel has been tuned against -- but
-# a default belongs to the MODEL, not to the funnel, and the next Opus generation defaults to
-# `medium`. Model-watch then judged that candidate at `medium` against an incumbent at `high`,
-# and called the gap a regression (2026-09-23 on). Pinning the level here makes a model bump
-# change one thing, the model, and makes the golden comparison like for like.
+# WHY THIS IS EXPLICIT. Until 2026-10 no call sent an effort, so each ran at its model's API
+# default. That is `high` for the Opus, Sonnet and Fable pins the pipeline has been tuned against --
+# but a default belongs to the MODEL, not to the pipeline, and the next Opus generation defaults to
+# `medium`. Model-watch then judged that candidate at `medium` against an incumbent at `high`, and
+# called the gap a regression (2026-09-23 on). The funnel tiers were pinned first (PR #352); the
+# guards, audits, reviews and watches below still rode the default, so an Opus or Sonnet bump would
+# have quietly moved the fidelity guards and the watch writers to whatever the new model defaults
+# to. Pinning the level here makes a model bump change one thing, the model.
 #
-# "high" reproduces exactly what summarize and triage ran at before this existed (it is the
-# documented default of their pinned models). The two Haiku tiers stay "": Haiku does not
-# accept an effort parameter, so they send none, as they always have. update.effort_params
-# also refuses to send an effort to any model whose support is not confirmed (by the documented
-# rule, update.EFFORT_DOCUMENTED, or else by the Models API's capabilities), whatever this says.
+# Every "high" reproduces exactly what that call ran at before this existed: it is the documented
+# API default of the model the role pins today (Opus 5, Sonnet 5, Fable 5), and sending a model its
+# default is the same as omitting it. The Haiku roles stay "": Haiku 4.5 does not accept an effort
+# parameter, so they send none, as they always have. update.with_effort also refuses to send an
+# effort to any model whose support is not confirmed (by the documented rule,
+# update.EFFORT_DOCUMENTED, or else by the Models API's capabilities), whatever this says -- so a
+# role whose model is overridden to Haiku sends nothing rather than a 400.
+#
+# Raising a level is not free: max_tokens caps thinking plus the answer together, and several of
+# these calls run on small budgets (the legislation recall audit at 200, the screens at 256,
+# treatment at 400). Re-check max_tokens before raising any of them above "high".
+#
+# Not separate roles, because they are not separate requests: the redraft of a vetoed case and
+# queue_cases.py run the same summarize/triage/treatment_audit requests; maintain.py's
+# re-validation runs guard_fidelity, guard_completeness and fable_review; golden_check runs the four
+# funnel tiers; ethics has no writer call (build_card is deterministic).
 # Allowed values: "", "low", "medium", "high", "xhigh", "max".
 MODEL_EFFORT = {
-    "summarize": "high",   # tier 3, the Opus card writer
-    "triage":    "high",   # tier 2, the Sonnet full-read gate
-    "pretriage": "",       # tier 1.5, Haiku: no effort parameter
-    "screen":    "",       # tier 1, Haiku: no effort parameter
+    # The opinions funnel (update.py; also backfill, queue_cases, golden_check).
+    "summarize":          "high",   # tier 3, the Opus card writer (and the redraft of a vetoed case)
+    "triage":             "high",   # tier 2, the Sonnet full-read gate
+    "pretriage":          "",       # tier 1.5, Haiku: no effort parameter
+    "screen":             "",       # tier 1, Haiku: no effort parameter
+    # The finish-time guards, sync and batched (update.guard_request; maintain's re-validation too).
+    "guard_fidelity":     "high",   # the Sonnet cross-check of the drafted holding
+    "guard_completeness": "high",   # the Sonnet check for an omitted material holding
+    # Audits (update.py).
+    "smell":              "high",   # the Opus drop-reason audit (smell_check.py too)
+    "treatment_audit":    "high",   # the Opus escalated treatment audit of a feed card
+    "authority_audit":    "high",   # the Opus adverse-treatment audit of a relied-on authority
+    # Fable senior review (fable_review.py: the held-card review and maintain's published-card review).
+    "fable_review":       "high",
+    # The treatment watch (treatment.py).
+    "treatment":          "high",   # the Sonnet citing-opinion classifier
+    # The rule, ethics, legislation and regulation watches.
+    "courtrules_extract": "high",   # Opus amendment extraction (courtrules.py)
+    "ethics_extract":     "high",   # Opus opinion extraction (ethics.py)
+    "leg_screen":         "",       # Haiku bill screen (legislation.py): no effort parameter
+    "leg_recall":         "high",   # Opus recall audit of a screened-out bill
+    "leg_write":          "high",   # Opus bill card writer
+    "reg_screen":         "",       # Haiku document screen (regulations.py): no effort parameter
+    "reg_write":          "high",   # Opus regulation card writer
+    # Repository maintenance (Fable).
+    "diagnose":           "high",   # failed-run diagnosis (diagnose.py)
+    "dep_review":         "high",   # dependency-bump review (dep_review.py)
 }
 
 # ---- Supreme Court of Georgia intake --------------------------------------

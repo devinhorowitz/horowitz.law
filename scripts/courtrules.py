@@ -202,11 +202,20 @@ EXTRACT_SYSTEM = (
 )
 
 
+def _with_effort(role, body):
+    """`body` with `role`'s effort (siteconfig.MODEL_EFFORT) attached by update.with_effort, the
+    one gate every Anthropic request goes through (no effort for Haiku or an unconfirmed model).
+    Imported lazily, like _default_ai, so importing this module stays cheap."""
+    import update
+    return update.with_effort(role, body)
+
+
 def _extract_body(text, model=None):
     """Messages body for one page's amendment extraction. Shared by the synchronous extract() and the
     batch path, so both build byte-identical requests."""
-    return {"model": model or MODEL, "max_tokens": EXTRACT_MAX_TOKENS, "system": EXTRACT_SYSTEM,
-            "messages": [{"role": "user", "content": "PAGE TEXT:\n" + (text or "")[:MAX_TEXT]}]}
+    return _with_effort("courtrules_extract", {
+        "model": model or MODEL, "max_tokens": EXTRACT_MAX_TOKENS, "system": EXTRACT_SYSTEM,
+        "messages": [{"role": "user", "content": "PAGE TEXT:\n" + (text or "")[:MAX_TEXT]}]})
 
 
 def _extract_parse(v):

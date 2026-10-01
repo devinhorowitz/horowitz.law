@@ -230,9 +230,11 @@ Run by hand, from the Actions tab:
   `model_watch.PIN_FILES` (`update.py`, `treatment.py` and the four watch scripts); no
   workflow restates one, and `test_model_watch` fails if one ever does. `model-watch` proposes
   upgrades, but a pin only changes when a PR merges.
-- The effort each funnel tier asks for is `siteconfig.MODEL_EFFORT` (summarize and triage
-  `high`, the Haiku tiers none), keyed by tier, sent as `output_config.effort`, and only to a
-  model whose support is confirmed: by the documented rule (`update.EFFORT_DOCUMENTED`) when it
+- The effort every Anthropic request asks for is `siteconfig.MODEL_EFFORT`, keyed by role (the
+  funnel tiers, the guards, the audits, Fable review, the treatment classifier, the four watches,
+  diagnose and dep_review: `high` everywhere except the Haiku screens, which send none). Each
+  builder attaches it through `update.with_effort`, and `test_effort` fails on a request body that
+  does not. It is sent as `output_config.effort`, and only to a model whose support is confirmed: by the documented rule (`update.EFFORT_DOCUMENTED`) when it
   covers the model, else by the Models API's `capabilities.effort`. A model neither confirms (a
   newer generation the docs predate, with no capabilities reported) is sent none, and the run
   logs that its comparison may be unmatched. It is explicit so a model bump changes the model and
