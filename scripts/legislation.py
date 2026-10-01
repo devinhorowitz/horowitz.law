@@ -1011,8 +1011,7 @@ def run(key=None, fetch=None, ai=None, today=None, max_run=None, states=None, sc
         return out_of_time
 
     for state in states:
-        if not stop:
-            time_low()
+        time_low()                      # checked every state, even past a cap: a cap-then-time stop must also end discovery
         if out_of_time or (stop and not carried):
             break                       # past a card/screen cap, discovery goes on only to match carried results
         cands = discover(key, state=state, fetch=fetch, today=today, seen=seen,
