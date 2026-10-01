@@ -289,9 +289,11 @@ jobs:
           # Auto-close ONLY issues without the maintenance-finding label. A clean run proves the
           # transient thing (a credit lapse, a network blip) is over -- but it does NOT clear a
           # card flag, because re-validation walks a rotating slice of 3 cards a day: today's run
-          # checked three DIFFERENT cards and says nothing about the one flagged yesterday. At 96
-          # cards that card is not revisited for roughly a month, so auto-closing on the next run
-          # would erase a real finding within a day of filing it. Those stay open for a person.
+          # checked three DIFFERENT cards and says nothing about the one flagged yesterday. The
+          # rotation reaches that card again only after every other card has had its turn -- the
+          # card count divided by 3, in days, already well over a month and growing with the feed --
+          # so auto-closing on the next run would erase a real finding within a day of filing it.
+          # Those stay open for a person.
           title="Opinions maintenance findings"
           for n in $(bash scripts/gh_retry.sh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title $title" --json number,title,labels \
             --jq ".[] | select(.title==\"$title\") | select([.labels[].name] | index(\"maintenance-finding\") | not) | .number" 2>/dev/null || true); do

@@ -241,8 +241,9 @@ Run by hand, from the Actions tab:
   (`scripts/dep_review.py`, `DEP_USAGE`). It is advisory and merges nothing; a broken run posts
   nothing. Add a `DEP_USAGE` entry when a new dependency is worth a repo-specific review.
 - Latency-tolerant model calls run through the **50%-priced Batch API** (`batch.py`). `diagnose` and
-  `dep-review` always do; `maintain`'s daily guard trickle does **by default** now (`MAINTAIN_BATCH`,
-  set it to `0` to force the synchronous path). The trade is latency: the run polls for the batch
+  `dep-review` always do; `maintain`'s daily guard trickle does only when the repo Variable
+  `MAINTAIN_BATCH=1` is set (the workflow passes it empty otherwise, which runs the synchronous
+  path). The trade is latency: the run polls for the batch
   (usually minutes), capped by the matching `*_BATCH_SEC` budget (`diagnose`/`dep-review` 480s;
   `maintain` 900s, which must stay under the 30-min job); a slow batch just posts nothing / defers
   the slice that run (best-effort). `backfill` batches too, but stays opt-in (`BACKFILL_BATCH`) since
