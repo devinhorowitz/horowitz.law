@@ -12,6 +12,7 @@ it in the smoke job; run it directly to check a change to crosscheck:
 
   python scripts/test_update.py        # prints each case; exits nonzero on any failure
 """
+import contextlib
 import io
 import os
 import sys
@@ -396,80 +397,96 @@ def test_draft_pending():
     def finish_fn(v, p):
         finished.append((p["cid"], v))
 
-    def mixed_run(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
-        assert sorted(rq["custom_id"] for rq in reqs) == ["111", "222", "333"], [rq["custom_id"] for rq in reqs]
-        return {"111": {"ok": True, "text": '{"relevant": true, "significance": "high"}', "stop_reason": "end_turn"},
-                "222": {"ok": False, "type": "errored", "error": "x"},
-                "333": {"ok": True, "text": "not json {{{", "stop_reason": "end_turn"}}
+    def mixed_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):
+        assert sorted(rq["custom_id"] for rq in reqs) == ["summarize-111", "summarize-222", "summarize-333"], \
+            [rq["custom_id"] for rq in reqs]
+        return {"summarize-111": {"ok": True, "text": '{"relevant": true, "significance": "high"}',
+                                  "stop_reason": "end_turn"},
+                "summarize-222": {"ok": False, "type": "errored", "error": "x"},
+                "summarize-333": {"ok": True, "text": "not json {{{", "stop_reason": "end_turn"}}
+    update._PENDING_BATCHES.clear(); update._RESUME_BATCHES.clear()
     update.batch.run = mixed_run
+    buf = io.StringIO()
     try:
-        drafted = update._draft_pending(pend, deadline=123.0, finish_fn=finish_fn)
+        with contextlib.redirect_stdout(buf):
+            drafted = update._draft_pending(pend, deadline=123.0, finish_fn=finish_fn)
     finally:
         update.batch.run = real_run
     assert drafted == {111}, drafted
     assert finished == [(111, {"relevant": True, "significance": "high"})], finished
-    print("  ok  ok line drafts+finishes; errored and unparseable lines skip (retry next run)")
+    log = buf.getvalue()
+    assert "! undrafted: 222 C v. D (summarize batch: result errored)" in log, log
+    assert "! undrafted: 333 E v. F (summarize batch: unparseable draft" in log, log
+    assert update._PENDING_BATCHES == {}, update._PENDING_BATCHES     # collected: nothing carried
+    print("  ok  ok line drafts+finishes; errored and unparseable lines are logged undrafted (retry next run)")
 
     for name, exc in (("timeout", update.batch.BatchTimeout("bid", "still running")),
                       ("transport error", update.batch.BatchError("submit failed"))):
         finished.clear()
 
-        def raiser(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None, _e=exc):
+        def raiser(reqs, deadline=None, interval=20.0, label="batch", _e=exc, **_kw):
             raise _e
         update.batch.run = raiser
+        buf = io.StringIO()
         try:
-            drafted = update._draft_pending(pend, deadline=123.0, finish_fn=finish_fn)
+            with contextlib.redirect_stdout(buf):
+                drafted = update._draft_pending(pend, deadline=123.0, finish_fn=finish_fn)
         finally:
             update.batch.run = real_run
         assert drafted == set() and finished == [], (name, drafted, finished)
-        print("  ok  batch %s defers the whole draft set (nothing evaluated)" % name)
+        assert buf.getvalue().count("! undrafted:") == 3, buf.getvalue()
+        print("  ok  batch %s defers the whole draft set (nothing evaluated, every case logged)" % name)
 
 
 def test_guard_cards_batch():
     """The post-draft fidelity-guard batch (OPINIONS_GUARD_BATCH, update.guard_cards_batch): one request
     per (card, guard kind), results mapped by custom_id, grounding applied via guard_verdict, and
     crosschecks/completeness populated in place. A per-line failure -> 'unavailable' for that guard; a
-    whole-batch failure -> returns False WITHOUT populating (the caller falls back to the sync guards).
+    whole-batch failure -> every (card, kind) pair is returned for the synchronous guards, unpopulated.
     Stubs batch.run, so it exercises the real guard_request + batch.from_body building with no network."""
     print("post-draft guard batch (guard_cards_batch):")
     items = [{"cid": 111, "name": CARD["name"], "text": OPINION, "entry": CARD},
              {"cid": 222, "name": CARD["name"], "text": OPINION, "entry": CARD}]
     real_run = update.batch.run
 
-    def guard_run(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+    def guard_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         ids = sorted(rq["custom_id"] for rq in reqs)
-        assert ids == ["111-completeness", "111-fidelity", "222-completeness", "222-fidelity"], ids
+        assert ids == ["guards-111-completeness", "guards-111-fidelity",
+                       "guards-222-completeness", "guards-222-fidelity"], ids
         return {
-            "111-fidelity": {"ok": True, "text": '{"verdict": "match"}'},
-            "111-completeness": {"ok": True, "text": '{"verdict": "complete"}'},
+            "guards-111-fidelity": {"ok": True, "text": '{"verdict": "match"}'},
+            "guards-111-completeness": {"ok": True, "text": '{"verdict": "complete"}'},
             # 222 fidelity flags with a quote copied verbatim from the drafted summary (grounded).
-            "222-fidelity": {"ok": True, "text": '{"verdict": "flag", "reason": "misstates", "quote": "%s"}' % REAL_QUOTE},
-            "222-completeness": {"ok": False, "type": "errored"},   # a per-line failure -> unavailable
+            "guards-222-fidelity": {"ok": True, "text": '{"verdict": "flag", "reason": "misstates", "quote": "%s"}'
+                                    % REAL_QUOTE},
+            "guards-222-completeness": {"ok": False, "type": "errored"},   # per-line failure -> sync fallback
         }
     cc, cp = {}, {}
     update.batch.run = guard_run
     try:
-        ok = update.guard_cards_batch(items, cc, cp, deadline=1.0)
+        left = update.guard_cards_batch(items, cc, cp, deadline=1.0)
     finally:
         update.batch.run = real_run
-    assert ok is True, ok
+    assert [(it["cid"], kind) for it, kind in left] == [(222, "completeness")], left
     assert cc[111]["verdict"] == "match", cc[111]
     assert cp[111]["verdict"] == "complete", cp[111]
     assert cc[222]["verdict"] == "flag" and REAL_QUOTE in cc[222].get("quote", ""), cc[222]
-    assert cp[222]["verdict"] == "unavailable", cp[222]     # errored line -> unavailable; card still surfaces
-    print("  ok  batched guards map by custom_id, ground a flag, and mark an errored line unavailable")
+    assert 222 not in cp, cp     # never stamped 'unavailable' as if guarded: it goes to the sync guard
+    print("  ok  batched guards map by custom_id, ground a flag, and hand an errored line to the sync guard")
 
     cc2, cp2 = {}, {}
 
-    def raiser(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+    def raiser(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         raise update.batch.BatchTimeout("bid", "still running")
     update.batch.run = raiser
     try:
-        ok2 = update.guard_cards_batch(items, cc2, cp2, deadline=1.0)
+        left2 = update.guard_cards_batch(items, cc2, cp2, deadline=1.0)
     finally:
         update.batch.run = real_run
-    assert ok2 is False and cc2 == {} and cp2 == {}, (ok2, cc2, cp2)
-    print("  ok  a whole-batch failure returns False without populating (caller falls back to sync)")
+    assert sorted((it["cid"], kind) for it, kind in left2) == [
+        (111, "completeness"), (111, "fidelity"), (222, "completeness"), (222, "fidelity")], left2
+    assert cc2 == {} and cp2 == {}, (cc2, cp2)
+    print("  ok  a whole-batch failure hands every guard to the sync fallback without populating")
 
 
 def test_triage_batch():
@@ -491,11 +508,12 @@ def test_triage_batch():
         return {"relevant": True, "significance": "high", "note": "sync:%s" % name}
 
     # 111 ok from the batch; 222 errored line -> sync fallback; 333 unparseable body -> sync fallback.
-    def mixed_run(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
-        assert sorted(rq["custom_id"] for rq in reqs) == ["111", "222", "333"], [rq["custom_id"] for rq in reqs]
-        return {"111": {"ok": True, "text": '{"relevant": true, "significance": "high", "note": "batch"}'},
-                "222": {"ok": False, "type": "errored", "error": "x"},
-                "333": {"ok": True, "text": "not json {{{"}}
+    def mixed_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):
+        assert sorted(rq["custom_id"] for rq in reqs) == ["triage-111", "triage-222", "triage-333"], \
+            [rq["custom_id"] for rq in reqs]
+        return {"triage-111": {"ok": True, "text": '{"relevant": true, "significance": "high", "note": "batch"}'},
+                "triage-222": {"ok": False, "type": "errored", "error": "x"},
+                "triage-333": {"ok": True, "text": "not json {{{"}}
     update.batch.run, update.triage = mixed_run, fake_triage
     try:
         verdicts = update._triage_batch(items, "", deadline=123.0)
@@ -512,7 +530,7 @@ def test_triage_batch():
                        ("transport error", update.batch.BatchError("submit failed"))):
         sync_calls.clear()
 
-        def raiser(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None, _e=exc):
+        def raiser(reqs, deadline=None, interval=20.0, label="batch", _e=exc, **_kw):
             raise _e
         update.batch.run, update.triage = raiser, fake_triage
         try:
@@ -542,7 +560,7 @@ def test_triage_batch():
             raise RuntimeError("triage claude-sonnet-5 hit max_tokens (2048); response truncated")
         return {"relevant": True, "significance": "high", "note": "sync:%s" % name}
 
-    def all_missing(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+    def all_missing(reqs, deadline=None, interval=20.0, label="batch", **_kw):
         raise update.batch.BatchTimeout("bid", "still running")
     update.batch.run, update.triage = all_missing, one_bad
     try:
@@ -738,112 +756,97 @@ def test_guard_token_budget():
 
 
 def test_batch_carry_over():
-    """A Message Batch is billed when Anthropic accepts it, not when we read it. Before this,
-    every deferral abandoned a batch that had already run -- at opus-5 rates for summarize.
-    The id must be recorded at SUBMIT time (not after the wait) and collected next run.
-
-    Honest scope, asserted in the comments so it is not forgotten: this recovers DEFERRALS.
-    A reclaimed run never reaches the commit step, so nothing reaches the state file.
-    """
-    real_run = update.batch.run
-    seen = {}
-
-    def submitting(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
-        seen["resume_id"] = resume_id
-        if on_submit:
-            on_submit("bid_new")
-        return {"a": {"ok": True, "text": "{}"}}
-
-    def timing_out(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
-        if on_submit:
-            on_submit("bid_deferred")
-        raise update.batch.BatchTimeout("bid_deferred", "still running")
-
+    """pending_batches bookkeeping. Only summarize carries (it has no synchronous fallback); triage,
+    smell and guards never carry and a legacy carry for them is cleared, not resumed. A carry stays in
+    state until it is collected or expires -- a run that never reaches the summarize phase must
+    write it back untouched (on 2026-09-30 such a run deleted the carry holding Benedetto v. Cuatt
+    10987874's escalated re-read). The end-to-end resume behaviour, against a fake Batch API, is
+    in test_batch_resume.py."""
+    DAY = 86400.0
     try:
-        # A completed batch leaves nothing behind.
         update._PENDING_BATCHES.clear(); update._RESUME_BATCHES.clear()
-        update.batch.run = submitting
-        out = update.batch_run(["r"], 0, "funnel-summarize", now=1000.0)
-        assert out == {"a": {"ok": True, "text": "{}"}}, out
-        assert update._PENDING_BATCHES == {}, update._PENDING_BATCHES
-        assert seen["resume_id"] is None, seen
-        print("  ok  a collected batch returns results and leaves nothing to carry")
+        state = {"pending_batches": {
+            "funnel-summarize": {"id": "bid_sum", "at": 1000.0, "n": 2},            # legacy shape
+            "msgbatch_new": {"label": "funnel-summarize", "id": "msgbatch_new", "at": 2000.0,
+                             "n": 2, "cids": [11, "12"]},
+            "funnel-triage": {"id": "bid_tri", "at": 1000.0},
+            "funnel-smell": {"id": "bid_sme", "at": 1000.0},
+            "funnel-guards": {"id": "bid_gua", "at": 1000.0}}}
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            expired = update.adopt_pending_batches(state, now=3000.0)
+        log = buf.getvalue()
+        assert expired == set(), expired
+        assert set(update._RESUME_BATCHES) == {"bid_sum", "msgbatch_new"}, update._RESUME_BATCHES
+        assert update._RESUME_BATCHES["msgbatch_new"]["cids"] == [11, 12], update._RESUME_BATCHES
+        assert update._RESUME_BATCHES["bid_sum"]["cids"] is None     # legacy: covered set unknown
+        for lab in ("funnel-triage", "funnel-smell", "funnel-guards"):
+            assert "clearing legacy %s carry" % lab in log, log
+        print("  ok  summarize carries load (legacy and new shapes); triage/smell/guard carries are cleared")
 
-        # A deferral still raises (callers degrade unchanged) but keeps the paid id.
-        update.batch.run = timing_out
+        # A run that never reaches the summarize phase keeps both carries, timestamps untouched.
+        st = update.stamp_pending_batches(dict(state))
+        assert set(st["pending_batches"]) == {"bid_sum", "msgbatch_new"}, st
+        assert st["pending_batches"]["bid_sum"]["at"] == 1000.0, st
+        assert update.pending_batches_changed(state)                 # the legacy keys were cleared
+        assert not update.pending_batches_changed(st)                # and now it is stable
+        print("  ok  a run that never reaches the phase writes its carries back untouched")
+
+        # Collected -> gone; a healthy run removes the key rather than committing an empty dict.
         update._PENDING_BATCHES.clear()
-        raised = False
-        try:
-            update.batch_run(["r"], 0, "funnel-summarize", now=2000.0)
-        except update.batch.BatchTimeout:
-            raised = True
-        assert raised, "BatchTimeout must still propagate to the caller"
-        rec = update._PENDING_BATCHES.get("funnel-summarize") or {}
-        assert rec.get("id") == "bid_deferred", rec
-        assert rec.get("at") == 2000.0, rec
-        print("  ok  a deferral still raises, and retains the billed batch id")
-
-        # A deferral whose id arrives ONLY on the exception (on_submit never fired -- e.g. the
-        # carried batch was still running, so nothing new was submitted) must still be held.
-        # Mutation testing caught this path being unreachable from the happy-path test.
-        def timing_out_silently(reqs, deadline=None, interval=20.0, label="batch",
-                                resume_id=None, on_submit=None):
-            raise update.batch.BatchTimeout("bid_from_exception", "still running")
-        update.batch.run = timing_out_silently
-        update._PENDING_BATCHES.clear()
-        try:
-            update.batch_run(["r"], 0, "funnel-triage", now=2500.0)
-        except update.batch.BatchTimeout:
-            pass
-        assert (update._PENDING_BATCHES.get("funnel-triage") or {}).get("id") == "bid_from_exception", \
-            update._PENDING_BATCHES
-        print("  ok  an id carried only on the exception is still retained")
-
-        # Restore the state the round-trip assertions below expect.
-        update.batch.run = timing_out
-        update._PENDING_BATCHES.clear()
-        try:
-            update.batch_run(["r"], 0, "funnel-summarize", now=2000.0)
-        except update.batch.BatchTimeout:
-            pass
-
-        # The id round-trips through the committed state file.
-        st = update.stamp_pending_batches({"seen_clusters": []})
-        assert st["pending_batches"]["funnel-summarize"]["id"] == "bid_deferred", st
-        back = update.load_pending_batches(st, now=2060.0)
-        assert back == {"funnel-summarize": "bid_deferred"}, back
-        print("  ok  the id round-trips through opinions_state.json")
-
-        # Next run offers it as resume_id instead of paying for the same work twice.
-        update._RESUME_BATCHES.clear(); update._RESUME_BATCHES.update(back)
-        update._PENDING_BATCHES.clear()
-        update.batch.run = submitting
-        update.batch_run(["r"], 0, "funnel-summarize", now=3000.0)
-        assert seen["resume_id"] == "bid_deferred", seen
-        assert update._RESUME_BATCHES == {}, update._RESUME_BATCHES
-        print("  ok  the carried id is offered as resume_id, and consumed once")
-
-        # A healthy run leaves no trace, so the committed diff stays quiet.
         st2 = update.stamp_pending_batches({"pending_batches": {"stale": {"id": "x"}}})
         assert "pending_batches" not in st2, st2
-        print("  ok  a clean run removes the key rather than committing an empty dict")
+        print("  ok  nothing outstanding removes the key")
 
-        # Too old to still be collectable -> dropped, not polled with the phase's whole budget.
-        old = {"pending_batches": {"funnel-triage": {"id": "bid_old", "at": 1000.0}}}
-        assert update.load_pending_batches(old, now=1000.0 + update.BATCH_CARRY_MAX_AGE_SEC + 1) == {}
-        assert update.load_pending_batches(old, now=1060.0) == {"funnel-triage": "bid_old"}
-        print("  ok  a stale id is dropped; one inside the window is carried")
+        # Expiry: older than the window -> dropped with a log naming its clusters, which come back.
+        old = {"pending_batches": {"b_old": {"label": "funnel-summarize", "id": "b_old", "at": 0.0,
+                                             "cids": [10987874]}}}
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            carries, exp = update.load_pending_batches(old, now=update.BATCH_CARRY_MAX_AGE_SEC + 1.0)
+        assert carries == {} and exp == {10987874}, (carries, exp)
+        assert "expired" in buf.getvalue() and "10987874" in buf.getvalue(), buf.getvalue()
+        carries, exp = update.load_pending_batches(old, now=DAY)
+        assert set(carries) == {"b_old"} and exp == set(), (carries, exp)
+        assert update.BATCH_CARRY_MAX_AGE_SEC >= 20 * DAY, update.BATCH_CARRY_MAX_AGE_SEC
+        print("  ok  an expired carry is dropped, logged with its clusters, and they are made eligible")
 
         # Junk in a committed file must never crash the run that reads it.
-        for junk in ({"pending_batches": {"a": "not-a-dict"}},
-                     {"pending_batches": {"a": {"id": "x", "at": "nonsense"}}},
-                     {"pending_batches": {"a": {"at": 1.0}}},
-                     {"pending_batches": None},
-                     {}):
-            assert update.load_pending_batches(junk, now=1000.0) == {}, junk
+        with contextlib.redirect_stdout(io.StringIO()):
+            for junk in ({"pending_batches": {"a": "not-a-dict"}},
+                         {"pending_batches": {"a": {"at": 1.0}}},
+                         {"pending_batches": None},
+                         {}):
+                assert update.load_pending_batches(junk, now=1000.0) == ({}, set()), junk
+            c, e = update.load_pending_batches(
+                {"pending_batches": {"funnel-summarize": {"id": "x", "at": "nonsense"}}}, now=1000.0)
+            assert c == {} and e == set(), (c, e)
         print("  ok  malformed carry-over state reads as empty instead of crashing")
+
+        # The no-op routing path writes when only the carries changed (it used to write only when
+        # seen moved, so a deferral was lost and a collected carry was resumed again).
+        import tempfile
+        import json as _json
+        tmp = tempfile.mkdtemp()
+        real_state = update.STATE_PATH
+        try:
+            update.STATE_PATH = os.path.join(tmp, "state.json")
+            st0 = {"seen_clusters": [1, 2], "pending_batches": {"funnel-triage": {"id": "t", "at": 1.0}}}
+            update._PENDING_BATCHES.clear()
+            update._PENDING_BATCHES["b_def"] = {"label": "funnel-summarize", "id": "b_def", "at": 5.0,
+                                                "n": 1, "cids": [3]}
+            counts = update.route_and_publish([], [], [], [], {}, {}, set(), set(), st0, {1, 2},
+                                              set(), set(), "2026-10-01T00:00:00Z", [])
+            assert counts["noop"], counts
+            with open(update.STATE_PATH, encoding="utf-8") as fh:
+                written = _json.load(fh)
+            assert set(written["pending_batches"]) == {"b_def"}, written
+            print("  ok  a no-op run still writes a changed pending_batches")
+        finally:
+            update.STATE_PATH = real_state
+            import shutil
+            shutil.rmtree(tmp, ignore_errors=True)
     finally:
-        update.batch.run = real_run
         update._PENDING_BATCHES.clear(); update._RESUME_BATCHES.clear()
 
 

@@ -59,7 +59,7 @@ Environment:
   ANTHROPIC_STATUS_URL     status summary endpoint (default https://status.claude.com/api/v2/summary.json)
   CL_PER_MINUTE / CL_PER_HOUR / CL_PER_DAY / CL_RATE_MARGIN  CourtListener REST budget (see cl_rate.py)
 """
-import os, re, sys, json, time, html, datetime, io, copy
+import os, re, sys, json, time, html, datetime, io, copy, hashlib
 import cl_rate           # shared CourtListener REST budget (limits, pacing, defer)
 import urllib.request, urllib.parse, urllib.error
 import xml.etree.ElementTree as ET
@@ -90,6 +90,12 @@ class ConfigError(RuntimeError):
     depleted credit balance, or a retired model id. Distinct from a transient
     error so the run can stop fast and exit non-zero (surfacing it by email)
     instead of silently deferring like it does for an outage or a rate limit."""
+
+
+class TransientAPIError(RuntimeError):
+    """An Anthropic call that still failed after its retries for a reason outside the opinion: a
+    429 (rate/credit window), an overload or other 5xx, or a network error. A RuntimeError, so every
+    existing handler still catches it; the GA intake uses the type to charge no backlog try."""
 
 JSON_PATH  = os.path.join(REPO, "opinions.json")
 STATE_PATH = os.path.join(REPO, "opinions_state.json")
@@ -1321,10 +1327,12 @@ def _pdf_ok(text):
 
 
 def pdf_text(pdf_url, deadline=None):
-    """Extract opinion text from the PDF enclosure on storage.courtlistener.com. The enclosure
-    is a static file, so it needs no token and does not draw on the REST API daily rate limit.
-    Returns cleaned text, or "" on any failure (missing or non-http url, download error,
-    image-only PDF, or pypdf unavailable) so the caller can fall back to the REST API."""
+    """Extract opinion text from an opinion PDF: the enclosure on storage.courtlistener.com, or, for
+    a Supreme Court of Georgia candidate, the court's own PDF on www.gasupreme.us (the release page's
+    link, set by _ga_resolve when the search feed gave no enclosure). Either is a static file, so it
+    needs no token and does not draw on the CourtListener REST daily rate limit. Returns cleaned
+    text, or "" on any failure (missing or non-http url, download error, image-only PDF, or pypdf
+    unavailable) so the caller can fall back to the REST API."""
     if not pdf_url or not pdf_url.lower().startswith(("http://", "https://")):
         return ""
     try:
@@ -1358,6 +1366,26 @@ def pdf_text(pdf_url, deadline=None):
         _dbg("pdf parse failed (%s); using REST fallback" % e)
         return ""
     return re.sub(r"[ \t]+", " ", text).strip()
+
+
+def refetch_opinion_text(r, deadline=None):
+    """An opinion's text by the candidate loop's rule (the PDF enclosure first, then the REST
+    sub-opinions while the CourtListener budget has room), for a case the loop is not reading this
+    run: a carried smell escalation whose draft is being finished. "" when nothing usable came back,
+    including a budget deferral; a ConfigError still propagates."""
+    text = pdf_text(r.get("pdf_url"), deadline=deadline)
+    if _pdf_ok(text):
+        return text
+    if cl_rate.remaining() <= 0:
+        return ""
+    try:
+        rest = opinion_text_full(r, deadline=deadline)
+    except ConfigError:
+        raise
+    except Exception as e:
+        _dbg("refetch of cluster %s text failed (%s)" % (cluster_id_of(r), e))
+        return ""
+    return rest if _pdf_ok(rest) else ""
 
 
 def _first_json_object(s):
@@ -1406,82 +1434,175 @@ def parse_json(s):
 
 
 # --- carried-over batches ---------------------------------------------------
-# A Message Batch is billed when Anthropic accepts it, not when we read the results. Every
-# phase here runs one under a wall-clock budget, and when that budget expires the phase
-# catches BatchTimeout and degrades gracefully -- but the batch itself keeps running to
-# completion on Anthropic's side and nobody ever collects it. That is paid work thrown away
-# on every deferral, at opus-5 rates for the summarize phase.
+# A Message Batch is billed when Anthropic accepts it, not when we read the results. Each funnel
+# phase runs one under a wall-clock budget. What happens when that budget expires depends on
+# whether the phase has a synchronous fallback:
 #
-# So the id is recorded when the batch is submitted and carried in opinions_state.json; the
-# next run collects it before submitting anything new.
+#   * triage, smell, guards fall back to synchronous calls for the same work in the same run. A
+#     carried batch could only ever duplicate work already done, so these phases NEVER carry: on
+#     the deadline the batch is cancelled (best effort, logged) and the fallback runs.
+#   * summarize has no fallback (an Opus draft is the expensive call), so its batch is CARRIED: the
+#     id is recorded in opinions_state.json `pending_batches` together with the exact cluster ids it
+#     covers, and a later run fetches it and applies each draft to its own cluster only.
 #
-# HONEST LIMIT: this recovers DEFERRALS, not reclamations. When the runner is reclaimed
-# (exit 143) the commit step never runs, so nothing reaches the state file. Shrinking the
-# batch budgets makes deferrals the common case and reclamations rarer, which is exactly the
-# trade this is meant to support -- but a reclaimed run still loses its batch.
-_PENDING_BATCHES = {}    # label -> {"id", "at", "n"}  : submitted this run, not yet collected
-_RESUME_BATCHES = {}     # label -> id                 : carried in from the last run
-# A carried id older than this is dropped rather than polled: Anthropic expires batch results,
-# and a stale id would spend the phase's whole budget discovering that.
-BATCH_CARRY_MAX_AGE_SEC = int(os.environ.get("OPINIONS_BATCH_CARRY_MAX_AGE_SEC", str(3 * 24 * 3600)))
+# Until 2026-10 every phase carried and a resumed batch was returned IN PLACE of the current
+# requests. Smell's positional custom_ids then stamped a previous run's verdicts onto this run's
+# drops, summarize silently skipped current candidates the carry did not cover, a stale guard carry
+# left a new card's guards "unavailable", and a run that never reached a phase deleted that phase's
+# carry. So now: custom_ids encode the phase and the case, results are mapped back strictly by
+# custom_id, and a carry persists until it is collected or expires.
+#
+# HONEST LIMIT: this recovers DEFERRALS, not reclamations. When the runner is reclaimed (exit 143)
+# the commit step never runs, so nothing reaches the state file and the batch is lost.
+SUMMARIZE_LABEL = "funnel-summarize"
+CARRY_LABELS = (SUMMARIZE_LABEL,)                                   # phases whose batches carry
+_PENDING_BATCHES = {}    # batch id -> {"label", "id", "at", "n", "cids"}: outstanding, written to state
+_RESUME_BATCHES = {}     # batch id -> the same record: carried in, not yet tried this run
+# A carry older than this is expired rather than polled: Anthropic keeps batch results for 29 days,
+# so a carry this old is about to be (or already is) uncollectable. Its clusters are made eligible
+# again so they are redrafted.
+BATCH_CARRY_MAX_AGE_SEC = int(os.environ.get("OPINIONS_BATCH_CARRY_MAX_AGE_SEC", str(25 * 24 * 3600)))
 
 
-def load_pending_batches(state, now=None):
-    """Read carried batch ids out of state, dropping anything too old to still be collectable."""
-    now = time.time() if now is None else now
-    out = {}
-    for label, rec in (state.get("pending_batches") or {}).items():
-        if not isinstance(rec, dict) or not rec.get("id"):
-            continue
+def _norm_cids(raw):
+    """A carry's covered cluster ids as a sorted list of ints, or None when unknown (a carry
+    written before the ids were recorded)."""
+    if not isinstance(raw, (list, tuple)):
+        return None
+    out = set()
+    for c in raw:
         try:
-            age = now - float(rec.get("at") or 0)
+            out.add(int(c))
         except (TypeError, ValueError):
             continue
-        if age <= BATCH_CARRY_MAX_AGE_SEC:
-            out[label] = rec["id"]
+    return sorted(out)
+
+
+# What a carried smell escalation needs to be finished on a later run. Its cluster was marked seen
+# when triage dropped it, so it never comes back through the candidate loop: the carry has to hold
+# the candidate's identity, the CourtListener fields that refetch its text and official link, and
+# the timestamp of the drop record whose smell_outcome the read settles.
+CARRY_SMELL_FIELDS = ("name", "court_id", "docket", "date_filed", "url", "note", "cl_status",
+                      "pdf_url", "absolute_url", "rej_ts")
+
+
+def _carry_smell_meta(p):
+    """The carry's record of one smell-escalation pending item (see CARRY_SMELL_FIELDS)."""
+    r = p.get("r") or {}
+    meta = {k: p.get(k) for k in ("name", "court_id", "docket", "date_filed", "url", "note", "cl_status")}
+    meta["pdf_url"] = r.get("pdf_url") or ""
+    meta["absolute_url"] = r.get("absolute_url") or ""
+    meta["rej_ts"] = (p.get("rej") or {}).get("ts") or ""
+    return {k: ("" if v is None else v) for k, v in meta.items()}
+
+
+def _norm_smell(raw):
+    """A carry's smell-escalation records as {"<cid>": meta}, dropping junk; {} when there are none."""
+    out = {}
+    if isinstance(raw, dict):
+        for k, v in raw.items():
+            if str(k).isdigit() and isinstance(v, dict):
+                out[str(int(k))] = {f: v.get(f) or "" for f in CARRY_SMELL_FIELDS}
     return out
 
 
+def load_pending_batches(state, now=None):
+    """Read carried batches out of state. Returns (carries, expired_cids):
+
+      carries      -- {batch id: record} for every collectable summarize carry; and
+      expired_cids -- the clusters covered by carries dropped for age, to be made eligible again.
+
+    A carry for a phase that falls back synchronously (triage, smell, guards; written by older
+    code) is cleared with a log line, never resumed. Junk never crashes the run that reads it."""
+    now = time.time() if now is None else now
+    carries, expired = {}, set()
+    for key, rec in (state.get("pending_batches") or {}).items():
+        if not isinstance(rec, dict) or not rec.get("id"):
+            print("  . clearing a malformed pending_batches entry %r" % (key,))
+            continue
+        bid = str(rec["id"])
+        label = rec.get("label") or key
+        if label not in CARRY_LABELS:
+            print("  . clearing legacy %s carry %s: that phase falls back synchronously and never "
+                  "resumes a batch" % (label, bid))
+            continue
+        cids = _norm_cids(rec.get("cids"))
+        try:
+            at = float(rec.get("at"))
+        except (TypeError, ValueError):
+            at = None
+        if at is None or now - at > BATCH_CARRY_MAX_AGE_SEC:
+            print("  ! %s carry %s expired (%s); clusters eligible again: %s"
+                  % (label, bid, "no timestamp" if at is None else "%.1f days old" % ((now - at) / 86400.0),
+                     ", ".join(str(c) for c in cids) if cids else "(not recorded)"))
+            expired.update(cids or [])
+            continue
+        carries[bid] = {"label": label, "id": bid, "at": at, "n": rec.get("n"), "cids": cids}
+        smell = _norm_smell(rec.get("smell"))
+        if smell:
+            carries[bid]["smell"] = smell
+    return carries, expired
+
+
+def adopt_pending_batches(state, now=None):
+    """main()'s load step: carried batches become both outstanding (so they are written back
+    unless collected) and resumable. Returns the expired clusters' ids."""
+    carries, expired = load_pending_batches(state, now)
+    _PENDING_BATCHES.clear(); _RESUME_BATCHES.clear()
+    _PENDING_BATCHES.update({k: dict(v) for k, v in carries.items()})
+    _RESUME_BATCHES.update({k: dict(v) for k, v in carries.items()})
+    return expired
+
+
+def _stamped_pending():
+    return {k: dict(v) for k, v in _PENDING_BATCHES.items()} or None
+
+
+def pending_batches_changed(state):
+    """Whether stamp_pending_batches would change what state holds, so a no-op run still writes
+    a collected, expired, cleared or newly deferred carry."""
+    return _stamped_pending() != (state.get("pending_batches") or None)
+
+
 def stamp_pending_batches(state):
-    """Fold this run's uncollected batch ids into state, just before it is written.
+    """Fold the outstanding batches into state, just before it is written. A carry this run never
+    reached is still in _PENDING_BATCHES (adopt_pending_batches put it there), so it survives.
 
     Removes the key entirely when nothing is outstanding, so a healthy run leaves no trace
     in the committed file and the diff stays quiet.
     """
-    if _PENDING_BATCHES:
-        state["pending_batches"] = dict(_PENDING_BATCHES)
+    pend = _stamped_pending()
+    if pend:
+        state["pending_batches"] = pend
     else:
         state.pop("pending_batches", None)
     return state
 
 
-def batch_run(reqs, deadline, label, now=None):
-    """batch.run with carry-over: collect a batch left behind by the last run if there is one,
-    and record this run's id the moment it is submitted.
+def batch_key(phase, cid, *rest):
+    """A batch custom_id naming the phase and the case it belongs to (and, for guards, the guard
+    kind): "triage-10983223", "summarize-10983223", "guards-10983223-fidelity". Never positional,
+    so a result line can only ever be applied to the case it was written for."""
+    return "-".join([phase, str(int(cid))] + [str(x) for x in rest])
 
-    Callers keep their existing `except (BatchTimeout, BatchError)` handling -- the exception
-    still propagates and still means "degrade this phase". The only change is that the paid
-    work survives to the next run.
-    """
-    now = time.time() if now is None else now
-    resume_id = _RESUME_BATCHES.pop(label, None)
 
-    def _record(bid):
-        _PENDING_BATCHES[label] = {"id": bid, "at": now, "n": len(reqs)}
+def batch_key_cid(key, phase):
+    """The cluster id a custom_id belongs to, or None when it is not this phase's key. Also accepts
+    a bare numeric id, the summarize scheme of carries written before batch_key existed."""
+    key = str(key or "")
+    if key.isdigit() and phase == "summarize":
+        return int(key)
+    parts = key.split("-")
+    if len(parts) >= 2 and parts[0] == phase and parts[1].isdigit():
+        return int(parts[1])
+    return None
 
-    if resume_id:
-        _record(resume_id)          # keep it recorded until it is actually collected
-    try:
-        out = batch.run(reqs, deadline=deadline, label=label,
-                        resume_id=resume_id, on_submit=_record)
-    except batch.BatchTimeout as e:
-        # Prefer the id the exception carries: on a fresh submit it is the new batch, and on a
-        # resume it is the same one we were already holding.
-        if getattr(e, "batch_id", None):
-            _record(e.batch_id)
-        raise
-    _PENDING_BATCHES.pop(label, None)   # collected; nothing left to carry
-    return out
+
+def batch_run(reqs, deadline, label):
+    """batch.run for a phase with a synchronous fallback (triage, smell, guards). Never carries
+    and never resumes: on the deadline the batch is cancelled (best effort, logged) and the
+    exception propagates, so the caller runs its synchronous fallback in this run."""
+    return batch.run(reqs, deadline=deadline, label=label, cancel_unfinished=True)
 
 
 def rss_mb():
@@ -1638,6 +1759,8 @@ def anthropic_json(body, label="call"):
                 else:
                     _dbg(msg)
                 time.sleep(wait); continue
+            if e.code in RETRY_STATUS:
+                raise TransientAPIError(last)
             lo = detail.lower()
             if e.code in (401, 403):
                 print("  ! Anthropic AUTHENTICATION failed (HTTP %s) on %s. Check the ANTHROPIC_API_KEY secret." % (e.code, model))
@@ -1656,7 +1779,7 @@ def anthropic_json(body, label="call"):
                 wait = min(2 ** attempt * 2, 30)
                 _dbg("%s network error, retrying in %ss" % (label, wait))
                 time.sleep(wait); continue
-            raise RuntimeError(last)
+            raise TransientAPIError(last)
     raise RuntimeError(last or (label + " failed"))
 
 
@@ -1767,18 +1890,19 @@ def _triage_batch(items, feed_index, deadline=None):
     unparseable body -- FALLS BACK to a synchronous triage() call, so the gate is never silently
     changed. Raises only ConfigError (auth/model), which must abort the run like any tier."""
     verdicts, missing = {}, list(items)
-    reqs = [batch.from_body(str(p["cid"]), triage_request(p["name"], p["docket"], p["text"], feed_index))
+    reqs = [batch.from_body(batch_key("triage", p["cid"]),
+                            triage_request(p["name"], p["docket"], p["text"], feed_index))
             for p in items]
     try:
         results = batch_run(reqs, deadline, "funnel-triage")
     except (batch.BatchTimeout, batch.BatchError) as e:
-        print("  ! triage batch deferred (%s); triaging %d candidate(s) synchronously this run"
+        print("  ! triage batch unavailable (%s); triaging %d candidate(s) synchronously this run"
               % (e, len(items)), flush=True)
         results = {}
     if results:
         still = []
         for p in missing:
-            res = results.get(str(p["cid"]))
+            res = results.get(batch_key("triage", p["cid"]))
             if not res or not res.get("ok"):
                 still.append(p); continue
             try:
@@ -1855,6 +1979,17 @@ def smell_request(items):
 SMELL_CHUNK = 40   # reasons per request; keeps each verdict list well inside the 2000-token budget
 
 
+def smell_chunk_key(k, chunk):
+    """The custom_id for one smell chunk: "smell-<k>-<digest>", the digest covering every item's
+    cluster id (or name, when an item carries none) and reason, in order. One request audits up to
+    SMELL_CHUNK cases, so the id cannot name a single case; it names the exact set instead, and a
+    verdict list can only be applied to the chunk it judged. (The old positional "smell-<k>" let a
+    carried batch stamp one run's verdicts onto another run's drops.)"""
+    ident = json.dumps([[it.get("cid") or it.get("name") or "", (it.get("reason") or "").strip()]
+                        for it in chunk], sort_keys=True)
+    return "smell-%d-%s" % (k, hashlib.sha1(ident.encode("utf-8")).hexdigest()[:16])
+
+
 def smell_reasons(items, deadline=None):
     """Audit drop reasons with the smell model; returns {0-based index: {"verdict": "ok"|"suspect",
     "note": str}} covering ONLY the items the model actually judged. Items go out in SMELL_CHUNK
@@ -1868,10 +2003,13 @@ def smell_reasons(items, deadline=None):
     datas = {}    # chunk index -> parsed verdicts object
     if SMELL_BATCH:
         try:
-            reqs = [batch.from_body("smell-%d" % k, smell_request(c)) for k, c in enumerate(chunks)]
+            keys = [smell_chunk_key(k, c) for k, c in enumerate(chunks)]
+            reqs = [batch.from_body(keys[k], smell_request(c)) for k, c in enumerate(chunks)]
             res = batch_run(reqs, deadline, "funnel-smell")
             for k in range(len(chunks)):
-                line = res.get("smell-%d" % k)
+                # Strictly by custom_id: a line is used only for the chunk whose exact cases and
+                # reasons it was written for. A line under any other id is never applied.
+                line = res.get(keys[k])
                 if line and line.get("ok"):
                     try:
                         datas[k] = parse_json(line["text"])
@@ -2368,38 +2506,62 @@ def guard_cards_batch(items, crosschecks, completeness, deadline=None):
     cards as ONE 50%-priced Message Batches job, populating crosschecks[cid] / completeness[cid] in
     place with the SAME verdict shape the synchronous guards produce (via guard_request/guard_verdict,
     a single grounded attempt each -- the maintenance-batch precedent). `items` is a list of
-    {cid, name, text, entry}. Returns True on success; on a whole-batch timeout or transport failure
-    returns False WITHOUT populating, so the caller can fall back to the synchronous guards -- a card
-    is never shipped un-guarded. A per-line error or unparseable body yields an 'unavailable' verdict
-    for that one guard (the card still surfaces, exactly like a synchronous guard failure)."""
-    reqs, meta = [], {}    # custom_id -> (kind, cid, ground)
+    {cid, name, text, entry}.
+
+    Returns the (item, kind) pairs the batch did NOT guard, which the caller must run through the
+    synchronous guards (guard_sync): every pair on a whole-batch timeout or transport failure, and
+    each pair whose line errored, was missing, or was unparseable. Those pairs are left unpopulated
+    here. A card is never reported guarded while a verdict is 'unavailable' -- that is how a stale
+    batch once left a new card's guards unavailable with the synchronous fallback skipped.
+
+    Results are mapped strictly by custom_id ("guards-<cid>-<kind>"), and this phase never carries
+    or resumes a batch: one that misses the deadline is cancelled and the fallback runs now."""
+    reqs, meta = [], {}    # custom_id -> (item, kind, ground)
     for it in items:
         for kind, enabled in (("fidelity", CROSSCHECK_MODEL), ("completeness", COMPLETENESS_MODEL)):
             if not enabled:
                 continue
             body, ground = guard_request(kind, it["name"], it["text"], it["entry"])
-            # custom_id must match ^[a-zA-Z0-9_-]{1,64}$ (no colon), so hyphen-join the id and kind.
-            ckey = "%s-%s" % (it["cid"], kind)
+            ckey = batch_key("guards", it["cid"], kind)
             reqs.append(batch.from_body(ckey, body))
-            meta[ckey] = (kind, it["cid"], ground)
+            meta[ckey] = (it, kind, ground)
     if not reqs:
-        return True
+        return []
     try:
         results = batch_run(reqs, deadline, "funnel-guards")
     except (batch.BatchTimeout, batch.BatchError) as e:
-        print("  ! finish-guard batch deferred (%s); falling back to the synchronous guards" % e)
-        return False
-    for ckey, (kind, cid, ground) in meta.items():
+        print("  ! finish-guard batch unavailable (%s); falling back to the synchronous guards" % e)
+        return [(it, kind) for it, kind, _ in meta.values()]
+    fallback = []
+    for ckey, (it, kind, ground) in meta.items():
         res = results.get(ckey)
-        if not res or not res.get("ok"):
-            v = {"verdict": "unavailable", "reason": "guard batch result unavailable"}
-        else:
+        v = None
+        if res and res.get("ok"):
             try:
                 v = guard_verdict(kind, parse_json(res["text"]), ground)
             except Exception:
-                v = {"verdict": "unavailable", "reason": "unparseable guard result"}
-        (crosschecks if kind == "fidelity" else completeness)[cid] = v
-    return True
+                v = None
+        if v is None or v.get("verdict") == "unavailable":
+            fallback.append((it, kind))
+            continue
+        (crosschecks if kind == "fidelity" else completeness)[it["cid"]] = v
+    if fallback:
+        print("  ! finish-guard batch left %d guard(s) without a verdict; running them synchronously: %s"
+              % (len(fallback), ", ".join("%s %s" % (it["cid"], kind) for it, kind in fallback)))
+    return fallback
+
+
+def guard_sync(pairs, crosschecks, completeness):
+    """The synchronous guards for the (item, kind) pairs guard_cards_batch could not guard."""
+    for it, kind in pairs:
+        if kind == "fidelity":
+            cc = crosscheck(it["name"], it["text"], it["entry"])
+            if cc:
+                crosschecks[it["cid"]] = cc
+        else:
+            cp = completeness_check(it["name"], it["text"], it["entry"])
+            if cp:
+                completeness[it["cid"]] = cp
 
 
 # Party-name matching for the screen override in the candidate loop. A case can
@@ -2536,20 +2698,29 @@ def _same_case(a, b):
     return bool(a[1]) and a[1] == b[1] and len(a[3] & b[3]) >= 2
 
 
-def _select_candidates(results, since, today, have, seen, pending_review, redraft_pending):
+def _select_candidates(results, since, today, have, seen, pending_review, redraft_pending,
+                       exempt=frozenset(), held_back=frozenset()):
     """The run's candidate filter, moved out of main() with its selection unchanged so the since-floor
     count below is unit-testable. Returns (cand, floor_dropped): the feed items to evaluate, in feed order, and
     {court_id: n} of NEVER-SEEN items the since floor dropped, largest first. The count is logging
     only; it changes nothing that is selected. It exists because the floor drops silently: juriscraper
     stamps every new gasupreme.us release 2026-06-16, so ~15 unseen Supreme Court of Georgia items
     fell under the floor every run for three months with no log line. An item already carded, seen
-    or held never reaches the floor check, so every count here is a case the pipeline never looked at."""
+    or held never reaches the floor check, so every count here is a case the pipeline never looked at.
+
+    `exempt` is the Supreme Court of Georgia backlog admitted this run (see _ga_backlog): never-seen
+    clusters above the GA high-water mark, which pass the floor like a redraft id. `held_back` is the
+    rest of that backlog, waiting for a later run: skipped quietly, NOT counted as floor drops,
+    because they are carried, not lost."""
     cand, ids, floored = [], set(), {}
     for r in results:
         cid = cluster_id_of(r)
         if not cid or cid in have or cid in seen or cid in ids or cid in pending_review:
             continue
-        if (r.get("dateFiled") or "") and r["dateFiled"] < since and cid not in redraft_pending:
+        if cid in held_back:
+            continue
+        if (r.get("dateFiled") or "") and r["dateFiled"] < since and cid not in redraft_pending \
+                and cid not in exempt:
             floored.setdefault(cid, r.get("court_id") or "?")   # by cid: a repeated feed item counts once
             continue
         if (r.get("dateFiled") or "") and r["dateFiled"][:10] > today:
@@ -2561,6 +2732,454 @@ def _select_candidates(results, since, today, have, seen, pending_review, redraf
         if cid not in ids:          # a cluster the feed also carried in-window was selected, not dropped
             counts[court] = counts.get(court, 0) + 1
     return cand, dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+
+
+# ---- Supreme Court of Georgia intake ------------------------------------------------------------
+# Since the 2026-06-30 release gasupreme.us prints each release date inside an <h3>, and juriscraper
+# still reads the first <p> after the heading, so CourtListener stamps every new Supreme Court of
+# Georgia opinion date_filed 2026-06-16. The funnel lost them two ways: the since floor dropped the
+# ones the 20-entry /feed/court/ga/ carried, and most never reached that feed at all, because 20
+# tied-date slots fill arbitrarily. So, for GA only:
+#   A. discovery does not depend on the date: every run lists GA clusters above a high-water mark
+#      (opinions_state.json ga_high_water) by cluster-id range on the free search feed;
+#   B. each GA candidate is re-dated from the court's own release page (official_ga.release_index),
+#      falling back to the opinion's "Decided:" line, with CourtListener's date kept for audit;
+#   C. never-seen clusters the since floor would drop are admitted GA_BACKLOG_PER_RUN at a time,
+#      oldest first, and the mark never passes one that is still waiting or unresolved;
+#   D. discovery and dating cost no CourtListener REST call: feeds, storage PDFs, and gasupreme.us
+#      only (opinions.yml must allow www.gasupreme.us). Text is fetched as for any court: a candidate
+#      with no PDF from the feed or the release page falls back to the REST text path.
+# A re-scrape (a second cluster for a docket already seen or carded) is skipped and marked seen.
+GA_CL = "ga"                                             # CourtListener's id for the Supreme Court of Georgia
+FEED_SEARCH = "https://www.courtlistener.com/feed/search/"
+_GA_DOCKET_RE = re.compile(r"\bS\d{2}[A-Z]\d{4}\b")
+
+
+def _sc(name, default):
+    """A siteconfig value with a built-in default, so an older siteconfig cannot crash the run."""
+    return getattr(siteconfig, name, default)
+
+
+_GA_INFRA_MSG_RE = re.compile(r"-> HTTP (?:429|5\d\d)\b|-> network error|overloaded_error|rate_limit_error", re.I)
+
+
+def _ga_infra_error(e):
+    """True when an exception that stopped a GA candidate's evaluation says nothing about the
+    opinion itself: the run's time budget (TimeoutError), the CourtListener REST budget
+    (cl_rate.RateBudgetExceeded), a transport failure (URLError/HTTPError, a reset connection, a
+    truncated read), or the Anthropic API still overloaded, rate-limited or 5xx after its retries
+    (TransientAPIError, or a wrapper whose message carries the same status). Such a failure spends
+    no backlog try: only a genuine evaluation failure (no text after a real fetch, an answer that
+    cannot be used) does. See _ga_next_mark."""
+    import http.client
+    if isinstance(e, urllib.error.HTTPError):
+        # An HTTP status is an answer, not a transport failure: only 408, 429 and 5xx are transient.
+        # A permanent 4xx (a 404/410 opinion record) must charge a try, or the cluster never
+        # reaches GA_BACKLOG_MAX_TRIES and pins the high-water mark forever.
+        code = getattr(e, "code", None) or 0
+        return code == 408 or code in CL_RETRY_STATUS or code >= 500
+    if isinstance(e, (TimeoutError, cl_rate.RateBudgetExceeded, TransientAPIError, urllib.error.URLError,
+                      ConnectionError, http.client.HTTPException)):
+        return True
+    if isinstance(e, OSError) and not isinstance(e, (FileNotFoundError, PermissionError, IsADirectoryError)):
+        return True    # socket-level errors that are not ConnectionError subclasses (EHOSTUNREACH, ...)
+    return bool(_GA_INFRA_MSG_RE.search(str(e) or ""))
+
+
+def ga_search_feed(q, deadline=None):
+    """One free CourtListener search-feed query for Supreme Court of Georgia opinions (the /feed/
+    path, not /api/rest/, so no REST quota). Returns _parse_feed items. The search feed carries no
+    PDF enclosure (pdf_url is "") and returns at most GA_FEED_ITEM_CAP entries, with no paging."""
+    url = FEED_SEARCH + "?" + urllib.parse.urlencode({"type": "o", "court": GA_CL, "q": q})
+    return _parse_feed(feed_get(url, deadline), GA_CL)
+
+
+def ga_docket_peers(docket, deadline=None):
+    """{cluster_id: CourtListener dateFiled} of every GA cluster filed under `docket`: one free
+    search-feed query. Used both to confirm a caption guess and to spot a re-scrape."""
+    out = {}
+    for it in ga_search_feed('docketNumber:"%s"' % docket, deadline):
+        c = cluster_id_of(it)
+        if c:
+            out[c] = (it.get("dateFiled") or "")[:10]
+    return out
+
+
+def ga_enumerate(after, ceiling, deadline=None, max_queries=None, search=None):
+    """Every GA cluster with id > `after`, by cluster-id range queries on the search feed. The feed
+    returns at most GA_FEED_ITEM_CAP entries in no useful order, ignores page=, and returns nothing
+    with order_by=cluster_id, so a FULL page means "maybe more": the range is split in half and the
+    halves are queried, lowest first. The closed range (after, ceiling] is walked first (`ceiling` is
+    the highest cluster id any feed carried this run, so it bounds the ids CourtListener has issued),
+    then the open tail; a full open tail is bounded at the highest id it returned and split.
+
+    Returns (items {cid: item}, covered, complete, queries). Ranges finish in ascending order, so
+    every GA cluster <= `covered` has been listed; `complete` means the open tail was listed too. On
+    the query cap, the deadline, or a feed error it stops early with complete=False, and the caller
+    never moves the high-water mark past what was covered."""
+    search = search or ga_search_feed
+    cap = int(_sc("GA_FEED_ITEM_CAP", 20))
+    max_queries = int(max_queries if max_queries is not None else _sc("GA_ENUM_MAX_QUERIES", 40))
+    after = int(after)
+    ceiling = max(int(ceiling or 0), after)
+    found, queries, covered = {}, 0, after
+    work = [(ceiling + 1, None)]           # a stack: pushed high-to-low, so popped lowest first
+    if ceiling > after:
+        work.append((after + 1, ceiling))
+    while work:
+        if queries >= max_queries or (deadline and time.time() > deadline):
+            return found, covered, False, queries
+        lo, hi = work.pop()
+        if queries:
+            time.sleep(0.5)                # polite pacing on a free endpoint
+        queries += 1
+        try:
+            items = search("cluster_id:[%d TO %s]" % (lo, "*" if hi is None else hi), deadline)
+        except Exception as e:
+            print("  ! ga discovery: search feed failed (%s); stopping at cluster %d" % (e, covered))
+            return found, covered, False, queries
+        got, stray = {}, set()
+        for it in items:
+            c = cluster_id_of(it)
+            if c and c >= lo and (hi is None or c <= hi):
+                got[c] = it
+            elif c:
+                stray.add(c)
+        if stray:
+            # Any page, full or partial, carrying a cluster outside the queried range: the feed ignored
+            # the range filter (as ga_lookup_ids treats it). Its in-range entries cannot be trusted to
+            # be the whole range, so nothing from it is listed and `covered` does not advance.
+            print("  ! ga discovery: the search feed answered cluster_id:[%d TO %s] with %d entr%s, including "
+                  "out-of-range cluster(s) %s; it ignored the range filter (feed malfunction). Stopping the "
+                  "walk at cluster %d; the high-water mark will not pass it"
+                  % (lo, "*" if hi is None else hi, len(items), "y" if len(items) == 1 else "ies",
+                     ", ".join(map(str, sorted(stray)[:5])), covered))
+            return found, covered, False, queries
+        if len(items) >= cap:
+            # A full page whose entries are not in the queried range means the feed ignored the
+            # range filter (a single id can match at most one cluster). Splitting cannot help, and
+            # taking the page as "listed" would let `covered` pass clusters never seen: stop here.
+            if not got or (hi is not None and hi == lo and len(items) > 1):
+                print("  ! ga discovery: the search feed returned a full page (%d entries, %d in range) for "
+                      "cluster_id:[%d TO %s]; it ignored the range filter (feed malfunction). Stopping the "
+                      "walk at cluster %d; the high-water mark will not pass it"
+                      % (len(items), len(got), lo, "*" if hi is None else hi, covered))
+                return found, covered, False, queries
+            if hi is None:
+                top = max(got)
+                work.append((top + 1, None))
+                hi = top
+            if hi > lo:
+                mid = (lo + hi) // 2
+                work.append((mid + 1, hi))
+                work.append((lo, mid))
+                continue
+        found.update(got)
+        if hi is None:
+            return found, max([covered] + list(found)), True, queries
+        covered = hi
+    return found, covered, True, queries   # not reached: the open tail always ends the walk
+
+
+def ga_lookup_ids(ids, deadline=None, max_queries=None, search=None):
+    """Look up specific cluster ids on the free search feed, one cluster_id:[x TO x] query each (in
+    the order given), for clusters below the high-water mark the enumeration no longer walks: vetoed
+    cases awaiting a redraft and abandoned backlog due a retry. Returns (items {cid: item}, absent,
+    queries): `absent` are ids the feed answered with no entry, i.e. not a Supreme Court of Georgia
+    cluster (the query is court=ga). A response carrying any OTHER cluster means the feed ignored
+    the range filter: the lookups stop there, loudly, and nothing from that page is used."""
+    search = search or ga_search_feed
+    max_queries = len(ids) if max_queries is None else int(max_queries)
+    found, absent, queries = {}, set(), 0
+    for cid in ids:
+        cid = int(cid)
+        if queries >= max_queries or (deadline and time.time() > deadline):
+            break
+        if queries:
+            time.sleep(0.5)
+        queries += 1
+        try:
+            items = search("cluster_id:[%d TO %d]" % (cid, cid), deadline)
+        except Exception as e:
+            print("  ! ga lookup: search feed failed for cluster %d (%s); stopping the lookups" % (cid, e))
+            break
+        items = [it for it in items if cluster_id_of(it)]
+        stray = sorted({cluster_id_of(it) for it in items} - {cid})
+        if stray:
+            print("  ! ga lookup: the search feed answered cluster_id:[%d TO %d] with %d entr%s, including "
+                  "cluster(s) %s; it ignored the range filter (feed malfunction). Stopping the lookups"
+                  % (cid, cid, len(items), "y" if len(items) == 1 else "ies", ", ".join(map(str, stray[:5]))))
+            break
+        if items:
+            found[cid] = items[0]
+        else:
+            absent.add(cid)
+    return found, absent, queries
+
+
+def _ga_abandoned_due(abandoned, known, today, retry_days, per_run):
+    """The abandoned GA clusters to re-admit this run: not yet seen, carded or held, last tried at
+    least `retry_days` before `today`, oldest last try first, at most `per_run`. Re-admitting one
+    is how a fix for whatever stopped it (a text source, a parser) reaches it without a hand edit."""
+    try:
+        cutoff = (datetime.date.fromisoformat(today) - datetime.timedelta(days=int(retry_days))).isoformat()
+    except ValueError:
+        return []
+    due = [a for a in abandoned if int(a.get("cluster_id") or 0) not in known
+           and (a.get("last_try") or "") <= cutoff]
+    due.sort(key=lambda a: (a.get("last_try") or "", int(a.get("cluster_id") or 0)))
+    return [int(a["cluster_id"]) for a in due[:max(0, int(per_run))]]
+
+
+def _ga_abandon_update(abandoned, gave_up, retried, resolved, reasons, names, today, tries):
+    """The ga_abandoned list after this run: drop entries now resolved (seen, carded, held, or
+    evaluated this run), stamp last_try on the ones re-admitted this run (with the new failure
+    reason, if any), and append the clusters the mark passed this run. Returns (list, newly)."""
+    out, have = [], set()
+    for a in abandoned:
+        c = int(a.get("cluster_id") or 0)
+        if not c or c in resolved or c in have:
+            continue
+        a = dict(a)
+        if c in retried:
+            a["last_try"] = today
+            a["retries"] = int(a.get("retries") or 0) + 1
+            if reasons.get(c):
+                a["reason"] = reasons[c]
+        have.add(c)
+        out.append(a)
+    newly = []
+    for c in gave_up:
+        if c in have:
+            continue
+        rec = {"cluster_id": int(c), "name": (names.get(c) or "")[:120],
+               "reason": reasons.get(c) or "unresolved", "tries": int(tries),
+               "abandoned": today, "last_try": today}
+        out.append(rec)
+        newly.append(rec)
+        have.add(c)
+    out.sort(key=lambda a: int(a["cluster_id"]))
+    return out, newly
+
+
+def _ga_stall_update(prev, old_mark, new_mark, blocker, stall_runs):
+    """Track how many consecutive runs the GA high-water mark has not moved while a cluster above it
+    is still outstanding (`blocker`, the lowest one; None when no backlog remains). Returns
+    (record, loud): the {"mark", "runs", "blocker"} record to keep in opinions_state.json
+    ga_mark_stall (None to clear it), and whether this run must say so loudly, i.e. the mark has
+    held for at least `stall_runs` runs. A moved mark or an empty backlog resets the count."""
+    if blocker is None or new_mark != old_mark:
+        return None, False
+    prev = prev if isinstance(prev, dict) else {}
+    try:
+        runs = int(prev.get("runs") or 0) + 1 if int(prev.get("mark") or -1) == int(new_mark) else 1
+    except (TypeError, ValueError):
+        runs = 1
+    rec = {"mark": int(new_mark), "runs": runs, "blocker": int(blocker)}
+    return rec, runs >= max(1, int(stall_runs))
+
+
+def _ga_seed_mark(entries, reject_path=None):
+    """The first GA high-water mark, for a state that has none: the highest Supreme Court of Georgia
+    cluster id already known from a card or a logged rejection (seen_clusters carries no court), or
+    siteconfig.GA_HIGH_WATER_SEED if neither has one. Everything above it is enumerated, which is
+    how the 2026-06-30-onward backlog enters the funnel."""
+    best = 0
+    for e in entries:
+        if e.get("court") == "scotga":
+            try:
+                best = max(best, int(e.get("cluster_id") or 0))
+            except (TypeError, ValueError):
+                pass
+    if reject_path and os.path.exists(reject_path):
+        try:
+            with open(reject_path, encoding="utf-8") as f:
+                for ln in f:
+                    try:
+                        rec = json.loads(ln)
+                        if isinstance(rec, dict) and rec.get("court") == "scotga":
+                            best = max(best, int(rec.get("cluster_id") or 0))
+                    except (ValueError, TypeError):
+                        continue
+        except OSError:
+            pass
+    return best or int(_sc("GA_HIGH_WATER_SEED", 0))
+
+
+def _ga_backlog(found, mark, since, known, per_run):
+    """Split the enumerated never-seen GA clusters the since floor would drop into (admitted, waiting),
+    oldest cluster id first: `per_run` enter this run exempt from the floor, the rest wait for a later
+    one. An in-window cluster is neither; it is an ordinary candidate, bounded only by OPINIONS_MAX."""
+    pool = sorted(c for c, r in found.items()
+                  if c > mark and c not in known and (r.get("dateFiled") or "") and r["dateFiled"] < since)
+    per_run = max(0, int(per_run))
+    return pool[:per_run], pool[per_run:]
+
+
+def _ga_next_mark(old, found, covered, complete, resolved, waiting, tries, max_tries, failed=frozenset()):
+    """The GA high-water mark after this run, plus the updated tries map and the clusters given up on.
+    The mark rises to the highest listed cluster (or to `covered`, on an incomplete walk) but stops
+    just below the lowest cluster still outstanding: one not yet seen, carded, held, or evaluated this
+    run. An outstanding cluster spends a try ONLY when this run actually evaluated it and it failed
+    (`failed`: no text after a real fetch, or an error while evaluating it). One the run never
+    reached -- waiting in the backlog, cut by OPINIONS_MAX, stopped by the time budget, deferred on
+    the CourtListener REST budget -- holds the mark for free, so a quota-starved run cannot burn a
+    cluster's tries. After `max_tries` failed runs the mark passes it so one broken cluster cannot
+    stall the intake; the caller records it in ga_abandoned (never a silent drop). Tries of a
+    cluster this run did not list (an incomplete walk) are carried, not forgotten."""
+    outstanding, gave_up = [], []
+    new_tries = {int(c): int(n) for c, n in tries.items() if int(c) not in found}
+    for c in sorted(found):
+        if c <= old or c in resolved:
+            continue
+        if c not in waiting:
+            n = int(tries.get(c, 0)) + (1 if c in failed else 0)
+            if n >= max_tries:
+                gave_up.append(c)
+                continue
+            if n:
+                new_tries[c] = n
+        outstanding.append(c)
+    top = max([old] + list(found)) if complete else covered
+    if outstanding:
+        top = min(top, outstanding[0] - 1)
+    new = max(int(old), int(top))
+    return new, {c: n for c, n in new_tries.items() if c > new}, gave_up
+
+
+_GA_INDEX_WARNED = []   # set once per process (one run), so the release-index warning prints once
+
+
+def _ga_release_index(years):
+    """The gasupreme.us release index for each year in `years`, merged (a newer year's entry wins a
+    docket clash). Fails open to {}, but never quietly: when the merged index is empty, or a year
+    page failed to fetch or parse, one loud line per run says so, because every GA candidate is then
+    dated from its PDF's Decided: line alone (and one without it is held for review)."""
+    idx, reasons = {}, []
+    for y in sorted({str(y) for y in years if y}, reverse=True):
+        errs = []
+        try:
+            got = official_ga.release_index(y, errors=errs)
+        except Exception as e:     # release_index fails open; this guards a future change to that
+            got, errs = {}, errs + ["%s: %s" % (type(e).__name__, e)]
+        for d, ent in got.items():
+            idx.setdefault(d, ent)
+        # A missing page is expected for a year the court has not opened yet (January); it is only
+        # worth a warning when nothing else was found either.
+        reasons += ["%s %s" % (y, r) for r in errs if r != "page not found" or not got]
+    hard = [r for r in reasons if not r.endswith("page not found")]
+    if (hard or not idx) and not _GA_INDEX_WARNED:
+        _GA_INDEX_WARNED.append(True)
+        why = "; ".join(hard or reasons) or "no releases parsed from the year page(s)"
+        print("  ! ga: release index unavailable (%s); dating falls back to PDF Decided: lines" % why, flush=True)
+    return idx
+
+
+def _ga_name_guesses(name, idx, not_before, limit):
+    """Official-page entries whose title shares a distinctive party token with a CourtListener caption,
+    best overlap first, released on or after `not_before` (CourtListener's stuck date is the last date
+    it read correctly, so nothing it carries was released earlier). Only a guess: the caller confirms
+    each one by a docket query before using it, since "Walker v. State" names several opinions."""
+    toks = party_tokens(name)
+    if not toks or limit <= 0:
+        return []
+    scored, ents = [], {id(e): e for e in idx.values()}
+    for ent in ents.values():
+        if not_before and ent.get("date", "") < not_before:
+            continue
+        et = party_tokens(ent.get("title", ""))
+        ov = len(toks & et)
+        if ov:
+            scored.append((ov / len(toks | et), ov, ent.get("date", ""), ent["dockets"][0], ent))
+    scored.sort(key=lambda t: t[:4], reverse=True)
+    return [t[4] for t in scored[:limit]]
+
+
+def _ga_resolve(r, ga, text=None):
+    """Find a GA candidate's docket and official release date, without CourtListener REST. Mutates r:
+    docketNumber (every docket of the opinion), dateFiled (the official date), cl_dateFiled
+    (CourtListener's original, kept for audit), and pdf_url (the gasupreme.us PDF when the search feed
+    gave none). `ga` carries idx (the release index), known (seen | carded | held cluster ids),
+    deadline, today, and a stats Counter.
+
+    Docket: the candidate's own docketNumber; else the caption of its PDF ("No. S26G0149"); else a
+    caption guess against the release page confirmed by a docket search-feed query. Date: the release
+    page's date for the docket; else the PDF's "Decided:" line. A docket another KNOWN cluster carries
+    under the same date (CourtListener's original scrape of the same release) is a re-scrape.
+
+    Returns "resolved", "dup" (r["_ga_twin"] names the earlier cluster), "pending" (no text yet:
+    r["_ga_pending"] is set and pass 1 calls again once it has fetched the text), or "unresolved" (keeps CourtListener's date; on the
+    stuck date the card is flagged r["_ga_unverified"] and held from auto-publication)."""
+    cid = cluster_id_of(r)
+    r.pop("_ga_pending", None)
+    if "cl_dateFiled" not in r:
+        r["cl_dateFiled"] = (r.get("dateFiled") or "")[:10]
+    cl_date = r["cl_dateFiled"]
+    idx, dl, stats = ga.get("idx") or {}, ga.get("deadline"), ga["stats"]
+    dockets = _GA_DOCKET_RE.findall(str(r.get("docketNumber") or "").upper())
+    if text is None and r.get("pdf_url"):
+        t = pdf_text(r["pdf_url"], deadline=dl)
+        if _pdf_ok(t):
+            text = r["_text"] = t
+            # The court feed's GA snippet is only the NOTICE boilerplate; give the screen the caption
+            # and opening of the opinion instead, as every other court's snippet does.
+            r["snippet"] = re.sub(r"\s+", " ", t).strip()[:1500]
+    if text and not dockets:
+        dockets = official_ga.dockets_in_text(text)
+    peers = None
+    if not dockets and idx and not text and not r.get("_ga_guessed"):
+        r["_ga_guessed"] = True
+        for ent in _ga_name_guesses(r.get("caseName") or "", idx, cl_date, int(_sc("GA_NAME_GUESSES", 3))):
+            try:
+                p = ga_docket_peers(ent["dockets"][0], dl)
+            except Exception as e:
+                _dbg("ga docket lookup failed (%s)" % e)
+                continue
+            if cid in p:
+                dockets, peers = list(ent["dockets"]), p
+                stats["guessed"] += 1
+                break
+    if dockets:
+        r["docketNumber"] = ", ".join(dockets)
+    ent = next((idx[d] for d in dockets if d in idx), None)
+    date, source = "", ""
+    if ent:
+        date, source = ent["date"], "gasupreme.us"
+        if not r.get("pdf_url"):
+            r["pdf_url"] = ent["url"]       # the court's own PDF: free, and spares the REST text fallback
+    elif text:
+        date = official_ga.decided_date(text)
+        source = "Decided: line" if date else ""
+    if dockets and not r.get("_ga_dup_checked"):
+        r["_ga_dup_checked"] = True
+        if peers is None:
+            try:
+                peers = ga_docket_peers(dockets[0], dl)
+            except Exception as e:
+                _dbg("ga docket lookup failed (%s)" % e)
+                peers = {}
+        twins = sorted(p for p, pd in peers.items()
+                       if p != cid and p in ga["known"] and pd and pd in {date, cl_date})
+        if twins:
+            r["_ga_twin"] = twins[0]
+            stats["dups"] += 1
+            return "dup"
+    if date and date <= ga["today"]:
+        r["dateFiled"] = date
+        r["_ga_date_source"] = source
+        r["_ga_resolved"] = True
+        r.pop("_ga_unverified", None)
+        stats["dated"] += 1
+        return "resolved"
+    if not text:
+        r["_ga_pending"] = True
+        return "pending"
+    r["_ga_unverified"] = cl_date == _sc("GA_BOGUS_DATE_FILED", "2026-06-16")
+    stats["unresolved"] += 1
+    print("  ! ga: no official release date for %s (cluster %s, docket %s); keeping CourtListener's %s%s"
+          % ((r.get("caseName") or "")[:50], cid, r.get("docketNumber") or "?", cl_date or "(none)",
+             " and holding the card for review" if r["_ga_unverified"] else ""))
+    return "unresolved"
 
 
 def _drop_counts(skipped):
@@ -2617,8 +3236,45 @@ def _log_run(rec):
                 if fd:
                     f.write("- since floor dropped %d never-seen item(s): %s\n"
                             % (sum(fd.values()), ", ".join("%s=%d" % kv for kv in fd.items())))
+                ga = rec.get("ga") or {}
+                if ga:
+                    f.write("- ga intake: %d listed above the mark, backlog %d admitted / %d remain, "
+                            "%d re-dated, %d re-scrape(s) skipped, %d undated; mark %s\n"
+                            % (ga.get("found", 0), ga.get("admitted", 0), ga.get("remain", 0),
+                               ga.get("dated", 0), ga.get("dups", 0), ga.get("unresolved", 0), ga.get("mark")))
         except Exception as e:
             print("  . run summary write skipped: %s" % e)
+
+
+def _settle_logged_smell(outcomes):
+    """Stamp smell_outcome on triage-drop records an EARLIER run logged, for smell escalations whose
+    carried draft this run finished. `outcomes` is [(cluster_id, drop ts, outcome)]; a record is
+    matched on its stage, cluster id and ts, so only the drop that was escalated is touched. Returns
+    how many records were updated. Best-effort like _log_rejections: a record that has aged out of the
+    capped log is skipped, and a write failure never fails the run."""
+    want = {(int(c), str(ts)): o for c, ts, o in outcomes if ts}
+    if not want or not os.path.exists(REJECT_PATH):
+        return 0
+    try:
+        with open(REJECT_PATH, "r", encoding="utf-8") as f:
+            lines = [ln for ln in f.read().splitlines() if ln.strip()]
+        n = 0
+        for i, ln in enumerate(lines):
+            try:
+                r = json.loads(ln)
+                key = (int(r.get("cluster_id")), str(r.get("ts")))
+            except (ValueError, TypeError):
+                continue
+            if r.get("stage") == "triage" and key in want:
+                r["smell_outcome"] = want[key]
+                lines[i] = json.dumps(r, separators=(",", ":"), ensure_ascii=False)
+                n += 1
+        if n:
+            safeio.atomic_write_text(REJECT_PATH, "\n".join(lines) + "\n")
+        return n
+    except Exception as e:
+        print("  . rejection-log smell settle skipped: %s" % e)
+        return 0
 
 
 def _log_rejections(records):
@@ -2885,7 +3541,7 @@ def fable_review_pass(added, flagged, crosschecks, completeness, overruling_cids
 
 def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, completeness,
                       overruling_cids, pending_review, state, seen, evaluated, have, now_iso,
-                      treat_flags, fable_cleared=None, fable_verdicts=None):
+                      treat_flags, fable_cleared=None, fable_verdicts=None, state_changed=False):
     """Route this run's carded output into the two lanes and write each. Returns a counts dict
     {auto, held, treatments, wrote_auto, noop}.
 
@@ -2900,7 +3556,8 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
     false positive, in OPINIONS_FABLE_REVIEW=clear) is routed to AUTO instead, carrying its hold
     reasons so the auto commit records that it was Fable-cleared. `fable_verdicts` maps cluster_id
     -> the verdict dict for the review PR body. The Fable network pass already ran in main(), so
-    this stays pure of network and unit-tested (test_review.py)."""
+    this stays pure of network and unit-tested (test_review.py). `state_changed` says the caller
+    changed `state` in a way a no-op run must still persist (the GA high-water mark)."""
     flagged_map = dict(flagged)
     fable_cleared = fable_cleared or set()
     fable_verdicts = fable_verdicts or {}
@@ -2919,7 +3576,9 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
 
     if not added and not treat_events:
         seen_all = seen | evaluated | have
-        if seen_all != seen:
+        # Write when seen moved, the carried batches did (collected, expired, cleared, newly
+        # deferred), or the GA intake state did (high-water mark, tries, abandoned, stall count).
+        if seen_all != seen or state_changed or pending_batches_changed(state):
             state["seen_clusters"] = sorted(seen_all)[-SEEN_CAP:]
             state["updated"] = now_iso
             safeio.atomic_write_json(STATE_PATH, stamp_pending_batches(state))
@@ -2994,51 +3653,254 @@ def route_and_publish(added, treat_events, clean_entries, flagged, crosschecks, 
             "wrote_auto": bool(auto_cards), "noop": False}
 
 
-def _draft_pending(pending, deadline, finish_fn):
-    """Draft the tier-3 summaries for the collected `pending` candidates as ONE 50%-priced Batch API
-    job (OPINIONS_BATCH), then call finish_fn(v, p) for each that succeeds. Returns the set of cluster
-    ids that were drafted, to fold into the run's `evaluated` set. Recovery mirrors the synchronous
-    path's per-candidate summarize error:
+def revive_smell_escalation(cid, meta, dedup_index, deadline=None):
+    """_draft_pending's `revive` for main(): a carried smell-escalation draft whose cluster was marked
+    seen at its triage drop, so it is never pending again. Rebuilds the candidate from the carry's
+    record (see CARRY_SMELL_FIELDS) and refetches its text, so the caller finishes it exactly as an
+    in-run escalation draft is finished (finish_card: the guards, then the publish/hold routing).
 
-      * a batch timeout or transport failure returns an empty set -- the whole draft set defers and
-        every candidate retries next run (none marked evaluated);
-      * a per-result batch error or an unparseable body skips just that candidate (it retries next
-        run), the others still finish;
-      * finish_fn owns its own exceptions, except ConfigError, which propagates so the run can abort.
+    Returns the pending-shaped item (with "rej_ts", the drop record to settle), False to drop the
+    draft (the same in-run twin recheck an in-run escalation passes), or None to keep the carry for a
+    later run (no usable text this run). Appends the case to dedup_index when it returns an item."""
+    csig = _dup_sig(COURT_MAP.get(meta["court_id"]) or meta["court_id"], meta["date_filed"],
+                    meta["docket"], meta["name"])
+    dup = next((nm for sig, nm in dedup_index if _same_case(csig, sig)), None)
+    if dup:
+        print("  ~ smell: carried escalation draft for %s dropped (twin of %s)" % (meta["name"][:40], dup[:40]))
+        return False
+    r = {"cluster_id": cid, "court_id": meta["court_id"], "caseName": meta["name"],
+         "docketNumber": meta["docket"], "dateFiled": meta["date_filed"],
+         "absolute_url": meta["absolute_url"], "pdf_url": meta["pdf_url"]}
+    text = refetch_opinion_text(r, deadline=deadline)
+    if not text:
+        print("  . smell: no opinion text for carried escalation %s %s this run; its draft is kept"
+              % (cid, meta["name"][:40]))
+        return None
+    dedup_index.append((csig, meta["name"]))
+    return {"r": r, "cid": cid, "name": meta["name"], "court_id": meta["court_id"],
+            "docket": meta["docket"], "date_filed": meta["date_filed"], "url": meta["url"],
+            "text": text, "note": meta["note"], "cl_status": meta["cl_status"], "rej_ts": meta["rej_ts"]}
+
+
+def _draft_pending(pending, deadline, finish_fn, carded=frozenset(), closed=frozenset(), revive=None):
+    """Draft the tier-3 summaries for the collected `pending` candidates through the 50%-priced Batch
+    API (OPINIONS_BATCH), then call finish_fn(v, p) for each that succeeds. Returns the set of cluster
+    ids that were drafted, to fold into the run's `evaluated` set.
+
+    Summarize is the one funnel phase whose batch CARRIES across runs (it has no synchronous
+    fallback), so this first settles any carried summarize batch, strictly by custom_id:
+
+      1. Each carry is checked once without waiting. An ended carry is collected and each draft is
+         applied only to its OWN cluster. A carry still running stays carried, and the clusters it
+         covers wait for it. A carry the API says is gone (404/410) is dropped and its clusters are
+         drafted fresh; one that could not be reached (a transport failure) stays carried and its
+         clusters wait for it, so the batch is never paid for twice.
+      2. Every pending candidate without a usable carried draft and not waiting on a carry gets a
+         FRESH request in this run. On the deadline that batch is carried (its id, the exact cluster
+         ids it covers, and the smell-escalation records among them go to pending_batches), never
+         cancelled.
+      3. A carry that was still running is polled again with what is left of the deadline.
+
+    A carried draft whose cluster is not pending this run is a finished, paid read, so it is not
+    thrown away lightly:
+
+      * a smell escalation (recorded in the carry's "smell" map) is handed to revive(cid, meta),
+        unless the cluster is in `carded`. Its cluster was marked seen at the triage drop, so it can
+        never be pending again. revive returns a pending-shaped item to finish now, None to keep the
+        draft for a later run (its text could not be fetched), or False to drop it;
+      * any other draft is dropped if its cluster is in `carded` (carded or staged for review) or
+        `closed` (seen or evaluated: permanently rejected) and otherwise KEPT: the carry stays in
+        pending_batches narrowed to those clusters, and a later run that has them pending applies
+        them. That is a cluster this run never reached (the CourtListener budget, the breaker, a
+        feed cut). It expires with the carry like any other.
+
+    Every candidate that ends the call undrafted is logged ("! undrafted: <cid> <name> (reason)")
+    and is not marked evaluated, so it stays un-seen and is retried. A per-result error or an
+    unparseable body is one of those reasons. finish_fn owns its own exceptions, except ConfigError,
+    which propagates so the run can abort.
 
     A candidate is counted drafted (evaluated) the moment its summary is produced, before finish_fn --
     exactly where the synchronous path calls evaluated.add(cid), so a card that summarizes but fails
-    to finish is not re-summarized next run. Extracted from main() so this orchestration is unit-
-    testable (test_update) without standing up the whole funnel."""
-    reqs = [batch.from_body(str(p["cid"]),
-                            summarize_request(p["court_id"], p["name"], p["docket"],
-                                              p["date_filed"], p["text"], p["note"],
-                                              cl_status=p["cl_status"]))
-            for p in pending]
-    try:
-        results = batch_run(reqs, deadline, "funnel-summarize")
-    except (batch.BatchTimeout, batch.BatchError) as e:
-        print("  ! tier-3 summarize batch deferred (%s); %d draft(s) roll to the next run"
-              % (e, len(pending)))
-        return set()
-    by_cid = {str(p["cid"]): p for p in pending}
-    drafted = set()
-    for cidk, res in results.items():
-        p = by_cid.get(cidk)
-        if not p:
-            continue
-        if not res.get("ok"):
-            print("  . tier-3 summary unavailable for %s (batch: %s); rolls to next run"
-                  % (p["name"][:50], res.get("type")))
-            continue
+    to finish is not re-summarized next run."""
+    by_cid = {int(p["cid"]): p for p in pending}
+    drafts = {}       # cid -> parsed summarize verdict
+    revived = {}      # cid -> pending-shaped item revive() built for a carried smell escalation
+    why = {}          # cid -> why it has no draft (yet)
+    waiting = {}      # carried batch id -> record, for carries still running (or unreachable)
+    unreachable = set()   # carried batch ids a transport failure kept from being read this run
+
+    def _take(results, source, rec=None):
+        """Apply one batch's lines by custom_id. Returns (drafts supplied, cluster ids kept for a
+        later run). Only a carried batch (`rec`) can keep a draft."""
+        n, kept = 0, []
+        smell = (rec or {}).get("smell") or {}
+        # A carry kept for some of its clusters is narrowed to them; the batch still returns every
+        # line, and the others were settled by the run that narrowed it.
+        live = set(rec["cids"]) if rec and rec.get("cids") is not None else None
+        for key, res in results.items():
+            cid = batch_key_cid(key, "summarize")
+            if cid is None:
+                print("  . %s: ignoring a result line under an unexpected custom_id %r" % (source, key))
+                continue
+            if live is not None and cid not in live:
+                continue
+            p = by_cid.get(cid)
+            if p is None:
+                if cid in revived or cid in drafts:
+                    continue
+                meta = smell.get(str(cid))
+                if rec is None:
+                    print("  . %s: draft for cluster %s dropped; it was not requested this run" % (source, cid))
+                elif not res.get("ok"):
+                    print("  . %s: no draft for cluster %s to keep (result %s)"
+                          % (source, cid, res.get("type") or "errored"))
+                elif cid in carded:
+                    print("  . %s: draft for cluster %s dropped; that case is already carded or staged"
+                          % (source, cid))
+                elif meta is not None and revive is not None:
+                    try:
+                        v = parse_json(res["text"])
+                    except Exception as pe:
+                        print("  . %s: smell-escalation draft for cluster %s unparseable (%s); dropped"
+                              % (source, cid, str(pe)[:80]))
+                        continue
+                    item = revive(cid, meta)
+                    if item:
+                        drafts[cid] = v
+                        revived[cid] = item
+                        n += 1
+                    elif item is None:
+                        kept.append(cid)
+                elif meta is None and cid in closed:
+                    print("  . %s: draft for cluster %s dropped; it is not eligible for drafting (seen)"
+                          % (source, cid))
+                else:
+                    kept.append(cid)
+                continue
+            if cid in drafts:
+                continue
+            if not res.get("ok"):
+                why[cid] = "%s: result %s" % (source, res.get("type") or "errored")
+                continue
+            try:
+                drafts[cid] = parse_json(res["text"])
+                why.pop(cid, None)
+                n += 1
+            except Exception as pe:
+                why[cid] = "%s: unparseable draft (%s)" % (source, str(pe)[:80])
+        return n, kept
+
+    def _collect_carry(bid, rec, wait_deadline):
         try:
-            v = parse_json(res["text"])
-        except Exception as pe:
-            print("  . tier-3 summary unparseable for %s (%s); rolls to next run"
-                  % (p["name"][:50], pe))
+            got = batch.fetch(bid, deadline=wait_deadline, label=SUMMARIZE_LABEL)
+        except batch.BatchTimeout:
+            waiting[bid] = rec
+            for c in rec.get("cids") or []:
+                if c in by_cid and c not in drafts:
+                    why[c] = "carried batch %s still running; kept for the next run" % bid
+            return
+        except batch.BatchError as e:
+            if not batch.gone(e):
+                # A transport failure says nothing about the batch: it is still running (and billed),
+                # so keep the carry and its clusters' claim on it, and try again next run.
+                print("  ! summarize carry %s unreachable (%s); kept for the next run" % (bid, e))
+                waiting[bid] = rec
+                unreachable.add(bid)
+                for c in rec.get("cids") or []:
+                    if c in by_cid and c not in drafts:
+                        why[c] = "carried batch %s unreachable; kept for the next run" % bid
+                return
+            print("  ! summarize carry %s is gone (%s); dropped, its clusters are drafted fresh" % (bid, e))
+            waiting.pop(bid, None)
+            _PENDING_BATCHES.pop(bid, None)
+            for c in rec.get("cids") or []:
+                if c in by_cid and c not in drafts:
+                    why[c] = "carried batch %s gone" % bid
+            return
+        waiting.pop(bid, None)
+        # The batch has ended: a covered cluster with no line in it is not "still running" any more.
+        for c in rec.get("cids") or []:
+            if c in by_cid and c not in drafts:
+                why[c] = "carried batch %s finished without a result line for it" % bid
+        n, kept = _take(got, "carried batch %s" % bid, rec)
+        if kept:
+            keep = dict(rec, cids=sorted(kept), n=len(kept))
+            smell = {k: v for k, v in (rec.get("smell") or {}).items() if int(k) in kept}
+            if smell:
+                keep["smell"] = smell
+            else:
+                keep.pop("smell", None)
+            _PENDING_BATCHES[bid] = keep
+            print("  . %s: carried batch %s kept for a later run, for the finished draft(s) of cluster(s) "
+                  "not pending this run: %s" % (SUMMARIZE_LABEL, bid, ", ".join(str(c) for c in sorted(kept))))
+        else:
+            _PENDING_BATCHES.pop(bid, None)
+        print("  . %s: collected carried batch %s (%d line(s), %d applied this run)"
+              % (SUMMARIZE_LABEL, bid, len(got), n), flush=True)
+
+    # 1. Carried batches: one status read each, no waiting yet.
+    for bid in [b for b, r in _RESUME_BATCHES.items() if r.get("label") == SUMMARIZE_LABEL]:
+        _collect_carry(bid, _RESUME_BATCHES.pop(bid), time.time())
+
+    # 2. Fresh requests for everything not drafted and not waiting on a carry.
+    covered = {c for rec in waiting.values() for c in (rec.get("cids") or [])}
+    fresh = [p for p in pending if int(p["cid"]) not in drafts and int(p["cid"]) not in covered]
+    if fresh:
+        reqs = [batch.from_body(batch_key("summarize", p["cid"]),
+                                summarize_request(p["court_id"], p["name"], p["docket"],
+                                                  p["date_filed"], p["text"], p["note"],
+                                                  cl_status=p["cl_status"]))
+                for p in fresh]
+        fresh_cids = sorted(int(p["cid"]) for p in fresh)
+        # Smell escalations among them: their clusters are already seen, so if this batch is carried
+        # the later run that collects it needs these records to finish them (see revive above).
+        fresh_smell = {str(int(p["cid"])): _carry_smell_meta(p) for p in fresh if p.get("rej")}
+        submitted = []
+
+        def _record(bid):
+            submitted.append(bid)
+            _PENDING_BATCHES[bid] = {"label": SUMMARIZE_LABEL, "id": bid, "at": time.time(),
+                                     "n": len(reqs), "cids": fresh_cids}
+            if fresh_smell:
+                _PENDING_BATCHES[bid]["smell"] = fresh_smell
+        try:
+            got = batch.run(reqs, deadline=deadline, label=SUMMARIZE_LABEL, on_submit=_record,
+                            cancel_unfinished=False)
+        except (batch.BatchTimeout, batch.BatchError) as e:
+            bid = getattr(e, "batch_id", None) or (submitted[-1] if submitted else None)
+            carried = bool(bid and bid in _PENDING_BATCHES)
+            print("  ! tier-3 summarize batch deferred (%s); %d draft(s) %s"
+                  % (e, len(fresh), "carried to the next run as %s" % bid if carried
+                     else "roll to the next run"))
+            for c in fresh_cids:
+                why[c] = ("summarize batch %s carried to the next run" % bid) if carried \
+                    else ("summarize batch failed: %s" % str(e)[:80])
+        else:
+            for bid in submitted:
+                _PENDING_BATCHES.pop(bid, None)
+            for c in fresh_cids:
+                why[c] = "summarize batch returned no result line for it"
+            _take(got, "summarize batch")
+
+    # 3. A carry that was still running gets whatever is left of the deadline. One that was
+    #    unreachable is not retried in this run: _send already spent its retries on it.
+    for bid, rec in list(waiting.items()):
+        if bid not in unreachable:
+            _collect_carry(bid, rec, deadline)
+
+    drafted = set()
+    for p in pending:
+        cid = int(p["cid"])
+        v = drafts.get(cid)
+        if v is None:
+            print("  ! undrafted: %s %s (%s)" % (cid, p["name"][:60], why.get(cid, "no result line returned")))
             continue
         drafted.add(p["cid"])
         finish_fn(v, p)
+    for cid, item in revived.items():
+        print("  ~ smell: finishing the carried escalation draft for %s %s" % (cid, item["name"][:50]))
+        drafted.add(item["cid"])
+        finish_fn(drafts[cid], item)
     return drafted
 
 
@@ -3120,13 +3982,18 @@ def main():
     if os.path.exists(STATE_PATH):
         state = json.load(open(STATE_PATH, encoding="utf-8"))
     seen = set(int(x) for x in state.get("seen_clusters", []))
-    # Batches the last run paid for but never collected. Loaded before any phase runs so each
-    # one collects its carry-over instead of submitting duplicate work.
-    _RESUME_BATCHES.clear()
-    _RESUME_BATCHES.update(load_pending_batches(state))
+    # Summarize batches an earlier run paid for but never collected. Loaded before any phase runs:
+    # each stays outstanding (written back to state) until the summarize phase collects it, so a
+    # run that never reaches that phase keeps it. An expired carry's clusters are made eligible
+    # again (un-seen), so the draft it held is redone rather than lost.
+    expired_carry_cids = adopt_pending_batches(state)
+    if expired_carry_cids & seen:
+        seen -= expired_carry_cids
     if _RESUME_BATCHES:
-        print("  . carrying over %d uncollected batch(es) from the last run: %s"
-              % (len(_RESUME_BATCHES), ", ".join(sorted(_RESUME_BATCHES))), flush=True)
+        print("  . carrying over %d uncollected summarize batch(es): %s"
+              % (len(_RESUME_BATCHES), "; ".join(
+                  "%s (%s)" % (bid, ", ".join(str(c) for c in (rec.get("cids") or [])) or "clusters not recorded")
+                  for bid, rec in sorted(_RESUME_BATCHES.items()))), flush=True)
     # Cases already staged in an open review PR: skip them so the funnel does not re-summarize
     # (and re-stage) a case every four hours while it is awaiting a human decision. A veto
     # clears the case from this ledger, so it is rediscovered and redrafted on a later run.
@@ -3167,7 +4034,117 @@ def main():
     # while the feed still carries them. Self-clearing: once one is re-carded it enters have/seen
     # (or is re-held into pending_review), so it falls out of this set on the next run.
     redraft_pending = review_store.load_redraft_ids() - seen - have - pending_review
-    cand, floor_dropped = _select_candidates(results, since, today, have, seen, pending_review, redraft_pending)
+    # Supreme Court of Georgia: list every cluster above the high-water mark by cluster id (free
+    # search feed), since CourtListener's stuck date_filed hides them from the dated court feed and
+    # the since floor. See the GA intake helpers above _drop_counts.
+    known = have | seen | pending_review
+    ga_mark, ga_found, ga_cov, ga_complete, ga_admitted, ga_remain = None, {}, None, False, [], []
+    ga_stats = {"dated": 0, "guessed": 0, "dups": 0, "unresolved": 0}
+    ga_retry, ga_not_ga = [], set()     # abandoned GA clusters re-admitted this run; redraft ids known not GA
+    ga_retry_tried = set()              # ...of those, the ones actually attempted (answered by a lookup, or carried)
+    ga_absent_once = {}                 # redraft id -> date the GA feed first answered it with nothing
+    ga_stall = {}                       # {"mark", "runs"}: consecutive runs the mark held with backlog left
+    ga_state_keys = ("ga_high_water", "ga_backlog_tries", "ga_abandoned", "ga_redraft_not_ga",
+                     "ga_redraft_absent_once", "ga_mark_stall")
+    ga_state_before = json.dumps({k: state.get(k) for k in ga_state_keys}, sort_keys=True)
+    if GA_CL in COURTS:
+        try:
+            ga_mark = int(state["ga_high_water"]) if state.get("ga_high_water") else None
+        except (TypeError, ValueError):
+            ga_mark = None
+        if ga_mark is None:
+            ga_mark = _ga_seed_mark(entries, REJECT_PATH)
+            print("  . ga high-water mark initialized at cluster %d" % ga_mark)
+        ga_deadline = time.time() + int(_sc("GA_ENUM_BUDGET_SEC", 90))
+        ceiling = max([cluster_id_of(r) or 0 for r in results] + [ga_mark])
+        ga_found, ga_cov, ga_complete, ga_q = ga_enumerate(ga_mark, ceiling, deadline=ga_deadline)
+        feed_ga = {cluster_id_of(r): r for r in results if r.get("court_id") == GA_CL and cluster_id_of(r)}
+        for c, it in list(ga_found.items()):
+            if c in feed_ga:
+                ga_found[c] = feed_ga[c]    # the court-feed copy carries the PDF enclosure
+            else:
+                results.append(it)
+        # The court feed is a second witness: a never-seen GA cluster it carries above the mark joins the
+        # backlog even if the enumeration missed it (a feed hiccup, the query cap), so discovery never
+        # rests on the enumeration alone. Loud when the walk claimed to have covered it.
+        for c in sorted(feed_ga):
+            if c > ga_mark and c not in ga_found and c not in known:
+                ga_found[c] = feed_ga[c]
+                if ga_complete or c <= (ga_cov or 0):
+                    print("  ! ga discovery: /feed/court/ga/ carries never-seen cluster %d above the mark, but the "
+                          "cluster-id enumeration did not list it; adding it from the court feed" % c)
+                else:
+                    print("  . ga discovery: cluster %d (beyond the walk's reach this run) added from the court feed"
+                          % c)
+        ga_admitted, ga_remain = _ga_backlog(ga_found, ga_mark, since, known,
+                                             int(_sc("GA_BACKLOG_PER_RUN", 8)))
+        print("  . ga discovery: %d cluster(s) above mark %d, %d never seen (%d feed quer%s%s)"
+              % (len(ga_found), ga_mark, sum(1 for c in ga_found if c not in known), ga_q,
+                 "y" if ga_q == 1 else "ies", "" if ga_complete else "; incomplete, listed to %s" % ga_cov),
+              flush=True)
+        print("  . ga backlog: %d admitted, %d remain" % (len(ga_admitted), len(ga_remain)), flush=True)
+        # Below the mark the walk no longer looks, so two kinds of GA cluster are fetched by id: an
+        # abandoned backlog cluster due a retry (see _ga_next_mark), and a vetoed card awaiting its
+        # redraft, which the 20-entry court feed may never carry again. Free single-id feed queries.
+        in_results = {cluster_id_of(r) for r in results}
+        ga_retry = _ga_abandoned_due(state.get("ga_abandoned") or [], known, today,
+                                     _sc("GA_ABANDONED_RETRY_DAYS", 7), _sc("GA_ABANDONED_RETRY_PER_RUN", 2))
+        try:
+            ga_not_ga = {int(c) for c in (state.get("ga_redraft_not_ga") or [])}
+        except (TypeError, ValueError):
+            ga_not_ga = set()
+        try:
+            ga_absent_once = {int(c): str(d) for c, d in (state.get("ga_redraft_absent_once") or {}).items()
+                              if int(c) in redraft_pending}
+        except (TypeError, ValueError, AttributeError):
+            ga_absent_once = {}
+        redraft_look = sorted(redraft_pending - in_results - ga_not_ga - set(ga_found) - set(ga_retry),
+                              reverse=True)[:int(_sc("GA_REDRAFT_MAX_QUERIES", 10))]
+        ga_retry_tried = set(ga_retry) & in_results     # carried by a feed: admitted without a lookup
+        look = [c for c in ga_retry if c not in in_results] + redraft_look
+        if look:
+            got, absent, lq = ga_lookup_ids(look, deadline=ga_deadline)
+            results.extend(got.values())
+            # An abandoned retry the feed answered (either way) was attempted: its last_try is stamped
+            # below, so one that never resolves cannot hold a GA_ABANDONED_RETRY_PER_RUN slot forever.
+            ga_retry_tried |= (set(got) | absent) & set(ga_retry)
+            # A redraft id is declared "not GA" only after the GA feed answered it with nothing on two
+            # separate runs: a single empty answer (a feed hiccup, an index lag) must not strand a veto.
+            for c in sorted(set(got) & set(redraft_look)):
+                ga_absent_once.pop(c, None)
+            for c in sorted(absent & set(redraft_look)):
+                first = ga_absent_once.get(c)
+                if first and first != today:
+                    ga_not_ga.add(c)
+                    ga_absent_once.pop(c, None)
+                    print("  ! ga redraft: cluster %d is not on the Supreme Court of Georgia search feed (empty "
+                          "answers on %s and %s); remembered in ga_redraft_not_ga, no longer looked up" % (c, first, today))
+                elif not first:
+                    ga_absent_once[c] = today
+                    print("  . ga redraft: cluster %d: the GA search feed returned nothing (first time, %s); "
+                          "asking again on a later run before treating it as not GA" % (c, today))
+            print("  . ga lookups: %d abandoned retr%s, %d redraft id(s) checked: %d GA cluster(s) re-entered "
+                  "(%d feed quer%s)" % (len(ga_retry), "y" if len(ga_retry) == 1 else "ies", len(redraft_look),
+                                        len(got), lq, "y" if lq == 1 else "ies"), flush=True)
+    cand, floor_dropped = _select_candidates(results, since, today, have, seen, pending_review, redraft_pending,
+                                             exempt=set(ga_admitted) | set(ga_retry), held_back=set(ga_remain))
+    # Date every GA candidate from the court's release page (or its PDF's "Decided:" line) BEFORE the
+    # sort and the OPINIONS_MAX cut, and set aside re-scrapes of a docket already seen or carded.
+    ga_ctx, ga_dups = None, []
+    if GA_CL in COURTS and any(r.get("court_id") == GA_CL for r in cand):
+        _GA_INDEX_WARNED.clear()       # one warning per run (a test process runs main() repeatedly)
+        years = {(r.get("dateFiled") or "")[:4] for r in cand if r.get("court_id") == GA_CL} | {today[:4]}
+        ga_ctx = {"idx": _ga_release_index(years), "known": known, "today": today, "stats": ga_stats,
+                  "deadline": time.time() + int(_sc("GA_ENUM_BUDGET_SEC", 90))}
+        kept = []
+        for r in cand:
+            if r.get("court_id") == GA_CL:
+                st = _ga_resolve(r, ga_ctx)
+                if st == "dup":
+                    ga_dups.append(r)
+                    continue
+            kept.append(r)
+        cand = kept
     cand.sort(key=lambda r: (r.get("dateFiled") or "", cluster_id_of(r)), reverse=True)
     cand = cand[:MAX_RUN]
     print("since %s | candidates: %d | tiers: screen=%s pretriage=%s triage=%s summarize=%s%s"
@@ -3193,6 +4170,36 @@ def main():
     cl_deferred = 0                                # candidates deferred this run on the CourtListener budget
     consec = 0
     cfg_error = False                              # set on a ConfigError (auth/model/credit); forces a non-zero exit
+    ga_failed = {}   # GA cluster -> why: actually evaluated this run and failed (spends a backlog try)
+
+    def ga_fail(cid, court_id, why, exc=None):
+        """Charge a GA cluster's failed evaluation (no text after a real fetch, or a model answer that
+        cannot be used). A cluster the run never reached is not charged (see _ga_next_mark), and
+        neither is one stopped by infrastructure: the time budget, the CourtListener REST budget, a
+        transport error, or the Anthropic API overloaded / rate-limited / 5xx (_ga_infra_error)."""
+        if court_id != GA_CL or not cid:
+            return
+        if exc is not None and _ga_infra_error(exc):
+            print("  . ga backlog: cluster %s not charged a try (infrastructure, not the opinion: %s: %s)"
+                  % (cid, type(exc).__name__, str(exc)[:120]))
+            return
+        if time.time() > run_start + BUDGET_SEC:
+            print("  . ga backlog: cluster %s not charged a try (the run's time budget expired mid-candidate)" % cid)
+            return
+        ga_failed[cid] = why
+
+    def ga_dup_skip(r):
+        """A GA re-scrape: a second CourtListener cluster for a docket a seen or carded cluster already
+        carries (Rease 10975744 of 10875591). Skip it, mark it seen, and say so."""
+        cid, name = cluster_id_of(r), r.get("caseName") or ""
+        skipped.append((name, "duplicate of cluster %s (same Supreme Court of Georgia docket %s; cluster %s "
+                              "is a CourtListener re-scrape)" % (r.get("_ga_twin"), r.get("docketNumber"), cid)))
+        print("  ~ ga re-scrape duplicate: %s (cluster %s) == cluster %s, docket %s; marked seen"
+              % (name[:50], cid, r.get("_ga_twin"), r.get("docketNumber")))
+        evaluated.add(cid)
+
+    for r in ga_dups:
+        ga_dup_skip(r)
     # Party tokens of every carded case, for the screen override below. Cards with
     # fewer than two distinctive tokens can never reach the two-token threshold, so
     # drop them here.
@@ -3224,6 +4231,8 @@ def main():
             skipped.append((name, "unrecognized court id %s" % court_id)); return
         entry = assemble_entry(v, cid, name, court, areas, docket, date_filed, url,
                                _today_eastern())
+        if r.get("cl_dateFiled") and r["cl_dateFiled"] != entry["date"]:
+            entry["cl_date_filed"] = r["cl_dateFiled"]   # CourtListener's date, kept for audit (GA re-dating)
         synopsis = entry["synopsis"]; why = entry["why"]; disp = entry["disposition"]
         additional_holdings = entry.get("additional_holdings", [])
         if entry["court"] == "scotga":
@@ -3253,6 +4262,10 @@ def main():
             reasons.append("no disposition")
         if not synopsis or not why:
             reasons.append("empty synopsis or reason")
+        if r.get("_ga_unverified"):
+            reasons.append("official release date unverified: CourtListener dates every Supreme Court of "
+                           "Georgia release since 2026-06-30 as %s, and neither gasupreme.us nor the "
+                           "opinion's Decided: line gave a date" % entry["date"])
         if reasons:
             flagged.append((entry["name"], reasons))
         # Fidelity guards: defer to the one post-draft batch (OPINIONS_GUARD_BATCH), or run the
@@ -3335,7 +4348,7 @@ def main():
             # Phase 2: read the PDF enclosure first (static file on storage.courtlistener.com,
             # no REST quota, fast). Fall back to the REST API only when extraction is empty,
             # too short, or unusable, so the worst case degrades to the prior REST behavior.
-            text = pdf_text(r.get("pdf_url"), deadline=run_start + BUDGET_SEC)
+            text = r.pop("_text", "") or pdf_text(r.get("pdf_url"), deadline=run_start + BUDGET_SEC)
             deferred = False
             if _pdf_ok(text):
                 _dbg("text via pdf for %s (%d chars)" % (name, len(text)))
@@ -3369,7 +4382,25 @@ def main():
                 # retries it. Listing it under "dropped" would poison the recall review.
                 continue
             if not text:
-                skipped.append((name, "no opinion text available")); consec = 0; continue
+                skipped.append((name, "no opinion text available")); consec = 0
+                ga_fail(cid, court_id, "no opinion text available (%s run)" % today)
+                continue
+            if ga_ctx is not None and court_id == GA_CL and r.get("_ga_pending"):
+                # A GA candidate the pre-pass could not date (no PDF enclosure and no caption match):
+                # read its docket and "Decided:" line from the text just fetched.
+                ga_ctx["deadline"] = run_start + BUDGET_SEC
+                if _ga_resolve(r, ga_ctx, text=text) == "dup":
+                    ga_dup_skip(r); consec = 0; continue
+                date_filed = (r.get("dateFiled") or "")[:10]
+                docket = r.get("docketNumber") or ""
+                csig = _dup_sig(COURT_MAP.get(court_id) or court_id, date_filed, docket, name)
+                dup = next((nm for sig, nm in dedup_index if _same_case(csig, sig)), None)
+                if dup:
+                    skipped.append((name, "duplicate of carded case %r (same court and shared docket; "
+                                          "cluster %s is a twin or a corrected republish)" % (dup[:60], cid)))
+                    print("  ~ duplicate skip: %s  ==  %s  (cluster %s)" % (name[:50], dup[:50], cid))
+                    evaluated.add(cid); consec = 0
+                    continue
             time.sleep(0.4)
             # Tier 1.5: cheap full-read screen (Haiku) before the costly Sonnet triage. Drops
             # opinions whose full text shows they cannot belong, so the Sonnet read only ever
@@ -3401,6 +4432,7 @@ def main():
             break
         except Exception as e:
             print("  ! error on cluster %s (%s): %s" % (cid, name, e))
+            ga_fail(cid, court_id, "error while evaluating (%s run): %s" % (today, str(e)[:160]), exc=e)
             consec += 1
             if consec >= BREAKER:
                 print("  ! %d consecutive failures; stopping early (API likely rate-limited). "
@@ -3570,6 +4602,7 @@ def main():
             break
         except Exception as e:
             print("  ! error on cluster %s (%s): %s" % (cid, name, e))
+            ga_fail(cid, court_id, "error while evaluating (%s run): %s" % (today, str(e)[:160]), exc=e)
             consec += 1
             if consec >= BREAKER:
                 print("  ! %d consecutive failures; stopping early (API likely rate-limited). "
@@ -3602,7 +4635,7 @@ def main():
             print("  . smelling %d triage-drop reason(s)%s"
                   % (len(smell_pending), rss_note()), flush=True)
             try:
-                items = [{"name": d["rej"]["name"], "court": d["rej"]["court"],
+                items = [{"cid": d["rej"]["cluster_id"], "name": d["rej"]["name"], "court": d["rej"]["court"],
                           "date": d["rej"]["date"], "reason": d["rej"]["reason"]}
                          for d in smell_pending]
                 verdicts = smell_reasons(items, deadline=time.time() + SMELL_BATCH_SEC)
@@ -3665,13 +4698,23 @@ def main():
             smell_escalated.append(item)
 
     # Tier 3, batched: draft every candidate that passed triage as ONE 50%-priced job, then finish
-    # each exactly as the synchronous path would (finish_card). A batch that does not end within the
-    # budget, or a transport failure, defers the whole draft set: those clusters stay unevaluated and
-    # retry next run -- the same recovery a synchronous summarize error already gets. finish_card runs
+    # each exactly as the synchronous path would (finish_card). A carried summarize batch from an
+    # earlier run is settled first and applied by custom_id (see _draft_pending). A batch that does
+    # not end within the budget is carried to the next run; every candidate left undrafted is logged
+    # and stays unevaluated, so it retries next run -- the same recovery a synchronous summarize
+    # error already gets. finish_card runs
     # with a FRESH CourtListener deadline, since the loop's run_start+BUDGET_SEC is spent by now and
-    # its official-link fetches must not start pre-expired.
-    if FUNNEL_BATCH and pending and not cfg_error:
+    # its official-link fetches must not start pre-expired. A run with nothing pending still settles
+    # a carried batch: its drafts may be smell escalations or clusters a later run will want.
+    smell_revived = []   # carried smell-escalation drafts finished this run (drop logged by an earlier run)
+    if FUNNEL_BATCH and (pending or _RESUME_BATCHES) and not cfg_error:
         cl_deadline = time.time() + BUDGET_SEC   # fresh CL window for the official-link enrichment
+
+        def _revive(cid, meta):
+            item = revive_smell_escalation(cid, meta, dedup_index, cl_deadline)
+            if item:
+                smell_revived.append(item)
+            return item
 
         def _finish(v, p):
             try:
@@ -3683,7 +4726,9 @@ def main():
                 print("  ! finishing card failed for %s: %s" % (p["name"][:50], fe))
 
         try:
-            drafted_cids = _draft_pending(pending, time.time() + SUMMARIZE_BATCH_SEC, _finish)
+            drafted_cids = _draft_pending(pending, time.time() + SUMMARIZE_BATCH_SEC, _finish,
+                                          carded=have | pending_review, closed=seen | evaluated,
+                                          revive=_revive)
             evaluated |= drafted_cids
         except ConfigError as ce:
             print("  ! configuration error finishing a batched draft (nothing committed): %s" % ce)
@@ -3698,14 +4743,9 @@ def main():
         # the way in, and batch.poll adds one per wait, so the next death is measurable.
         print("  . guarding %d drafted card(s) as one batch (fidelity + completeness)%s"
               % (len(guard_pending), rss_note()), flush=True)
-        if not guard_cards_batch(guard_pending, crosschecks, completeness, deadline=time.time() + GUARD_BATCH_SEC):
-            for it in guard_pending:
-                cc = crosscheck(it["name"], it["text"], it["entry"])
-                if cc:
-                    crosschecks[it["cid"]] = cc
-                cp = completeness_check(it["name"], it["text"], it["entry"])
-                if cp:
-                    completeness[it["cid"]] = cp
+        guard_sync(guard_cards_batch(guard_pending, crosschecks, completeness,
+                                     deadline=time.time() + GUARD_BATCH_SEC),
+                   crosschecks, completeness)
 
     # Resolve each smell escalation's outcome now that drafting is done, on the rejection record:
     #   carded      -- the summarizer read it and carded it (recall recovered); the case's stale
@@ -3728,6 +4768,16 @@ def main():
             else:
                 it["rej"]["smell_outcome"] = "deferred"
         skipped = [s for s in skipped if s is not None]
+    # A carried escalation draft finished this run settles the drop an earlier run logged (and marked
+    # "deferred" when its batch was carried). The summarizer read it, so it is carded or the drop stands.
+    smell_settled = []
+    if smell_revived:
+        carded_cids = {int(e.get("cluster_id") or 0) for e in added}
+        for it in smell_revived:
+            outcome = "carded" if it["cid"] in carded_cids else "drop-stands"
+            smell_recovered += outcome == "carded"
+            smell_settled.append((it["cid"], it["rej_ts"], outcome))
+            print("  ~ smell: carried escalation %s %s -> %s" % (it["cid"], it["name"][:40], outcome))
     if n_smell or smell_pending:
         print("  . smell: %d of %d drop reason(s) audited, %d suspect, %d escalated, %d recovered"
               % (n_smell, len(smell_pending), n_smell_suspect, len(smell_escalated), smell_recovered))
@@ -3764,8 +4814,73 @@ def main():
     os.makedirs(os.path.dirname(PR_PATH), exist_ok=True)
     open(PR_PATH, "w", encoding="utf-8").write(pr_body)
 
+    # Supreme Court of Georgia high-water mark: rise past every listed cluster this run settled, but
+    # stop below the lowest one still waiting or outstanding (see _ga_next_mark), so nothing above the
+    # mark is ever skipped. Written with the state in route_and_publish.
+    ga_rec, ga_state_changed = None, False
+    if ga_mark is not None:
+        resolved = known | evaluated | {int(e["cluster_id"]) for e in added if e.get("cluster_id")}
+        old_tries = {int(k): int(v) for k, v in (state.get("ga_backlog_tries") or {}).items()}
+        max_tries = int(_sc("GA_BACKLOG_MAX_TRIES", 3))
+        new_mark, new_tries, gave_up = _ga_next_mark(
+            ga_mark, ga_found, ga_cov, ga_complete, resolved, set(ga_remain), old_tries, max_tries,
+            failed=set(ga_failed))
+        names = {c: (it.get("caseName") or "") for c, it in ga_found.items()}
+        abandoned, newly = _ga_abandon_update(state.get("ga_abandoned") or [], gave_up,
+                                              ga_retry_tried | (set(ga_retry) & set(ga_failed)), resolved, ga_failed, names,
+                                              today, max_tries)
+        for a in newly:
+            print("  ! ga backlog: ABANDONED cluster %d (%s): failed in %d run(s), last: %s. The mark passes it; "
+                  "it is recorded in opinions_state.json ga_abandoned and re-admitted every %s day(s). To "
+                  "force it now, add the line %d to queue.txt"
+                  % (a["cluster_id"], a["name"][:50] or "?", max_tries, a["reason"],
+                     _sc("GA_ABANDONED_RETRY_DAYS", 7), a["cluster_id"]))
+        if abandoned:
+            state["ga_abandoned"] = abandoned
+            print("  ! ga backlog: %d abandoned cluster(s) outstanding: %s"
+                  % (len(abandoned), ", ".join(str(a["cluster_id"]) for a in abandoned[:20])))
+        else:
+            state.pop("ga_abandoned", None)
+        if ga_not_ga:
+            state["ga_redraft_not_ga"] = sorted(ga_not_ga)[-1000:]
+        if ga_absent_once:
+            state["ga_redraft_absent_once"] = {str(c): d for c, d in sorted(ga_absent_once.items())[-1000:]}
+        else:
+            state.pop("ga_redraft_absent_once", None)
+        # A mark that holds run after run while backlog remains means one cluster is blocking the
+        # intake (never reached, never resolving): name it loudly so it is looked at, not waited out.
+        outstanding = sorted(c for c in ga_found if c > new_mark and c not in resolved and c not in gave_up)
+        blocker = outstanding[0] if outstanding else None
+        stall_runs = int(_sc("GA_MARK_STALL_RUNS", 6))
+        ga_stall, stall_loud = _ga_stall_update(state.get("ga_mark_stall"), ga_mark, new_mark, blocker, stall_runs)
+        if stall_loud:
+            why = ("waiting in the backlog (GA_BACKLOG_PER_RUN)" if blocker in set(ga_remain)
+                   else ga_failed.get(blocker) or ("%d failed evaluation(s) so far" % new_tries[blocker]
+                                                   if new_tries.get(blocker) else
+                                                   "not reached (OPINIONS_MAX cut, time budget, or REST-budget deferral)"))
+            print("  ! ga high-water mark STALLED at %d for %d consecutive run(s) with %d cluster(s) outstanding; "
+                  "blocking cluster %d (%s): %s"
+                  % (new_mark, ga_stall["runs"], len(outstanding), blocker,
+                     (ga_found.get(blocker, {}).get("caseName") or "?")[:60], why))
+        if ga_stall:
+            state["ga_mark_stall"] = ga_stall
+        else:
+            state.pop("ga_mark_stall", None)
+        state["ga_high_water"] = new_mark
+        if new_tries:
+            state["ga_backlog_tries"] = {str(c): n for c, n in sorted(new_tries.items())}
+        else:
+            state.pop("ga_backlog_tries", None)
+        ga_state_changed = json.dumps({k: state.get(k) for k in ga_state_keys}, sort_keys=True) != ga_state_before
+        print("  . ga high-water mark: %d -> %d" % (ga_mark, new_mark))
+        ga_rec = {"found": len(ga_found), "admitted": len(ga_admitted), "remain": len(ga_remain),
+                  "dated": ga_stats["dated"], "guessed": ga_stats["guessed"], "dups": ga_stats["dups"],
+                  "unresolved": ga_stats["unresolved"], "gave_up": len(gave_up), "abandoned": len(abandoned),
+                  "retried": len(ga_retry), "failed": len(ga_failed), "mark": new_mark}
+
     # Per-run health record (every non-dry run, no-op or not), so the funnel's activity
     # and how much each tier discards are visible without reading raw logs.
+    _settle_logged_smell(smell_settled)
     _log_rejections(rejections)
     _log_run({
         "ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -3777,6 +4892,7 @@ def main():
         "crosscheck_flags": sum(1 for c in crosschecks.values() if c["verdict"] == "flag"),
         "completeness_flags": sum(1 for c in completeness.values() if c["verdict"] == "flag"),
         "floor_dropped": floor_dropped,
+        **({"ga": ga_rec} if ga_rec else {}),
     })
 
     if sa_events:
@@ -3797,7 +4913,8 @@ def main():
     routed = route_and_publish(added, treat_events, clean_entries, flagged, crosschecks,
                                completeness, overruling_cids, pending_review, state, seen,
                                evaluated, have, now_iso, treat_flags,
-                               fable_cleared=fable_cleared, fable_verdicts=fable_verdicts)
+                               fable_cleared=fable_cleared, fable_verdicts=fable_verdicts,
+                               state_changed=ga_state_changed)
     print(cl_line)
     if routed["noop"]:
         _summary("No new opinions this run.", "%s \u00b7 since %s" % (cl_line, since))

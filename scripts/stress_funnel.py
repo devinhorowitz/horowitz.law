@@ -100,13 +100,16 @@ def sandbox(candidates, batch_mode):
     setattr_saved(update, "completeness_check", lambda *a, **k: {})
     setattr_saved(update, "official_download_url", lambda *a, **k: "")
     setattr_saved(official_ga, "official_url_for", lambda *a, **k: "")
+    # The Supreme Court of Georgia intake (COURT is "ga"): no search-feed enumeration, no release page.
+    setattr_saved(update, "ga_search_feed", lambda *a, **k: [])
+    setattr_saved(official_ga, "release_index", lambda *a, **k: {})
     setattr_saved(update, "fable_review_pass", lambda *a, **k: ([], {}))
     setattr_saved(update, "route_and_publish", fake_route)
     setattr_saved(review_store, "load_pending", lambda *a, **k: set())
     setattr_saved(review_store, "load_redraft_ids", lambda *a, **k: set())
 
     # Batch mode: stub the summarize batch to return one verdict per pending candidate, keyed by cid.
-    def fake_run(reqs, deadline=None, interval=20.0, label="batch"):
+    def fake_run(reqs, deadline=None, interval=20.0, label="batch", **_kw):   # resume_id, on_submit
         return {rq["custom_id"]: {"ok": True, "text": json.dumps(VERDICT), "stop_reason": "end_turn"}
                 for rq in reqs}
     setattr_saved(batch, "run", fake_run)

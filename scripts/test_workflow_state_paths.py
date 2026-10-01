@@ -132,6 +132,16 @@ def commits_outside_add_paths(wf_name, filename):
     return False
 
 
+def bookkeeping_run(wf_name):
+    """The run block of a workflow's "Commit bookkeeping" step, or None if it has none."""
+    doc = yaml.safe_load(open(os.path.join(WORKFLOWS, wf_name), encoding="utf-8"))
+    for job in (doc.get("jobs") or {}).values():
+        for st in (job.get("steps") or []):
+            if (st.get("name") or "").startswith("Commit bookkeeping"):
+                return st.get("run") or ""
+    return None
+
+
 def main():
     print("workflow add-paths vs the state files their scripts write:")
     seen_any, checked = 0, 0
@@ -172,6 +182,20 @@ def main():
             check("%s persists %s (add-paths, or its own commit+push_main)" % (wf, log),
                   log in paths or commits_outside_add_paths(wf, log),
                   "not in add-paths and no git add/push_main.sh step names it")
+
+        # The other half of the route. legislation.yml commits state by TWO routes: the review PR
+        # on a run with cards, and its own "Commit bookkeeping" step straight to main on a quiet
+        # run. The bookkeeping list was hand-kept and lost ethics_state.json / ethics_log.jsonl when
+        # the ethics watch was added, so a quiet week never recorded an ethics page hash and the
+        # page was re-extracted (and paid for) on every run. Every state file and run/drop log the
+        # PR carries must be on the bookkeeping list too.
+        book = bookkeeping_run(wf)
+        if book is not None:
+            for p in paths:
+                if re.match(r"^[a-z_]+_(state\.json|log\.jsonl|rejections\.jsonl)$", p):
+                    checked += 1
+                    check("%s's bookkeeping step also commits %s (a quiet run's route)" % (wf, p),
+                          re.search(r"(^|\s)%s(\s|$)" % re.escape(p), book) is not None)
 
     check("PR-opening workflows were actually found", seen_any >= 3, str(seen_any))
     # Without this the suite passes trivially the day the regexes stop matching -- which is

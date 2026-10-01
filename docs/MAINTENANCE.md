@@ -100,8 +100,9 @@ folder drag, so upload `.gitignore`, `.well-known/`, and `.github/` files indivi
 
 `opinions_state.json`, `opinions_rejections.jsonl`, `opinions_pipeline_log.jsonl`,
 `treatment_state.json`, `status.json`, `scripts/golden_set.json`, `skill-authorities.json`,
-`skill_alert_state.json`, `model_watch_state.json`, and `.github/keepalive.txt`. These are written by the pipeline and
-its tools.
+`skill_alert_state.json`, `model_watch_state.json`, `watch_batches.json` (the Legislative & Regulatory
+Watch's carried batches; see docs/LEGISLATION.md), and `.github/keepalive.txt`. These are written by
+the pipeline and its tools.
 
 ### Not in the repo (gitignored, written at runtime)
 
@@ -278,7 +279,8 @@ Run by hand, from the Actions tab:
   synchronous Opus call each — the biggest single AI saving here. Screen/pretriage/triage and the
   treatment escalation stay synchronous, so discovery and routing are unchanged; the trade is that a
   new card may publish up to a run later if a draft batch is slow (it defers to the next run, capped
-  by `OPINIONS_SUMMARIZE_BATCH_SEC`, 1500s). Set `OPINIONS_BATCH=0` for the synchronous funnel — the
+  by `OPINIONS_SUMMARIZE_BATCH_SEC`, 1500s; the late batch is carried in `opinions_state.json`
+  `pending_batches` and collected by cluster id, see docs/PIPELINE.md, "Message Batches"). Set `OPINIONS_BATCH=0` for the synchronous funnel — the
   instant rollback if a run ever looks wrong. The **`treatment` sweep batches too** by default
   (`TREATMENT_BATCH`, `=0` for sync): each card's citer classifications go through one job, and a
   failed/slow batch defers that card's citers *and* leaves it not-fully-swept, so its history is

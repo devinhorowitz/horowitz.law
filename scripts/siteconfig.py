@@ -220,6 +220,30 @@ MODEL_EFFORT = {
     "screen":    "",       # tier 1, Haiku: no effort parameter
 }
 
+# ---- Supreme Court of Georgia intake --------------------------------------
+# Since the 2026-06-30 release gasupreme.us prints each release date inside an <h3>, and
+# juriscraper's ga.py still reads the first <p> after the heading, so CourtListener stamps every
+# new Supreme Court of Georgia opinion date_filed 2026-06-16. The CourtListener court feed then
+# sorts them as old (the since floor drops them) and its 20 tied-date slots fill arbitrarily, so
+# most never appear there at all. update.py therefore enumerates GA clusters by cluster id on the
+# free /feed/search/ endpoint (no REST quota), above a high-water mark kept in
+# opinions_state.json (ga_high_water), and dates each one from the court's own release page.
+GASUPREME_HOST = "https://www.gasupreme.us"   # the court's site; the year index is <host>/<year>-opinions/
+GA_BOGUS_DATE_FILED = "2026-06-16"            # CourtListener's stuck date_filed; a card is never auto-published on it unverified
+GA_BACKLOG_PER_RUN = 8          # never-seen GA clusters below the since floor admitted per run, oldest cluster id first; the rest wait
+GA_BACKLOG_MAX_TRIES = 3        # runs in which an admitted cluster was actually evaluated and failed (no text after a real fetch, an
+                                # unusable model answer) before the mark passes it; a run that never reaches it (OPINIONS_MAX cut, time
+                                # budget, REST-budget deferral) or is stopped by infrastructure (timeout, transport, API 429/5xx) costs no try. A passed cluster is recorded in ga_abandoned, never dropped
+GA_ABANDONED_RETRY_DAYS = 7     # an abandoned GA cluster is re-admitted (floor-exempt) once this many days after its last try
+GA_ABANDONED_RETRY_PER_RUN = 2  # abandoned GA clusters re-admitted per run, oldest last-try first
+GA_MARK_STALL_RUNS = 6          # consecutive runs the GA high-water mark may hold with backlog left before a loud "!" line names the blocker
+GA_REDRAFT_MAX_QUERIES = 10     # per-run cap on single-id search-feed lookups for vetoed (redraft) clusters the feeds did not carry
+GA_HIGH_WATER_SEED = 10876000   # first mark when state has none and no scotga card or rejection gives a higher-known GA cluster id
+GA_FEED_ITEM_CAP = 20           # /feed/search/ returns at most this many entries and ignores page=; a full page is split in half
+GA_ENUM_MAX_QUERIES = 40        # per-run cap on enumeration feed queries (the 2026-09 backlog of 54 clusters took 29)
+GA_ENUM_BUDGET_SEC = 90         # per-run wall-clock budget for the enumeration and the docket lookups
+GA_NAME_GUESSES = 3             # official-page entries tried per cluster when only the caption is known (each costs one free feed query)
+
 # ---- Top-level page registry --------------------------------------------
 # The site's top-level pages, as (path, label, changefreq, priority, lastmod).
 # render.py drives both the /404 "ls /" listing and the sitemap's static URLs
@@ -293,4 +317,33 @@ AREA_GLOSSES = {
     "damages": ("measure and recoverability of damages: caps, punitive damages, apportionment of "
                 "fault under O.C.G.A. 51-12-33, wrongful-death full value, attorney fees, remittitur"),
 }
+
+# ---- Legislative & Regulatory Watch: run budget and batch carry ------------
+# legislation.yml runs four watches (statutes, regulations, court rules, ethics opinions), and each
+# can wait on an Anthropic Message Batch, whose latency ranges from minutes to over an hour. On
+# 2026-09-27 (run 36318024609) the statutes batch waited its full 30 minutes, the court-rules batch
+# waited 25 more, and the 60-minute job timeout killed the run: render, the review PR and the
+# bookkeeping never ran, nothing was saved, and the paid batch ids were never recorded.
+#
+# So each watch runs in its OWN workflow step, with `timeout-minutes` from WATCH_STEP_MIN, and the
+# steps plus the setup allowance plus WATCH_RESERVE_MIN fit inside WATCH_JOB_TIMEOUT_MIN. A watch
+# that overruns fails only its own step; the steps that save state still have time to run.
+# test_watchbatch.py holds legislation.yml's numbers to these.
+#
+# Inside a step the script ends every batch wait, and every synchronous model loop,
+# WATCH_STEP_MARGIN_SEC before the step limit (watchbatch.Budget), so in practice a slow batch is
+# CARRIED -- its id and the items it covers go to watch_batches.json and the next run collects the
+# results -- rather than ever reaching the step limit.
+WATCH_JOB_TIMEOUT_MIN = 90
+WATCH_STEP_MIN = {"legislation": 40, "regulations": 10, "courtrules": 15, "ethics": 12}
+WATCH_SETUP_MIN = 3          # harden-runner, checkout, setup-python, pip install
+WATCH_RESERVE_MIN = 10       # results, bookkeeping, render, review PR, carry save, failure report
+WATCH_STEP_MARGIN_SEC = 150  # left inside a step after the last wait, for saving cards and state
+# A synchronous model loop (a screen, a recall audit) starts no new call once less than this much of
+# the step is left: one call can take minutes on a retrying API, and the batch submit and the state
+# save still have to run after it.
+WATCH_SYNC_FLOOR_SEC = 300
+# Anthropic keeps a batch's results for 29 days after creation. An older carry cannot be collected,
+# so it is dropped (with a log line) and its items are processed again as usual.
+WATCH_CARRY_MAX_AGE_DAYS = 25
 

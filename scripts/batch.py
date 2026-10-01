@@ -8,15 +8,21 @@ grows past Georgia to more courts and states.
 
 A batch is asynchronous by construction: you submit many Messages API requests as
 one job, it runs server-side (usually minutes, up to 24h), then you collect the
-results keyed by your own `custom_id`. This module gives the two shapes a caller
+results keyed by your own `custom_id`. This module gives the shapes a caller
 needs:
 
   * blocking -- `run(requests, deadline=...)` submits, polls until the batch ends
     (never past the deadline), and returns {custom_id: result}. On timeout it
-    raises BatchTimeout carrying the batch id, so the caller can persist the id
-    and collect it on a later run instead of losing the work; and
+    raises BatchTimeout carrying the batch id. By default it first CANCELS the
+    unfinished batch (best effort, logged): a caller that falls back to synchronous
+    calls would otherwise pay for the batch on top of the fallback. A caller that
+    carries the id to a later run passes cancel_unfinished=False;
+  * carried  -- `fetch(batch_id, deadline=...)` polls and collects a batch an earlier
+    run submitted. It returns that batch's results and nothing else: the caller maps
+    each result back to its own work by custom_id, so a carried batch can never be
+    mistaken for the current requests; and
   * async    -- `submit()` returns the id now, `status()`/`collect()` finish it on
-    a subsequent run once it has ended.
+    a subsequent run once it has ended; `cancel()` stops one.
 
 Pure standard library and no project imports (a safe leaf like cl_rate), so any
 script can depend on it without a cycle. Auth mirrors update.anthropic_json:
@@ -59,17 +65,35 @@ CUSTOM_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")   # the Batch API's custom_i
 
 
 class BatchError(RuntimeError):
-    """A batch API call failed (non-retryable HTTP, or retries exhausted)."""
+    """A batch API call failed (non-retryable HTTP, or retries exhausted). `status` is the HTTP
+    status of a non-retryable error response, or None for a transport failure (connection, timeout,
+    retries exhausted) or a malformed batch object. See gone()."""
+
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.status = status
+
+
+# HTTP statuses that say a batch id is definitively gone: unknown to the API, or its results have
+# been deleted. Anything else -- a transport failure, a 5xx after retries, an auth error -- says
+# nothing about the batch itself, so a caller carrying the id should keep it and try again later.
+GONE_STATUS = {404, 410}
+
+
+def gone(exc):
+    """Whether `exc` is a definitive "this batch no longer exists" answer (HTTP 404/410), as
+    opposed to a transient failure that leaves the batch running and billable."""
+    return isinstance(exc, BatchError) and exc.status in GONE_STATUS
 
 
 class BatchTimeout(RuntimeError):
-    """The batch had not ended by the caller's deadline. Carries `batch_id` so the
-    caller can record it and collect the results on a later run rather than losing
-    the (already-billed) work."""
+    """The batch had not ended by the caller's deadline. Carries `batch_id` so a caller
+    that carries work across runs can record it and fetch() the results later."""
 
     def __init__(self, batch_id, message):
         super().__init__(message)
         self.batch_id = batch_id
+        self.cancelled = False    # set by run() when it cancelled the batch on the way out
 
 
 def _send(method, url, body=None, label="batch"):
@@ -96,7 +120,7 @@ def _send(method, url, body=None, label="batch"):
             last = "%s %s -> HTTP %s: %s" % (label, method, e.code, (detail[:400] or e.reason))
             if e.code in RETRY_STATUS and attempt < 4:
                 time.sleep(min(2 ** attempt * 2, 30)); continue
-            raise BatchError(last)
+            raise BatchError(last, status=e.code)
         except (urllib.error.URLError, TimeoutError) as e:
             # TimeoutError (bare socket.timeout) is a SIBLING of URLError under OSError, not a
             # subclass, and a read timeout on r.read() above raises it unwrapped -- so it must be
@@ -219,38 +243,66 @@ def poll(batch_id, deadline=None, interval=20.0, label="batch"):
         time.sleep(nap)
 
 
-def run(requests, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+def cancel(batch_id, label="batch"):
+    """Ask the API to cancel a batch. Requests already processed are still billed; the rest are
+    not. Returns the batch object (processing_status "canceling" while it winds down)."""
+    return json.loads(_send("POST", "%s/%s/cancel" % (API, batch_id), None, label))
+
+
+def cancel_quietly(batch_id, label="batch", why="abandoned"):
+    """Best-effort cancel with a log line either way; never raises. Returns True when the API
+    accepted the cancel."""
+    try:
+        cancel(batch_id, label)
+        print("  . %s: cancelled batch %s (%s)" % (label, batch_id, why), flush=True)
+        return True
+    except Exception as e:
+        print("  . %s: could not cancel batch %s (%s): %s" % (label, batch_id, why, e), flush=True)
+        return False
+
+
+def fetch(batch_id, deadline=None, interval=20.0, label="batch"):
+    """Poll and collect a batch an earlier run submitted (a carry). Returns {custom_id: result}
+    for THAT batch only; mapping each line back to current work by custom_id is the caller's job.
+    Raises BatchTimeout if it is still running at the deadline (it is not cancelled: the caller
+    is carrying it), and BatchError on a failure. gone(e) tells a definitive answer (the id is
+    unknown, or its results were deleted: drop the carry) from a transient one (keep it and retry
+    on a later run). Requests that expired or were canceled come back as per-line results with
+    ok False, not as an exception."""
+    return collect(poll(batch_id, deadline=deadline, interval=interval, label=label), label)
+
+
+def run(requests, deadline=None, interval=20.0, label="batch", on_submit=None, cancel_unfinished=True):
     """Submit, poll to completion, and collect -- the blocking convenience path.
     Returns {custom_id: result}. Raises BatchTimeout (carrying the batch id) if the
     deadline passes first, and BatchError on a transport failure.
 
     `on_submit` is called with the new batch id the instant submit() returns, BEFORE any
-    polling. That ordering is the whole point: a batch is billed from the moment it is
-    accepted, so the id has to be recorded before the long wait that might not survive.
+    polling. That ordering matters to a caller that carries the id: a batch is billed from the
+    moment it is accepted, so the id has to be recorded before the long wait that might not
+    survive.
 
-    `resume_id` collects a batch a previous run already paid for instead of submitting new
-    work. BatchTimeout carries the id and always has, and this module's docstring has always
-    said callers should persist it -- but until now nothing did, so every deferral abandoned
-    a batch that Anthropic had already run and billed.
+    `cancel_unfinished` (default True) cancels the batch, best effort, when the deadline passes
+    or polling fails, before the exception propagates. Every caller that degrades to synchronous
+    calls or defers the work wants that: the batch would otherwise run to completion and be billed
+    on top of the fallback, with nobody ever reading it. A caller that carries the id to a later
+    run (the funnel's summarize phase) passes False.
 
-    A resumed batch is used INSTEAD of `requests`, not merged with it: its results are keyed
-    by custom_id and every caller already ignores ids it no longer wants and re-queues ids it
-    did not get, so a drifted pending set degrades to "some work rolls to the next run"
-    rather than to wrong output. A stale or expired id raises BatchError on the status call,
-    which falls through to a fresh submit.
+    There is deliberately no resume parameter. A carried batch is collected with fetch() and its
+    results are applied by custom_id; it is never returned in place of `requests`, which is how a
+    previous run's verdicts were once stamped onto this run's cases.
     """
-    if resume_id:
-        try:
-            obj = poll(resume_id, deadline=deadline, interval=interval, label=label)
-            print("  . %s: collected batch %s carried over from a previous run"
-                  % (label, resume_id), flush=True)
-            return collect(obj, label)
-        except BatchTimeout:
-            raise          # still running; the id rides the exception so the caller re-records it
-        except BatchError as e:
-            print("  . %s: could not resume batch %s (%s); submitting fresh work"
-                  % (label, resume_id, e), flush=True)
     bid = submit(requests, label)
     if on_submit:
         on_submit(bid)
-    return collect(poll(bid, deadline=deadline, interval=interval, label=label), label)
+    try:
+        obj = poll(bid, deadline=deadline, interval=interval, label=label)
+    except BatchTimeout as e:
+        if cancel_unfinished:
+            e.cancelled = cancel_quietly(bid, label, "deadline passed")
+        raise
+    except BatchError:
+        if cancel_unfinished:
+            cancel_quietly(bid, label, "polling failed")
+        raise
+    return collect(obj, label)

@@ -277,6 +277,82 @@ allowlist. It runs all four watches, renders once, and mirrors the opinion pipel
 - **Nothing new** → commit only the advanced seen-state and run logs straight to `main` with
   `[skip ci]`.
 
+### Time budget and carried batches
+
+Each watch's Opus pass is one Anthropic Message Batch. Batch latency runs from minutes to over an
+hour. On 2026-09-27 (run 36318024609) two slow batches together ran past the old 60-minute job
+timeout. The run was killed before anything was saved, and the paid statutes batch was recorded
+nowhere. The run is now organized so that no watch can cost the others their work:
+
+- **One step per watch.** Each watch has its own step and its own `timeout-minutes`, set from
+  `siteconfig.WATCH_STEP_MIN` (statutes 40, regulations 10, court rules 15, ethics 12).
+  - The job timeout is 90 minutes (`WATCH_JOB_TIMEOUT_MIN`). It covers all four watch steps, plus
+    setup, plus a reserve for saving the run.
+  - Every later step runs `if: !cancelled()`. If a watch fails or times out, the later watches, the
+    bookkeeping, render and the review PR still run, and the failure report still fires.
+  - Those steps also require the setup gate (`steps.setup.outputs.ok`, set by a marker step after
+    checkout, setup-python and the pip install). If setup fails, nothing after it runs except the
+    failure report.
+  - Render and the review PR run only if the bookkeeping step succeeded. If its push fails twice,
+    its commit exists only on the runner, and `create-pull-request` would otherwise carry that
+    unpushed commit into the review branch.
+  - **Save carried batches** runs `if: always()` on every non-dry run that got through setup, so it
+    runs even when the job timeout cancels the run and every `!cancelled()` step is skipped. It
+    commits `watch_batches.json` alone onto the freshly fetched tip of the branch (`main` on a
+    scheduled run) with git plumbing, never any other file or local commit. It merges rather than
+    overwrites: it starts from the remote file and adds only the local carries whose batch id the
+    remote lacks (the batches submitted this run), and never removes a remote carry. The local
+    file has already dropped the ended carries this run consumed, and their outputs reach `main`
+    only with the bookkeeping or the review PR; if the run was cancelled or the bookkeeping failed,
+    removing them would lose paid results. When nothing is new (the normal case, after the
+    bookkeeping) it does nothing.
+  - `scripts/test_watchbatch.py` checks the YAML against these numbers. It also evaluates the `if:`
+    conditions against a failed watch.
+- **Batch waits fit the step's budget** (`scripts/watchbatch.py`, `Budget`). A watch waits on its
+  batch until its own `*_BATCH_SEC` runs out or until 150 seconds before its step limit, whichever
+  comes first. The synchronous screen and recall loops also stop starting model calls when the step
+  is nearly out of time. Anything they leave is unseen and retried next run.
+- **Carrying a deferred batch.** A batch still running at its deadline is not abandoned. Its id goes
+  to `watch_batches.json` at submit time, before the wait begins, so the record survives a killed
+  step. The record also holds the time and exactly which item each `custom_id` stands for:
+  - statutes: the bill at one `change_hash`;
+  - regulations: the Federal Register document number;
+  - court rules and ethics: the page URL and the hash of the text sent. These used to be list
+    indexes (`cr-0`).
+
+  The covered items stay unseen. The next run collects the carry before it does anything else.
+  A carry is dropped only when the API says the batch is gone (HTTP 404, or a 400 naming the batch
+  id invalid). A 401/403/429, any other 4xx, a 5xx or a network error keeps it for the next run;
+  the age limit below still bounds it.
+- **Applying collected results.** A result is applied only to the exact item its id recorded, only
+  when this run has read that item at the same version (a bill's current `change_hash`, a page's
+  current text hash), and only while nothing has settled that item since. A result is never
+  substituted for different current work.
+  - The carried results are matched before the in-flight check. A result for an older version is
+    discarded with a log line (`discarding carried result for bill …`) even when a newer write for
+    the same bill is still running in another carried batch.
+  - A result whose item this run could not read (a bill discovery did not list, a page that did not
+    fetch or failed its marker check) is neither applied nor discarded: it **stays carried** under
+    its original batch id and timestamp, and the next run tries it again.
+  - Past the card or screen cap, statutes discovery goes on to the remaining jurisdictions only to
+    match carried results (a master list costs no model call). Past the step's time budget it
+    stops: the remaining jurisdictions are not fetched, and their carried results stay carried.
+  - A bill listed more than once in one run (it can appear in more than one watched session) is
+    handled once, at its newest listing (latest last-action and status date). A carried result
+    applies only if it was written at that listing's hash, so one run never yields both a fresh
+    card and a carried card for the same bill.
+  - Any other result is **re-queued**, meaning the item goes through the normal pass again. This
+    covers an expired, errored or unparseable result, a bill that moved after the batch was sent,
+    and a page whose text changed.
+  - A batch that is still running keeps its items out of this run.
+  - A carry older than 25 days (`WATCH_CARRY_MAX_AGE_DAYS`) is dropped with a log line, because
+    Anthropic keeps batch results for 29 days.
+  - The log shows `. carrying N batch(es) to next run: …` and
+    `. collected carried batch … (k results applied, j re-queued[, m kept carried])`.
+- **`watch_batches.json` always goes to `main`,** even on a run that opens the review PR. The next
+  run starts from `main`, and a carry left on the unmerged review branch would be paid for again. A
+  carry never publishes anything by itself: the cards it produces go to review like any others.
+
 A manual dispatch defaults to `dry_run` (prints the drafted cards, writes nothing). The regulatory
 half runs with no key, so it works on the first scheduled run even before `LEGISCAN_API_KEY` is set.
 

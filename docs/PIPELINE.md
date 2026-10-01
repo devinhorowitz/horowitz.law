@@ -92,6 +92,75 @@ The court set, labels, and citation suffixes are defined once in `scripts/jurisd
 `OPINIONS_JURISDICTION` selects the active jurisdiction and `OPINIONS_COURTS` narrows the
 active court set, both without editing code.
 
+### Supreme Court of Georgia intake
+
+Every court is read from its CourtListener court feed, filtered by the since floor
+(`last_filed` minus 2 days). The Supreme Court of Georgia needs more than that. Since the
+2026-06-30 release, gasupreme.us prints release dates inside an `<h3>`, and juriscraper still
+reads the first `<p>`, so CourtListener stamps every new release `date_filed` 2026-06-16. The
+floor dropped those opinions, and the 20 tied-date slots in `/feed/court/ga/` hid most of
+them, so the intake was dead from 06-30 until this fix. For `ga`, `update.py` now does four
+more things. Discovery and dating cost no CourtListener REST call: they read the free feeds,
+storage PDFs, and gasupreme.us, which is why `opinions.yml` allows `www.gasupreme.us:443`
+through harden-runner. Text is fetched as for any other court, so a candidate with no PDF
+from the feed or the release page falls back to the REST text path.
+
+- **Discovery by cluster id.** Each run lists every GA cluster above a high-water mark
+  (`ga_high_water` in `opinions_state.json`) with the free search feed
+  (`/feed/search/?type=o&court=ga&q=cluster_id:[A TO B]`). That feed caps a page at 20 and
+  ignores paging, so a full page is split in half until each range fits. The first mark is
+  the newest scotga card or rejection, which brings in the post-06-30 backlog. A full page
+  whose entries fall outside the queried range means the feed ignored the filter: the walk
+  stops there (`! ga discovery: ... feed malfunction`) and the mark does not pass it. The
+  court feed is a second witness: a never-seen GA cluster it carries above the mark is added
+  even when the walk missed it (`! ga discovery: /feed/court/ga/ carries never-seen cluster`).
+- **Official dates.** Each GA candidate is re-dated from the court's release page
+  (`official_ga.release_index`, which parses both the `<p>` and `<h3>` layouts). The docket
+  comes from the opinion PDF's caption, or from a caption match on the page confirmed by a
+  `docketNumber` search-feed query. When the page does not list the docket, the date comes
+  from the PDF's `Decided:` line instead. CourtListener's date is kept on the card as
+  `cl_date_filed`. A card still on the stuck date with neither source is held for review,
+  never auto-published. When the release index is empty or a year page fails, the run says
+  so once: `! ga: release index unavailable (<reason>); dating falls back to PDF Decided: lines`.
+- **Paced backlog.** Never-seen clusters above the mark that the floor would drop are
+  admitted `siteconfig.GA_BACKLOG_PER_RUN` at a time (8), oldest first. The rest wait, and
+  are not counted as floor drops. The mark stops just below the lowest cluster still waiting
+  or unsettled, so nothing above it is skipped. A cluster spends a try (`ga_backlog_tries`)
+  only in a run that actually evaluated it and failed: no text after a real fetch, or a
+  model answer that cannot be used. A run that never reached it (cut by `OPINIONS_MAX`,
+  stopped by the time budget, deferred on the CourtListener REST budget) costs nothing, and
+  neither does a run stopped by infrastructure (the time budget expiring mid-candidate, the
+  REST budget, a transport error, the Anthropic API still 429/overloaded/5xx after its
+  retries; the run prints `. ga backlog: cluster N not charged a try`), so a quota-starved or
+  outage-hit stretch only holds the mark. When the mark has not moved for
+  `GA_MARK_STALL_RUNS` (6) consecutive runs while backlog remains, the run prints
+  `! ga high-water mark STALLED at M ...; blocking cluster N (name): why`
+  (`ga_mark_stall` in the state counts the runs). After `GA_BACKLOG_MAX_TRIES` failures the mark passes the cluster, but it
+  is not dropped: it is recorded in `opinions_state.json` `ga_abandoned` (id, name, reason,
+  dates), the run prints `! ga backlog: ABANDONED cluster N`, and every run lists the ones
+  outstanding. An abandoned cluster is looked up by id and re-admitted past the floor every
+  `GA_ABANDONED_RETRY_DAYS` (7), `GA_ABANDONED_RETRY_PER_RUN` (2) at a time (its `last_try` is
+  stamped whenever a retry is attempted, so a never-resolving one rotates out), so a fix for
+  what stopped it reaches it on its own; to force one now, add its bare cluster id as a line
+  in `queue.txt`. The log reads `. ga backlog: N admitted, M remain`, and the run log
+  carries a `ga` record.
+- **Redrafts below the mark.** A vetoed card is redrafted only when a feed carries its
+  cluster again, and the 20-entry court feed may never carry an older GA release. So each
+  run looks up, by `cluster_id:[x TO x]` on the search feed, the still-pending redraft ids
+  (`review_store.load_redraft_ids`) that no feed carried, up to `GA_REDRAFT_MAX_QUERIES` (10),
+  newest first. An id the GA search feed answers with nothing on two separate runs is another
+  court's and is remembered in `ga_redraft_not_ga`, so it is not queried again; the first empty
+  answer is only noted (`ga_redraft_absent_once`), since one empty answer may be a feed hiccup.
+  A search-feed page carrying any cluster outside the queried range, full or partial, is a feed
+  malfunction: the walk (or the lookups) stops loudly and nothing from that page is used.
+- **Re-scrapes.** When a docket also belongs to a cluster already seen or carded, and that
+  cluster carries the same date, the new cluster is skipped and marked seen
+  (`~ ga re-scrape duplicate`). Rease 10975744 is one, a re-scrape of 10875591.
+
+The knobs are in the Supreme Court of Georgia section of `scripts/siteconfig.py`. About 35
+releases since 06-30 are on gasupreme.us but not in CourtListener at all, and this intake does
+not card them (render keys every card on a cluster id).
+
 ## The funnel
 
 Candidates pass through four model tiers, cheapest first, so the expensive model only ever
@@ -171,6 +240,54 @@ visible downstream. Each genuinely audited rejection record is stamped with the 
 audits the logged backlog plus anything un-stamped or deferred, persisting progress after
 every chunk, and surfaces suspects on a tracking issue with ready-to-paste `queue.txt` force
 lines for editor review.
+
+### Message Batches: what happens when a batch misses its deadline
+
+Triage, smell, summarize and the finish guards each run as one 50%-priced Message Batches job
+(`scripts/batch.py`) under a wall-clock budget (`OPINIONS_*_BATCH_SEC`). Every request's
+`custom_id` names its phase and its case (`triage-<cid>`, `summarize-<cid>`,
+`guards-<cid>-<kind>`; a smell chunk audits many drops, so its id is `smell-<k>-<digest>` over the
+chunk's exact cluster ids and reasons), and results are applied strictly by `custom_id`. A result
+can never land on a different case.
+
+- **Triage, smell, guards** have a synchronous fallback, so they never carry a batch to a later
+  run. On the deadline the batch is cancelled (best effort, logged, so it is not paid for on top of
+  the fallback) and the same work runs synchronously. A guard verdict the batch did not return
+  (an errored, missing or unparseable line) is also run synchronously; a card is never reported
+  guarded while a verdict is unavailable.
+- **Summarize** has no fallback, so a late batch is carried: `opinions_state.json`
+  `pending_batches` records its id, submit time and the exact cluster ids it covers. The next run
+  that reaches the summarize phase (even with nothing new pending) checks the carry first and
+  applies each draft only to its own cluster. Every pending candidate the carry does not cover gets
+  a fresh request in the same run. Every candidate that ends the run undrafted is logged as
+  `! undrafted: <cid> <name> (reason)` and stays un-seen, so it is retried.
+- A carried draft is a finished, paid read, so one whose cluster is not pending in the collecting
+  run is not thrown away lightly:
+  - a **smell escalation** (its cluster was marked seen at the triage drop, so it is never pending
+    again) is recorded in the carry's `smell` map with what it takes to finish it. The collecting
+    run refetches the opinion text and finishes it the way an in-run escalation draft is finished:
+    the guards, then publish or hold. It then stamps `smell_outcome` (`carded` or `drop-stands`) on
+    the drop record the earlier run logged. If the text cannot be fetched, the draft is kept for a
+    later run. An escalation whose case is already carded or staged is dropped;
+  - any **other** draft is dropped only when its cluster is already carded or staged, or seen
+    (permanently rejected). Otherwise (a cluster the run never reached because of the CourtListener
+    budget, the breaker or a feed cut) the carry is kept, narrowed to those clusters, for a later
+    run that has them pending.
+- A carry stays in `pending_batches` until it is collected, including through runs that never
+  reach the summarize phase. A transport failure while collecting it (after `_send`'s retries)
+  keeps it and its clusters wait for it, so the batch is never paid for twice. Only a definitive
+  answer drops it: HTTP 404/410 (the id is unknown or its results are gone), after which its
+  clusters are drafted fresh. Requests that expired or were canceled come back as per-line results
+  and are re-requested. A carry expires after `OPINIONS_BATCH_CARRY_MAX_AGE_SEC` (default 25
+  days; Anthropic keeps batch results for 29). On expiry a log line names the clusters it covered,
+  and those clusters are made eligible again.
+- Older code also carried triage, smell and guard batches. A run that finds one of those in state
+  logs it as cleared and does not resume it.
+
+This applies only to deferrals. A run reclaimed mid-batch (exit 143) never writes state, so its
+batch is lost. Before 2026-10 a carried batch's results were returned in place of the current
+requests: smell verdicts landed on the wrong drops, and current summarize candidates went undrafted
+with no log line. `scripts/test_batch_resume.py` pins the fixed behaviour against a fake Batch API.
 
 ### Standing decision: the recall audit runs to 2026-11-30
 

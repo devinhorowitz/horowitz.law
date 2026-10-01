@@ -182,6 +182,72 @@ def main():
     check("newest opinion first, compared numerically", order == ["24-10", "24-9", "24-1", "05-13"],
           "got %r" % order)
 
+    # ---- a deferred extraction batch is carried, keyed by page + text, never by list index ----
+    print("\ncarried batch:")
+    import contextlib
+    import io
+    import json
+    import tempfile
+    import batch as B
+    import watchbatch as W
+    real = (B.run, B.status, B.collect, E._load_seen)
+    h = E.courtrules.page_hash(E.courtrules.strip_html(PAGE))
+    cid = E.courtrules.page_cid("eth", "u", h)
+    E._load_seen = lambda: {"pages": {}, "cards": {}}
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "watch_batches.json")
+
+            def slow(reqs, deadline=None, interval=20.0, label="batch", resume_id=None, on_submit=None):
+                on_submit("msgbatch_E")
+                raise B.BatchTimeout("msgbatch_E", "still running")
+
+            B.run = slow
+            book = W.CarryBook.load("ethics", persist=True, path=path)
+            with contextlib.redirect_stdout(io.StringIO()):
+                dcards, _n, dupd = E.run(fetch=lambda url: PAGE, ai=ai_boom, today=TODAY,
+                                         sources=[("FAO", "u")], batch_enabled=True, carry=book)
+            book.save()
+            disk = W.load_carries("ethics", path)
+            check("a deferred batch is carried under the page's url + hash id (not 'eth-0')",
+                  [r["id"] for r in disk] == ["msgbatch_E"] and list(disk[0]["items"]) == [cid])
+            check("the page stays un-hashed while carried", dcards == [] and dupd["pages"] == {})
+
+            B.status = lambda bid, label="batch": {"id": bid, "processing_status": "ended", "results_url": "x"}
+            B.collect = lambda obj, label="batch": {cid: {"ok": True, "text": json.dumps({"opinions": [OP_241]})}}
+            B.run = lambda *a, **k: (_ for _ in ()).throw(AssertionError("no new batch expected"))
+            book = W.CarryBook.load("ethics", path=path)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rcards, _n, rupd = E.run(fetch=lambda url: PAGE, ai=ai_boom, today=TODAY,
+                                         sources=[("FAO", "u")], batch_enabled=True, carry=book)
+            check("the next run cards the page from the carried result, with no new call",
+                  [c["id"] for c in rcards] == ["24-1"] and rupd["pages"].get("u") == h)
+            check("and reports it", "msgbatch_E (1 results applied, 0 re-queued)" in buf.getvalue(),
+                  buf.getvalue())
+
+            # A page that did not fetch this run keeps its carried extraction for the next run
+            # (it used to be discarded), and the next run applies it once the page reads the same.
+            at = W._iso(__import__("time").time())
+            book = W.CarryBook("ethics", [{"id": "msgbatch_K", "label": "ethics-extract", "at": at,
+                                           "items": {cid: {"url": "u", "h": h, "label": "FAO"}}}])
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                kcards, _n, kupd = E.run(fetch=lambda url: "", ai=ai_boom, today=TODAY,
+                                         sources=[("FAO", "u")], batch_enabled=True, carry=book)
+            check("unreachable: the carried extraction is not applied, and stays carried",
+                  kcards == [] and kupd["pages"] == {}
+                  and [(r["id"], list(r["items"]), r["at"]) for r in book.carries] == [("msgbatch_K", [cid], at)]
+                  and "1 kept carried" in buf.getvalue(), buf.getvalue())
+            with contextlib.redirect_stdout(io.StringIO()):
+                kcards, _n, kupd = E.run(fetch=lambda url: PAGE, ai=ai_boom, today=TODAY,
+                                         sources=[("FAO", "u")], batch_enabled=True, carry=book)
+            check("unreachable: the next run applies the kept extraction once the page reads the same",
+                  [c["id"] for c in kcards] == ["24-1"] and kupd["pages"].get("u") == h
+                  and book.carries == [])
+    finally:
+        B.run, B.status, B.collect, E._load_seen = real
+
     # ---- the PR body ------------------------------------------------------------------------
     print("\npr body:")
     body = E._pr_body(1, 1, [approved], changes3)
