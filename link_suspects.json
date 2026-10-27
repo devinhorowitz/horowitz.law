@@ -1,11 +1,3 @@
 {
-  "suspects": {
-    "https://horowitz.law/o/10970013": {
-      "first_failed": 1793022560.067415,
-      "last_failed": 1793022560.067415,
-      "first_status": "Error (cached)",
-      "last_status": "Error (cached)",
-      "source": "public/opinions.html"
-    }
-  }
+  "suspects": {}
 }
