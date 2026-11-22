@@ -154,7 +154,7 @@ jobs:
       - name: Open the bump PR
         id: pr
         if: steps.watch.outputs.upgrade == 'true' && steps.pat.outputs.has == 'true'
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8
         with:
           token: ${{ secrets.MODEL_WATCH_TOKEN }}
           branch: bot/model-watch

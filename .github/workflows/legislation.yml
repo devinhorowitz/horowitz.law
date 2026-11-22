@@ -259,7 +259,7 @@ jobs:
       - name: Open review pull request
         id: pr
         if: ${{ !cancelled() && steps.setup.outputs.ok == '1' && steps.run.outputs.changed == '1' && steps.book.outcome == 'success' }}
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8
         with:
           branch: bot/legislation-review
           title: 'Georgia Legislative & Regulatory Watch: new law, rules and opinions for review'
